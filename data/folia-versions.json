@@ -1,0 +1,12 @@
+{
+    "latest": "1.21.8",
+    "1.21.8": "https://api.papermc.io/v2/projects/folia/versions/1.21.8/builds/6/downloads/folia-1.21.8-6.jar",
+    "1.21.6": "https://api.papermc.io/v2/projects/folia/versions/1.21.6/builds/6/downloads/folia-1.21.6-6.jar",
+    "1.21.5": "https://api.papermc.io/v2/projects/folia/versions/1.21.5/builds/12/downloads/folia-1.21.5-12.jar",
+    "1.21.4": "https://api.papermc.io/v2/projects/folia/versions/1.21.4/builds/6/downloads/folia-1.21.4-6.jar",
+    "1.20.6": "https://api.papermc.io/v2/projects/folia/versions/1.20.6/builds/6/downloads/folia-1.20.6-6.jar",
+    "1.20.4": "https://api.papermc.io/v2/projects/folia/versions/1.20.4/builds/31/downloads/folia-1.20.4-31.jar",
+    "1.20.2": "https://api.papermc.io/v2/projects/folia/versions/1.20.2/builds/20/downloads/folia-1.20.2-20.jar",
+    "1.20.1": "https://api.papermc.io/v2/projects/folia/versions/1.20.1/builds/17/downloads/folia-1.20.1-17.jar",
+    "1.19.4": "https://api.papermc.io/v2/projects/folia/versions/1.19.4/builds/39/downloads/folia-1.19.4-39.jar"
+}

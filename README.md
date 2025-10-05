@@ -4,33 +4,64 @@ Craft is a Minecraft server setup CLI tool that can install any version of any s
 
 # Features
 
-- Installing any version of Minecraft of any server software, or custom jar from path.
-    - Supported pieces of software:
-        - **Vanilla**
-        - **Paper (Java)**
-        - **Purpur (Java)**
-        - **Spigot (Java)**
-        - **Bukkit (Java)**
-        - **Fabric (Java)**
-        - **Forge (Java)**
-        - **NukkitX (Bedrock)**
-        - **PowerNukkitX (Bedrock)**
-        - **PocketMine (Bedrock)**
-- Supports both Java and Bedrock editions.
 - Installing/searching:
-    - **Plugins**
-    - **Datapacks (Java)**
-    - **Function Packs (Bedrock)**
-    - **Worlds**
-    - **Mods**
-    - **Mod packs**
-    - from the internet or from a path(zip or folder).
+    - **Java Edition**
+        - **Server Software**
+            - Vanilla
+            - Paper
+            - Spigot
+            - Purpur
+            - Folia
+            - Pufferfish?
+            - Fabric*
+            - Forge*
+            - Quilt*
+            - NeoForge*
+        - **Proxy**
+            - BungeeCord*
+            - Waterfall*
+            - Velocity*
+        - **Plugins**
+            - [modrinth.com](https://modrinth.com/plugins/)*
+            - [spigotmc.org](https://www.spigotmc.org/resources/categories/spigot.4/)*
+            - [hangar.papermc.io](https://hangar.papermc.io/)*
+            - [builtbybit.io](https://builtbybit.com/resources/categories/minecraft.27/)*
+        - **Datapacks**
+            - [planetminecraft.com](https://www.planetminecraft.com/data-packs/)*
+            - [curseforge.com](https://www.curseforge.com/minecraft/search?class=data-packs)*
+            - [modrinth.com](https://modrinth.com/datapacks)
+        - **Worlds**
+            - todo
+        - **Mods**
+            - todo
+        - **Mod packs**
+            - todo
+    - **Bedrock Edition**:
+        - **Server Software**
+            - Vanilla*
+            - NukkitX*
+            - PowerNukkitX*
+            - PocketMine*
+        - **Proxy**
+            - GeyserMC*
+            - Floodgate*
+            - Waterdog*
+        - **Plugins**
+            - [poggit.pmmp.io](https://poggit.pmmp.io/plugins/)*
+            - [cloudburstmc.org](https://cloudburstmc.org/resources/categories/nukkit-plugins.1/)*
+        - **Bedrock Function Packs**
+            - todo
+        - **Mods**
+            - todo
+        - **Mod packs**
+            - todo
+    - A URL or a file path works too.
 - Setting up a:
     - **Plugin template**
     - **Datapack template (Java)**
     - **Function pack template (Bedrock)**
     - **Mod pack template**
-    - and optionally open it with IntelliJ or VSCode.
+    - and optionally open it (and setup) with IntelliJ or VSCode.
 - Setting up custom firewall rules for the server allowing only specific IPs to access the server.
 - Periodic(e.g. daily) world backup system.
 - A server management tool that can start/stop/enter/give information of any server (w/tmux).
