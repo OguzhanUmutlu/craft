@@ -1,2 +1,2 @@
 #!/bin/sh
-bun run "../." "$@"
+node "$(dirname "$(realpath "$0")")/.." "$@"

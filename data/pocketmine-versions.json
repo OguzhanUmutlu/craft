@@ -1,0 +1,363 @@
+{
+  "latest": "1.21.111",
+  "1.21.111": [
+    "5.35.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.35.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.35.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.35.0/start.cmd"
+  ],
+  "1.21.100": [
+    "5.32.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.32.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.32.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.32.0/start.cmd"
+  ],
+  "1.21.93": [
+    "5.31.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.31.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.31.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.31.0/start.cmd"
+  ],
+  "1.21.90": [
+    "5.29.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.29.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.29.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.29.0/start.cmd"
+  ],
+  "1.21.80": [
+    "5.28.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.28.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.28.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.28.0/start.cmd"
+  ],
+  "1.21.70": [
+    "5.27.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.27.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.27.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.27.0/start.cmd"
+  ],
+  "1.21.60": [
+    "5.25.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.25.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.25.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.25.0/start.cmd"
+  ],
+  "1.21.50": [
+    "5.22.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.22.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.22.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.22.0/start.cmd"
+  ],
+  "1.21.40": [
+    "5.20.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.20.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.20.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.20.0/start.cmd"
+  ],
+  "1.21.30": [
+    "5.19.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.19.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.19.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.19.0/start.cmd"
+  ],
+  "1.21.20": [
+    "5.18.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.18.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.18.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.18.0/start.cmd"
+  ],
+  "1.21.2": [
+    "5.17.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.17.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.17.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.17.0/start.cmd"
+  ],
+  "1.21.0": [
+    "5.16.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.16.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.16.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.16.0/start.cmd"
+  ],
+  "1.20.80": [
+    "5.15.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.15.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.15.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.15.0/start.cmd"
+  ],
+  "1.20.70": [
+    "5.13.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.13.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.13.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.13.0/start.cmd"
+  ],
+  "1.20.60": [
+    "5.11.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.11.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.11.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/5.11.0/start.cmd"
+  ],
+  "1.20.50": [
+    "4.26.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.26.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.26.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.26.0/start.cmd"
+  ],
+  "1.20.40": [
+    "4.25.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.25.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.25.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.25.0/start.cmd"
+  ],
+  "1.20.30": [
+    "4.24.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.24.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.24.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.24.0/start.cmd"
+  ],
+  "1.20.10": [
+    "4.23.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.23.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.23.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.23.0/start.cmd"
+  ],
+  "1.20.0": [
+    "4.22.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.22.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.22.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.22.0/start.cmd"
+  ],
+  "1.19.80": [
+    "4.20.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.20.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.20.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.20.0/start.cmd"
+  ],
+  "1.19.70": [
+    "4.17.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.17.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.17.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.17.0/start.cmd"
+  ],
+  "1.19.62": [
+    "4.15.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.15.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.15.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.15.0/start.cmd"
+  ],
+  "1.19.62+": [
+    "4.15.2",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.15.2/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.15.2/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.15.2/start.cmd"
+  ],
+  "1.19.60": [
+    "4.14.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.14.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.14.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.14.0/start.cmd"
+  ],
+  "1.19.50": [
+    "4.12.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.12.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.12.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.12.0/start.cmd"
+  ],
+  "1.19.40": [
+    "4.10.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.10.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.10.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.10.0/start.cmd"
+  ],
+  "1.19.30": [
+    "4.9.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.9.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.9.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.9.0/start.cmd"
+  ],
+  "1.19.21": [
+    "4.8.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.8.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.8.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.8.0/start.cmd"
+  ],
+  "1.19.20": [
+    "4.7.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.7.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.7.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.7.0/start.cmd"
+  ],
+  "1.19.10": [
+    "4.6.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.6.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.6.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.6.0/start.cmd"
+  ],
+  "1.19.0": [
+    "4.5.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.5.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.5.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.5.0/start.cmd"
+  ],
+  "1.18.30": [
+    "4.3.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.3.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.3.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/4.3.0/start.cmd"
+  ],
+  "1.18.10": [
+    "3.28.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.28.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.28.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.28.0/start.cmd"
+  ],
+  "1.18.0": [
+    "3.26.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.26.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.26.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.26.0/start.cmd"
+  ],
+  "1.17.40": [
+    "3.25.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.25.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.25.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.25.0/start.cmd"
+  ],
+  "1.17.30": [
+    "3.23.1",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.23.1/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.23.1/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.23.1/start.cmd"
+  ],
+  "1.17.10": [
+    "3.22.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.22.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.22.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.22.0/start.cmd"
+  ],
+  "1.17.0": [
+    "3.20.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.20.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.20.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.20.0/start.cmd"
+  ],
+  "1.16.220": [
+    "3.19.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.19.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.19.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.19.0/start.cmd"
+  ],
+  "1.16.210": [
+    "3.18.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.18.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.18.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.18.0/start.cmd"
+  ],
+  "1.16.200": [
+    "3.17.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.17.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.17.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.17.0/start.cmd"
+  ],
+  "1.16.100": [
+    "3.16.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.16.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.16.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.16.0/start.cmd"
+  ],
+  "1.16.20": [
+    "3.15.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.15.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.15.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.15.0/start.cmd"
+  ],
+  "1.16.0": [
+    "3.14.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.14.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.14.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.14.0/start.cmd"
+  ],
+  "1.14.60": [
+    "3.13.1",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.13.1/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.13.1/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.13.1/start.cmd"
+  ],
+  "1.14.60+": [
+    "3.12.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.12.0/PocketMine-MP.phar",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.12.0/start.sh",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.12.0/start.cmd"
+  ],
+  "1.14.x": [
+    "3.11.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.11.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.cmd"
+  ],
+  "1.13.x": [
+    "3.10.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.10.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.cmd"
+  ],
+  "1.12.x": [
+    "3.9.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.9.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.cmd"
+  ],
+  "1.11.x": [
+    "3.8.3",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.8.3/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.cmd"
+  ],
+  "1.11.0": [
+    "3.8.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.8.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/stable/start.cmd"
+  ],
+  "1.10.0": [
+    "3.7.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.7.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.cmd"
+  ],
+  "1.9.0": [
+    "3.6.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.6.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.cmd"
+  ],
+  "1.8.0": [
+    "3.5.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.5.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.cmd"
+  ],
+  "1.7.0": [
+    "3.3.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.3.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.cmd"
+  ],
+  "1.6.0": [
+    "3.2.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.2.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.cmd"
+  ],
+  "1.5.0": [
+    "3.1.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.1.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.cmd"
+  ],
+  "1.4.0": [
+    "3.0.0",
+    "https://github.com/pmmp/PocketMine-MP/releases/download/3.0.0/PocketMine-MP.phar",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.sh",
+    "https://raw.githubusercontent.com/pmmp/PocketMine-MP/master/start.cmd"
+  ]
+}

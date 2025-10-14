@@ -2,11 +2,12 @@
   "name": "craft",
   "version": "1.0.0",
   "description": "Craft is a Minecraft server setup CLI tool that can install any version of any server software.",
-  "main": "src/main.ts",
+  "main": "dist/src/Main",
   "type": "module",
   "scripts": {
-    "scrape": "tsx scripts/scrape.ts",
-    "build": "tsc"
+    "lint": "npx eslint . --ext ",
+    "build": "tsc",
+    "watch-build": "tsc -w"
   },
   "repository": {
     "type": "git",
@@ -20,6 +21,7 @@
   },
   "homepage": "https://github.com/OguzhanUmutlu/craft#readme",
   "devDependencies": {
+    "@eslint/js": "^9.37.0",
     "@types/inquirer-fuzzy-path": "^2.3.9",
     "@types/node": "^24.0.12",
     "tsx": "^4.20.3",
@@ -27,13 +29,16 @@
   },
   "dependencies": {
     "@types/cli-progress": "^3.11.6",
+    "@types/unzipper": "^0.10.11",
     "chalk": "^5.4.1",
     "cli-progress": "^3.12.0",
     "fancy-printer": "^2.1.7",
     "inquirer": "^12.7.0",
     "inquirer-fuzzy-path": "^2.3.0",
-    "ktfile": "^1.1.0",
+    "ktfile": "^1.1.8",
     "listr2": "^9.0.0",
-    "ora": "^8.2.0"
+    "ora": "^8.2.0",
+    "typescript-eslint": "^8.45.0",
+    "unzipper": "^0.12.3"
   }
 }
