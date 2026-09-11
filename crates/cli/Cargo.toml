@@ -23,6 +23,7 @@ colored.workspace = true
 indicatif.workspace = true
 comfy-table.workspace = true
 dialoguer.workspace = true
+directories.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tokio.workspace = true

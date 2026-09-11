@@ -35,6 +35,7 @@ impl BackupEngine {
         server_name: &str,
         server_path: &Path,
         rcon: Option<(&str, u16, &str)>, // (host, port, password)
+        world_only: bool,
     ) -> Result<PathBuf> {
         if !server_path.exists() {
             return Err(CraftError::InvalidPath(server_path.to_string_lossy().to_string()));
@@ -53,10 +54,11 @@ impl BackupEngine {
         fs::create_dir_all(&target_dir)?;
 
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
-        let archive_name = format!("{}_{}.tar.gz", server_name, timestamp);
+        let suffix = if world_only { "_world" } else { "" };
+        let archive_name = format!("{}_{}{}.tar.gz", server_name, timestamp, suffix);
         let archive_path = target_dir.join(&archive_name);
 
-        let res = compress_server_directory(server_path, &archive_path);
+        let res = compress_server_directory(server_path, &archive_path, world_only);
 
         // Resume auto-saving if RCON was connected
         if let Some(mut client) = rcon_client {
@@ -117,16 +119,157 @@ impl BackupEngine {
     }
 }
 
-fn compress_server_directory(source_dir: &Path, output_tar_gz: &Path) -> Result<()> {
+fn should_exclude(rel_path: &Path) -> bool {
+    let components: Vec<_> = rel_path.iter().map(|c| c.to_string_lossy().to_string()).collect();
+    for comp in &components {
+        let lower = comp.to_lowercase();
+        if lower == "logs" || lower == "crash-reports" || lower == "cache" || lower == ".craft" {
+            return true;
+        }
+    }
+
+    if let Some(file_name) = rel_path.file_name().and_then(|f| f.to_str()) {
+        let lower = file_name.to_lowercase();
+        if lower.ends_with(".tmp") || lower.ends_with(".sock") || lower.ends_with(".pid") || lower == "session.lock" {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn is_world_or_config(rel_path: &Path, is_dir: bool) -> bool {
+    let comp = if let Some(first) = rel_path.iter().next() {
+        first.to_string_lossy().to_lowercase()
+    } else {
+        return false;
+    };
+
+    // World root folders
+    if comp.starts_with("world") || comp == "dim-1" || comp == "dim1" || comp == "worlds" || comp == "db" {
+        return true;
+    }
+
+    // Config directories
+    if comp == "config" || comp == "defaultconfigs" || comp == "plugins" {
+        return true;
+    }
+
+    // Root config / script files
+    if !is_dir && rel_path.parent().map(|p| p.as_os_str().is_empty()).unwrap_or(true) {
+        let lower = comp;
+        if lower.ends_with(".properties")
+            || lower.ends_with(".yml")
+            || lower.ends_with(".yaml")
+            || lower.ends_with(".toml")
+            || lower.ends_with(".json")
+            || lower.ends_with(".txt")
+            || lower.ends_with(".sh")
+            || lower.ends_with(".cmd")
+            || lower.ends_with(".bat")
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn compress_server_directory(source_dir: &Path, output_tar_gz: &Path, world_only: bool) -> Result<()> {
     let file = File::create(output_tar_gz)?;
     let enc = GzEncoder::new(file, Compression::default());
     let mut tar = tar::Builder::new(enc);
 
-    tar.append_dir_all(".", source_dir)
-        .map_err(|e| CraftError::Other(format!("Failed to create tar archive: {}", e)))?;
+    let mut stack = vec![source_dir.to_path_buf()];
+
+    while let Some(current_dir) = stack.pop() {
+        if let Ok(entries) = fs::read_dir(&current_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let rel_path = match path.strip_prefix(source_dir) {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+
+                if should_exclude(rel_path) {
+                    continue;
+                }
+
+                let is_dir = path.is_dir();
+
+                if world_only && !is_world_or_config(rel_path, is_dir) {
+                    continue;
+                }
+
+                if is_dir {
+                    tar.append_dir(rel_path, &path)
+                        .map_err(|e| CraftError::Other(format!("Failed to append dir {}: {}", rel_path.display(), e)))?;
+                    stack.push(path);
+                } else {
+                    let mut f = File::open(&path)?;
+                    tar.append_file(rel_path, &mut f)
+                        .map_err(|e| CraftError::Other(format!("Failed to append file {}: {}", rel_path.display(), e)))?;
+                }
+            }
+        }
+    }
 
     tar.finish()
         .map_err(|e| CraftError::Other(format!("Failed to finalize archive: {}", e)))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_exclusions_and_world_only() {
+        let tmp = tempdir().unwrap();
+        let server_dir = tmp.path().join("server");
+        fs::create_dir_all(server_dir.join("world/data")).unwrap();
+        fs::create_dir_all(server_dir.join("logs")).unwrap();
+        fs::create_dir_all(server_dir.join("cache")).unwrap();
+
+        fs::write(server_dir.join("world/level.dat"), b"level_data").unwrap();
+        fs::write(server_dir.join("logs/latest.log"), b"log_data").unwrap();
+        fs::write(server_dir.join("cache/some.cache"), b"cache_data").unwrap();
+        fs::write(server_dir.join("server.properties"), b"motd=Test").unwrap();
+        fs::write(server_dir.join("session.lock"), b"lock").unwrap();
+        fs::write(server_dir.join("server.jar"), b"fake_jar").unwrap();
+
+        // 1. Full backup (should exclude logs, cache, session.lock, but include server.jar)
+        let full_archive = tmp.path().join("full.tar.gz");
+        compress_server_directory(&server_dir, &full_archive, false).unwrap();
+
+        let restore_dir = tmp.path().join("restore_full");
+        let file = File::open(&full_archive).unwrap();
+        let gz = flate2::read::GzDecoder::new(file);
+        let mut archive = tar::Archive::new(gz);
+        archive.unpack(&restore_dir).unwrap();
+
+        assert!(restore_dir.join("world/level.dat").exists());
+        assert!(restore_dir.join("server.properties").exists());
+        assert!(restore_dir.join("server.jar").exists());
+        assert!(!restore_dir.join("logs/latest.log").exists());
+        assert!(!restore_dir.join("cache/some.cache").exists());
+        assert!(!restore_dir.join("session.lock").exists());
+
+        // 2. World-only backup (should only include world and config files, not server.jar)
+        let world_archive = tmp.path().join("world.tar.gz");
+        compress_server_directory(&server_dir, &world_archive, true).unwrap();
+
+        let restore_world = tmp.path().join("restore_world");
+        let file_w = File::open(&world_archive).unwrap();
+        let gz_w = flate2::read::GzDecoder::new(file_w);
+        let mut archive_w = tar::Archive::new(gz_w);
+        archive_w.unpack(&restore_world).unwrap();
+
+        assert!(restore_world.join("world/level.dat").exists());
+        assert!(restore_world.join("server.properties").exists());
+        assert!(!restore_world.join("server.jar").exists());
+        assert!(!restore_world.join("logs/latest.log").exists());
+    }
 }

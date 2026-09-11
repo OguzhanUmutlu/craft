@@ -15,7 +15,7 @@ pub struct Cli {
 pub enum Commands {
     /// Set up a new Minecraft server
     New {
-        /// Server software (paper, purpur, folia, vanilla_java, fabric, spigot, vanilla_bedrock, pocketmine)
+        /// Server software (paper, purpur, folia, velocity, waterfall, vanilla_java, fabric, quilt, neoforge, spigot, bungeecord, geyser, vanilla_bedrock, pocketmine, nukkit, waterdog)
         software: String,
         /// Software version (or "latest")
         #[arg(default_value = "latest")]
@@ -35,6 +35,18 @@ pub enum Commands {
         /// Temporary server (deleted on exit)
         #[arg(long)]
         tmp: bool,
+        /// Use Aikar's optimized JVM garbage collection flags (G1GC)
+        #[arg(long)]
+        aikar: bool,
+        /// Use Z Garbage Collector (ZGC) low-latency flags
+        #[arg(long)]
+        zgc: bool,
+        /// Use Shenandoah low-pause garbage collector
+        #[arg(long)]
+        shenandoah: bool,
+        /// Custom JVM flags (e.g. "-XX:+UseStringDeduplication")
+        #[arg(long, value_delimiter = ' ')]
+        jvm_flags: Option<Vec<String>>,
         /// Target remote host alias
         #[arg(long)]
         remote: Option<String>,
@@ -252,6 +264,10 @@ pub enum ServiceCommands {
     Restart,
     /// Check the background daemon status
     Status,
+    /// Install Craft daemon as an automated OS background service (systemd/launchd/Windows)
+    Install,
+    /// Uninstall Craft daemon automated OS background service
+    Uninstall,
 }
 
 #[derive(Subcommand)]
@@ -293,6 +309,9 @@ pub enum BackupCommands {
     /// Create a compressed backup of a server
     Create {
         server: String,
+        /// Only backup world folders and configuration files (excludes logs, caches)
+        #[arg(long)]
+        world_only: bool,
     },
     /// List backups for a server
     List {

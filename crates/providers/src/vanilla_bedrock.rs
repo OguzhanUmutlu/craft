@@ -123,7 +123,7 @@ impl ServerSoftware for VanillaBedrockProvider {
     ) -> Result<()> {
         #[cfg(target_os = "windows")]
         {
-            let cmd_content = "@echo off\r\nbedrock_server.exe\r\npause\r\n";
+            let cmd_content = "@echo off\r\nbedrock_server.exe\r\n";
             std::fs::write(server_path.join("start.cmd"), cmd_content)?;
         }
 

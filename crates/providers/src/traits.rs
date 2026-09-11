@@ -48,9 +48,21 @@ pub trait ServerSoftware: Send + Sync {
     fn generate_start_script(
         &self,
         server_path: &Path,
+        version: &str,
+        java_path: Option<&Path>,
+        memory: &str,
+    ) -> Result<()> {
+        self.generate_start_script_with_flags(server_path, version, java_path, memory, None)
+    }
+
+    /// Generates start scripts with custom JVM flags and GC options
+    fn generate_start_script_with_flags(
+        &self,
+        server_path: &Path,
         _version: &str,
         java_path: Option<&Path>,
         memory: &str,
+        jvm_flags: Option<&[String]>,
     ) -> Result<()> {
         let server_file = self.default_server_file();
         let java_cmd = if let Some(j) = java_path {
@@ -64,11 +76,16 @@ pub trait ServerSoftware: Send + Sync {
             "java".to_string()
         };
 
+        let flags = match jvm_flags {
+            Some(f) if !f.is_empty() => f.join(" "),
+            _ => "-XX:+UseG1GC".to_string(),
+        };
+
         #[cfg(target_os = "windows")]
         {
             let cmd_content = format!(
-                "@echo off\r\n{} -Xms{} -Xmx{} -XX:+UseG1GC -jar {} nogui\r\npause\r\n",
-                java_cmd, memory, memory, server_file
+                "@echo off\r\n{} -Xms{} -Xmx{} {} -jar {} nogui\r\n",
+                java_cmd, memory, memory, flags, server_file
             );
             std::fs::write(server_path.join("start.cmd"), cmd_content)?;
         }
@@ -77,8 +94,8 @@ pub trait ServerSoftware: Send + Sync {
         {
             use std::os::unix::fs::PermissionsExt;
             let sh_content = format!(
-                "#!/bin/sh\nexec {} -Xms{} -Xmx{} -XX:+UseG1GC -jar {} nogui\n",
-                java_cmd, memory, memory, server_file
+                "#!/bin/sh\nexec {} -Xms{} -Xmx{} {} -jar {} nogui\n",
+                java_cmd, memory, memory, flags, server_file
             );
             let sh_path = server_path.join("start.sh");
             std::fs::write(&sh_path, sh_content)?;

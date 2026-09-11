@@ -1,0 +1,31 @@
+services:
+  craft:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: craft:latest
+    container_name: craft
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    ports:
+      # Minecraft Java Edition
+      - "25565:25565"
+      # Minecraft Bedrock Edition
+      - "19132:19132/udp"
+      # Minecraft RCON Remote Console
+      - "25575:25575"
+      # Craft Daemon IPC / Web Map
+      - "8123:8123"
+    volumes:
+      # Persistent servers, cache, backups, and configurations
+      - ./craft-data:/craft
+    environment:
+      - CRAFT_HOME=/craft
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD-SHELL", "craft service status || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

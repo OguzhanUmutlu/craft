@@ -54,26 +54,32 @@ impl DaemonServer {
 
         #[cfg(target_os = "windows")]
         {
-            let addr = format!("127.0.0.1:{}", DAEMON_PORT);
-            let listener = tokio::net::TcpListener::bind(&addr).await
-                .map_err(|e| CraftError::Ipc(format!("Failed to bind TCP port {}: {}", DAEMON_PORT, e)))?;
-            info!("Craft daemon listening on TCP: {}", addr);
+            use tokio::net::windows::named_pipe::ServerOptions;
+            let pipe_name = r"\\.\pipe\craft-daemon";
+            info!("Craft daemon listening on Windows Named Pipe: {}", pipe_name);
+
+            let mut server = ServerOptions::new()
+                .first_pipe_instance(true)
+                .create(pipe_name)
+                .map_err(|e| CraftError::Ipc(format!("Failed to create named pipe: {}", e)))?;
 
             let supervisor = self.supervisor.clone();
             loop {
-                match listener.accept().await {
-                    Ok((stream, _)) => {
-                        let sup = supervisor.clone();
-                        tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, sup).await {
-                                warn!("IPC client error: {}", e);
-                            }
-                        });
-                    }
-                    Err(e) => {
-                        error!("Error accepting TCP connection: {}", e);
-                    }
+                if let Err(e) = server.connect().await {
+                    error!("Error connecting named pipe client: {}", e);
+                    continue;
                 }
+                let client = server;
+                server = ServerOptions::new()
+                    .create(pipe_name)
+                    .map_err(|e| CraftError::Ipc(format!("Failed to create next pipe instance: {}", e)))?;
+
+                let sup = supervisor.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = handle_connection(client, sup).await {
+                        warn!("IPC client error: {}", e);
+                    }
+                });
             }
         }
     }
@@ -239,7 +245,7 @@ pub struct DaemonClient {
     #[cfg(not(target_os = "windows"))]
     stream: tokio::net::UnixStream,
     #[cfg(target_os = "windows")]
-    stream: tokio::net::TcpStream,
+    stream: tokio::net::windows::named_pipe::NamedPipeClient,
 }
 
 impl DaemonClient {
@@ -253,10 +259,11 @@ impl DaemonClient {
 
         #[cfg(target_os = "windows")]
         {
-            let addr = format!("127.0.0.1:{}", DAEMON_PORT);
-            let stream = tokio::net::TcpStream::connect(&addr).await
-                .map_err(|e| CraftError::Ipc(format!("Could not connect to daemon TCP {}: {}", addr, e)))?;
-            Ok(Self { stream })
+            use tokio::net::windows::named_pipe::ClientOptions;
+            let pipe_name = r"\\.\pipe\craft-daemon";
+            let client = ClientOptions::new().open(pipe_name)
+                .map_err(|e| CraftError::Ipc(format!("Could not connect to daemon named pipe {}: {}", pipe_name, e)))?;
+            Ok(Self { stream: client })
         }
     }
 
@@ -308,7 +315,7 @@ impl DaemonClient {
 
         println!("\x1b[36m--- Attached to server console (Type 'stop' or commands, press Ctrl+C to exit) ---\x1b[0m");
 
-        let (mut reader, mut writer) = self.stream.into_split();
+        let (mut reader, mut writer) = tokio::io::split(self.stream);
         let path_clone = path.to_path_buf();
 
         let rx_task = tokio::spawn(async move {

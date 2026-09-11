@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Terminal, 
   Download, 
@@ -15,21 +15,73 @@ import {
   ExternalLink,
   ChevronRight,
   Monitor,
-  Apple
+  Apple,
+  BookOpen
 } from 'lucide-react';
-
-const VDS_HOST = "185.157.46.103:8080";
-const VDS_BASE_URL = `http://${VDS_HOST}`;
+import Documentation from './components/Documentation';
 
 export default function App() {
+  const [view, setView] = useState<'home' | 'docs'>('home');
+  const [docPage, setDocPage] = useState<string>('getting-started');
   const [activeTab, setActiveTab] = useState<'linux' | 'macos' | 'windows' | 'docker'>('linux');
   const [copied, setCopied] = useState(false);
 
+  // Sync state with URL hash for zero-refresh client-side routing
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#/docs')) {
+        setView('docs');
+        const subPage = hash.replace('#/docs/', '');
+        if (subPage && subPage !== '#/docs') {
+          setDocPage(subPage);
+        }
+      } else {
+        setView('home');
+      }
+    };
+
+    window.addEventListener('hashchange', handleHash);
+    handleHash();
+
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
+  const openDocs = (page = 'getting-started') => {
+    setDocPage(page);
+    setView('docs');
+    window.location.hash = `#/docs/${page}`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const openHome = (anchor?: string) => {
+    setView('home');
+    window.location.hash = anchor || '';
+    if (anchor) {
+      setTimeout(() => {
+        const el = document.getElementById(anchor.replace('#', ''));
+        el?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  // Base URL resolves dynamically to current static origin or official production domain
+  const getBaseUrl = () => {
+    if (typeof window !== 'undefined' && window.location && window.location.origin) {
+      return window.location.origin;
+    }
+    return 'https://craft.oguzhanumutlu.com';
+  };
+
+  const baseUrl = getBaseUrl();
+
   const installCommands = {
-    linux: `curl -fsSL ${VDS_BASE_URL}/install.sh | bash`,
-    macos: `curl -fsSL ${VDS_BASE_URL}/install.sh | bash`,
-    windows: `irm ${VDS_BASE_URL}/install.ps1 | iex`,
-    docker: `curl -fsSL https://raw.githubusercontent.com/OguzhanUmutlu/craft/main/docker-compose.yml -o docker-compose.yml && docker compose up -d`,
+    linux: `curl -fsSL ${baseUrl}/install.sh | bash`,
+    macos: `curl -fsSL ${baseUrl}/install.sh | bash`,
+    windows: `irm ${baseUrl}/install.ps1 | iex`,
+    docker: `curl -fsSL ${baseUrl}/docker-compose.yml -o docker-compose.yml && docker compose up -d`,
   };
 
   const handleCopy = (text: string) => {
@@ -38,20 +90,24 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (view === 'docs') {
+    return <Documentation onBackToHome={() => openHome()} initialPage={docPage} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0d14] text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-black">
       {/* Top Announcement Bar */}
       <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-emerald-950/80 border-b border-emerald-500/20 py-2 px-4 text-center text-xs font-medium text-emerald-300">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          Craft 1.0 is Live! Single native binary, zero runtime dependencies.
+          Craft 1.0 is Live! 100% Standalone native binary &bull; Zero runtime dependencies.
         </span>
       </div>
 
       {/* Navigation */}
       <header className="sticky top-0 z-50 backdrop-blur-md bg-[#0a0d14]/80 border-b border-slate-800/80 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => openHome()}>
             <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20 flex items-center justify-center">
               <Box className="h-6 w-6 text-black" strokeWidth={2.5} />
             </div>
@@ -66,13 +122,28 @@ export default function App() {
           </div>
 
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
-            <a href="#install" className="hover:text-emerald-400 transition-colors">Quick Install</a>
-            <a href="#downloads" className="hover:text-emerald-400 transition-colors">Downloads</a>
-            <a href="#features" className="hover:text-emerald-400 transition-colors">Features</a>
-            <a href="#platforms" className="hover:text-emerald-400 transition-colors">16+ Softwares</a>
+            <button onClick={() => openHome('#install')} className="hover:text-emerald-400 transition-colors">
+              Quick Install
+            </button>
+            <button onClick={() => openHome('#downloads')} className="hover:text-emerald-400 transition-colors">
+              Downloads
+            </button>
+            <button onClick={() => openHome('#features')} className="hover:text-emerald-400 transition-colors">
+              Features
+            </button>
+            <button onClick={() => openDocs('getting-started')} className="text-slate-200 hover:text-emerald-400 flex items-center gap-1.5 transition-colors">
+              <BookOpen className="h-4 w-4 text-emerald-400" />
+              Documentation
+            </button>
           </nav>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => openDocs('getting-started')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black shadow-lg shadow-emerald-500/20 transition-all md:hidden"
+            >
+              Docs
+            </button>
             <a
               href="https://github.com/OguzhanUmutlu/craft"
               target="_blank"
@@ -94,7 +165,7 @@ export default function App() {
           <div className="max-w-5xl mx-auto text-center relative z-10">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300 mb-8">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-              Ultra-fast startup &lt;2ms • Zero Node.js or npm needed
+              Ultra-fast startup &lt;2ms &bull; Zero Node.js or npm needed &bull; Pure Rust
             </div>
 
             <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6">
@@ -105,8 +176,26 @@ export default function App() {
             </h1>
 
             <p className="text-lg sm:text-xl text-slate-400 max-w-3xl mx-auto mb-10 leading-relaxed">
-              Provision, run, attach to, ping, backup, and orchestrate across remote VPS targets with a single standalone executable. Supporting 16+ server platforms across Java and Bedrock.
+              Provision, run, attach to, ping, backup, and orchestrate across remote VPS targets with a single standalone executable. Supporting 16+ server platforms across Java, Bedrock, and Proxies.
             </p>
+
+            {/* Actions: Get Started & Read Docs */}
+            <div className="flex flex-wrap items-center justify-center gap-4 mb-12">
+              <button
+                onClick={() => openDocs('getting-started')}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm shadow-xl shadow-emerald-500/20 transition-all hover:scale-[1.02]"
+              >
+                <BookOpen className="h-4 w-4" />
+                Read the Documentation
+              </button>
+              <button
+                onClick={() => openHome('#downloads')}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white font-medium text-sm transition-all"
+              >
+                <Download className="h-4 w-4 text-slate-400" />
+                Download Binaries
+              </button>
+            </div>
 
             {/* One-Line Installer Card */}
             <div id="install" className="max-w-2xl mx-auto bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-2xl backdrop-blur-md">
@@ -187,22 +276,23 @@ export default function App() {
                 <div className="h-3 w-3 rounded-full bg-yellow-500/80"></div>
                 <div className="h-3 w-3 rounded-full bg-emerald-500/80"></div>
               </div>
-              <span className="text-slate-400 text-[11px]">craft session — interactive</span>
+              <span className="text-slate-400 text-[11px]">craft session &mdash; interactive</span>
               <div className="w-8"></div>
             </div>
             <div className="p-6 space-y-4 text-slate-300">
               <div>
-                <span className="text-emerald-400 font-semibold">user@workstation:~$</span> craft new paper 1.21.4 survival --memory 4G
-                <p className="text-slate-500 mt-1">✓ Resolving Paper 1.21.4 build #137...</p>
-                <p className="text-slate-500">✓ Downloaded server.jar [42.1 MB / 42.1 MB] (100%)</p>
-                <p className="text-slate-500">✓ Detected OpenJDK 21 (Temurin-21.0.4+7)</p>
-                <p className="text-emerald-400 font-semibold">✓ Server 'survival' successfully provisioned!</p>
+                <span className="text-emerald-400 font-semibold">user@workstation:~$</span> craft new paper 1.21.4 survival --memory 4G --aikar
+                <p className="text-slate-500 mt-1">&check; Resolving Paper 1.21.4 stable build...</p>
+                <p className="text-slate-500">&check; Downloaded server.jar [51.4 MB / 51.4 MB] (100%)</p>
+                <p className="text-slate-500">&check; Applied Aikar's optimized G1GC JVM flags</p>
+                <p className="text-slate-500">&check; Detected OpenJDK 21 (Temurin-21.0.4+7)</p>
+                <p className="text-emerald-400 font-semibold">&check; Server 'survival' successfully provisioned!</p>
               </div>
               <div>
                 <span className="text-emerald-400 font-semibold">user@workstation:~$</span> craft run survival
                 <p className="text-slate-500 mt-1">Starting Craft supervisor daemon...</p>
                 <p className="text-slate-500">Server 'survival' started in background [PID: 41829]</p>
-                <p className="text-emerald-400 font-semibold">✓ Live on port 25565. Attach anytime with: craft view survival</p>
+                <p className="text-emerald-400 font-semibold">&check; Live on port 25565. Attach anytime with: craft view survival</p>
               </div>
             </div>
           </div>
@@ -229,7 +319,8 @@ export default function App() {
                 </span>
               </div>
               <a
-                href={`${VDS_BASE_URL}/api/v1/download/craft-linux-amd64`}
+                href={`${baseUrl}/downloads/craft-linux-amd64`}
+                download
                 className="mt-6 w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all"
               >
                 <Download className="h-4 w-4" /> Download (~12 MB)
@@ -249,7 +340,8 @@ export default function App() {
                 </span>
               </div>
               <a
-                href={`${VDS_BASE_URL}/api/v1/download/craft-windows-amd64.exe`}
+                href={`${baseUrl}/downloads/craft-windows-amd64.exe`}
+                download
                 className="mt-6 w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all"
               >
                 <Download className="h-4 w-4" /> Download (.exe)
@@ -269,7 +361,8 @@ export default function App() {
                 </span>
               </div>
               <a
-                href={`${VDS_BASE_URL}/api/v1/download/craft-darwin-arm64`}
+                href={`${baseUrl}/downloads/craft-darwin-arm64`}
+                download
                 className="mt-6 w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all"
               >
                 <Download className="h-4 w-4" /> Download (~12 MB)
@@ -285,15 +378,16 @@ export default function App() {
                 <h3 className="font-bold text-base text-white">Docker Compose</h3>
                 <p className="text-xs text-slate-400 mt-1">Single-command container stack</p>
                 <span className="inline-block mt-3 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-400 border border-slate-800">
-                  craft deploy up -d
+                  docker-compose.yml
                 </span>
               </div>
-              <button
-                onClick={() => handleCopy(installCommands.docker)}
+              <a
+                href={`${baseUrl}/docker-compose.yml`}
+                download
                 className="mt-6 w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all"
               >
-                <Copy className="h-4 w-4" /> Copy Compose
-              </button>
+                <Download className="h-4 w-4" /> Download Compose
+              </a>
             </div>
           </div>
         </section>
@@ -315,7 +409,7 @@ export default function App() {
                 </div>
                 <h3 className="font-bold text-base text-white mb-2">24/7 Supervisor Daemon</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Length-delimited JSON IPC over Unix Domain Sockets and Named Pipes. Interactive console attachment with circular memory log buffers.
+                  IPC over Unix Domain Sockets and Windows Named Pipes (<code className="text-emerald-400 font-mono">\\.\pipe\craft-daemon</code>). Native automated service installation for systemd, launchd, and Windows Task Scheduler.
                 </p>
               </div>
 
@@ -325,7 +419,7 @@ export default function App() {
                 </div>
                 <h3 className="font-bold text-base text-white mb-2">Remote SSH Bootstrapping</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Target remote machines over SSH. Automatically provisions OpenJDK 21, sets up systemd user services, and streams interactive remote consoles.
+                  Target remote machines over SSH. Automatically provisions OpenJDK 21, sets up systemd user units, and streams interactive remote consoles.
                 </p>
               </div>
 
@@ -333,9 +427,9 @@ export default function App() {
                 <div className="h-10 w-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center mb-4">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
-                <h3 className="font-bold text-base text-white mb-2">Zero-Downtime Snapshots</h3>
+                <h3 className="font-bold text-base text-white mb-2">Smart Selective Snapshots</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  RCON-synchronized safe world flushes (<code className="text-emerald-400">save-off</code> &rarr; <code className="text-emerald-400">save-all flush</code> &rarr; gzip snapshot &rarr; <code className="text-emerald-400">save-on</code>) with instant restore.
+                  RCON-synchronized safe flushes with automatic exclusion of logs/caches and optional <code className="text-emerald-400 font-mono">--world-only</code> flag for ultra-compact backups.
                 </p>
               </div>
 
@@ -343,9 +437,9 @@ export default function App() {
                 <div className="h-10 w-10 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 flex items-center justify-center mb-4">
                   <Cpu className="h-5 w-5" />
                 </div>
-                <h3 className="font-bold text-base text-white mb-2">In-Memory Bytecode Parser</h3>
+                <h3 className="font-bold text-base text-white mb-2">JVM Garbage Collection Tuning</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Inspects JAR <code className="text-yellow-400">0xCAFEBABE</code> headers directly in memory to verify exact JVM class version compatibility before starting servers.
+                  Out-of-the-box presets for Aikar's G1GC (<code className="text-emerald-400 font-mono">--aikar</code>), ZGC low-latency (<code className="text-emerald-400 font-mono">--zgc</code>), and Shenandoah GC (<code className="text-emerald-400 font-mono">--shenandoah</code>).
                 </p>
               </div>
 
@@ -381,9 +475,9 @@ export default function App() {
 
           <div className="flex flex-wrap justify-center gap-3">
             {[
-              "Paper", "Purpur", "Folia", "Fabric", "Spigot", "Vanilla Java",
+              "Paper", "Purpur", "Folia", "Fabric", "Quilt", "NeoForge", "Spigot", "Vanilla Java",
               "Vanilla Bedrock BDS", "PocketMine-MP", "NukkitX", "Velocity",
-              "Waterfall", "BungeeCord", "GeyserMC", "NeoForge", "Quilt", "WaterdogPE"
+              "Waterfall", "BungeeCord", "GeyserMC", "WaterdogPE"
             ].map((name) => (
               <div
                 key={name}
@@ -393,6 +487,15 @@ export default function App() {
                 {name}
               </div>
             ))}
+          </div>
+
+          <div className="mt-12">
+            <button
+              onClick={() => openDocs('platforms')}
+              className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-medium"
+            >
+              View detailed platform specs in documentation <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
         </section>
       </main>
@@ -404,9 +507,17 @@ export default function App() {
             Craft &bull; Licensed under the MIT License
           </div>
           <div className="flex items-center gap-4 text-slate-400">
-            <span>VDS Distribution Host: <code className="text-emerald-400 font-mono">{VDS_HOST}</code></span>
+            <button onClick={() => openDocs('getting-started')} className="hover:text-white transition-colors">
+              Documentation
+            </button>
             <span>&bull;</span>
-            <a href="https://github.com/OguzhanUmutlu/craft" className="hover:text-white transition-colors">GitHub</a>
+            <button onClick={() => openHome('#downloads')} className="hover:text-white transition-colors">
+              Downloads
+            </button>
+            <span>&bull;</span>
+            <a href="https://github.com/OguzhanUmutlu/craft" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
+              GitHub
+            </a>
           </div>
         </div>
       </footer>

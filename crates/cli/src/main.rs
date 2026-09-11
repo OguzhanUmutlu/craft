@@ -53,9 +53,22 @@ async fn main() {
             print_banner();
             Ok(())
         }
-        Some(Commands::New { software, version, name, path, memory, agree_eula, tmp, remote }) => {
+        Some(Commands::New {
+            software,
+            version,
+            name,
+            path,
+            memory,
+            agree_eula,
+            tmp,
+            aikar,
+            zgc,
+            shenandoah,
+            jvm_flags,
+            remote,
+        }) => {
             if let Some(alias) = remote {
-                let remote_cmd = format!(
+                let mut remote_cmd = format!(
                     "craft new {} {} {} --memory {}{}",
                     software,
                     version,
@@ -63,9 +76,34 @@ async fn main() {
                     memory,
                     if agree_eula { " --agree-eula" } else { "" }
                 );
+                if aikar {
+                    remote_cmd.push_str(" --aikar");
+                }
+                if zgc {
+                    remote_cmd.push_str(" --zgc");
+                }
+                if shenandoah {
+                    remote_cmd.push_str(" --shenandoah");
+                }
+                if let Some(ref flags) = jvm_flags {
+                    remote_cmd.push_str(&format!(" --jvm-flags \"{}\"", flags.join(" ")));
+                }
                 execute_remote(&alias, &remote_cmd, false, &paths)
             } else {
-                handle_new(&software, &version, &name, path, &memory, agree_eula, tmp, &paths).await
+                handle_new(
+                    &software,
+                    &version,
+                    &name,
+                    path,
+                    &memory,
+                    agree_eula,
+                    tmp,
+                    aikar,
+                    zgc,
+                    shenandoah,
+                    jvm_flags,
+                    &paths,
+                ).await
             }
         }
         Some(Commands::Run { name, path, here, remote }) => {

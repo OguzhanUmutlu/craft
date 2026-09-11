@@ -65,6 +65,10 @@ You can also use the bundled wrapper scripts in `bin/`:
 # Set up a new server (downloads assets, selects Java, generates scripts, sets EULA)
 craft new paper 1.21.4 my-survival --memory 4G --agree-eula
 
+# Set up with high-performance JVM tuning flags (Aikar's G1GC, ZGC, or Shenandoah)
+craft new purpur 1.21.4 my-hardcore --memory 8G --aikar --agree-eula
+craft new fabric 1.21.4 my-modded --memory 6G --zgc --agree-eula
+
 # Run a server in the background (supervised by Craft daemon)
 craft run my-survival
 
@@ -117,6 +121,10 @@ craft service stop
 craft service restart
 craft service status
 
+# Install / uninstall as native OS background service (systemd user unit, macOS LaunchAgent, Windows Task)
+craft service install
+craft service uninstall
+
 # Configure auto-run on system boot
 craft auto how
 craft auto add my-survival
@@ -134,8 +142,11 @@ craft plugin install <modrinth-project-id> my-survival
 
 ### Backups & RCON
 ```bash
-# Create an atomic, compressed world snapshot (.tar.gz)
+# Create an atomic, compressed snapshot (.tar.gz, automatically excludes logs/cache)
 craft backup create my-survival
+
+# Create a lightweight world-only snapshot (worlds & configurations only)
+craft backup create my-survival --world-only
 
 # List snapshots for a server
 craft backup list my-survival
@@ -222,7 +233,7 @@ make down
 # 🌐 Deploy container stack to a remote VPS in one command:
 craft remote deploy my-vps
 
-# ⚡ Deploy Portal & Docs to Cloudflare Workers (craft.oguzhanumutlu.net):
+# ⚡ Deploy Portal & Docs to Cloudflare Workers (craft.oguzhanumutlu.com):
 ./scripts/deploy_docs.sh
 # or: make deploy-docs
 ```

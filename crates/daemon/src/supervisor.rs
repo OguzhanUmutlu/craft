@@ -131,6 +131,11 @@ impl Supervisor {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
+        #[cfg(not(target_os = "windows"))]
+        {
+            cmd.process_group(0);
+        }
+
         let mut child = cmd.spawn()
             .map_err(|e| CraftError::Process(format!("Failed to spawn server process: {}", e)))?;
 
@@ -225,6 +230,22 @@ impl Supervisor {
         // Force kill if graceful stop timed out or force was requested
         warn!("Force killing server '{}'", server_path.display());
         let mut c = child.lock().await;
+        if let Some(pid) = c.id() {
+            #[cfg(not(target_os = "windows"))]
+            {
+                // Kill the entire process group (-pid)
+                let _ = std::process::Command::new("kill")
+                    .args(["-9", &format!("-{}", pid)])
+                    .status();
+            }
+            #[cfg(target_os = "windows")]
+            {
+                // Force kill the full process tree (/F /T)
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
+                    .status();
+            }
+        }
         let _ = c.kill().await;
 
         let mut servers = self.servers.lock().await;

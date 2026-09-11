@@ -26,7 +26,28 @@ pub fn allow_ip_port(ip: &str, port: u16, is_udp: bool) -> Result<()> {
         }
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        let rule = format!("pass in proto {} from {} to any port {}\n", proto, ip, port);
+        let rule_path = std::env::temp_dir().join("craft_pf.rule");
+        std::fs::write(&rule_path, &rule)
+            .map_err(|e| CraftError::Other(format!("Failed to write pf rule: {}", e)))?;
+
+        let status = Command::new("pfctl")
+            .args(["-a", "craft", "-f", &rule_path.to_string_lossy()])
+            .status()
+            .map_err(|e| CraftError::Other(format!("pfctl execution error: {}", e)))?;
+
+        let _ = std::fs::remove_file(&rule_path);
+
+        if status.success() {
+            Ok(())
+        } else {
+            Err(CraftError::Other("pfctl command failed. Sudo privileges required on macOS.".to_string()))
+        }
+    }
+
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     {
         // Try ufw first
         let ufw_check = Command::new("which").arg("ufw").output();

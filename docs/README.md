@@ -6,14 +6,14 @@ Official landing page and download center for **Craft**. Built with React 18, Ty
 
 ## Deployment to Cloudflare Workers
 
-Craft Web is pre-configured for **Cloudflare Workers Static Assets** (`assets = { directory: "./dist" }`) with custom domain mapping for `craft.oguzhanumutlu.net`.
+Craft Web is pre-configured for **Cloudflare Workers Static Assets** (`assets = { directory: "./dist" }`) with custom domain mapping for `craft.oguzhanumutlu.com`.
 
 ### Single-Command Automated Deployment
 ```bash
 cd docs
 npm run deploy
 ```
-*(This automatically runs `vite build` to compile the static bundle and runs `wrangler deploy` to publish it to Cloudflare edge and bind `craft.oguzhanumutlu.net`)*.
+*(This automatically runs `vite build` to compile the static bundle and runs `wrangler deploy` to publish it to Cloudflare edge and bind `craft.oguzhanumutlu.com`)*.
 
 ---
 

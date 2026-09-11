@@ -11,7 +11,7 @@
   },
   "routes": [
     {
-      "pattern": "craft.oguzhanumutlu.net",
+      "pattern": "craft.oguzhanumutlu.com",
       "custom_domain": true
     }
   ]

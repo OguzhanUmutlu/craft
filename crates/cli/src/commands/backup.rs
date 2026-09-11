@@ -10,7 +10,7 @@ pub async fn handle_backup(action: BackupCommands, paths: &CraftPaths) -> Result
     let engine = BackupEngine::new(paths);
 
     match action {
-        BackupCommands::Create { server } => {
+        BackupCommands::Create { server, world_only } => {
             let server_path = paths.resolve_server_path(None, Some(&server), true)?;
             let registry = ServersRegistry::load(paths)?;
 
@@ -18,8 +18,9 @@ pub async fn handle_backup(action: BackupCommands, paths: &CraftPaths) -> Result
                 return Err(CraftError::ServerNotFound(format!("Server '{}' is not registered.", server)));
             }
 
-            println!("{}", format!("Creating compressed snapshot for server '{}'...", server).cyan());
-            let backup_file = engine.create_backup(&server, &server_path, None).await?;
+            let mode_str = if world_only { "world snapshot (excluding logs/cache)" } else { "full snapshot (excluding logs/cache)" };
+            println!("{}", format!("Creating compressed {} for server '{}'...", mode_str, server).cyan());
+            let backup_file = engine.create_backup(&server, &server_path, None, world_only).await?;
             let meta = std::fs::metadata(&backup_file)?;
             let mb = (meta.len() as f64) / (1024.0 * 1024.0);
 

@@ -14,6 +14,10 @@ pub async fn handle_new(
     memory: &str,
     agree_eula: bool,
     tmp: bool,
+    aikar: bool,
+    zgc: bool,
+    shenandoah: bool,
+    jvm_flags: Option<Vec<String>>,
     paths: &CraftPaths,
 ) -> Result<()> {
     let software = find_software(software_id).ok_or_else(|| {
@@ -85,8 +89,57 @@ pub async fn handle_new(
         }
     }
 
+    // Prepare JVM tuning flags
+    let mut flags = Vec::new();
+    if aikar {
+        flags.extend(vec![
+            "-XX:+UseG1GC".to_string(),
+            "-XX:+ParallelRefProcEnabled".to_string(),
+            "-XX:MaxGCPauseMillis=200".to_string(),
+            "-XX:+UnlockExperimentalVMOptions".to_string(),
+            "-XX:+DisableExplicitGC".to_string(),
+            "-XX:+AlwaysPreTouch".to_string(),
+            "-XX:G1NewSizePercent=30".to_string(),
+            "-XX:G1MaxNewSizePercent=40".to_string(),
+            "-XX:G1ReservePercent=20".to_string(),
+            "-XX:G1HeapWastePercent=5".to_string(),
+            "-XX:G1MixedGCCountTarget=4".to_string(),
+            "-XX:InitiatingHeapOccupancyPercent=15".to_string(),
+            "-XX:G1MixedGCLiveThresholdPercent=90".to_string(),
+            "-XX:G1RSetUpdatingPauseTimePercent=5".to_string(),
+            "-XX:SurvivorRatio=32".to_string(),
+            "-XX:+PerfDisableSharedMem".to_string(),
+            "-XX:MaxTenuringThreshold=1".to_string(),
+            "-Dusing.aikars.flags=https://mcflags.emc.gs".to_string(),
+            "-Daikars.new.flags=true".to_string(),
+        ]);
+        println!("{}", "Applied Aikar's optimized G1GC JVM flags.".cyan());
+    } else if zgc {
+        flags.extend(vec![
+            "-XX:+UseZGC".to_string(),
+            "-XX:+UnlockExperimentalVMOptions".to_string(),
+            "-XX:+AlwaysPreTouch".to_string(),
+            "-XX:+DisableExplicitGC".to_string(),
+        ]);
+        println!("{}", "Applied ZGC low-latency JVM flags.".cyan());
+    } else if shenandoah {
+        flags.extend(vec![
+            "-XX:+UseShenandoahGC".to_string(),
+            "-XX:+UnlockExperimentalVMOptions".to_string(),
+            "-XX:+AlwaysPreTouch".to_string(),
+            "-XX:+DisableExplicitGC".to_string(),
+        ]);
+        println!("{}", "Applied Shenandoah GC JVM flags.".cyan());
+    }
+
+    if let Some(custom) = jvm_flags {
+        flags.extend(custom);
+    }
+
+    let final_jvm_flags = if flags.is_empty() { None } else { Some(flags) };
+
     // Generate start scripts
-    software.generate_start_script(&target_dir, &version, java_path.as_deref(), memory)?;
+    software.generate_start_script_with_flags(&target_dir, &version, java_path.as_deref(), memory, final_jvm_flags.as_deref())?;
 
     // Handle EULA
     if agree_eula {
@@ -109,7 +162,7 @@ pub async fn handle_new(
         java_path,
         memory: Some(memory.to_string()),
         port: None,
-        jvm_args: None,
+        jvm_args: final_jvm_flags,
         created_at: Some(chrono::Utc::now()),
     };
 

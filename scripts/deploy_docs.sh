@@ -54,8 +54,31 @@ cmd_login() {
     cd "${DOCS_DIR}" && npx wrangler login
 }
 
+sync_static_assets() {
+    echo -e "${BLUE}==> Synchronizing static deployment assets into docs/public...${NC}"
+    mkdir -p "${DOCS_DIR}/public/downloads"
+
+    # Sync docker-compose.yml
+    if [ -f "${ROOT_DIR}/docker-compose.yml" ]; then
+        cp "${ROOT_DIR}/docker-compose.yml" "${DOCS_DIR}/public/docker-compose.yml"
+        echo -e "${GREEN}✓ Synced docker-compose.yml to docs/public/${NC}"
+    fi
+
+    # Sync release binary if built
+    if [ -f "${ROOT_DIR}/target/release/craft" ]; then
+        cp "${ROOT_DIR}/target/release/craft" "${DOCS_DIR}/public/downloads/craft-linux-amd64"
+        echo -e "${GREEN}✓ Synced target/release/craft to docs/public/downloads/craft-linux-amd64${NC}"
+    elif command -v cargo &> /dev/null; then
+        echo -e "${YELLOW}==> Building release binary with cargo...${NC}"
+        cd "${ROOT_DIR}" && cargo build --release
+        cp "${ROOT_DIR}/target/release/craft" "${DOCS_DIR}/public/downloads/craft-linux-amd64"
+        echo -e "${GREEN}✓ Built and synced target/release/craft${NC}"
+    fi
+}
+
 cmd_build() {
     check_prereqs
+    sync_static_assets
     echo -e "${BLUE}==> Building production static bundle (Vite + React + PostCSS)...${NC}"
     cd "${DOCS_DIR}" && npm run build
     echo -e "${GREEN}✓ Build completed successfully! Assets located in docs/dist/${NC}"
@@ -78,6 +101,7 @@ cmd_deploy() {
         cd "${DOCS_DIR}" && npx wrangler login
     fi
 
+    sync_static_assets
     echo ""
     echo -e "${BLUE}==> Compiling web application...${NC}"
     cd "${DOCS_DIR}" && npm run build
@@ -90,7 +114,7 @@ cmd_deploy() {
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
     echo -e "${GREEN}${BOLD}✓ Craft Portal successfully deployed to Cloudflare Workers!${NC}"
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
-    echo -e "🌐 Live URL:      ${CYAN}${BOLD}https://craft.oguzhanumutlu.net${NC}"
+    echo -e "🌐 Live URL:      ${CYAN}${BOLD}https://craft.oguzhanumutlu.com${NC}"
     echo -e "📦 Assets Source: ${YELLOW}${DOCS_DIR}/dist${NC}"
     echo -e "⚙️  Config:        ${YELLOW}${DOCS_DIR}/wrangler.jsonc${NC}"
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
@@ -108,7 +132,7 @@ cmd_help() {
     echo -e "  ${GREEN}login${NC}     Log in to Cloudflare via Wrangler OAuth"
     echo -e "  ${GREEN}help${NC}      Show this help message"
     echo ""
-    echo -e "Target domain: ${CYAN}https://craft.oguzhanumutlu.net${NC}"
+    echo -e "Target domain: ${CYAN}https://craft.oguzhanumutlu.com${NC}"
 }
 
 case "${1:-deploy}" in
