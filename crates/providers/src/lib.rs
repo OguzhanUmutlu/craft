@@ -99,4 +99,16 @@ mod tests {
             assert!(!versions.is_empty(), "Software {} has empty bundled versions", soft.name());
         }
     }
+
+    #[test]
+    fn test_software_descriptions() {
+        let softwares = get_all_softwares();
+        assert_eq!(softwares.len(), 16);
+        for soft in softwares {
+            let desc = soft.description();
+            assert!(!desc.is_empty(), "Software {} has empty description", soft.name());
+            assert_ne!(desc, "Supported Minecraft Server Platform", "Software {} has generic placeholder", soft.name());
+            assert!(desc.len() <= 48, "Software {} description is too long ({} chars): {}", soft.name(), desc.len(), desc);
+        }
+    }
 }

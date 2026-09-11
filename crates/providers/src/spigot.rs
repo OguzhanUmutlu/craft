@@ -36,6 +36,10 @@ impl ServerSoftware for SpigotProvider {
         ServerEdition::Java
     }
 
+    fn description(&self) -> &'static str {
+        "Classic Bukkit / Spigot plugin server"
+    }
+
     fn bundled_versions(&self) -> Vec<String> {
         let mut v: Vec<String> = self.bundled.keys().cloned().collect();
         v.sort();

@@ -150,6 +150,16 @@ impl ServerSoftware for PaperProvider {
         self.edition
     }
 
+    fn description(&self) -> &'static str {
+        match self.project {
+            "paper" => "High-performance standard Java server (Rec.)",
+            "folia" => "Multi-threaded regional ticking server",
+            "velocity" => "Next-generation ultra-fast proxy (Rec.)",
+            "waterfall" => "Optimized BungeeCord proxy fork",
+            _ => "PaperMC platform",
+        }
+    }
+
     fn bundled_versions(&self) -> Vec<String> {
         if !self.bundled.is_empty() {
             let mut v: Vec<String> = self.bundled.keys().cloned().collect();

@@ -42,6 +42,10 @@ impl ServerSoftware for PurpurProvider {
         ServerEdition::Java
     }
 
+    fn description(&self) -> &'static str {
+        "Paper fork with extensive gameplay tweaks"
+    }
+
     fn bundled_versions(&self) -> Vec<String> {
         let mut v: Vec<String> = self.bundled.keys().cloned().collect();
         v.sort();

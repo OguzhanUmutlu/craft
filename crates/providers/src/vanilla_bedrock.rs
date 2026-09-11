@@ -42,6 +42,10 @@ impl ServerSoftware for VanillaBedrockProvider {
         ServerEdition::Bedrock
     }
 
+    fn description(&self) -> &'static str {
+        "Official Mojang Bedrock Dedicated Server"
+    }
+
     fn default_server_file(&self) -> &'static str {
         if cfg!(windows) {
             "bedrock_server.exe"

@@ -62,22 +62,22 @@ pub async fn handle_new(
 
         let software_choices: Vec<(&'static str, &'static str, &'static str)> = match cat_idx {
             0 => vec![
-                ("paper", "Paper", "High-performance Minecraft Java server (Standard)"),
-                ("purpur", "Purpur", "Extreme customization & gameplay optimizations"),
-                ("folia", "Folia", "Multi-threaded regional ticking for massive scale"),
-                ("spigot", "Spigot", "Classic Bukkit / Spigot server"),
-                ("vanilla_java", "Vanilla Java", "Official Mojang Minecraft Java server"),
+                ("paper", "Paper", "High-performance standard Java server (Rec.)"),
+                ("purpur", "Purpur", "Paper fork with extensive gameplay tweaks"),
+                ("folia", "Folia", "Multi-threaded regional ticking server"),
+                ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
+                ("vanilla_java", "Vanilla Java", "Official Mojang Java dedicated server"),
             ],
             1 => vec![
-                ("fabric", "Fabric", "Lightweight, modular modding toolchain"),
-                ("quilt", "Quilt", "Next-gen community-driven modding ecosystem"),
-                ("neoforge", "NeoForge", "Modern Forge-compatible high-power modded server"),
+                ("fabric", "Fabric", "Lightweight modular modded server"),
+                ("quilt", "Quilt", "Community-driven modular modded server"),
+                ("neoforge", "NeoForge", "Modern Forge-compatible modded server"),
             ],
             2 => vec![
-                ("velocity", "Velocity", "Next-generation ultra-fast proxy"),
-                ("waterfall", "Waterfall", "BungeeCord fork with improved performance"),
+                ("velocity", "Velocity", "Next-generation ultra-fast proxy (Rec.)"),
+                ("waterfall", "Waterfall", "Optimized BungeeCord proxy fork"),
                 ("bungeecord", "BungeeCord", "Classic multi-server network proxy"),
-                ("geyser", "GeyserMC Standalone", "Bridge allowing Bedrock players on Java"),
+                ("geyser", "GeyserMC Standalone", "Cross-play bridge for Bedrock clients"),
                 ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
             ],
             3 => vec![
@@ -88,7 +88,7 @@ pub async fn handle_new(
             _ => {
                 get_all_softwares()
                     .into_iter()
-                    .map(|s| (s.id(), s.name(), "Supported Minecraft Server Platform"))
+                    .map(|s| (s.id(), s.name(), s.description()))
                     .collect()
             }
         };
@@ -97,7 +97,7 @@ pub async fn handle_new(
         println!("{}", "Select server software:".cyan().bold());
         let item_labels: Vec<String> = software_choices
             .iter()
-            .map(|(_, name, desc)| format!("{:<22} - {}", name, desc))
+            .map(|(_, name, desc)| format!("{:<20} - {}", name, desc))
             .collect();
 
         let choice_idx = Select::with_theme(&theme)

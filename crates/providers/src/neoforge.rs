@@ -57,6 +57,10 @@ impl ServerSoftware for NeoForgeProvider {
         ServerEdition::Java
     }
 
+    fn description(&self) -> &'static str {
+        "Modern Forge-compatible modded server"
+    }
+
     fn default_server_file(&self) -> &'static str {
         "run.sh"
     }

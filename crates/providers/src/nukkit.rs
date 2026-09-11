@@ -63,6 +63,10 @@ impl ServerSoftware for NukkitProvider {
         ServerEdition::Bedrock
     }
 
+    fn description(&self) -> &'static str {
+        "Java-based multi-threaded Bedrock server"
+    }
+
     fn default_server_file(&self) -> &'static str {
         "nukkit.jar"
     }

@@ -100,52 +100,52 @@ pub async fn gui_create_server_wizard_with_name(
             (
                 "paper",
                 "Paper",
-                "High-performance Minecraft Java server (Standard)",
+                "High-performance standard Java server (Rec.)",
             ),
             (
                 "purpur",
                 "Purpur",
-                "Extreme customization & gameplay optimizations",
+                "Paper fork with extensive gameplay tweaks",
             ),
             (
                 "folia",
                 "Folia",
-                "Multi-threaded regional ticking for massive scale",
+                "Multi-threaded regional ticking server",
             ),
-            ("spigot", "Spigot", "Classic Bukkit / Spigot server"),
+            ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
             (
                 "vanilla_java",
                 "Vanilla Java",
-                "Official Mojang Minecraft Java server",
+                "Official Mojang Java dedicated server",
             ),
         ],
         1 => vec![
             (
                 "fabric",
                 "Fabric",
-                "Lightweight, modular modding toolchain",
+                "Lightweight modular modded server",
             ),
             (
                 "quilt",
                 "Quilt",
-                "Next-gen community-driven modding ecosystem",
+                "Community-driven modular modded server",
             ),
             (
                 "neoforge",
                 "NeoForge",
-                "Modern Forge-compatible high-power modded server",
+                "Modern Forge-compatible modded server",
             ),
         ],
         2 => vec![
             (
                 "velocity",
                 "Velocity",
-                "Next-generation ultra-fast proxy (Standard)",
+                "Next-generation ultra-fast proxy (Rec.)",
             ),
             (
                 "waterfall",
                 "Waterfall",
-                "BungeeCord fork with improved performance",
+                "Optimized BungeeCord proxy fork",
             ),
             (
                 "bungeecord",
@@ -155,7 +155,7 @@ pub async fn gui_create_server_wizard_with_name(
             (
                 "geyser",
                 "GeyserMC Standalone",
-                "Bridge allowing Bedrock players on Java",
+                "Cross-play bridge for Bedrock clients",
             ),
             ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
         ],
@@ -178,7 +178,7 @@ pub async fn gui_create_server_wizard_with_name(
         ],
         _ => get_all_softwares()
             .into_iter()
-            .map(|s| (s.id(), s.name(), "Supported Minecraft Server Platform"))
+            .map(|s| (s.id(), s.name(), s.description()))
             .collect(),
     };
 
@@ -206,7 +206,7 @@ pub async fn gui_create_server_wizard_with_name(
             } else {
                 ((b'a' + (i - 9) as u8) as char).to_string()
             };
-            MenuEntry::new(hotkey, format!("{:<22} - {}", name, desc))
+            MenuEntry::new(hotkey, format!("{:<20} - {}", name, desc))
         })
         .collect();
     sw_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));

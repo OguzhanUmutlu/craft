@@ -22,6 +22,9 @@ pub trait ServerSoftware: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn edition(&self) -> ServerEdition;
+    fn description(&self) -> &'static str {
+        "Minecraft server software"
+    }
     fn default_server_file(&self) -> &'static str {
         "server.jar"
     }

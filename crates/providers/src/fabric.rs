@@ -52,6 +52,10 @@ impl ServerSoftware for FabricProvider {
         ServerEdition::Java
     }
 
+    fn description(&self) -> &'static str {
+        "Lightweight modular modded server"
+    }
+
     fn bundled_versions(&self) -> Vec<String> {
         vec![
             "1.21.4".into(), "1.21.3".into(), "1.21.1".into(), "1.21".into(),

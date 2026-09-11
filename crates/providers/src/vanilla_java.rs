@@ -79,6 +79,10 @@ impl ServerSoftware for VanillaJavaProvider {
         ServerEdition::Java
     }
 
+    fn description(&self) -> &'static str {
+        "Official Mojang Java dedicated server"
+    }
+
     fn bundled_versions(&self) -> Vec<String> {
         let mut v: Vec<String> = self.bundled.keys().cloned().collect();
         v.sort();

@@ -31,6 +31,10 @@ impl ServerSoftware for BungeeProvider {
         ServerEdition::Proxy
     }
 
+    fn description(&self) -> &'static str {
+        "Classic multi-server network proxy"
+    }
+
     fn default_server_file(&self) -> &'static str {
         "BungeeCord.jar"
     }

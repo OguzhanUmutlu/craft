@@ -31,6 +31,10 @@ impl ServerSoftware for GeyserProvider {
         ServerEdition::Proxy
     }
 
+    fn description(&self) -> &'static str {
+        "Cross-play bridge for Bedrock clients"
+    }
+
     fn default_server_file(&self) -> &'static str {
         "Geyser.jar"
     }

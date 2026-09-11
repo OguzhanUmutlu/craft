@@ -106,6 +106,10 @@ impl ServerSoftware for PocketmineProvider {
         ServerEdition::Bedrock
     }
 
+    fn description(&self) -> &'static str {
+        "High-performance C++ / PHP Bedrock server"
+    }
+
     fn default_server_file(&self) -> &'static str {
         "PocketMine-MP.phar"
     }

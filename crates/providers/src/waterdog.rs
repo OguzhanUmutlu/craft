@@ -31,6 +31,10 @@ impl ServerSoftware for WaterdogProvider {
         ServerEdition::Proxy
     }
 
+    fn description(&self) -> &'static str {
+        "Native Bedrock network proxy"
+    }
+
     fn default_server_file(&self) -> &'static str {
         "Waterdog.jar"
     }

@@ -39,6 +39,10 @@ impl ServerSoftware for QuiltProvider {
         ServerEdition::Java
     }
 
+    fn description(&self) -> &'static str {
+        "Community-driven modular modded server"
+    }
+
     fn default_server_file(&self) -> &'static str {
         "quilt-server-launch.jar"
     }
