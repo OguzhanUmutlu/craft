@@ -1,15 +1,15 @@
 [workspace]
 members = [
-    "crates/craft-core",
-    "crates/craft-providers",
-    "crates/craft-net",
-    "crates/craft-plugins",
-    "crates/craft-daemon",
-    "crates/craft-backup",
-    "crates/craft-remote",
-    "crates/craft-cli",
+    "crates/core",
+    "crates/providers",
+    "crates/net",
+    "crates/plugins",
+    "crates/daemon",
+    "crates/backup",
+    "crates/remote",
+    "crates/cli",
 ]
-default-members = ["crates/craft-cli"]
+default-members = ["crates/cli"]
 resolver = "2"
 
 [workspace.package]
@@ -22,13 +22,13 @@ repository = "https://github.com/OguzhanUmutlu/craft"
 
 [workspace.dependencies]
 # Workspace crates
-craft-core = { path = "crates/craft-core" }
-craft-providers = { path = "crates/craft-providers" }
-craft-net = { path = "crates/craft-net" }
-craft-plugins = { path = "crates/craft-plugins" }
-craft-daemon = { path = "crates/craft-daemon" }
-craft-backup = { path = "crates/craft-backup" }
-craft-remote = { path = "crates/craft-remote" }
+craft-core = { path = "crates/core" }
+craft-providers = { path = "crates/providers" }
+craft-net = { path = "crates/net" }
+craft-plugins = { path = "crates/plugins" }
+craft-daemon = { path = "crates/daemon" }
+craft-backup = { path = "crates/backup" }
+craft-remote = { path = "crates/remote" }
 
 # Serialization & data
 serde = { version = "1.0", features = ["derive"] }

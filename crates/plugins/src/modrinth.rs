@@ -39,6 +39,12 @@ pub struct ModrinthClient {
     client: reqwest::Client,
 }
 
+impl Default for ModrinthClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModrinthClient {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()
@@ -81,7 +87,6 @@ impl ModrinthClient {
 
         let primary_file = first.files.into_iter()
             .find(|f| f.primary)
-            .or_else(|| None)
             .ok_or_else(|| CraftError::Other("No downloadable files found in release".to_string()))?;
 
         Ok(primary_file)

@@ -13,6 +13,12 @@ pub struct PoggitClient {
     client: reqwest::Client,
 }
 
+impl Default for PoggitClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PoggitClient {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()

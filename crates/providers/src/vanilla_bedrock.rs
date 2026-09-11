@@ -12,6 +12,12 @@ pub struct VanillaBedrockProvider {
     linux_versions: HashMap<String, String>,
 }
 
+impl Default for VanillaBedrockProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VanillaBedrockProvider {
     pub fn new() -> Self {
         let (_, win_versions) = parse_bundled_manifest(BUNDLED_BEDROCK_WIN);

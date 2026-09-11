@@ -28,7 +28,7 @@ impl RemoteSession {
         let mut session = Session::new()
             .map_err(|e| CraftError::Other(format!("Failed to initialize SSH session: {}", e)))?;
 
-        session.set_tcp_stream(tcp.try_clone().map_err(|e| CraftError::Io(e))?);
+        session.set_tcp_stream(tcp.try_clone().map_err(CraftError::Io)?);
         session.handshake()
             .map_err(|e| CraftError::Other(format!("SSH handshake failed: {}", e)))?;
 
@@ -174,12 +174,7 @@ fn find_default_private_key() -> Option<PathBuf> {
         ssh_dir.join("id_ecdsa"),
     ];
 
-    for candidate in candidates {
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    None
+    candidates.into_iter().find(|candidate| candidate.is_file())
 }
 
 pub fn expand_tilde(path: &Path) -> PathBuf {

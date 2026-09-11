@@ -21,6 +21,12 @@ pub struct PocketmineProvider {
     versions: HashMap<String, PocketmineEntry>,
 }
 
+impl Default for PocketmineProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PocketmineProvider {
     pub fn new() -> Self {
         let parsed: Value = serde_json::from_str(BUNDLED_POCKETMINE).unwrap_or(Value::Null);

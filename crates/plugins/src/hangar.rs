@@ -29,6 +29,12 @@ pub struct HangarClient {
     client: reqwest::Client,
 }
 
+impl Default for HangarClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HangarClient {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()

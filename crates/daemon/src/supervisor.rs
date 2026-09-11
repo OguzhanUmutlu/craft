@@ -51,11 +51,7 @@ impl Supervisor {
         let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let mut servers = self.servers.lock().await;
 
-        let child_arc = if let Some(active) = servers.get(&canonical) {
-            Some(active.child.clone())
-        } else {
-            None
-        };
+        let child_arc = servers.get(&canonical).map(|active| active.child.clone());
 
         if let Some(child) = child_arc {
             let mut c = child.lock().await;

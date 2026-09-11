@@ -61,7 +61,7 @@ pub fn read_pid_file<P: AsRef<Path>>(path: P) -> Option<u32> {
 
 pub fn write_pid_file<P: AsRef<Path>>(path: P, pid: u32) -> Result<()> {
     fs::write(path.as_ref(), pid.to_string())
-        .map_err(|e| CraftError::Io(e))
+        .map_err(CraftError::Io)
 }
 
 pub fn remove_pid_file<P: AsRef<Path>>(path: P) {

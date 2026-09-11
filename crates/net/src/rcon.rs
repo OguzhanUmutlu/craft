@@ -72,7 +72,7 @@ async fn send_rcon_packet(stream: &mut TcpStream, req_id: i32, packet_type: i32,
 
 async fn read_rcon_packet(stream: &mut TcpStream) -> Result<(i32, i32, String)> {
     let length = stream.read_i32_le().await?;
-    if length < 10 || length > 4096 {
+    if !(10..=4096).contains(&length) {
         return Err(CraftError::Other("Invalid RCON packet length".to_string()));
     }
 

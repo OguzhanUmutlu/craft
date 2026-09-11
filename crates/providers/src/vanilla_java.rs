@@ -44,6 +44,12 @@ pub struct VanillaJavaProvider {
     bundled: HashMap<String, String>,
 }
 
+impl Default for VanillaJavaProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VanillaJavaProvider {
     pub fn new() -> Self {
         let (_, bundled) = parse_bundled_manifest(BUNDLED_VANILLA_JAVA);

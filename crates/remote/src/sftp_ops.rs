@@ -17,9 +17,9 @@ impl<'a> SftpOps<'a> {
     pub fn upload_file(&self, local_path: &Path, remote_path: &Path) -> Result<()> {
         let sftp = self.session.sftp()?;
         let mut local_file = File::open(local_path)
-            .map_err(|e| CraftError::Io(e))?;
+            .map_err(CraftError::Io)?;
 
-        let meta = local_file.metadata().map_err(|e| CraftError::Io(e))?;
+        let meta = local_file.metadata().map_err(CraftError::Io)?;
         let total_size = meta.len();
 
         let pb = ProgressBar::new(total_size);

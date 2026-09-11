@@ -16,6 +16,12 @@ pub struct PurpurProvider {
     bundled: HashMap<String, String>,
 }
 
+impl Default for PurpurProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PurpurProvider {
     pub fn new() -> Self {
         let (_, bundled) = parse_bundled_manifest(BUNDLED_PURPUR);

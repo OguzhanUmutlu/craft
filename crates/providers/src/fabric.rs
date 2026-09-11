@@ -27,6 +27,12 @@ struct FabricInstallerVersion {
 
 pub struct FabricProvider;
 
+impl Default for FabricProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FabricProvider {
     pub fn new() -> Self {
         Self
