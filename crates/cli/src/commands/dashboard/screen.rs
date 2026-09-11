@@ -92,16 +92,17 @@ pub fn run_menu(
             print!("\x1B[K\r\n");
 
             for (i, entry) in entries.iter().enumerate() {
+                let badge = format!("[{}]", entry.hotkey);
                 if i == *selected_idx {
                     print!(
-                        "  \x1B[1;36m>\x1B[0m  \x1B[1;30;46m {:<4} \x1B[0m \x1B[1;37;44m {:<68} \x1B[0m\x1B[K\r\n",
-                        format!("[{}]", entry.hotkey),
+                        "  \x1B[1;36m>\x1B[0m \x1B[1;36m{:<5}\x1B[0m \x1B[1;37m{}\x1B[0m\x1B[K\r\n",
+                        badge,
                         entry.label
                     );
                 } else {
                     print!(
-                        "    \x1B[1;36m{:<4}\x1B[0m {:<70}\x1B[K\r\n",
-                        format!("[{}]", entry.hotkey),
+                        "    \x1B[36m{:<5}\x1B[0m {}\x1B[K\r\n",
+                        badge,
                         entry.label
                     );
                 }
@@ -243,13 +244,24 @@ pub fn run_input_prompt(
     let result = (|| -> Result<Option<String>> {
         loop {
             execute!(stdout, MoveTo(0, 0))?;
-            print!("{}\x1B[K\r\n", "================================================================================".cyan().bold());
-            print!("{:^80}\x1B[K\r\n", header_title.cyan().bold());
-            print!("{}\x1B[K\r\n", "================================================================================".cyan().bold());
-            print!("\x1B[K\r\n");
-            print!("  {}\x1B[K\r\n", prompt_label.white().bold());
-            print!("\x1B[K\r\n");
+            let mut current_y = 0u16;
 
+            print!("{}\x1B[K\r\n", "================================================================================".cyan().bold());
+            current_y += 1;
+            print!("{:^80}\x1B[K\r\n", header_title.cyan().bold());
+            current_y += 1;
+            print!("{}\x1B[K\r\n", "================================================================================".cyan().bold());
+            current_y += 1;
+            print!("\x1B[K\r\n");
+            current_y += 1;
+            for line in prompt_label.lines() {
+                print!("  {}\x1B[K\r\n", line.white().bold());
+                current_y += 1;
+            }
+            print!("\x1B[K\r\n");
+            current_y += 1;
+
+            let cursor_y = current_y;
             let prefix = "  > ";
             let display_text = match default_val {
                 Some(def) if input_buffer.is_empty() => format!("\x1B[2m{}\x1B[0m", def),
@@ -263,7 +275,6 @@ pub fn run_input_prompt(
             execute!(stdout, Clear(ClearType::FromCursorDown))?;
 
             let cursor_x = (prefix.len() + cursor_pos) as u16;
-            let cursor_y = 5;
             execute!(stdout, MoveTo(cursor_x, cursor_y), Show)?;
             stdout.flush()?;
 
