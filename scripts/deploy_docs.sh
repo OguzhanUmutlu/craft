@@ -57,6 +57,7 @@ cmd_login() {
 sync_static_assets() {
     echo -e "${BLUE}==> Synchronizing static deployment assets into docs/public...${NC}"
     mkdir -p "${DOCS_DIR}/public/downloads"
+    rm -f "${DOCS_DIR}/public/downloads/craft-darwin-universal"*
 
     # Sync docker-compose.yml
     if [ -f "${ROOT_DIR}/docker-compose.yml" ]; then
