@@ -223,7 +223,7 @@ pub fn execute_remote(
     }
 }
 
-fn parse_connection_string(conn: &str) -> Result<(String, String, u16)> {
+pub fn parse_connection_string(conn: &str) -> Result<(String, String, u16)> {
     // Format: user@host or user@host:port
     let parts: Vec<&str> = conn.split('@').collect();
     if parts.len() != 2 {

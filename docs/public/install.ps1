@@ -27,5 +27,5 @@ if ($UserPath -notlike "*$InstallDir*") {
     $env:Path += ";$InstallDir"
 }
 
-Write-Host "`n✓ Craft installed successfully!" -ForegroundColor Green
+Write-Host "`n[OK] Craft installed successfully!" -ForegroundColor Green
 Write-Host "Run 'craft --help' in a new terminal window to get started." -ForegroundColor Green

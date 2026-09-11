@@ -12,7 +12,12 @@ use commands::{
     auto::handle_auto,
     backup::handle_backup,
     cache::handle_cache,
-    dashboard::handle_dashboard,
+    dashboard::{
+        backups_menu, cache_menu, daemon_menu,
+        gui_create_server_wizard_with_name, handle_dashboard, ping_menu,
+        plugins_menu, quick_start_menu, remotes_menu, restart_servers_menu,
+        rm_servers_menu, stop_servers_menu, view_servers_menu,
+    },
     deploy::handle_deploy,
     dockerize::handle_dockerize,
     fix::handle_fix,
@@ -115,6 +120,8 @@ async fn main() {
                     remote_cmd.push_str(&format!(" --jvm-flags \"{}\"", flags.join(" ")));
                 }
                 execute_remote(&alias, &remote_cmd, false, &paths)
+            } else if (name.is_empty() || sw.is_none()) && std::io::stdin().is_terminal() && !yes {
+                gui_create_server_wizard_with_name(&name, &paths).await
             } else {
                 handle_new(
                     &name,
@@ -138,6 +145,8 @@ async fn main() {
             if let Some(alias) = remote {
                 let remote_cmd = format!("craft run {}{}", name, if here { " --here" } else { "" });
                 execute_remote(&alias, &remote_cmd, here, &paths)
+            } else if name.is_empty() && path.is_none() && !here && std::io::stdin().is_terminal() {
+                quick_start_menu(&paths).await
             } else {
                 handle_run(&name, path, here, &paths).await
             }
@@ -151,6 +160,8 @@ async fn main() {
                     if all { " --all" } else { "" }
                 );
                 execute_remote(&alias, &remote_cmd, false, &paths)
+            } else if name.is_empty() && path.is_none() && !force && !all && std::io::stdin().is_terminal() {
+                stop_servers_menu(&paths).await
             } else {
                 handle_stop(&name, path, force, all, &paths).await
             }
@@ -159,6 +170,8 @@ async fn main() {
             if let Some(alias) = remote {
                 let remote_cmd = format!("craft restart {}{}", name, if force { " --force" } else { "" });
                 execute_remote(&alias, &remote_cmd, false, &paths)
+            } else if name.is_empty() && path.is_none() && !force && std::io::stdin().is_terminal() {
+                restart_servers_menu(&paths).await
             } else {
                 handle_restart(&name, path, force, &paths).await
             }
@@ -167,6 +180,8 @@ async fn main() {
             if let Some(alias) = remote {
                 let remote_cmd = format!("craft view {}", name);
                 execute_remote(&alias, &remote_cmd, true, &paths)
+            } else if name.is_empty() && path.is_none() && std::io::stdin().is_terminal() {
+                view_servers_menu(&paths).await
             } else {
                 handle_view(&name, path, &paths).await
             }
@@ -182,6 +197,8 @@ async fn main() {
             if let Some(alias) = remote {
                 let remote_cmd = format!("craft rm {}{}", name, if rf { " -rf" } else { "" });
                 execute_remote(&alias, &remote_cmd, false, &paths)
+            } else if name.is_empty() && path.is_none() && !rf && std::io::stdin().is_terminal() {
+                rm_servers_menu(&paths).await
             } else {
                 handle_rm(&name, path, rf, &paths).await
             }
@@ -196,10 +213,20 @@ async fn main() {
             handle_update(softwares).await
         }
         Some(Commands::Cache { action }) => {
-            handle_cache(action, &paths)
+            if action.is_none() && std::io::stdin().is_terminal() {
+                cache_menu(&paths)
+            } else {
+                handle_cache(action, &paths)
+            }
         }
         Some(Commands::Service { action }) => {
-            handle_service(action, &paths).await
+            if let Some(act) = action {
+                handle_service(act, &paths).await
+            } else if std::io::stdin().is_terminal() {
+                daemon_menu(&paths).await
+            } else {
+                handle_service(crate::cli::ServiceCommands::Status, &paths).await
+            }
         }
         Some(Commands::Auto { action }) => {
             handle_auto(action, &paths).await
@@ -208,16 +235,34 @@ async fn main() {
             handle_fix(&name, path, &paths).await
         }
         Some(Commands::Plugin { action }) => {
-            handle_plugin(action, &paths).await
+            if let Some(act) = action {
+                handle_plugin(act, &paths).await
+            } else if std::io::stdin().is_terminal() {
+                plugins_menu(&paths).await
+            } else {
+                eprintln!("{}: Specify a plugin action or run interactively in a TTY.", "Error".red().bold());
+                Ok(())
+            }
         }
         Some(Commands::Ping { target, bedrock }) => {
-            handle_ping(&target, bedrock).await
+            if target.is_empty() && std::io::stdin().is_terminal() {
+                ping_menu().await
+            } else {
+                handle_ping(&target, bedrock).await
+            }
         }
         Some(Commands::Rcon { server, password, command }) => {
             handle_rcon(&server, password, &command, &paths).await
         }
         Some(Commands::Backup { action }) => {
-            handle_backup(action, &paths).await
+            if let Some(act) = action {
+                handle_backup(act, &paths).await
+            } else if std::io::stdin().is_terminal() {
+                backups_menu(&paths).await
+            } else {
+                eprintln!("{}: Specify a backup action or run interactively in a TTY.", "Error".red().bold());
+                Ok(())
+            }
         }
         Some(Commands::Firewall { action }) => {
             match action {
@@ -236,7 +281,13 @@ async fn main() {
             handle_dockerize(&server, &paths)
         }
         Some(Commands::Remote { action }) => {
-            handle_remote(action, &paths).await
+            if let Some(act) = action {
+                handle_remote(act, &paths).await
+            } else if std::io::stdin().is_terminal() {
+                remotes_menu(&paths).await
+            } else {
+                handle_remote(crate::cli::RemoteCommands::Ls, &paths).await
+            }
         }
         Some(Commands::Deploy { action }) => {
             handle_deploy(action, &paths)

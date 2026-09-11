@@ -196,7 +196,7 @@ pub enum Commands {
     /// Manage background service daemon
     Service {
         #[command(subcommand)]
-        action: ServiceCommands,
+        action: Option<ServiceCommands>,
     },
 
     /// Manage auto-starting servers
@@ -218,12 +218,13 @@ pub enum Commands {
     /// Search and install plugins, mods, and datapacks
     Plugin {
         #[command(subcommand)]
-        action: PluginCommands,
+        action: Option<PluginCommands>,
     },
 
     /// Ping a Minecraft Java or Bedrock server
     Ping {
         /// Target address (e.g. localhost:25565 or server name)
+        #[arg(default_value = "")]
         target: String,
         /// Bedrock server ping
         #[arg(long)]
@@ -244,7 +245,7 @@ pub enum Commands {
     /// Create, list, or restore world backups
     Backup {
         #[command(subcommand)]
-        action: BackupCommands,
+        action: Option<BackupCommands>,
     },
 
     /// Configure firewall rules for a server
@@ -274,7 +275,7 @@ pub enum Commands {
     /// Manage remote hosts and servers over SSH
     Remote {
         #[command(subcommand)]
-        action: RemoteCommands,
+        action: Option<RemoteCommands>,
     },
 
     /// Deploy and manage Craft container stack with Docker Compose
