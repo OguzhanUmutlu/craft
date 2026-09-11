@@ -122,7 +122,7 @@ pub fn run_menu(
             }
 
             print!("\x1B[K\r\n\x1B[2m--------------------------------------------------------------------------------\x1B[K\r\n");
-            print!(" [HOTKEYS] Press key (0-9)  |  [↑/↓/j/k] Move  |  [Enter] Select  |  [Esc] Back  |  [q] Exit\x1B[0m\x1B[K\r\n");
+            print!(" [HOTKEYS] (0-9)  |  [↑/↓/j/k] Move  |  [Enter/→] Select  |  [Esc/←] Back  |  [q] Exit\x1B[0m\x1B[K\r\n");
 
             execute!(stdout, Clear(ClearType::FromCursorDown))?;
             stdout.flush()?;
@@ -166,10 +166,10 @@ pub fn run_menu(
                     KeyCode::End => {
                         *selected_idx = entries.len().saturating_sub(1);
                     }
-                    KeyCode::Enter => {
+                    KeyCode::Enter | KeyCode::Right => {
                         return Ok(Some(*selected_idx));
                     }
-                    KeyCode::Esc => {
+                    KeyCode::Esc | KeyCode::Left => {
                         return Ok(None);
                     }
                     KeyCode::Char(c) => {
@@ -220,7 +220,7 @@ pub fn show_modal_message<S: AsRef<str>>(title: &str, lines: &[S], is_error: boo
         }
 
         print!("\x1B[K\r\n{}\x1B[K\r\n", div.dimmed());
-        print!("  \x1B[2m[Enter / Space / Esc] Dismiss  |  [q] Quit\x1B[0m\x1B[K\r\n");
+        print!("  \x1B[2m[Enter / Space / Esc / ← / →] Dismiss  |  [q] Quit\x1B[0m\x1B[K\r\n");
 
         execute!(stdout, Clear(ClearType::FromCursorDown))?;
         stdout.flush()?;
@@ -238,7 +238,11 @@ pub fn show_modal_message<S: AsRef<str>>(title: &str, lines: &[S], is_error: boo
                     }
 
                     match key.code {
-                        KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' ') => break,
+                        KeyCode::Enter
+                        | KeyCode::Esc
+                        | KeyCode::Char(' ')
+                        | KeyCode::Left
+                        | KeyCode::Right => break,
                         _ => {}
                     }
                 }
