@@ -64,15 +64,32 @@ sync_static_assets() {
         echo -e "${GREEN}✓ Synced docker-compose.yml to docs/public/${NC}"
     fi
 
-    # Sync release binary if built
+    # Sync Linux release binary & archive
     if [ -f "${ROOT_DIR}/target/release/craft" ]; then
         cp "${ROOT_DIR}/target/release/craft" "${DOCS_DIR}/public/downloads/craft-linux-amd64"
-        echo -e "${GREEN}✓ Synced target/release/craft to docs/public/downloads/craft-linux-amd64${NC}"
-    elif command -v cargo &> /dev/null; then
-        echo -e "${YELLOW}==> Building release binary with cargo...${NC}"
-        cd "${ROOT_DIR}" && cargo build --release
-        cp "${ROOT_DIR}/target/release/craft" "${DOCS_DIR}/public/downloads/craft-linux-amd64"
-        echo -e "${GREEN}✓ Built and synced target/release/craft${NC}"
+        tar -czf "${DOCS_DIR}/public/downloads/craft-linux-amd64.tar.gz" -C "${DOCS_DIR}/public/downloads" craft-linux-amd64
+        echo -e "${GREEN}✓ Synced Linux x86_64 binary and archive${NC}"
+    fi
+
+    # Sync Windows release binary & zip
+    if [ -f "${ROOT_DIR}/target/x86_64-pc-windows-gnu/release/craft.exe" ]; then
+        cp "${ROOT_DIR}/target/x86_64-pc-windows-gnu/release/craft.exe" "${DOCS_DIR}/public/downloads/craft-windows-amd64.exe"
+        (cd "${DOCS_DIR}/public/downloads" && cp craft-windows-amd64.exe craft.exe && zip -9 -q craft-windows-amd64.zip craft.exe && rm craft.exe)
+        echo -e "${GREEN}✓ Synced Windows x64 binary and zip archive${NC}"
+    fi
+
+    # Sync macOS Apple Silicon binary & archive
+    if [ -f "${ROOT_DIR}/target/aarch64-apple-darwin/release/craft" ]; then
+        cp "${ROOT_DIR}/target/aarch64-apple-darwin/release/craft" "${DOCS_DIR}/public/downloads/craft-darwin-arm64"
+        tar -czf "${DOCS_DIR}/public/downloads/craft-darwin-arm64.tar.gz" -C "${DOCS_DIR}/public/downloads" craft-darwin-arm64
+        echo -e "${GREEN}✓ Synced macOS ARM64 binary and archive${NC}"
+    fi
+
+    # Sync macOS Intel binary & archive
+    if [ -f "${ROOT_DIR}/target/x86_64-apple-darwin/release/craft" ]; then
+        cp "${ROOT_DIR}/target/x86_64-apple-darwin/release/craft" "${DOCS_DIR}/public/downloads/craft-darwin-amd64"
+        tar -czf "${DOCS_DIR}/public/downloads/craft-darwin-amd64.tar.gz" -C "${DOCS_DIR}/public/downloads" craft-darwin-amd64
+        echo -e "${GREEN}✓ Synced macOS AMD64 binary and archive${NC}"
     fi
 }
 
@@ -114,7 +131,7 @@ cmd_deploy() {
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
     echo -e "${GREEN}${BOLD}✓ Craft Portal successfully deployed to Cloudflare Workers!${NC}"
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
-    echo -e "🌐 Live URL:      ${CYAN}${BOLD}https://craft.oguzhanumutlu.com${NC}"
+    echo -e "🌐 Live URL:      ${CYAN}${BOLD}https://craft.oguzhanumutlu.net${NC}"
     echo -e "📦 Assets Source: ${YELLOW}${DOCS_DIR}/dist${NC}"
     echo -e "⚙️  Config:        ${YELLOW}${DOCS_DIR}/wrangler.jsonc${NC}"
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
@@ -132,7 +149,7 @@ cmd_help() {
     echo -e "  ${GREEN}login${NC}     Log in to Cloudflare via Wrangler OAuth"
     echo -e "  ${GREEN}help${NC}      Show this help message"
     echo ""
-    echo -e "Target domain: ${CYAN}https://craft.oguzhanumutlu.com${NC}"
+    echo -e "Target domain: ${CYAN}https://craft.oguzhanumutlu.net${NC}"
 }
 
 case "${1:-deploy}" in

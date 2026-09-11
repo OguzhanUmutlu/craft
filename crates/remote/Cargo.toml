@@ -19,4 +19,4 @@ comfy-table.workspace = true
 dialoguer.workspace = true
 directories.workspace = true
 crossterm = "0.29"
-ssh2 = "0.9"
+ssh2 = { version = "0.9", features = ["vendored-openssl"] }

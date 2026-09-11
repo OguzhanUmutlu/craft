@@ -1,6 +1,6 @@
 # ==============================================================================
 # Craft Universal Static PowerShell Installer (Windows x64)
-# https://craft.oguzhanumutlu.com
+# https://craft.oguzhanumutlu.net
 # ==============================================================================
 $ErrorActionPreference = "Stop"
 
@@ -8,7 +8,7 @@ Write-Host "================================================================" -F
 Write-Host "                    Craft Windows Installer                     " -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 
-$BaseUrl = if ($env:CRAFT_BASE_URL) { $env:CRAFT_BASE_URL } else { "https://craft.oguzhanumutlu.com" }
+$BaseUrl = if ($env:CRAFT_BASE_URL) { $env:CRAFT_BASE_URL } else { "https://craft.oguzhanumutlu.net" }
 $InstallDir = Join-Path $env:LOCALAPPDATA "Programs\craft"
 if (!(Test-Path -Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null

@@ -72,7 +72,7 @@ export default function App() {
     if (typeof window !== 'undefined' && window.location && window.location.origin) {
       return window.location.origin;
     }
-    return 'https://craft.oguzhanumutlu.com';
+    return 'https://craft.oguzhanumutlu.net';
   };
 
   const baseUrl = getBaseUrl();
@@ -318,13 +318,22 @@ export default function App() {
                   craft-linux-amd64
                 </span>
               </div>
-              <a
-                href={`${baseUrl}/downloads/craft-linux-amd64`}
-                download
-                className="mt-6 w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all"
-              >
-                <Download className="h-4 w-4" /> Download (~12 MB)
-              </a>
+              <div className="mt-6 flex flex-col">
+                <a
+                  href={`${baseUrl}/downloads/craft-linux-amd64.tar.gz`}
+                  download="craft-linux-amd64.tar.gz"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all shadow-md"
+                >
+                  <Download className="h-4 w-4" /> Download (.tar.gz, 4.1 MB)
+                </a>
+                <a
+                  href={`${baseUrl}/downloads/craft-linux-amd64`}
+                  download="craft-linux-amd64"
+                  className="mt-2.5 text-center text-[11px] text-slate-400 hover:text-emerald-400 transition-colors"
+                >
+                  or standalone binary (12 MB) &rarr;
+                </a>
+              </div>
             </div>
 
             {/* Windows x64 */}
@@ -339,13 +348,22 @@ export default function App() {
                   craft-windows-amd64.exe
                 </span>
               </div>
-              <a
-                href={`${baseUrl}/downloads/craft-windows-amd64.exe`}
-                download
-                className="mt-6 w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all"
-              >
-                <Download className="h-4 w-4" /> Download (.exe)
-              </a>
+              <div className="mt-6 flex flex-col">
+                <a
+                  href={`${baseUrl}/downloads/craft-windows-amd64.exe`}
+                  download="craft-windows-amd64.exe"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all shadow-md"
+                >
+                  <Download className="h-4 w-4" /> Download (.exe, 17 MB)
+                </a>
+                <a
+                  href={`${baseUrl}/downloads/craft-windows-amd64.zip`}
+                  download="craft-windows-amd64.zip"
+                  className="mt-2.5 text-center text-[11px] text-slate-400 hover:text-emerald-400 transition-colors"
+                >
+                  or ZIP archive (5.9 MB) &rarr;
+                </a>
+              </div>
             </div>
 
             {/* macOS Apple Silicon */}
@@ -360,13 +378,22 @@ export default function App() {
                   craft-darwin-arm64
                 </span>
               </div>
-              <a
-                href={`${baseUrl}/downloads/craft-darwin-arm64`}
-                download
-                className="mt-6 w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all"
-              >
-                <Download className="h-4 w-4" /> Download (~12 MB)
-              </a>
+              <div className="mt-6 flex flex-col">
+                <a
+                  href={`${baseUrl}/downloads/craft-darwin-arm64.tar.gz`}
+                  download="craft-darwin-arm64.tar.gz"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all shadow-md"
+                >
+                  <Download className="h-4 w-4" /> Download (.tar.gz, 5.5 MB)
+                </a>
+                <a
+                  href={`${baseUrl}/downloads/craft-darwin-arm64`}
+                  download="craft-darwin-arm64"
+                  className="mt-2.5 text-center text-[11px] text-slate-400 hover:text-emerald-400 transition-colors"
+                >
+                  or standalone binary (14 MB) &rarr;
+                </a>
+              </div>
             </div>
 
             {/* Docker Deployment */}
@@ -381,13 +408,18 @@ export default function App() {
                   docker-compose.yml
                 </span>
               </div>
-              <a
-                href={`${baseUrl}/docker-compose.yml`}
-                download
-                className="mt-6 w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all"
-              >
-                <Download className="h-4 w-4" /> Download Compose
-              </a>
+              <div className="mt-6 flex flex-col">
+                <a
+                  href={`${baseUrl}/docker-compose.yml`}
+                  download="docker-compose.yml"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all shadow-md"
+                >
+                  <Download className="h-4 w-4" /> Download Compose
+                </a>
+                <span className="mt-2.5 text-center text-[11px] text-slate-500">
+                  Ready for docker compose up
+                </span>
+              </div>
             </div>
           </div>
         </section>
