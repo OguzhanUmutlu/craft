@@ -13,7 +13,7 @@ pub fn bootstrap_linux(session: &RemoteSession) -> Result<()> {
     println!("{}", "Checking remote Java installation...".cyan());
     let java_check = session.exec("java -version");
     let needs_java = match java_check {
-        Ok((code, stdout, stderr)) if code == 0 => {
+        Ok((0, stdout, stderr)) => {
             let out = format!("{}\n{}", stdout, stderr);
             println!("Detected remote Java:\n{}", out.lines().next().unwrap_or("").dimmed());
             !out.contains("\"21") && !out.contains("\"22") && !out.contains("\"23") && !out.contains("\"24") && !out.contains("\"25")

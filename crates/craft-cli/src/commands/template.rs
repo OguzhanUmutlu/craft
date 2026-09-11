@@ -13,26 +13,26 @@ pub fn handle_template(action: TemplateCommands) -> Result<()> {
             fs::create_dir_all(target_dir.join(".vscode"))?;
 
             // build.gradle.kts
-            let gradle_content = format!(r#"plugins {{
+            let gradle_content = r#"plugins {
     `java-library`
-}}
+}
 
 group = "com.example"
 version = "1.0.0-SNAPSHOT"
 
-repositories {{
+repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
-}}
+}
 
-dependencies {{
+dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
-}}
+}
 
-java {{
+java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))
-}}
-"#);
+}
+"#;
             fs::write(target_dir.join("build.gradle.kts"), gradle_content)?;
             fs::write(target_dir.join("settings.gradle.kts"), format!("rootProject.name = \"{}\"\n", name))?;
 

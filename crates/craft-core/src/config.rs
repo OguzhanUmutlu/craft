@@ -68,58 +68,13 @@ impl Default for GlobalSettings {
     }
 }
 
-/// Legacy format from TypeScript craft for smooth backward compatibility
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct LegacyServerConfig {
-    path: String,
-    software: String,
-    version: String,
-    #[serde(default)]
-    auto: bool,
-}
-
 impl ServersRegistry {
     pub fn load(paths: &CraftPaths) -> Result<Self> {
-        // If modern servers.toml exists, read it
         if paths.servers_file.exists() {
             let content = fs::read_to_string(&paths.servers_file)?;
             let registry: ServersRegistry = toml::from_str(&content)
                 .map_err(|e| CraftError::Config(format!("Failed to parse servers.toml: {}", e)))?;
             return Ok(registry);
-        }
-
-        // Check for legacy servers.json
-        let legacy_json = paths.legacy_servers_json();
-        if legacy_json.exists() {
-            let content = fs::read_to_string(&legacy_json)?;
-            if let Ok(legacy_list) = serde_json::from_str::<Vec<LegacyServerConfig>>(&content) {
-                let mut servers = Vec::new();
-                for item in legacy_list {
-                    let path = PathBuf::from(&item.path);
-                    let name = path
-                        .file_name()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_else(|| item.path.clone());
-
-                    servers.push(ServerConfig {
-                        name,
-                        path,
-                        software: item.software,
-                        version: item.version,
-                        auto: item.auto,
-                        java_path: None,
-                        memory: Some("2G".to_string()),
-                        port: None,
-                        jvm_args: None,
-                        created_at: Some(Utc::now()),
-                    });
-                }
-
-                let registry = ServersRegistry { servers };
-                // Migrate to servers.toml automatically
-                registry.save(paths)?;
-                return Ok(registry);
-            }
         }
 
         Ok(Self::default())
@@ -129,7 +84,7 @@ impl ServersRegistry {
         let content = toml::to_string_pretty(self)
             .map_err(|e| CraftError::Config(format!("Failed to serialize servers.toml: {}", e)))?;
 
-        let lock_file_path = paths.home.join(".servers.lock");
+        let lock_file_path = paths.locks_dir.join("servers.lock");
         let lock_file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -143,25 +98,8 @@ impl ServersRegistry {
         fs::write(&temp_path, content)?;
         fs::rename(&temp_path, &paths.servers_file)?;
 
-        // Also write legacy JSON mirror for any external tools expecting servers.json
-        if let Ok(legacy_json) = serde_json::to_string_pretty(&self.to_legacy()) {
-            let _ = fs::write(paths.legacy_servers_json(), legacy_json);
-        }
-
         lock_file.unlock()?;
         Ok(())
-    }
-
-    fn to_legacy(&self) -> Vec<LegacyServerConfig> {
-        self.servers
-            .iter()
-            .map(|s| LegacyServerConfig {
-                path: s.path.to_string_lossy().to_string(),
-                software: s.software.clone(),
-                version: s.version.clone(),
-                auto: s.auto,
-            })
-            .collect()
     }
 
     pub fn find_by_path<P: AsRef<Path>>(&self, path: P) -> Option<&ServerConfig> {

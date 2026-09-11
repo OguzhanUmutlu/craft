@@ -9,6 +9,9 @@ pub struct CraftPaths {
     pub servers_dir: PathBuf,
     pub cache_dir: PathBuf,
     pub backups_dir: PathBuf,
+    pub run_dir: PathBuf,
+    pub locks_dir: PathBuf,
+    pub logs_dir: PathBuf,
     pub servers_file: PathBuf,
     pub remotes_file: PathBuf,
     pub config_file: PathBuf,
@@ -18,7 +21,7 @@ pub struct CraftPaths {
 
 impl CraftPaths {
     pub fn new() -> Result<Self> {
-        let home = if let Ok(val) = env::var("CRAFT_HOME").or_else(|_| env::var("CraftHomePath")) {
+        let home = if let Ok(val) = env::var("CRAFT_HOME") {
             PathBuf::from(val)
         } else {
             let user_home = directories::UserDirs::new()
@@ -26,50 +29,37 @@ impl CraftPaths {
                 .home_dir()
                 .to_path_buf();
 
-            #[cfg(target_os = "windows")]
-            {
-                user_home.join("craft")
-            }
-            #[cfg(target_os = "macos")]
-            {
-                user_home.join("Library").join("craft")
-            }
-            #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-            {
-                user_home.join(".craft")
-            }
+            user_home.join(".craft")
         };
 
-        if !home.exists() {
-            fs::create_dir_all(&home)?;
-        }
-
         let servers_dir = home.join("servers");
-        if !servers_dir.exists() {
-            fs::create_dir_all(&servers_dir)?;
-        }
-
-        let cache_dir = home.join("download_cache");
-        if !cache_dir.exists() {
-            fs::create_dir_all(&cache_dir)?;
-        }
-
+        let cache_dir = home.join("cache");
         let backups_dir = home.join("backups");
-        if !backups_dir.exists() {
-            fs::create_dir_all(&backups_dir)?;
+        let run_dir = home.join("run");
+        let locks_dir = run_dir.join("locks");
+        let logs_dir = home.join("logs");
+
+        // Ensure all primary directories exist
+        for dir in [&home, &servers_dir, &cache_dir, &backups_dir, &run_dir, &locks_dir, &logs_dir] {
+            if !dir.exists() {
+                fs::create_dir_all(dir)?;
+            }
         }
 
         let servers_file = home.join("servers.toml");
         let remotes_file = home.join("remotes.toml");
         let config_file = home.join("config.toml");
-        let socket_file = home.join("service.sock");
-        let pid_file = home.join("service.pid");
+        let socket_file = run_dir.join("daemon.sock");
+        let pid_file = run_dir.join("daemon.pid");
 
         Ok(Self {
             home,
             servers_dir,
             cache_dir,
             backups_dir,
+            run_dir,
+            locks_dir,
+            logs_dir,
             servers_file,
             remotes_file,
             config_file,
@@ -137,10 +127,5 @@ impl CraftPaths {
         }
 
         Ok(candidate)
-    }
-
-    /// Legacy servers.json path for backward compatibility
-    pub fn legacy_servers_json(&self) -> PathBuf {
-        self.home.join("servers.json")
     }
 }

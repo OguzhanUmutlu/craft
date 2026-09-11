@@ -62,12 +62,12 @@ pub async fn handle_rcon(
         let mut pass = String::new();
 
         for line in content.lines() {
-            if line.starts_with("rcon.port=") {
-                if let Ok(p) = line[10..].trim().parse::<u16>() {
+            if let Some(rest) = line.strip_prefix("rcon.port=") {
+                if let Ok(p) = rest.trim().parse::<u16>() {
                     port = p;
                 }
-            } else if line.starts_with("rcon.password=") {
-                pass = line[14..].trim().to_string();
+            } else if let Some(rest) = line.strip_prefix("rcon.password=") {
+                pass = rest.trim().to_string();
             }
         }
 

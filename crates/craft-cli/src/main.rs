@@ -171,8 +171,8 @@ async fn main() {
 }
 
 fn print_banner() {
-    println!("{}", "Craft CLI v2.0 (Rust Edition)".cyan().bold());
-    println!("{}", "High-performance Minecraft server management CLI and daemon.\n".dimmed());
+    println!("{}", "Craft — Minecraft Server Toolchain".cyan().bold());
+    println!("{}", "High-performance Minecraft server management CLI and background daemon.\n".dimmed());
     println!("Usage: craft <COMMAND> [OPTIONS]\n");
     println!("Commands:");
     println!("  new <software> [version] [name]   Set up a new server");
@@ -194,6 +194,7 @@ fn print_banner() {
     println!("  template plugin <name>            Scaffold plugin/datapack project");
     println!("  dockerize <server>                Generate Dockerfile & compose file");
     println!("  remote <add|ls|rm|test|setup>     Manage remote hosts over SSH");
+    println!("  deploy <up|down|status|logs|exec> Deploy containerized stack with Docker");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

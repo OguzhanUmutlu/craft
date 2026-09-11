@@ -1,0 +1,24 @@
+[Unit]
+Description=Craft Binary Distribution Server
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/craft-distribution
+ExecStart=/opt/craft-distribution/bin/craft-server --port 8080 --dir /opt/craft-distribution/releases
+Restart=always
+RestartSec=5s
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=craft-server
+
+# Hardening measures
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

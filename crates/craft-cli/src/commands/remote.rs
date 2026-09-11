@@ -14,8 +14,6 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
 
             let auth_type = if password.is_some() {
                 RemoteAuthType::Password
-            } else if key.is_some() {
-                RemoteAuthType::Key
             } else {
                 RemoteAuthType::Key
             };

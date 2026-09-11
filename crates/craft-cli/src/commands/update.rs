@@ -8,7 +8,7 @@ pub async fn handle_update(softwares_arg: Vec<String>) -> Result<()> {
     } else {
         let mut list = Vec::new();
         for id in softwares_arg {
-            let soft = find_software(&id).ok_or_else(|| CraftError::UnknownSoftware(id))?;
+            let soft = find_software(&id).ok_or(CraftError::UnknownSoftware(id))?;
             list.push(soft);
         }
         list

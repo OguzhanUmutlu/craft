@@ -13,6 +13,7 @@ cargo-timing.html
 /cache/
 /backups/
 /craft-data/
+/tools/
 *.log
 *.sock
 *.pid
@@ -27,8 +28,16 @@ servers.json
 remotes.toml
 
 # ==============================================================================
-# Legacy TypeScript & Node.js
+# Docs / Web & Distribution Server
 # ==============================================================================
+/docs/dist/
+/docs/node_modules/
+.wrangler/
+**/.wrangler/
+/docs/.wrangler/
+/server/craft-server
+/server/releases/
+
 /dist/
 /node_modules/
 *.tsbuildinfo

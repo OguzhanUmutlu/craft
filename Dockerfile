@@ -1,10 +1,10 @@
 # ==============================================================================
-# Craft 2.0 Production Container Image
+# Craft Production Container Image
 # Runtime: Eclipse Temurin Java 21 LTS + Craft Supervisor Daemon
 # ==============================================================================
 FROM eclipse-temurin:21-jre-jammy
 
-LABEL org.opencontainers.image.title="Craft 2.0" \
+LABEL org.opencontainers.image.title="Craft" \
       org.opencontainers.image.description="High-performance Minecraft Server Management & Background Daemon" \
       org.opencontainers.image.source="https://github.com/OguzhanUmutlu/craft"
 

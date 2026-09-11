@@ -15,7 +15,7 @@ pub struct CacheManager {
 impl CacheManager {
     pub fn new(paths: &CraftPaths) -> Self {
         let client = Client::builder()
-            .user_agent("Craft/2.0 (Minecraft Server Manager)")
+            .user_agent("Craft/1.0 (Minecraft Server Manager)")
             .build()
             .unwrap_or_default();
 

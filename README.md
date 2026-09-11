@@ -1,4 +1,4 @@
-# Craft 2.0 (Rust Edition)
+# Craft
 
 > **High-performance, industry-grade Minecraft server setup, management CLI tool, and background daemon written in Rust.**
 
@@ -221,6 +221,10 @@ make down
 
 # 🌐 Deploy container stack to a remote VPS in one command:
 craft remote deploy my-vps
+
+# ⚡ Deploy Portal & Docs to Cloudflare Workers (craft.oguzhanumutlu.net):
+./scripts/deploy_docs.sh
+# or: make deploy-docs
 ```
 
 ### Developer Templates & Server Dockerization
@@ -243,7 +247,7 @@ craft dockerize my-survival
 craft/
 ├── Cargo.toml                  # Workspace root
 ├── crates/
-│   ├── craft-core/             # Core models, TOML/JSON registry, remotes.toml, Java bytecode detector
+│   ├── craft-core/             # Core models, TOML registry, remotes.toml, Java bytecode detector
 │   ├── craft-providers/        # Server software providers (Paper, Purpur, Mojang, Fabric, BDS, PMMP, etc.)
 │   ├── craft-daemon/           # Background process supervisor, IPC, log ring-buffer
 │   ├── craft-net/              # Native SLP ping, RakNet ping, RCON client, firewall

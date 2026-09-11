@@ -78,7 +78,7 @@ impl RemotesRegistry {
         let content = toml::to_string_pretty(self)
             .map_err(|e| CraftError::Config(format!("Failed to serialize remotes.toml: {}", e)))?;
 
-        let lock_file_path = paths.home.join(".remotes.lock");
+        let lock_file_path = paths.locks_dir.join("remotes.lock");
         let lock_file = OpenOptions::new()
             .read(true)
             .write(true)

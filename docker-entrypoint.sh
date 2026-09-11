@@ -15,7 +15,7 @@ fi
 # If no arguments provided, start the Craft service daemon in foreground
 if [ $# -eq 0 ] || [ "$1" = 'daemon' ] || [ "$1" = 'service' ]; then
     echo "================================================================"
-    echo "  Starting Craft 2.0 Background Supervisor Daemon"
+    echo "  Starting Craft Background Supervisor Daemon"
     echo "  Data Directory: $CRAFT_DATA_DIR"
     echo "================================================================"
     exec $EXEC_CMD craft service start --foreground

@@ -15,12 +15,12 @@ cd "$SCRIPT_DIR"
 
 banner() {
     echo -e "${CYAN}${BOLD}"
-    echo "  ____            __ _     ____    ___  "
-    echo " / ___|_ __ __ _ / _| |_  |___ \  / _ \ "
-    echo "| |   | '__/ _\` | |_| __|   __) || | | |"
-    echo "| |___| | | (_| |  _| |_   / __/ | |_| |"
-    echo " \____|_|  \__,_|_|  \__| |_____(_)___/ "
-    echo "  Production Docker Orchestrator        "
+    echo "  ____            __ _   "
+    echo " / ___|_ __ __ _ / _| |_ "
+    echo "| |   | '__/ _\` | |_| __|"
+    echo "| |___| | | (_| |  _| |_ "
+    echo " \____|_|  \__,_|_|  \__|"
+    echo "  Docker Stack Orchestrator"
     echo -e "${NC}"
 }
 

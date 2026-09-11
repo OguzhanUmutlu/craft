@@ -1,0 +1,12 @@
+services:
+  distribution-server:
+    build: .
+    container_name: craft-distribution
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./releases:/releases
+    environment:
+      - PORT=8080
+      - RELEASES_DIR=/releases

@@ -7,7 +7,7 @@ use crate::cli::DeployCommands;
 
 const DOCKERFILE_TEMPLATE: &str = r#"FROM eclipse-temurin:21-jre-jammy
 
-LABEL org.opencontainers.image.title="Craft 2.0" \
+LABEL org.opencontainers.image.title="Craft" \
       org.opencontainers.image.description="High-performance Minecraft Server Management & Background Daemon"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -74,7 +74,7 @@ else
 fi
 if [ $# -eq 0 ] || [ "$1" = 'daemon' ] || [ "$1" = 'service' ]; then
     echo "================================================================"
-    echo "  Starting Craft 2.0 Background Supervisor Daemon"
+    echo "  Starting Craft Background Supervisor Daemon"
     echo "  Data Directory: $CRAFT_DATA_DIR"
     echo "================================================================"
     exec $EXEC_CMD craft service start --foreground

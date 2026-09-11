@@ -16,7 +16,7 @@ pub struct PoggitClient {
 impl PoggitClient {
     pub fn new() -> Self {
         let client = reqwest::Client::builder()
-            .user_agent("Craft/2.0 (Minecraft Server Manager)")
+            .user_agent("Craft/1.0 (Minecraft Server Manager)")
             .build()
             .unwrap_or_default();
         Self { client }

@@ -5,6 +5,7 @@ use craft_core::{find_best_java, get_jar_java_version, CraftError, CraftPaths, R
 use craft_providers::{find_software, CacheManager};
 use crate::commands::run::run_foreground_server;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_new(
     software_id: &str,
     version_arg: &str,

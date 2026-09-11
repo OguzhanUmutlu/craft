@@ -36,7 +36,7 @@ impl<'a> SftpOps<'a> {
 
         let mut buf = [0u8; 64 * 1024];
         loop {
-            let count = local_file.read(&mut buf).map_err(|e| CraftError::Io(e))?;
+            let count = local_file.read(&mut buf).map_err(CraftError::Io)?;
             if count == 0 {
                 break;
             }
@@ -68,10 +68,10 @@ impl<'a> SftpOps<'a> {
         pb.set_message(format!("Downloading {}", remote_path.file_name().unwrap_or_default().to_string_lossy()));
 
         if let Some(parent) = local_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| CraftError::Io(e))?;
+            std::fs::create_dir_all(parent).map_err(CraftError::Io)?;
         }
 
-        let mut local_file = File::create(local_path).map_err(|e| CraftError::Io(e))?;
+        let mut local_file = File::create(local_path).map_err(CraftError::Io)?;
         let mut buf = [0u8; 64 * 1024];
 
         loop {
@@ -80,7 +80,7 @@ impl<'a> SftpOps<'a> {
             if count == 0 {
                 break;
             }
-            local_file.write_all(&buf[..count]).map_err(|e| CraftError::Io(e))?;
+            local_file.write_all(&buf[..count]).map_err(CraftError::Io)?;
             pb.inc(count as u64);
         }
 
