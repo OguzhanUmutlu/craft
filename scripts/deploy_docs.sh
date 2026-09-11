@@ -132,7 +132,7 @@ cmd_deploy() {
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
     echo -e "${GREEN}${BOLD}[OK] Craft Portal successfully deployed to Cloudflare Workers!${NC}"
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
-    echo -e " Live URL:      ${CYAN}${BOLD}https://craft.oguzhanumutlu.net${NC}"
+    echo -e " Live URL:      ${CYAN}${BOLD}https://craft.oguzhanumutlu.com${NC}"
     echo -e " Assets Source: ${YELLOW}${DOCS_DIR}/dist${NC}"
     echo -e "  Config:        ${YELLOW}${DOCS_DIR}/wrangler.jsonc${NC}"
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
@@ -150,7 +150,7 @@ cmd_help() {
     echo -e "  ${GREEN}login${NC}     Log in to Cloudflare via Wrangler OAuth"
     echo -e "  ${GREEN}help${NC}      Show this help message"
     echo ""
-    echo -e "Target domain: ${CYAN}https://craft.oguzhanumutlu.net${NC}"
+    echo -e "Target domain: ${CYAN}https://craft.oguzhanumutlu.com${NC}"
 }
 
 case "${1:-deploy}" in

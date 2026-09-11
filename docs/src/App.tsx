@@ -72,7 +72,7 @@ export default function App() {
     if (typeof window !== 'undefined' && window.location && window.location.origin) {
       return window.location.origin;
     }
-    return 'https://craft.oguzhanumutlu.net';
+    return 'https://craft.oguzhanumutlu.com';
   };
 
   const baseUrl = getBaseUrl();

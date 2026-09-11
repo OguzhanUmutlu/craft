@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Craft Universal Static One-Line Installer (Linux & macOS)
-# https://craft.oguzhanumutlu.net
+# https://craft.oguzhanumutlu.com
 # ==============================================================================
 set -euo pipefail
 
@@ -22,7 +22,7 @@ echo " \____|_|  \__,_|_|  \__| |_____(_)___/ "
 echo "  Craft Native Standalone Installer"
 echo -e "${NC}"
 
-BASE_URL="${CRAFT_BASE_URL:-https://craft.oguzhanumutlu.net}"
+BASE_URL="${CRAFT_BASE_URL:-https://craft.oguzhanumutlu.com}"
 
 OS="$(uname -s)"
 ARCH="$(uname -m)"
