@@ -191,7 +191,39 @@ craft view my-survival --remote my-vps    # Full interactive PTY with Ctrl+B -> 
 craft remote rm my-vps
 ```
 
-### Developer Templates & Docker
+### Single-Command Docker Deployment & Containerization
+Craft provides an all-in-one containerized deployment with Eclipse Temurin Java 21 LTS:
+
+```bash
+# 🚀 Single-command deployment via native Craft CLI:
+craft deploy up -d            # Build & start containerized daemon + servers
+craft deploy status           # View container health and port bindings
+craft deploy logs -f          # Stream real-time logs
+craft deploy exec ver         # Execute Craft commands inside the container
+craft deploy down             # Stop and tear down containers
+
+# 🐳 Alternatively via Docker Compose:
+docker compose up -d
+docker compose logs -f
+docker compose down
+
+# 🛠️ Or via standard Makefile:
+make up
+make logs
+make shell
+make down
+
+# 📜 Or via zero-dependency helper script:
+./scripts/deploy.sh up
+./scripts/deploy.sh logs
+./scripts/deploy.sh shell
+./scripts/deploy.sh down
+
+# 🌐 Deploy container stack to a remote VPS in one command:
+craft remote deploy my-vps
+```
+
+### Developer Templates & Server Dockerization
 ```bash
 # Scaffold Paper / Velocity plugin project with Gradle & VS Code config
 craft template plugin MyPlugin --platform paper
@@ -199,7 +231,7 @@ craft template plugin MyPlugin --platform paper
 # Scaffold a Minecraft datapack
 craft template datapack MyDatapack
 
-# Generate optimized Dockerfile and docker-compose.yml for a server
+# Generate optimized Dockerfile and docker-compose.yml for a specific server
 craft dockerize my-survival
 ```
 
