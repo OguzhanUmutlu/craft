@@ -1,0 +1,69 @@
+[workspace]
+members = [
+    "crates/craft-core",
+    "crates/craft-providers",
+    "crates/craft-net",
+    "crates/craft-plugins",
+    "crates/craft-daemon",
+    "crates/craft-backup",
+    "crates/craft-remote",
+    "crates/craft-cli",
+]
+default-members = ["crates/craft-cli"]
+resolver = "2"
+
+[workspace.package]
+version = "2.0.0"
+edition = "2021"
+authors = ["OguzhanUmutlu"]
+license = "MIT"
+description = "High-performance, industry-grade Minecraft server setup and management CLI tool & daemon."
+repository = "https://github.com/OguzhanUmutlu/craft"
+
+[workspace.dependencies]
+# Workspace crates
+craft-core = { path = "crates/craft-core" }
+craft-providers = { path = "crates/craft-providers" }
+craft-net = { path = "crates/craft-net" }
+craft-plugins = { path = "crates/craft-plugins" }
+craft-daemon = { path = "crates/craft-daemon" }
+craft-backup = { path = "crates/craft-backup" }
+craft-remote = { path = "crates/craft-remote" }
+
+# Serialization & data
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Async & Networking
+tokio = { version = "1.43", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures-util = "0.3"
+
+# CLI & Terminal UI
+clap = { version = "4.5", features = ["derive", "env"] }
+colored = "3.0"
+indicatif = "0.17"
+comfy-table = "7.1"
+dialoguer = "0.11"
+
+# Diagnostics & Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Filesystem & OS
+directories = "5.0"
+fs2 = "0.4"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+tar = "0.4"
+flate2 = "1.0"
+sysinfo = "0.33"
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1.11"
+sha2 = "0.10"
+hex = "0.4"
+tempfile = "3.16"
+bytes = "1.10"

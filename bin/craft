@@ -1,2 +1,12 @@
 #!/bin/sh
-node "$(dirname "$(realpath "$0")")/.." "$@"
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+if [ -f "$SCRIPT_DIR/../target/release/craft" ]; then
+    exec "$SCRIPT_DIR/../target/release/craft" "$@"
+elif [ -f "$SCRIPT_DIR/../target/debug/craft" ]; then
+    exec "$SCRIPT_DIR/../target/debug/craft" "$@"
+elif command -v craft >/dev/null 2>&1; then
+    exec craft "$@"
+else
+    echo "Craft binary not found. Run 'cargo build --release' first." >&2
+    exit 1
+fi

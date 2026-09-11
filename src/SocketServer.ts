@@ -1,8 +1,9 @@
 import net, {Server, Socket} from "node:net";
-import {getServers, isWin, processRunning, servicePidFile, socketFile} from "./Utils.js";
+import {getServers, isWin, processRunning, servicePidFile, socketFile, sourceFolder} from "./Utils.js";
 import {runningServers, startServer} from "./commands/run.js";
 import {FileSync, fileSync} from "ktfile";
 import {spawn} from "child_process";
+import terminate from "terminate/promise";
 
 export const SOCKET_PORT = 8123;
 
@@ -29,6 +30,7 @@ export class SocketServer {
     _stream: WritableStream;
 
     static startService() {
+        if (SocketServer.isRunning()) return;
         const child = spawn(
             process.execPath, [process.argv[1], "service", "start", "-h"],
             {detached: true, stdio: "ignore", windowsHide: true}
@@ -37,7 +39,9 @@ export class SocketServer {
     };
 
     static isRunning() {
-        return servicePidFile.exists && processRunning(parseInt(servicePidFile.read("utf8").trim()));
+        return servicePidFile.exists
+            && processRunning(parseInt(servicePidFile.read("utf8").trim()))
+            && !socketFile.canWrite; // TODO: this is wrong, use the lstatSync().isSocket and then try to connect
     };
 
     static async stopService() {
@@ -46,26 +50,11 @@ export class SocketServer {
         }
 
         const pid = parseInt(servicePidFile.read("utf8").trim());
-        try {
-            process.kill(pid, "SIGINT");
-        } catch {
-            return false;
-        }
 
-        return await new Promise<boolean>(r => {
-            const check = () => {
-                if (!processRunning(pid)) {
-                    if (servicePidFile.exists) servicePidFile.delete();
-                    r(true);
-                    return;
-                }
-
-                process.kill(pid, "SIGINT");
-                setTimeout(check, 5000);
-            };
-
-            check();
-        });
+        return await terminate(pid, "SIGTERM", {
+            timeout: 5000,
+            pollInterval: 500
+        }).then(() => true).catch(() => false);
     };
 
     static async restartService() {

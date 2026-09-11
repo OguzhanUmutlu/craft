@@ -1,0 +1,32 @@
+[package]
+name = "craft"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "craft"
+path = "src/main.rs"
+
+[dependencies]
+craft-core.workspace = true
+craft-providers.workspace = true
+craft-net.workspace = true
+craft-plugins.workspace = true
+craft-daemon.workspace = true
+craft-backup.workspace = true
+craft-remote.workspace = true
+
+clap.workspace = true
+colored.workspace = true
+indicatif.workspace = true
+comfy-table.workspace = true
+dialoguer.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true

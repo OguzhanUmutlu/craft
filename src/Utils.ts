@@ -7,6 +7,7 @@ import {fileSync, FileSync} from "ktfile";
 import unzipper from "unzipper";
 import {GitRelease} from "./gitrelease.js";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const myPrinter = Printer.brackets.makeGlobal().makeGlobal("Printer");
 declare global {
     let printer: typeof myPrinter;
@@ -104,7 +105,7 @@ export function processRunning(pid: number) {
     try {
         process.kill(pid, 0);
         return true;
-    } catch (e) {
+    } catch {
         return false;
     }
 }
@@ -140,7 +141,7 @@ export function formatBytes(bytes: number) {
 export async function getRepoReleases(owner: string, repo: string) {
     let page = 1;
     const per_page = 100;
-    let allReleases = [];
+    const allReleases = [];
 
     while (true) {
         const url = `https://api.github.com/repos/${owner}/${repo}/releases?per_page=${per_page}&page=${page}`;
@@ -187,3 +188,10 @@ export function getServer(path: FileSync | string) {
 
 export const socketFile = home.to("service.sock");
 export const servicePidFile = home.to("service.pid");
+
+export const sourceFolder = fileSync(process.argv[1]);
+
+if (!sourceFolder.isDirectory || !sourceFolder.to("package.json").exists) {
+    printer.error("Craft CLI must be ran through the source folder, and not to the compiled file.");
+    process.exit(1);
+}

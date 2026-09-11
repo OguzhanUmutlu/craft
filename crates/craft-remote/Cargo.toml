@@ -1,0 +1,22 @@
+[package]
+name = "craft-remote"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+craft-core.workspace = true
+craft-daemon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+colored.workspace = true
+indicatif.workspace = true
+comfy-table.workspace = true
+dialoguer.workspace = true
+directories.workspace = true
+crossterm = "0.29"
+ssh2 = "0.9"

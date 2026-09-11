@@ -29,6 +29,7 @@ class SocketClient {
                 r();
                 succeeded = true;
             });
+
             this.socket.on("data", data => {
                 const msg = data.toString();
                 const type = msg[0];

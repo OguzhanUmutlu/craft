@@ -4,6 +4,10 @@ import {SocketServer} from "../SocketServer.js";
 export default [
     new Command({h: Arguments.bool, here: Arguments.bool}, ["service", "start"], flags => {
         if (flags.h || flags.here) return new SocketServer().start();
+        if (SocketServer.isRunning()) {
+            printer.info("Service is already running.");
+            return;
+        }
         SocketServer.startService();
         printer.pass("Service started successfully.");
     }),

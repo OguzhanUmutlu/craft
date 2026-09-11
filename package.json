@@ -20,13 +20,6 @@
     "url": "https://github.com/OguzhanUmutlu/craft/issues"
   },
   "homepage": "https://github.com/OguzhanUmutlu/craft#readme",
-  "devDependencies": {
-    "@eslint/js": "^9.37.0",
-    "@types/inquirer-fuzzy-path": "^2.3.9",
-    "@types/node": "^24.0.12",
-    "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
-  },
   "dependencies": {
     "@types/cli-progress": "^3.11.6",
     "@types/unzipper": "^0.10.11",
@@ -35,10 +28,19 @@
     "fancy-printer": "^2.1.7",
     "inquirer": "^12.7.0",
     "inquirer-fuzzy-path": "^2.3.0",
-    "ktfile": "^1.1.8",
+    "ktfile": "^1.1.9",
     "listr2": "^9.0.0",
     "ora": "^8.2.0",
+    "ps-list": "^9.0.0",
+    "terminate": "^2.8.0",
     "typescript-eslint": "^8.45.0",
     "unzipper": "^0.12.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.37.0",
+    "@types/inquirer-fuzzy-path": "^2.3.9",
+    "@types/node": "^24.0.12",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
   }
 }

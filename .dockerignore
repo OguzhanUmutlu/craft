@@ -1,0 +1,12 @@
+.git
+.gitignore
+.idea
+node_modules
+dist
+servers
+cache
+backups
+craft-data
+*.log
+*.tmp
+*.lock

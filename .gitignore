@@ -1,0 +1,90 @@
+# ==============================================================================
+# Rust & Cargo
+# ==============================================================================
+/target/
+**/*.rs.bk
+*.pdb
+cargo-timing.html
+
+# ==============================================================================
+# Craft Runtime & State (Local Servers, Caches, Daemon & Registry)
+# ==============================================================================
+/servers/
+/cache/
+/backups/
+/craft-data/
+*.log
+*.sock
+*.pid
+*.tmp
+*.tmp.*
+
+# Local Registry & Lock Files (Keep Cargo.lock tracked)
+.servers.lock
+.remotes.lock
+servers.toml
+servers.json
+remotes.toml
+
+# ==============================================================================
+# Legacy TypeScript & Node.js
+# ==============================================================================
+/dist/
+/node_modules/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ==============================================================================
+# IDEs & Code Editors
+# ==============================================================================
+# JetBrains (IntelliJ, CLion, RustRover)
+.idea/
+*.iml
+
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Fleet, Cursor, Vim, Emacs
+.fleet/
+.cursor/
+*.swp
+*.swo
+*~
+*.bak
+
+# ==============================================================================
+# Environment & Sensitive Credentials
+# ==============================================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# ==============================================================================
+# Operating System Artifacts
+# ==============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Linux
+*~
