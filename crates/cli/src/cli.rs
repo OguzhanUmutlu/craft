@@ -13,28 +13,46 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Set up a new Minecraft server
+    /// Open the interactive Craft Server Manager Dashboard
+    #[command(alias = "dashboard", alias = "ui", alias = "tui")]
+    Manage,
+
+    /// Set up a new Minecraft server (interactive wizard if software omitted)
+    #[command(alias = "create", alias = "init")]
     New {
-        /// Server software (paper, purpur, folia, velocity, waterfall, vanilla_java, fabric, quilt, neoforge, spigot, bungeecord, geyser, vanilla_bedrock, pocketmine, nukkit, waterdog)
-        software: String,
-        /// Software version (or "latest")
-        #[arg(default_value = "latest")]
-        version: String,
-        /// Optional server directory name
+        /// Server name (or omit to launch the interactive setup wizard)
         #[arg(default_value = "")]
         name: String,
+        /// Server software (paper, purpur, folia, fabric, quilt, neoforge, velocity, etc.)
+        #[arg(value_name = "SOFTWARE")]
+        software: Option<String>,
+        /// Software version (or "latest")
+        #[arg(value_name = "VERSION")]
+        version: Option<String>,
+        /// Explicit server software option
+        #[arg(short = 's', long = "software-id")]
+        software_opt: Option<String>,
+        /// Explicit software version option
+        #[arg(short = 'v', long = "version-id")]
+        version_opt: Option<String>,
         /// Custom destination path
         #[arg(long)]
         path: Option<PathBuf>,
         /// Allocate memory (e.g. 2G, 4G, 8G)
-        #[arg(long, default_value = "2G")]
-        memory: String,
+        #[arg(short = 'm', long = "memory")]
+        memory: Option<String>,
         /// Automatic EULA acceptance
         #[arg(long)]
         agree_eula: bool,
         /// Temporary server (deleted on exit)
         #[arg(long)]
         tmp: bool,
+        /// Do not automatically start the server after creation
+        #[arg(long)]
+        no_start: bool,
+        /// Non-interactive mode (use defaults without prompting)
+        #[arg(short = 'y', long = "yes", alias = "non-interactive")]
+        yes: bool,
         /// Use Aikar's optimized JVM garbage collection flags (G1GC)
         #[arg(long)]
         aikar: bool,
@@ -53,6 +71,7 @@ pub enum Commands {
     },
 
     /// Run an existing server
+    #[command(alias = "start")]
     Run {
         /// Server name
         #[arg(default_value = "")]
@@ -79,12 +98,32 @@ pub enum Commands {
         /// Force kill process immediately
         #[arg(short, long)]
         force: bool,
+        /// Stop all running servers
+        #[arg(short = 'a', long = "all")]
+        all: bool,
+        /// Target remote host alias
+        #[arg(long)]
+        remote: Option<String>,
+    },
+
+    /// Restart a running server
+    Restart {
+        /// Server name
+        #[arg(default_value = "")]
+        name: String,
+        /// Server directory path
+        #[arg(long)]
+        path: Option<PathBuf>,
+        /// Force kill process before restarting
+        #[arg(short, long)]
+        force: bool,
         /// Target remote host alias
         #[arg(long)]
         remote: Option<String>,
     },
 
     /// View / attach to live console of a running server
+    #[command(alias = "attach", alias = "console", alias = "logs")]
     View {
         /// Server name
         #[arg(default_value = "")]
@@ -98,6 +137,7 @@ pub enum Commands {
     },
 
     /// List all registered servers and their status
+    #[command(alias = "list", alias = "ps")]
     Ls {
         /// Target remote host alias
         #[arg(long)]
@@ -105,6 +145,7 @@ pub enum Commands {
     },
 
     /// Unregister an existing server
+    #[command(alias = "delete")]
     Rm {
         /// Server name
         #[arg(default_value = "")]
@@ -121,6 +162,7 @@ pub enum Commands {
     },
 
     /// Load an existing server folder into Craft
+    #[command(alias = "import")]
     Load {
         /// Path to server directory
         path: PathBuf,

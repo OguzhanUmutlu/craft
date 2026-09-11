@@ -7,15 +7,62 @@ use tokio::process::Command;
 use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
 use craft_daemon::DaemonClient;
 
+use std::io::IsTerminal;
+use dialoguer::{theme::ColorfulTheme, Select};
+
 pub async fn handle_run(
     name_arg: &str,
     custom_path: Option<PathBuf>,
     here: bool,
     paths: &CraftPaths,
 ) -> Result<()> {
+    let mut resolved_name = name_arg.to_string();
+
+    if resolved_name.is_empty() && custom_path.is_none() && std::io::stdin().is_terminal() {
+        let registry = ServersRegistry::load(paths)?;
+        if registry.servers.is_empty() {
+            println!("{}", "No servers registered. Use 'craft new' to create one.".yellow());
+            return Ok(());
+        }
+
+        // Check if current directory is a server
+        let in_server_dir = std::env::current_dir().ok().and_then(|cwd| registry.find_by_path(&cwd).map(|s| s.name.clone()));
+        if let Some(cur_name) = in_server_dir {
+            resolved_name = cur_name;
+        } else {
+            println!("{}", "=== Select Server to Run ===".cyan().bold());
+            let running_paths = if DaemonClient::is_daemon_running(paths) {
+                if let Ok(mut client) = DaemonClient::connect(paths).await {
+                    client.get_running().await.unwrap_or_default()
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
+            };
+
+            let server_items: Vec<String> = registry.servers.iter().map(|s| {
+                let status = if running_paths.contains(&s.path) || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false) {
+                    "[ALREADY RUNNING]"
+                } else {
+                    "[STOPPED]"
+                };
+                format!("{:<20} {:<18} ({} {})", s.name, status, s.software, s.version)
+            }).collect();
+
+            let idx = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt("Select server")
+                .items(&server_items)
+                .default(0)
+                .interact()?;
+
+            resolved_name = registry.servers[idx].name.clone();
+        }
+    }
+
     let server_path = paths.resolve_server_path(
         custom_path.as_deref(),
-        if name_arg.is_empty() { None } else { Some(name_arg) },
+        if resolved_name.is_empty() { None } else { Some(&resolved_name) },
         true,
     )?;
 

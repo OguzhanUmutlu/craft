@@ -5,12 +5,12 @@ High-performance binary distribution server for **Craft**. Serves executables, c
 ---
 
 ## Features
-- 🚀 **Zero external dependencies**: Built purely with the Go standard library.
-- 📦 **Static Release Serving**: Streams platform binaries with SHA256 checksum verification.
-- 📜 **Dynamic One-Line Installers**:
+- **Zero external dependencies**: Built purely with the Go standard library.
+- **Static Release Serving**: Streams platform binaries with SHA256 checksum verification.
+- **Dynamic One-Line Installers**:
   - `GET /install.sh`: Linux/macOS bash installer auto-detecting architecture.
   - `GET /install.ps1`: Windows PowerShell 1-liner installer.
-- 🩺 **Health & Version APIs**: `/healthz` and `/api/v1/version`.
+- **Health & Version APIs**: `/healthz` and `/api/v1/version`.
 
 ---
 

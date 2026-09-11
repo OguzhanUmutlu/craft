@@ -56,7 +56,7 @@ pub async fn handle_plugin(action: PluginCommands, paths: &CraftPaths) -> Result
 
             println!("{}", format!("Installing plugin '{}' to '{}'...", project_id, server_path.display()).cyan());
             let dest = pm.install_from_modrinth(&server_path, &project_id).await?;
-            println!("{}", format!("✓ Successfully installed plugin to '{}'!", dest.display()).green().bold());
+            println!("{}", format!("[OK] Successfully installed plugin to '{}'!", dest.display()).green().bold());
         }
     }
 

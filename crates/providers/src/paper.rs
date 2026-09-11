@@ -110,9 +110,10 @@ impl PaperProvider {
                 let resp = client.get(&url).send().await.ok()?;
                 let builds: Vec<serde_json::Value> = resp.json().await.ok()?;
 
-                let chosen = builds.into_iter().rev().find(|b| {
-                    b.get("channel").and_then(|c| c.as_str()) == Some("STABLE")
-                });
+                let chosen = builds
+                    .iter()
+                    .find(|b| b.get("channel").and_then(|c| c.as_str()) == Some("STABLE"))
+                    .or_else(|| builds.first());
 
                 if let Some(b) = chosen {
                     let downloads = b.get("downloads")?.as_object()?;
@@ -172,7 +173,12 @@ impl ServerSoftware for PaperProvider {
     }
 
     fn get_assets(&self, version: &str) -> Result<Vec<AssetDownload>> {
-        // 1. Try bundled map
+        // 1. Try live resolution via fill.papermc.io
+        if let Some(asset) = self.resolve_live_build(version) {
+            return Ok(vec![asset]);
+        }
+
+        // 2. Try bundled map
         if let Some(url) = self.bundled.get(version) {
             return Ok(vec![AssetDownload {
                 filename: "server.jar".to_string(),
@@ -180,11 +186,6 @@ impl ServerSoftware for PaperProvider {
                 sha256: None,
                 is_archive: false,
             }]);
-        }
-
-        // 2. Try live resolution via fill.papermc.io
-        if let Some(asset) = self.resolve_live_build(version) {
-            return Ok(vec![asset]);
         }
 
         // 3. Fallback direct build format

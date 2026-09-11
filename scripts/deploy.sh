@@ -42,7 +42,7 @@ cmd_up() {
     check_docker
     echo -e "${BLUE}==> Deploying Craft container stack...${NC}"
     docker compose up -d "$@"
-    echo -e "${GREEN}✓ Craft container deployed successfully!${NC}"
+    echo -e "${GREEN}[OK] Craft container deployed successfully!${NC}"
     echo ""
     docker compose ps
     echo ""
@@ -55,7 +55,7 @@ cmd_down() {
     check_docker
     echo -e "${YELLOW}==> Tearing down Craft container stack...${NC}"
     docker compose down "$@"
-    echo -e "${GREEN}✓ Craft containers stopped and removed.${NC}"
+    echo -e "${GREEN}[OK] Craft containers stopped and removed.${NC}"
 }
 
 cmd_restart() {
@@ -89,7 +89,7 @@ cmd_build() {
     check_docker
     echo -e "${BLUE}==> Building Craft Docker image...${NC}"
     DOCKER_BUILDKIT=1 docker compose build "$@"
-    echo -e "${GREEN}✓ Image built successfully!${NC}"
+    echo -e "${GREEN}[OK] Image built successfully!${NC}"
 }
 
 cmd_help() {

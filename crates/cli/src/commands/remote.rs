@@ -33,7 +33,7 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
             registry.add(remote_config)?;
             registry.save(paths)?;
 
-            println!("{}", format!("✓ Successfully added remote host '{}'!", alias).green().bold());
+            println!("{}", format!("[OK] Successfully added remote host '{}'!", alias).green().bold());
             println!("Test connection with: craft remote test {}", alias);
             println!("Bootstrap host with:   craft remote setup {}", alias);
         }
@@ -74,7 +74,7 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
                 return Err(CraftError::Other(format!("Remote host '{}' not found", alias)));
             }
             registry.save(paths)?;
-            println!("{}", format!("✓ Removed remote host '{}'.", alias).green());
+            println!("{}", format!("[OK] Removed remote host '{}'.", alias).green());
         }
         RemoteCommands::Test { alias } => {
             let registry = RemotesRegistry::load(paths)?;
@@ -88,7 +88,7 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
 
             let (_, echo_out, _) = session.exec("echo connection-verified")?;
             if echo_out.trim() == "connection-verified" {
-                println!("{}", format!("✓ Connection successful! Remote OS: {}", os).green().bold());
+                println!("{}", format!("[OK] Connection successful! Remote OS: {}", os).green().bold());
             } else {
                 println!("{}", "Connection established but command output differed.".yellow());
             }
@@ -135,7 +135,7 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
                 }
                 println!("{}", inst_out);
             } else {
-                println!("{}", format!("✓ Found remote Docker: {}", stdout.trim()).green());
+                println!("{}", format!("[OK] Found remote Docker: {}", stdout.trim()).green());
             }
 
             let remote_dir = config.remote_dir.clone().unwrap_or_else(|| std::path::PathBuf::from("craft-deploy"));
@@ -183,7 +183,7 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
                 println!("{}", up_stdout);
             }
 
-            println!("{}", format!("✓ Craft successfully deployed to remote host '{}'!", alias).green().bold());
+            println!("{}", format!("[OK] Craft successfully deployed to remote host '{}'!", alias).green().bold());
             println!("Check remote status: craft remote test {}", alias);
         }
     }

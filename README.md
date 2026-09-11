@@ -8,28 +8,28 @@ Craft can provision, run, attach to, supervise, ping, back up, containerize, and
 
 ## Highlights & Features
 
-- ⚡ **Blazing Fast & Lightweight**: Single native compiled binary (<12 MB) with instant startup (<2ms) and low memory footprint (<10 MB RSS for daemon).
-- 🧩 **16+ Server Software Providers**:
+- **Blazing Fast & Lightweight**: Single native compiled binary (<12 MB) with instant startup (<2ms) and low memory footprint (<10 MB RSS for daemon).
+- **16+ Server Software Providers**:
   - **Java Edition**: Paper, Purpur, Folia, Vanilla Java, Fabric, Spigot, Quilt, NeoForge.
   - **Bedrock Edition**: Vanilla Bedrock Dedicated Server, PocketMine-MP, NukkitX.
   - **Proxies**: Velocity, Waterfall, BungeeCord, GeyserMC, WaterdogPE.
-- 🔄 **Live Background Daemon & Console Attachment**:
+- **Live Background Daemon & Console Attachment**:
   - Background supervisor service with typed IPC over Unix Domain Sockets and Windows Named Pipes / TCP.
   - Interactive console attachment (`craft view` / `craft attach`) with circular log replay and raw stdin command injection.
   - Auto-start servers on system boot (`craft auto`).
-- 🔎 **Multi-Source Plugin & Mod Manager**:
+- **Multi-Source Plugin & Mod Manager**:
   - Unified search & install across **Modrinth API v2**, **PaperMC Hangar API v1**, and **PocketMine Poggit**.
-- 📡 **Native Protocols & Diagnostics**:
+- **Native Protocols & Diagnostics**:
   - Java Server List Ping (SLP) status & latency checker without external tools.
   - Bedrock RakNet UDP unconnected ping.
   - Built-in RCON client (`craft rcon`).
-- 💾 **Zero-Downtime World Snapshots**:
+- **Zero-Downtime World Snapshots**:
   - RCON-synchronized safe world flushes (`save-off` -> `save-all flush` -> gzip snapshot -> `save-on`).
   - Automated retention policies and instant restore.
-- 🛡️ **Network & Firewall Automation**:
+- **Network & Firewall Automation**:
   - Automated system firewall provisioning (UFW / iptables / Windows Firewall) to restrict server access to trusted IPs or proxies.
   - Windows Bedrock UWP loopback exemption manager.
-- 🛠️ **Developer Scaffolding & Containerization**:
+- **Developer Scaffolding & Containerization**:
   - `craft template plugin [paper|velocity]` -> Generates modern Gradle/Kotlin project with sample listeners and VS Code debug profiles.
   - `craft template datapack` -> Scaffolds modern Minecraft datapack.
   - `craft dockerize` -> Generates production multi-stage `Dockerfile` and `docker-compose.yml`.
@@ -206,34 +206,34 @@ craft remote rm my-vps
 Craft provides an all-in-one containerized deployment with Eclipse Temurin Java 21 LTS:
 
 ```bash
-# 🚀 Single-command deployment via native Craft CLI:
+# Single-command deployment via native Craft CLI:
 craft deploy up -d            # Build & start containerized daemon + servers
 craft deploy status           # View container health and port bindings
 craft deploy logs -f          # Stream real-time logs
 craft deploy exec ver         # Execute Craft commands inside the container
 craft deploy down             # Stop and tear down containers
 
-# 🐳 Alternatively via Docker Compose:
+# Alternatively via Docker Compose:
 docker compose up -d
 docker compose logs -f
 docker compose down
 
-# 🛠️ Or via standard Makefile:
+# Or via standard Makefile:
 make up
 make logs
 make shell
 make down
 
-# 📜 Or via zero-dependency helper script:
+# Or via zero-dependency helper script:
 ./scripts/deploy.sh up
 ./scripts/deploy.sh logs
 ./scripts/deploy.sh shell
 ./scripts/deploy.sh down
 
-# 🌐 Deploy container stack to a remote VPS in one command:
+# Deploy container stack to a remote VPS in one command:
 craft remote deploy my-vps
 
-# ⚡ Deploy Portal & Docs to Cloudflare Workers (craft.oguzhanumutlu.com):
+# Deploy Portal & Docs to Cloudflare Workers (craft.oguzhanumutlu.com):
 ./scripts/deploy_docs.sh
 # or: make deploy-docs
 ```

@@ -79,7 +79,7 @@ public final class {name}Plugin extends JavaPlugin {{
 }"#;
             fs::write(target_dir.join(".vscode/launch.json"), vscode_launch)?;
 
-            println!("{}", format!("✓ Scaffolded {} plugin template in '{}'!", platform, name).green().bold());
+            println!("{}", format!("[OK] Scaffolded {} plugin template in '{}'!", platform, name).green().bold());
             println!("Open with VS Code or IntelliJ and run './gradlew build' to build.");
         }
         TemplateCommands::Datapack { name } => {
@@ -106,7 +106,7 @@ public final class {name}Plugin extends JavaPlugin {{
             let load_mc = format!("tellraw @a [\"\",{{\"text\":\"[{name}] Datapack loaded!\",\"color\":\"green\"}}]\n");
             fs::write(target_dir.join(format!("data/{}/function/load.mcfunction", name)), load_mc)?;
 
-            println!("{}", format!("✓ Scaffolded Minecraft datapack in '{}'!", name).green().bold());
+            println!("{}", format!("[OK] Scaffolded Minecraft datapack in '{}'!", name).green().bold());
         }
     }
 

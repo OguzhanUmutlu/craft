@@ -27,7 +27,7 @@ pub fn bootstrap_windows(session: &RemoteSession) -> Result<()> {
         let winget_cmd = "powershell -Command \"winget install Microsoft.OpenJDK.21 --silent --accept-package-agreements --accept-source-agreements\"";
         let _ = session.exec(winget_cmd);
     } else {
-        println!("{}", "✓ Compatible Java 21+ already present on remote Windows host.".green());
+        println!("{}", "[OK] Compatible Java 21+ already present on remote Windows host.".green());
     }
 
     // 3. Create Craft directories
@@ -46,6 +46,6 @@ pub fn bootstrap_windows(session: &RemoteSession) -> Result<()> {
     let _ = session.exec(firewall_tcp);
     let _ = session.exec(firewall_udp);
 
-    println!("{}", "✓ Windows host bootstrapped successfully!".green().bold());
+    println!("{}", "[OK] Windows host bootstrapped successfully!".green().bold());
     Ok(())
 }

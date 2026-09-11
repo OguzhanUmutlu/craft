@@ -81,7 +81,7 @@ else
   mv "$TMP_FILE" "${INSTALL_DIR}/craft"
 fi
 
-echo -e "${GREEN}${BOLD}✓ Craft installed successfully to ${INSTALL_DIR}/craft!${NC}"
+echo -e "${GREEN}${BOLD}[OK] Craft installed successfully to ${INSTALL_DIR}/craft!${NC}"
 echo ""
 echo -e "Get started by creating a new server:"
 echo -e "  ${YELLOW}craft new paper 1.21.4 survival --memory 4G${NC}"

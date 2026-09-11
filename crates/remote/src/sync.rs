@@ -32,7 +32,7 @@ pub fn sync_local_to_remote(
         }
     }
 
-    println!("{}", "✓ Synchronization complete!".green().bold());
+    println!("{}", "[OK] Synchronization complete!".green().bold());
     Ok(())
 }
 

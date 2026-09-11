@@ -94,7 +94,7 @@ pub async fn handle_fix(
     } else {
         println!("{}", "Server repaired successfully:".green().bold());
         for item in fixed_items {
-            println!("  ✓ {}", item);
+            println!("  [FIXED] {}", item);
         }
     }
 

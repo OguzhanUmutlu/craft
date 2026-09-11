@@ -38,7 +38,7 @@ pub fn bootstrap_linux(session: &RemoteSession) -> Result<()> {
             println!("{}", "Package manager not recognized. Please ensure Java 21+ is installed on the remote machine.".yellow());
         }
     } else {
-        println!("{}", "✓ Compatible Java 21+ already present on remote host.".green());
+        println!("{}", "[OK] Compatible Java 21+ already present on remote host.".green());
     }
 
     // 3. Create Craft directories
@@ -81,6 +81,6 @@ WantedBy=default.target
         }
     }
 
-    println!("{}", "✓ Linux host bootstrapped successfully!".green().bold());
+    println!("{}", "[OK] Linux host bootstrapped successfully!".green().bold());
     Ok(())
 }

@@ -1,3 +1,4 @@
+use std::io::IsTerminal;
 use clap::Parser;
 use colored::Colorize;
 use craft_core::{CraftPaths, Result};
@@ -11,6 +12,7 @@ use commands::{
     auto::handle_auto,
     backup::handle_backup,
     cache::handle_cache,
+    dashboard::handle_dashboard,
     deploy::handle_deploy,
     dockerize::handle_dockerize,
     fix::handle_fix,
@@ -20,6 +22,7 @@ use commands::{
     new::handle_new,
     plugin::handle_plugin,
     remote::{execute_remote, handle_remote},
+    restart::handle_restart,
     rm::handle_rm,
     run::handle_run,
     service::handle_service,
@@ -50,32 +53,55 @@ async fn main() {
 
     let result: Result<()> = match cli.command {
         None => {
-            print_banner();
-            Ok(())
+            if std::io::stdin().is_terminal() {
+                handle_dashboard(&paths).await
+            } else {
+                print_banner();
+                Ok(())
+            }
+        }
+        Some(Commands::Manage) => {
+            handle_dashboard(&paths).await
         }
         Some(Commands::New {
+            name,
             software,
             version,
-            name,
+            software_opt,
+            version_opt,
             path,
             memory,
             agree_eula,
             tmp,
+            no_start,
+            yes,
             aikar,
             zgc,
             shenandoah,
             jvm_flags,
             remote,
         }) => {
+            let sw = software.or(software_opt);
+            let ver = version.or(version_opt);
             if let Some(alias) = remote {
                 let mut remote_cmd = format!(
-                    "craft new {} {} {} --memory {}{}",
-                    software,
-                    version,
+                    "craft new {} {} {}",
                     name,
-                    memory,
-                    if agree_eula { " --agree-eula" } else { "" }
+                    sw.as_deref().unwrap_or("paper"),
+                    ver.as_deref().unwrap_or("latest"),
                 );
+                if let Some(ref m) = memory {
+                    remote_cmd.push_str(&format!(" --memory {}", m));
+                }
+                if agree_eula {
+                    remote_cmd.push_str(" --agree-eula");
+                }
+                if no_start {
+                    remote_cmd.push_str(" --no-start");
+                }
+                if yes {
+                    remote_cmd.push_str(" --yes");
+                }
                 if aikar {
                     remote_cmd.push_str(" --aikar");
                 }
@@ -91,13 +117,15 @@ async fn main() {
                 execute_remote(&alias, &remote_cmd, false, &paths)
             } else {
                 handle_new(
-                    &software,
-                    &version,
                     &name,
+                    sw.as_deref(),
+                    ver.as_deref(),
                     path,
-                    &memory,
+                    memory.as_deref(),
                     agree_eula,
                     tmp,
+                    no_start,
+                    yes,
                     aikar,
                     zgc,
                     shenandoah,
@@ -114,12 +142,25 @@ async fn main() {
                 handle_run(&name, path, here, &paths).await
             }
         }
-        Some(Commands::Stop { name, path, force, remote }) => {
+        Some(Commands::Stop { name, path, force, all, remote }) => {
             if let Some(alias) = remote {
-                let remote_cmd = format!("craft stop {}{}", name, if force { " --force" } else { "" });
+                let remote_cmd = format!(
+                    "craft stop {}{}{}",
+                    name,
+                    if force { " --force" } else { "" },
+                    if all { " --all" } else { "" }
+                );
                 execute_remote(&alias, &remote_cmd, false, &paths)
             } else {
-                handle_stop(&name, path, force, &paths).await
+                handle_stop(&name, path, force, all, &paths).await
+            }
+        }
+        Some(Commands::Restart { name, path, force, remote }) => {
+            if let Some(alias) = remote {
+                let remote_cmd = format!("craft restart {}{}", name, if force { " --force" } else { "" });
+                execute_remote(&alias, &remote_cmd, false, &paths)
+            } else {
+                handle_restart(&name, path, force, &paths).await
             }
         }
         Some(Commands::View { name, path, remote }) => {
@@ -209,16 +250,18 @@ async fn main() {
 }
 
 fn print_banner() {
-    println!("{}", "Craft — Minecraft Server Toolchain".cyan().bold());
-    println!("{}", "High-performance Minecraft server management CLI and background daemon.\n".dimmed());
-    println!("Usage: craft <COMMAND> [OPTIONS]\n");
+    println!("{}", "Craft - Minecraft Server Toolchain".cyan().bold());
+    println!("{}", "High-performance Minecraft server management CLI, interactive dashboard, and daemon.\n".dimmed());
+    println!("Usage: craft [COMMAND] [OPTIONS]\n");
     println!("Commands:");
-    println!("  new <software> [version] [name]   Set up a new server");
-    println!("  run [name] [--here]               Run an existing server");
-    println!("  stop [name]                       Stop an existing server");
-    println!("  view [name]                       Attach to server live console");
-    println!("  ls                                List all registered servers");
-    println!("  rm [name] [-rf]                   Unregister a server");
+    println!("  manage                            Open interactive Server Manager Dashboard");
+    println!("  new [name] [software] [version]   Set up a new server (interactive wizard if omitted)");
+    println!("  run [name] [--here]               Run an existing server (interactive selector if omitted)");
+    println!("  stop [name] [--all]               Stop running servers");
+    println!("  restart [name]                    Restart a running server");
+    println!("  view [name]                       Attach to server live console (logs/interactive)");
+    println!("  ls                                List all registered servers and status");
+    println!("  rm [name] [-rf]                   Unregister or delete a server");
     println!("  load <path> <software> <version>  Load an existing server directory");
     println!("  ver [software]                    List available software/versions");
     println!("  update                            Update version lists");
@@ -237,3 +280,4 @@ fn print_banner() {
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");
 }
+

@@ -18,4 +18,6 @@ pub mod template;
 pub mod dockerize;
 pub mod remote;
 pub mod deploy;
+pub mod restart;
+pub mod dashboard;
 

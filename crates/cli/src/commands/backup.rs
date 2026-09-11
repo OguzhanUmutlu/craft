@@ -24,7 +24,7 @@ pub async fn handle_backup(action: BackupCommands, paths: &CraftPaths) -> Result
             let meta = std::fs::metadata(&backup_file)?;
             let mb = (meta.len() as f64) / (1024.0 * 1024.0);
 
-            println!("{}", format!("✓ Backup created successfully: {} ({:.2} MB)", backup_file.display(), mb).green().bold());
+            println!("{}", format!("[OK] Backup created successfully: {} ({:.2} MB)", backup_file.display(), mb).green().bold());
         }
         BackupCommands::List { server } => {
             let list = engine.list_backups(&server);
@@ -56,7 +56,7 @@ pub async fn handle_backup(action: BackupCommands, paths: &CraftPaths) -> Result
             let server_path = paths.resolve_server_path(None, Some(&server), true)?;
             println!("{}", format!("Restoring backup '{}' to '{}'...", backup_file.display(), server_path.display()).yellow());
             engine.restore_backup(&backup_file, &server_path)?;
-            println!("{}", "✓ Server restored successfully!".green().bold());
+            println!("{}", "[OK] Server restored successfully!".green().bold());
         }
     }
 

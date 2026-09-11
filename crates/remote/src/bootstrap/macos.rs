@@ -28,7 +28,7 @@ pub fn bootstrap_macos(session: &RemoteSession) -> Result<()> {
             println!("{}", "Homebrew not found. Please install Java 21+ on the remote macOS machine.".yellow());
         }
     } else {
-        println!("{}", "✓ Compatible Java 21+ already present on remote host.".green());
+        println!("{}", "[OK] Compatible Java 21+ already present on remote host.".green());
     }
 
     // 2. Create Craft directories
@@ -60,6 +60,6 @@ pub fn bootstrap_macos(session: &RemoteSession) -> Result<()> {
     );
     session.exec_checked(&write_cmd)?;
 
-    println!("{}", "✓ macOS host bootstrapped successfully!".green().bold());
+    println!("{}", "[OK] macOS host bootstrapped successfully!".green().bold());
     Ok(())
 }

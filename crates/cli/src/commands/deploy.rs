@@ -117,7 +117,7 @@ pub fn handle_deploy(action: Option<DeployCommands>, _paths: &CraftPaths) -> Res
                 .map_err(|e| CraftError::Other(format!("Failed to execute 'docker compose up': {}. Is Docker installed?", e)))?;
 
             if status.success() {
-                println!("{}", "✓ Craft container stack deployed successfully!".green().bold());
+                println!("{}", "[OK] Craft container stack deployed successfully!".green().bold());
                 println!("Run '{}' to view container health.", "craft deploy status".yellow());
                 println!("Run '{}' to stream logs.", "craft deploy logs -f".yellow());
             } else {
@@ -137,7 +137,7 @@ pub fn handle_deploy(action: Option<DeployCommands>, _paths: &CraftPaths) -> Res
                 .map_err(|e| CraftError::Other(format!("Failed to execute 'docker compose down': {}", e)))?;
 
             if status.success() {
-                println!("{}", "✓ Craft container stack stopped and removed.".green().bold());
+                println!("{}", "[OK] Craft container stack stopped and removed.".green().bold());
             } else {
                 return Err(CraftError::Other("docker compose down exited with an error".to_string()));
             }
@@ -210,10 +210,10 @@ fn init_docker_templates(force: bool) -> Result<()> {
     }
 
     fs::write(dockerfile, DOCKERFILE_TEMPLATE)?;
-    println!("{}", "✓ Created Dockerfile".green());
+    println!("{}", "[OK] Created Dockerfile".green());
 
     fs::write(compose, DOCKER_COMPOSE_TEMPLATE)?;
-    println!("{}", "✓ Created docker-compose.yml".green());
+    println!("{}", "[OK] Created docker-compose.yml".green());
 
     fs::write(entrypoint, ENTRYPOINT_TEMPLATE)?;
     #[cfg(unix)]
@@ -223,7 +223,7 @@ fn init_docker_templates(force: bool) -> Result<()> {
         perms.set_mode(0o755);
         fs::set_permissions(entrypoint, perms)?;
     }
-    println!("{}", "✓ Created docker-entrypoint.sh".green());
+    println!("{}", "[OK] Created docker-entrypoint.sh".green());
 
     println!("{}", "Successfully initialized Docker deployment templates!".green().bold());
     Ok(())

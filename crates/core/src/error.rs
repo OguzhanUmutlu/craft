@@ -54,6 +54,9 @@ pub enum CraftError {
         actual: String,
     },
 
+    #[error("Interactive prompt error: {0}")]
+    Prompt(#[from] dialoguer::Error),
+
     #[error("Operation cancelled by user")]
     Cancelled,
 

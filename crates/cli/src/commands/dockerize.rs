@@ -67,7 +67,7 @@ CMD ["java", "-Xms{}", "-Xmx{}", "-XX:+UseG1GC", "-jar", "server.jar", "nogui"]
         fs::write(server_path.join("docker-compose.yml"), compose)?;
     }
 
-    println!("{}", format!("✓ Generated Dockerfile and docker-compose.yml in '{}'!", server_path.display()).green().bold());
+    println!("{}", format!("[OK] Generated Dockerfile and docker-compose.yml in '{}'!", server_path.display()).green().bold());
     println!("Run 'docker compose up -d' in that directory to launch.");
     Ok(())
 }

@@ -1,46 +1,168 @@
 use std::fs;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use colored::Colorize;
+use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 use craft_core::{find_best_java, get_jar_java_version, CraftError, CraftPaths, Result, ServerConfig, ServersRegistry};
-use craft_providers::{find_software, CacheManager};
+use craft_daemon::DaemonClient;
+use craft_providers::{find_software, get_all_softwares, CacheManager, ServerEdition};
 use crate::commands::run::run_foreground_server;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_new(
-    software_id: &str,
-    version_arg: &str,
-    name_arg: &str,
+    name_input: &str,
+    software_input: Option<&str>,
+    version_input: Option<&str>,
     custom_path: Option<PathBuf>,
-    memory: &str,
-    agree_eula: bool,
+    memory_input: Option<&str>,
+    mut agree_eula: bool,
     tmp: bool,
-    aikar: bool,
-    zgc: bool,
-    shenandoah: bool,
+    no_start: bool,
+    yes: bool,
+    mut aikar: bool,
+    mut zgc: bool,
+    mut shenandoah: bool,
     jvm_flags: Option<Vec<String>>,
     paths: &CraftPaths,
 ) -> Result<()> {
-    let software = find_software(software_id).ok_or_else(|| {
-        CraftError::UnknownSoftware(software_id.to_string())
-    })?;
+    let is_tty = std::io::stdin().is_terminal() && !yes;
+    let theme = ColorfulTheme::default();
 
-    // Determine target version
-    let version = if version_arg == "latest" {
-        software.bundled_versions().first().cloned().unwrap_or_else(|| "latest".to_string())
+    // 1. Determine server name
+    let server_name = if !name_input.trim().is_empty() {
+        name_input.trim().to_string()
+    } else if is_tty {
+        println!("{}", "=== Craft Server Setup Wizard ===".cyan().bold());
+        Input::with_theme(&theme)
+            .with_prompt("Enter server name")
+            .default("my-server".to_string())
+            .interact_text()?
     } else {
-        version_arg.to_string()
+        "my-server".to_string()
     };
 
-    // Determine target directory
+    // 2. Determine target software
+    let selected_software_id = if let Some(sw) = software_input {
+        sw.to_string()
+    } else if is_tty {
+        println!();
+        println!("{}", "Select server platform category:".cyan().bold());
+        let categories = &[
+            "[1] Java High-Performance (Paper, Purpur, Folia, Spigot, Vanilla Java)",
+            "[2] Modded & Hybrid (Fabric, Quilt, NeoForge)",
+            "[3] Network Proxies (Velocity, Waterfall, BungeeCord, GeyserMC, WaterdogPE)",
+            "[4] Bedrock Dedicated (Vanilla Bedrock BDS, PocketMine-MP, NukkitX)",
+            "[5] Browse All 16 Platforms",
+        ];
+        let cat_idx = Select::with_theme(&theme)
+            .with_prompt("Category")
+            .items(categories)
+            .default(0)
+            .interact()?;
+
+        let software_choices: Vec<(&'static str, &'static str, &'static str)> = match cat_idx {
+            0 => vec![
+                ("paper", "Paper", "High-performance Minecraft Java server (Standard)"),
+                ("purpur", "Purpur", "Extreme customization & gameplay optimizations"),
+                ("folia", "Folia", "Multi-threaded regional ticking for massive scale"),
+                ("spigot", "Spigot", "Classic Bukkit / Spigot server"),
+                ("vanilla_java", "Vanilla Java", "Official Mojang Minecraft Java server"),
+            ],
+            1 => vec![
+                ("fabric", "Fabric", "Lightweight, modular modding toolchain"),
+                ("quilt", "Quilt", "Next-gen community-driven modding ecosystem"),
+                ("neoforge", "NeoForge", "Modern Forge-compatible high-power modded server"),
+            ],
+            2 => vec![
+                ("velocity", "Velocity", "Next-generation ultra-fast proxy"),
+                ("waterfall", "Waterfall", "BungeeCord fork with improved performance"),
+                ("bungeecord", "BungeeCord", "Classic multi-server network proxy"),
+                ("geyser", "GeyserMC Standalone", "Bridge allowing Bedrock players on Java"),
+                ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
+            ],
+            3 => vec![
+                ("vanilla_bedrock", "Vanilla Bedrock BDS", "Official Mojang Bedrock Dedicated Server"),
+                ("pocketmine", "PocketMine-MP", "High-performance C++ / PHP Bedrock server"),
+                ("nukkit", "NukkitX", "Java-based multi-threaded Bedrock server"),
+            ],
+            _ => {
+                get_all_softwares()
+                    .into_iter()
+                    .map(|s| (s.id(), s.name(), "Supported Minecraft Server Platform"))
+                    .collect()
+            }
+        };
+
+        println!();
+        println!("{}", "Select server software:".cyan().bold());
+        let item_labels: Vec<String> = software_choices
+            .iter()
+            .map(|(_, name, desc)| format!("{:<22} - {}", name, desc))
+            .collect();
+
+        let choice_idx = Select::with_theme(&theme)
+            .with_prompt("Software")
+            .items(&item_labels)
+            .default(0)
+            .interact()?;
+
+        software_choices[choice_idx].0.to_string()
+    } else {
+        "paper".to_string()
+    };
+
+    let software = find_software(&selected_software_id).ok_or_else(|| {
+        CraftError::UnknownSoftware(selected_software_id.clone())
+    })?;
+
+    // 3. Determine target version
+    let bundled = software.bundled_versions();
+    let default_version = bundled.first().cloned().unwrap_or_else(|| "latest".to_string());
+
+    let version = if let Some(v) = version_input {
+        if v == "latest" {
+            default_version
+        } else {
+            v.to_string()
+        }
+    } else if is_tty {
+        println!();
+        println!("{}", "Select software version:".cyan().bold());
+        let mut version_options = vec![
+            format!("latest (Recommended: {})", default_version),
+        ];
+        for b in bundled.iter().take(5) {
+            if b != &default_version {
+                version_options.push(b.clone());
+            }
+        }
+        version_options.push("Custom version...".to_string());
+
+        let ver_choice = Select::with_theme(&theme)
+            .with_prompt("Version")
+            .items(&version_options)
+            .default(0)
+            .interact()?;
+
+        if ver_choice == 0 {
+            default_version
+        } else if ver_choice == version_options.len() - 1 {
+            Input::with_theme(&theme)
+                .with_prompt("Enter custom Minecraft version")
+                .default(default_version)
+                .interact_text()?
+        } else {
+            version_options[ver_choice].clone()
+        }
+    } else {
+        default_version
+    };
+
+    // 4. Determine target directory
     let target_dir = if let Some(p) = custom_path {
         p
     } else {
-        let folder_name = if !name_arg.is_empty() {
-            name_arg.to_string()
-        } else {
-            format!("{}_{}", software.id(), version.replace('.', "_"))
-        };
-        paths.servers_dir.join(&folder_name)
+        paths.servers_dir.join(&server_name)
     };
 
     if target_dir.exists() {
@@ -54,9 +176,83 @@ pub async fn handle_new(
         fs::create_dir_all(&target_dir)?;
     }
 
+    // 5. Determine memory allocation
+    let memory = if let Some(m) = memory_input {
+        m.to_string()
+    } else if is_tty {
+        println!();
+        println!("{}", "Select memory allocation (RAM):".cyan().bold());
+        let mem_options = &[
+            "2G (Standard)",
+            "4G (Recommended for Paper / Fabric)",
+            "8G (Heavy Modpacks / Folia / Large Worlds)",
+            "16G (High-capacity Network / Multi-world)",
+            "Custom memory...",
+        ];
+        let mem_choice = Select::with_theme(&theme)
+            .with_prompt("Memory")
+            .items(mem_options)
+            .default(1)
+            .interact()?;
+
+        match mem_choice {
+            0 => "2G".to_string(),
+            1 => "4G".to_string(),
+            2 => "8G".to_string(),
+            3 => "16G".to_string(),
+            _ => Input::with_theme(&theme)
+                .with_prompt("Enter memory limit (e.g. 6G, 12G)")
+                .default("4G".to_string())
+                .interact_text()?,
+        }
+    } else {
+        "2G".to_string()
+    };
+
+    // 6. JVM Garbage Collection Presets (for Java Edition)
+    if software.edition() == ServerEdition::Java && !aikar && !zgc && !shenandoah {
+        if is_tty {
+            println!();
+            println!("{}", "Select JVM Garbage Collection Preset:".cyan().bold());
+            let gc_options = &[
+                "Aikar G1GC (Industry standard for Paper/Spigot/Folia - Recommended)",
+                "ZGC (Ultra-low latency for Java 21+)",
+                "Shenandoah GC (Low-pause collector)",
+                "Standard JVM Defaults",
+            ];
+            let gc_choice = Select::with_theme(&theme)
+                .with_prompt("JVM GC Tuning")
+                .items(gc_options)
+                .default(0)
+                .interact()?;
+
+            match gc_choice {
+                0 => aikar = true,
+                1 => zgc = true,
+                2 => shenandoah = true,
+                _ => {}
+            }
+        } else {
+            aikar = true;
+        }
+    }
+
+    // 7. EULA Acceptance
+    if !agree_eula {
+        if is_tty {
+            agree_eula = Confirm::with_theme(&theme)
+                .with_prompt("Accept Minecraft EULA? (required to start server)")
+                .default(true)
+                .interact()?;
+        } else {
+            agree_eula = true;
+        }
+    }
+
+    // 8. Download assets and set up server
+    println!();
     println!("{}", format!("Setting up {} version {} in '{}'...", software.name(), version, target_dir.display()).cyan());
 
-    // Download assets
     let assets = software.get_assets(&version)?;
     let cache = CacheManager::new(paths);
 
@@ -76,7 +272,7 @@ pub async fn handle_new(
 
     // Check Java version requirements for Java edition
     let mut java_path = None;
-    if software.edition() == craft_providers::ServerEdition::Java {
+    if software.edition() == ServerEdition::Java {
         let jar_path = target_dir.join(software.default_server_file());
         if jar_path.exists() {
             if let Ok(req_ver) = get_jar_java_version(&jar_path) {
@@ -113,7 +309,7 @@ pub async fn handle_new(
             "-Dusing.aikars.flags=https://mcflags.emc.gs".to_string(),
             "-Daikars.new.flags=true".to_string(),
         ]);
-        println!("{}", "Applied Aikar's optimized G1GC JVM flags.".cyan());
+        println!("{}", "Applied Aikar G1GC JVM flags.".cyan());
     } else if zgc {
         flags.extend(vec![
             "-XX:+UseZGC".to_string(),
@@ -139,20 +335,16 @@ pub async fn handle_new(
     let final_jvm_flags = if flags.is_empty() { None } else { Some(flags) };
 
     // Generate start scripts
-    software.generate_start_script_with_flags(&target_dir, &version, java_path.as_deref(), memory, final_jvm_flags.as_deref())?;
+    software.generate_start_script_with_flags(&target_dir, &version, java_path.as_deref(), &memory, final_jvm_flags.as_deref())?;
 
     // Handle EULA
     if agree_eula {
         let eula_file = target_dir.join("eula.txt");
         let _ = fs::write(eula_file, "eula=true\n");
-        println!("{}", "EULA accepted automatically via --agree-eula.".green());
+        println!("{}", "EULA accepted automatically.".green());
     }
 
     // Register server
-    let server_name = target_dir.file_name()
-        .map(|f| f.to_string_lossy().to_string())
-        .unwrap_or_else(|| "server".to_string());
-
     let server_config = ServerConfig {
         name: server_name.clone(),
         path: target_dir.clone(),
@@ -172,19 +364,56 @@ pub async fn handle_new(
 
     println!("{}", format!("Server '{}' successfully installed!", server_name).green().bold());
 
-    // Launch server in foreground
-    println!("{}", "Starting server...".cyan());
-    let run_res = run_foreground_server(&target_dir).await;
-
-    // If temporary server, clean up on exit
-    if tmp {
-        println!("{}", "Temporary server: Cleaning up files...".yellow());
-        let _ = fs::remove_dir_all(&target_dir);
-        let mut reg = ServersRegistry::load(paths)?;
-        reg.remove(&target_dir);
-        let _ = reg.save(paths);
-        println!("{}", "Temporary server removed.".dimmed());
+    // 9. Startup decision
+    if no_start {
+        println!("{}", format!("Server configured without starting. Start anytime with 'craft run {}'.", server_name).dimmed());
+        return Ok(());
     }
 
-    run_res
+    let start_choice = if is_tty {
+        println!();
+        let start_options = &[
+            "[1] Background Daemon (Runs 24/7 supervisor in background)",
+            "[2] Foreground Terminal (Interactive console in current session)",
+            "[3] Do not start yet (Exit)",
+        ];
+        Select::with_theme(&theme)
+            .with_prompt("Startup mode")
+            .items(start_options)
+            .default(0)
+            .interact()?
+    } else {
+        1 // Foreground by default in non-interactive
+    };
+
+    match start_choice {
+        0 => {
+            println!("{}", format!("Starting '{}' via supervisor daemon...", server_name).cyan());
+            DaemonClient::ensure_daemon_started(paths).await?;
+            let mut client = DaemonClient::connect(paths).await?;
+            client.start_server(&target_dir).await?;
+            println!("{}", format!("Server '{}' is running in the background!", server_name).green().bold());
+            println!("{}", format!("Use 'craft view {}' to attach to its live console.", server_name).dimmed());
+            Ok(())
+        }
+        1 => {
+            println!("{}", format!("Starting server '{}' in foreground...", server_name).cyan());
+            let run_res = run_foreground_server(&target_dir).await;
+
+            if tmp {
+                println!("{}", "Temporary server: Cleaning up files...".yellow());
+                let _ = fs::remove_dir_all(&target_dir);
+                let mut reg = ServersRegistry::load(paths)?;
+                reg.remove(&target_dir);
+                let _ = reg.save(paths);
+                println!("{}", "Temporary server removed.".dimmed());
+            }
+
+            run_res
+        }
+        _ => {
+            println!("{}", format!("Server '{}' is ready. Start anytime with 'craft run {}'.", server_name, server_name).dimmed());
+            Ok(())
+        }
+    }
 }

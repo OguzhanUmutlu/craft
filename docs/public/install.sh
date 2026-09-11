@@ -82,7 +82,7 @@ fi
 chmod +x "${TMP_FILE}"
 mv "${TMP_FILE}" "${DEST_FILE}"
 
-echo -e "${GREEN}${BOLD}✓ Craft successfully installed to ${DEST_FILE}!${NC}"
+echo -e "${GREEN}${BOLD}[OK] Craft successfully installed to ${DEST_FILE}!${NC}"
 
 # Check PATH
 case ":$PATH:" in

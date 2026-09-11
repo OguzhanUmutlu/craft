@@ -316,6 +316,7 @@ dependencies = [
  "indicatif",
  "serde",
  "serde_json",
+ "sysinfo",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -343,6 +344,7 @@ name = "craft-core"
 version = "1.0.0"
 dependencies = [
  "chrono",
+ "dialoguer",
  "directories",
  "fs2",
  "libc",
