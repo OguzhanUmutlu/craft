@@ -311,6 +311,7 @@ dependencies = [
  "craft-plugins",
  "craft-providers",
  "craft-remote",
+ "crossterm",
  "dialoguer",
  "directories",
  "indicatif",

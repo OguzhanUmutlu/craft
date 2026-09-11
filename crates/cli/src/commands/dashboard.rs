@@ -1,7 +1,12 @@
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use colored::Colorize;
-use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
+use crossterm::{
+    cursor::{Hide, MoveTo, Show},
+    event::{self, Event, KeyCode, KeyEventKind},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
+};
 use sysinfo::System;
 
 use craft_core::{CraftPaths, Result, ServersRegistry};
@@ -22,12 +27,158 @@ use crate::commands::{
     view::handle_view,
 };
 
+pub struct MenuEntry {
+    pub hotkey: String,
+    pub label: String,
+}
+
+impl MenuEntry {
+    pub fn new(hotkey: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            hotkey: hotkey.into(),
+            label: label.into(),
+        }
+    }
+}
+
+pub fn run_menu(
+    header: &str,
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+) -> Result<Option<usize>> {
+    let mut stdout = io::stdout();
+    enable_raw_mode()?;
+    let _ = execute!(stdout, Hide);
+
+    let result = (|| -> Result<Option<usize>> {
+        if *selected_idx >= entries.len() {
+            *selected_idx = 0;
+        }
+
+        loop {
+            execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+
+            for line in header.lines() {
+                print!("{}\r\n", line);
+            }
+            print!("\r\n");
+
+            for (idx, entry) in entries.iter().enumerate() {
+                if idx == *selected_idx {
+                    print!(
+                        "  \x1B[1;36m>\x1B[0m \x1B[1;97;44m {:<4} {:<68} \x1B[0m\r\n",
+                        format!("[{}]", entry.hotkey),
+                        entry.label
+                    );
+                } else {
+                    print!(
+                        "    \x1B[1;36m{:<4}\x1B[0m {:<68}\r\n",
+                        format!("[{}]", entry.hotkey),
+                        entry.label
+                    );
+                }
+            }
+
+            print!("\r\n\x1B[2m--------------------------------------------------------------------------------\r\n");
+            print!(" [HOTKEYS] Press 0-9 / keys directly  |  [↑/↓/j/k] Move  |  [Enter] Select  |  [q] Exit\x1B[0m\r\n");
+            stdout.flush()?;
+
+            if let Event::Key(key) = event::read()? {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+
+                match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        if *selected_idx > 0 {
+                            *selected_idx -= 1;
+                        } else {
+                            *selected_idx = entries.len().saturating_sub(1);
+                        }
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        if *selected_idx + 1 < entries.len() {
+                            *selected_idx += 1;
+                        } else {
+                            *selected_idx = 0;
+                        }
+                    }
+                    KeyCode::Home => {
+                        *selected_idx = 0;
+                    }
+                    KeyCode::End => {
+                        *selected_idx = entries.len().saturating_sub(1);
+                    }
+                    KeyCode::Enter => {
+                        return Ok(Some(*selected_idx));
+                    }
+                    KeyCode::Esc => {
+                        return Ok(None);
+                    }
+                    KeyCode::Char(c) => {
+                        let c_lower = c.to_ascii_lowercase();
+                        if c_lower == 'q' {
+                            if let Some(pos) = entries.iter().position(|e| e.hotkey.eq_ignore_ascii_case("q")) {
+                                *selected_idx = pos;
+                                return Ok(Some(pos));
+                            }
+                            return Ok(None);
+                        }
+
+                        let c_str = c_lower.to_string();
+                        if let Some(pos) = entries.iter().position(|e| e.hotkey.eq_ignore_ascii_case(&c_str)) {
+                            *selected_idx = pos;
+                            return Ok(Some(pos));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    })();
+
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), Show);
+    result
+}
+
 fn press_enter() {
-    println!();
-    print!("{}", "Press Enter to continue...".dimmed());
+    print!("\r\n  \x1B[2mPress Enter to continue...\x1B[0m");
     let _ = io::stdout().flush();
     let mut s = String::new();
     let _ = io::stdin().read_line(&mut s);
+}
+
+fn prompt_text(prompt: &str, default: Option<&str>) -> io::Result<String> {
+    print!("  \x1B[1;36m?\x1B[0m {} ", prompt);
+    if let Some(d) = default {
+        print!("\x1B[2m[{}]\x1B[0m: ", d);
+    } else {
+        print!(": ");
+    }
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        if let Some(d) = default {
+            return Ok(d.to_string());
+        }
+    }
+    Ok(trimmed.to_string())
+}
+
+fn prompt_confirm(prompt: &str, default_yes: bool) -> io::Result<bool> {
+    let hint = if default_yes { "Y/n" } else { "y/N" };
+    print!("  \x1B[1;33m?\x1B[0m {} \x1B[2m[{}]\x1B[0m: ", prompt, hint);
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Ok(default_yes);
+    }
+    Ok(trimmed.eq_ignore_ascii_case("y") || trimmed.eq_ignore_ascii_case("yes"))
 }
 
 fn get_system_summary() -> (String, f64, f64, f64) {
@@ -40,7 +191,7 @@ fn get_system_summary() -> (String, f64, f64, f64) {
     (os_name, total_gb, used_gb, pct)
 }
 
-fn print_dashboard_header(
+fn build_dashboard_header(
     os: &str,
     total_ram: f64,
     used_ram: f64,
@@ -48,31 +199,27 @@ fn print_dashboard_header(
     daemon_online: bool,
     registered_count: usize,
     running_count: usize,
-) {
+) -> String {
     let daemon_badge = if daemon_online {
         "[ONLINE]".green().bold()
     } else {
         "[OFFLINE]".yellow().bold()
     };
 
-    println!();
-    println!("{}", "================================================================================".cyan().bold());
-    println!("{}", "                         CRAFT SERVER MANAGER DASHBOARD                         ".cyan().bold());
-    println!("{}", "================================================================================".cyan().bold());
-    println!(
-        " Host: {:<16} | RAM: {:.1} / {:.1} GB ({:.1}%) | Daemon: {}",
+    format!(
+        "{}\r\n{}\r\n{}\r\n Host: {:<16} | RAM: {:.1} / {:.1} GB ({:.1}%) | Daemon: {}\r\n Registered Servers: {:<4} | Active Running: {:<4}\r\n{}",
+        "================================================================================".cyan().bold(),
+        "                         CRAFT SERVER MANAGER DASHBOARD                         ".cyan().bold(),
+        "================================================================================".cyan().bold(),
         os.white().bold(),
         used_ram,
         total_ram,
         ram_pct,
-        daemon_badge
-    );
-    println!(
-        " Registered Servers: {:<4} | Active Running: {:<4}",
+        daemon_badge,
         registered_count.to_string().cyan().bold(),
-        running_count.to_string().green().bold()
-    );
-    println!("{}", "--------------------------------------------------------------------------------".dimmed());
+        running_count.to_string().green().bold(),
+        "--------------------------------------------------------------------------------".dimmed()
+    )
 }
 
 pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
@@ -81,7 +228,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
         return Ok(());
     }
 
-    let theme = ColorfulTheme::default();
+    let mut selected_main = 0;
 
     loop {
         let (os, total_ram, used_ram, ram_pct) = get_system_summary();
@@ -100,7 +247,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
         };
         let running_count = running_paths.len();
 
-        print_dashboard_header(
+        let header = build_dashboard_header(
             &os,
             total_ram,
             used_ram,
@@ -110,39 +257,30 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
             running_count,
         );
 
-        let options = &[
-            "[1] Manage Servers (Start, Stop, Restart, Console, Delete)",
-            "[2] Create New Server (Interactive Wizard)",
-            "[3] Quick Start Server",
-            "[4] Stop Running Server",
-            "[5] Restart Server",
-            "[6] Attach Live Console (craft view)",
-            "[7] Server Network Ping (Java SLP & Bedrock)",
-            "[8] World Snapshots & Backup Manager",
-            "[9] Browse & Install Plugins (Modrinth / Hangar)",
-            "[10] Remote VPS Hosts (SSH Management)",
-            "[11] Service Daemon Control (Start / Stop / Restart)",
-            "[12] Cache & Storage Management",
-            "[0] Exit Craft",
+        let entries = vec![
+            MenuEntry::new("1", "Manage Servers (Start, Stop, Restart, Console, Delete)"),
+            MenuEntry::new("2", "Create New Server (Interactive Wizard)"),
+            MenuEntry::new("3", "Quick Start Server"),
+            MenuEntry::new("4", "Stop Running Server"),
+            MenuEntry::new("5", "Restart Server"),
+            MenuEntry::new("6", "Attach Live Console (craft view)"),
+            MenuEntry::new("7", "Server Network Ping (Java SLP & Bedrock)"),
+            MenuEntry::new("8", "World Snapshots & Backup Manager"),
+            MenuEntry::new("9", "Browse & Install Plugins (Modrinth / Hangar)"),
+            MenuEntry::new("r", "Remote VPS Hosts (SSH Management)"),
+            MenuEntry::new("d", "Service Daemon Control (Start / Stop / Restart)"),
+            MenuEntry::new("c", "Cache & Storage Management"),
+            MenuEntry::new("0", "Exit Craft"),
         ];
 
-        let selection = Select::with_theme(&theme)
-            .with_prompt("Select action")
-            .items(options)
-            .default(0)
-            .interact();
+        let selection = run_menu(&header, &entries, &mut selected_main)?;
 
-        let choice = match selection {
-            Ok(idx) => idx,
-            Err(_) => break,
-        };
-
-        match choice {
-            0 => {
-                manage_servers_menu(paths, &theme).await?;
+        match selection {
+            Some(0) => {
+                manage_servers_menu(paths).await?;
             }
-            1 => {
-                println!();
+            Some(1) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_new(
                     "",
                     None,
@@ -164,58 +302,59 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                 }
                 press_enter();
             }
-            2 => {
-                println!();
+            Some(2) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_run("", None, false, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
                 }
                 press_enter();
             }
-            3 => {
-                println!();
+            Some(3) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_stop("", None, false, false, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
                 }
                 press_enter();
             }
-            4 => {
-                println!();
+            Some(4) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_restart("", None, false, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
                 }
                 press_enter();
             }
-            5 => {
-                println!();
+            Some(5) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_view("", None, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
                 }
                 press_enter();
             }
-            6 => {
-                ping_menu(&theme).await?;
+            Some(6) => {
+                ping_menu().await?;
             }
-            7 => {
-                backups_menu(paths, &theme).await?;
+            Some(7) => {
+                backups_menu(paths).await?;
             }
-            8 => {
-                plugins_menu(paths, &theme).await?;
+            Some(8) => {
+                plugins_menu(paths).await?;
             }
-            9 => {
-                remotes_menu(paths, &theme).await?;
+            Some(9) => {
+                remotes_menu(paths).await?;
             }
-            10 => {
-                daemon_menu(paths, &theme).await?;
+            Some(10) => {
+                daemon_menu(paths).await?;
             }
-            11 => {
-                cache_menu(paths, &theme)?;
+            Some(11) => {
+                cache_menu(paths)?;
             }
-            12 => {
-                println!("{}", "Exiting Craft. Goodbye!".cyan());
+            Some(12) | None => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                println!("{}", "Exiting Craft. Goodbye!".cyan().bold());
                 break;
             }
             _ => break,
@@ -225,15 +364,11 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
     Ok(())
 }
 
-async fn manage_servers_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
+async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
+    let mut selected = 0;
+
     loop {
         let registry = ServersRegistry::load(paths)?;
-        if registry.servers.is_empty() {
-            println!("{}", "\nNo servers registered. Create one with option [2].".yellow());
-            press_enter();
-            return Ok(());
-        }
-
         let daemon_running = DaemonClient::is_daemon_running(paths);
         let running_paths = if daemon_running {
             if let Ok(mut c) = DaemonClient::connect(paths).await {
@@ -245,46 +380,118 @@ async fn manage_servers_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Resul
             Vec::new()
         };
 
-        println!();
-        println!("{}", "=== Registered Servers ===".cyan().bold());
+        if registry.servers.is_empty() {
+            let header = format!(
+                "{}\r\n{}\r\n{}\r\n No servers currently registered on this machine.\r\n{}",
+                "================================================================================".cyan().bold(),
+                "                               REGISTERED SERVERS                               ".cyan().bold(),
+                "================================================================================".cyan().bold(),
+                "--------------------------------------------------------------------------------".dimmed()
+            );
 
-        let mut items: Vec<String> = registry
-            .servers
-            .iter()
-            .map(|s| {
-                let is_running = running_paths.contains(&s.path)
-                    || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false);
-                let status_str = if is_running {
-                    "[RUNNING]".green().bold().to_string()
-                } else {
-                    "[STOPPED]".dimmed().to_string()
-                };
-                format!("{:<20} {:<10} {:<10} {}", s.name, s.software, s.version, status_str)
-            })
-            .collect();
-        items.push("[0] Back to Main Menu".to_string());
+            let entries = vec![
+                MenuEntry::new("2", "Create Your First Server (Setup Wizard)"),
+                MenuEntry::new("0", "Back to Main Menu"),
+            ];
 
-        let sel = Select::with_theme(theme)
-            .with_prompt("Select a server to manage")
-            .items(&items)
-            .default(0)
-            .interact();
-
-        let idx = match sel {
-            Ok(i) => i,
-            Err(_) => return Ok(()),
-        };
-
-        if idx >= registry.servers.len() {
-            return Ok(());
+            match run_menu(&header, &entries, &mut selected)? {
+                Some(0) => {
+                    let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                    let res = handle_new(
+                        "",
+                        None,
+                        None,
+                        None,
+                        None,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        None,
+                        paths,
+                    ).await;
+                    if let Err(e) = res {
+                        eprintln!("{}: {}", "Setup Error".red().bold(), e);
+                    }
+                    press_enter();
+                }
+                _ => return Ok(()),
+            }
+            continue;
         }
 
-        let chosen = &registry.servers[idx];
-        server_control_panel(&chosen.name, paths, theme).await?;
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Select a server to inspect details, control lifecycle, or attach console.\r\n{}",
+            "================================================================================".cyan().bold(),
+            "                               REGISTERED SERVERS                               ".cyan().bold(),
+            "================================================================================".cyan().bold(),
+            "--------------------------------------------------------------------------------".dimmed()
+        );
+
+        let mut entries = Vec::new();
+        for (idx, s) in registry.servers.iter().enumerate() {
+            let is_running = running_paths.contains(&s.path)
+                || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false);
+            let status_str = if is_running {
+                "[RUNNING]".green().bold().to_string()
+            } else {
+                "[STOPPED]".dimmed().to_string()
+            };
+            let hotkey = if idx < 9 {
+                (idx + 1).to_string()
+            } else {
+                ((b'a' + (idx - 9) as u8) as char).to_string()
+            };
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<20} {:<10} {:<10} {}", s.name, s.software, s.version, status_str),
+            ));
+        }
+
+        entries.push(MenuEntry::new("n", "Create New Server (Setup Wizard)"));
+        entries.push(MenuEntry::new("0", "Back to Main Menu"));
+
+        let sel = run_menu(&header, &entries, &mut selected)?;
+
+        match sel {
+            Some(idx) if idx < registry.servers.len() => {
+                let chosen = &registry.servers[idx];
+                server_control_panel(&chosen.name, paths).await?;
+            }
+            Some(idx) if idx == registry.servers.len() => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                let res = handle_new(
+                    "",
+                    None,
+                    None,
+                    None,
+                    None,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    None,
+                    paths,
+                ).await;
+                if let Err(e) = res {
+                    eprintln!("{}: {}", "Setup Error".red().bold(), e);
+                }
+                press_enter();
+            }
+            _ => return Ok(()),
+        }
     }
 }
 
-async fn server_control_panel(name: &str, paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
+async fn server_control_panel(name: &str, paths: &CraftPaths) -> Result<()> {
+    let mut selected = 0;
+
     loop {
         let registry = ServersRegistry::load(paths)?;
         let server = match registry.find_by_name(name) {
@@ -315,79 +522,76 @@ async fn server_control_panel(name: &str, paths: &CraftPaths, theme: &ColorfulTh
             "[STOPPED]".dimmed()
         };
 
-        println!();
-        println!("{}", format!("=== Server Control: {} {} ===", server.name, status_badge).cyan().bold());
-        println!("  Platform: {} {}", server.software, server.version);
-        println!("  Path:     {}", server.path.display());
-        println!("  Memory:   {}", server.memory.as_deref().unwrap_or("Default (2G)"));
-        println!("{}", "--------------------------------------------------------------------------------".dimmed());
+        let title = format!("SERVER CONTROL: {} {}", server.name, status_badge);
+        let header = format!(
+            "{}\r\n {:^78} \r\n{}\r\n  Platform: {} {}\r\n  Path:     {}\r\n  Memory:   {}\r\n{}",
+            "================================================================================".cyan().bold(),
+            title,
+            "================================================================================".cyan().bold(),
+            server.software.white().bold(),
+            server.version.cyan(),
+            server.path.display(),
+            server.memory.as_deref().unwrap_or("Default (2G)"),
+            "--------------------------------------------------------------------------------".dimmed()
+        );
 
-        let actions = &[
-            "[1] Start Server (Background Daemon)",
-            "[2] Start Server (Foreground Terminal)",
-            "[3] Stop Server",
-            "[4] Restart Server",
-            "[5] Attach Live Console (craft view)",
-            "[6] Create World Snapshot Backup",
-            "[7] List Existing Backups",
-            "[8] Delete / Unregister Server",
-            "[0] Back to Server List",
+        let entries = vec![
+            MenuEntry::new("1", "Start Server (Background Daemon)"),
+            MenuEntry::new("2", "Start Server (Foreground Terminal)"),
+            MenuEntry::new("3", "Stop Server"),
+            MenuEntry::new("4", "Restart Server"),
+            MenuEntry::new("5", "Attach Live Console (craft view)"),
+            MenuEntry::new("6", "Create World Snapshot Backup"),
+            MenuEntry::new("7", "List Existing Backups"),
+            MenuEntry::new("8", "Delete / Unregister Server"),
+            MenuEntry::new("0", "Back to Server List"),
         ];
 
-        let sel = Select::with_theme(theme)
-            .with_prompt("Server Action")
-            .items(actions)
-            .default(0)
-            .interact();
+        let sel = run_menu(&header, &entries, &mut selected)?;
 
-        let choice = match sel {
-            Ok(i) => i,
-            Err(_) => return Ok(()),
-        };
-
-        match choice {
-            0 => {
-                println!();
+        match sel {
+            Some(0) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_run(&server.name, None, false, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
                 }
                 press_enter();
             }
-            1 => {
-                println!();
+            Some(1) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_run(&server.name, None, true, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
                 }
                 press_enter();
             }
-            2 => {
-                println!();
+            Some(2) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_stop(&server.name, None, false, false, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
                 }
                 press_enter();
             }
-            3 => {
-                println!();
+            Some(3) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_restart(&server.name, None, false, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
                 }
                 press_enter();
             }
-            4 => {
-                println!();
+            Some(4) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_view(&server.name, None, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
                 }
                 press_enter();
             }
-            5 => {
-                println!();
+            Some(5) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_backup(
                     BackupCommands::Create {
                         server: server.name.clone(),
@@ -400,8 +604,8 @@ async fn server_control_panel(name: &str, paths: &CraftPaths, theme: &ColorfulTh
                 }
                 press_enter();
             }
-            6 => {
-                println!();
+            Some(6) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_backup(
                     BackupCommands::List {
                         server: server.name.clone(),
@@ -413,8 +617,8 @@ async fn server_control_panel(name: &str, paths: &CraftPaths, theme: &ColorfulTh
                 }
                 press_enter();
             }
-            7 => {
-                println!();
+            Some(7) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_rm(&server.name, None, false, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Error".red().bold(), e);
@@ -422,30 +626,36 @@ async fn server_control_panel(name: &str, paths: &CraftPaths, theme: &ColorfulTh
                 press_enter();
                 return Ok(());
             }
-            8 => return Ok(()),
             _ => return Ok(()),
         }
     }
 }
 
-async fn ping_menu(theme: &ColorfulTheme) -> Result<()> {
-    println!();
-    println!("{}", "=== Ping Minecraft Server ===".cyan().bold());
+async fn ping_menu() -> Result<()> {
+    let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+    println!("{}", "================================================================================".cyan().bold());
+    println!("{}", "                           SERVER NETWORK PING                                  ".cyan().bold());
+    println!("{}", "================================================================================".cyan().bold());
+    println!(" Test network reachability, latency, and online player counts.\r\n");
 
-    let target: String = Input::with_theme(theme)
-        .with_prompt("Server address (host or host:port)")
-        .default("127.0.0.1:25565".to_string())
-        .interact_text()?;
+    let target = prompt_text("Server address (IP:Port or Domain)", Some("127.0.0.1:25565"))?;
 
-    let proto_items = &["[1] Java Edition (SLP Protocol)", "[2] Bedrock Edition (RakNet Protocol)"];
-    let proto = Select::with_theme(theme)
-        .with_prompt("Protocol")
-        .items(proto_items)
-        .default(0)
-        .interact()?;
+    let mut proto_sel = 0;
+    let proto_header = " Select Protocol:";
+    let proto_entries = vec![
+        MenuEntry::new("1", "Java Edition (SLP Protocol)"),
+        MenuEntry::new("2", "Bedrock Edition (RakNet Protocol)"),
+        MenuEntry::new("0", "Cancel"),
+    ];
 
-    let is_bedrock = proto == 1;
+    let choice = run_menu(proto_header, &proto_entries, &mut proto_sel)?;
+    let is_bedrock = match choice {
+        Some(0) => false,
+        Some(1) => true,
+        _ => return Ok(()),
+    };
 
+    let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
     let res = handle_ping(&target, is_bedrock).await;
     if let Err(e) = res {
         eprintln!("{}: {}", "Ping Error".red().bold(), e);
@@ -454,40 +664,33 @@ async fn ping_menu(theme: &ColorfulTheme) -> Result<()> {
     Ok(())
 }
 
-async fn backups_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
-    loop {
-        println!();
-        println!("{}", "=== World Snapshots & Backups ===".cyan().bold());
+async fn backups_menu(paths: &CraftPaths) -> Result<()> {
+    let mut selected = 0;
 
-        let options = &[
-            "[1] Create Snapshot Backup",
-            "[2] List Server Backups",
-            "[3] Restore Server from Backup",
-            "[0] Back",
+    loop {
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Create compressed backups, inspect archive history, or restore worlds.\r\n{}",
+            "================================================================================".cyan().bold(),
+            "                       WORLD SNAPSHOTS & BACKUP MANAGER                         ".cyan().bold(),
+            "================================================================================".cyan().bold(),
+            "--------------------------------------------------------------------------------".dimmed()
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Create World Snapshot"),
+            MenuEntry::new("2", "List Existing Backups"),
+            MenuEntry::new("3", "Restore Server from Backup"),
+            MenuEntry::new("0", "Back to Main Menu"),
         ];
 
-        let sel = Select::with_theme(theme)
-            .with_prompt("Backup Action")
-            .items(options)
-            .default(0)
-            .interact();
-
-        let choice = match sel {
-            Ok(i) => i,
-            Err(_) => return Ok(()),
-        };
-
-        match choice {
-            0 => {
-                let server = match prompt_select_server(paths, theme)? {
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                let server = match prompt_select_server(paths)? {
                     Some(s) => s,
                     None => continue,
                 };
-                let world_only = Confirm::with_theme(theme)
-                    .with_prompt("Snapshot world directories only (faster, skips logs)?")
-                    .default(false)
-                    .interact()?;
-
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                let world_only = prompt_confirm("Snapshot world directories only (faster, skips logs)?", false)?;
                 let res = handle_backup(
                     BackupCommands::Create { server, world_only },
                     paths,
@@ -497,11 +700,12 @@ async fn backups_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
                 }
                 press_enter();
             }
-            1 => {
-                let server = match prompt_select_server(paths, theme)? {
+            Some(1) => {
+                let server = match prompt_select_server(paths)? {
                     Some(s) => s,
                     None => continue,
                 };
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_backup(
                     BackupCommands::List { server },
                     paths,
@@ -511,15 +715,13 @@ async fn backups_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
                 }
                 press_enter();
             }
-            2 => {
-                let server = match prompt_select_server(paths, theme)? {
+            Some(2) => {
+                let server = match prompt_select_server(paths)? {
                     Some(s) => s,
                     None => continue,
                 };
-                let backup_file_str: String = Input::with_theme(theme)
-                    .with_prompt("Path to backup archive (.tar.gz / .zip)")
-                    .interact_text()?;
-
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                let backup_file_str = prompt_text("Path to backup archive (.tar.gz / .zip)", None)?;
                 let res = handle_backup(
                     BackupCommands::Restore {
                         server,
@@ -537,49 +739,41 @@ async fn backups_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
     }
 }
 
-async fn plugins_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
-    loop {
-        println!();
-        println!("{}", "=== Plugins Manager (Modrinth / Hangar / Poggit) ===".cyan().bold());
+async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
+    let mut selected = 0;
 
-        let options = &[
-            "[1] Search Plugins Online",
-            "[2] Install Plugin to Server",
-            "[0] Back",
+    loop {
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Discover and install plugins from Modrinth, Hangar, and Poggit.\r\n{}",
+            "================================================================================".cyan().bold(),
+            "                         PLUGINS & EXTENSIONS MANAGER                           ".cyan().bold(),
+            "================================================================================".cyan().bold(),
+            "--------------------------------------------------------------------------------".dimmed()
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Search Plugins Online"),
+            MenuEntry::new("2", "Install Plugin to Server"),
+            MenuEntry::new("0", "Back to Main Menu"),
         ];
 
-        let sel = Select::with_theme(theme)
-            .with_prompt("Action")
-            .items(options)
-            .default(0)
-            .interact();
-
-        let choice = match sel {
-            Ok(i) => i,
-            Err(_) => return Ok(()),
-        };
-
-        match choice {
-            0 => {
-                let query: String = Input::with_theme(theme)
-                    .with_prompt("Search keyword (e.g. essentials, viaversion, worldedit)")
-                    .interact_text()?;
-
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                let query = prompt_text("Search keyword (e.g. essentials, viaversion, worldedit)", None)?;
                 let res = handle_plugin(PluginCommands::Search { query }, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Plugin Search Error".red().bold(), e);
                 }
                 press_enter();
             }
-            1 => {
-                let server = match prompt_select_server(paths, theme)? {
+            Some(1) => {
+                let server = match prompt_select_server(paths)? {
                     Some(s) => s,
                     None => continue,
                 };
-                let project_id: String = Input::with_theme(theme)
-                    .with_prompt("Plugin ID or slug from Modrinth")
-                    .interact_text()?;
-
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                let project_id = prompt_text("Plugin ID or slug from Modrinth", None)?;
                 let res = handle_plugin(
                     PluginCommands::Install { project_id, server },
                     paths,
@@ -594,55 +788,48 @@ async fn plugins_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
     }
 }
 
-async fn remotes_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
-    loop {
-        println!();
-        println!("{}", "=== Remote VPS Hosts (SSH) ===".cyan().bold());
+async fn remotes_menu(paths: &CraftPaths) -> Result<()> {
+    let mut selected = 0;
 
-        let options = &[
-            "[1] List Configured Remote Hosts",
-            "[2] Test Remote Host Connection",
-            "[3] Add New Remote Host",
-            "[4] Remove Remote Host",
-            "[0] Back",
+    loop {
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Manage remote game server hosts and orchestrated deployments over SSH.\r\n{}",
+            "================================================================================".cyan().bold(),
+            "                            REMOTE VPS HOSTS (SSH)                              ".cyan().bold(),
+            "================================================================================".cyan().bold(),
+            "--------------------------------------------------------------------------------".dimmed()
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "List Configured Remote Hosts"),
+            MenuEntry::new("2", "Test Remote Host Connection"),
+            MenuEntry::new("3", "Add New Remote Host"),
+            MenuEntry::new("4", "Remove Remote Host"),
+            MenuEntry::new("0", "Back to Main Menu"),
         ];
 
-        let sel = Select::with_theme(theme)
-            .with_prompt("Remote Action")
-            .items(options)
-            .default(0)
-            .interact();
-
-        let choice = match sel {
-            Ok(i) => i,
-            Err(_) => return Ok(()),
-        };
-
-        match choice {
-            0 => {
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_remote(RemoteCommands::Ls, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Remote Error".red().bold(), e);
                 }
                 press_enter();
             }
-            1 => {
-                let alias: String = Input::with_theme(theme)
-                    .with_prompt("Remote host alias")
-                    .interact_text()?;
+            Some(1) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                let alias = prompt_text("Remote host alias", None)?;
                 let res = handle_remote(RemoteCommands::Test { alias }, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Test Error".red().bold(), e);
                 }
                 press_enter();
             }
-            2 => {
-                let alias: String = Input::with_theme(theme)
-                    .with_prompt("New alias (e.g. prod-vps)")
-                    .interact_text()?;
-                let connection: String = Input::with_theme(theme)
-                    .with_prompt("Connection string (e.g. user@192.168.1.100 or user@host:22)")
-                    .interact_text()?;
+            Some(2) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                let alias = prompt_text("New alias (e.g. prod-vps)", None)?;
+                let connection = prompt_text("Connection string (e.g. user@192.168.1.100 or user@host:22)", None)?;
 
                 let res = handle_remote(
                     RemoteCommands::Add {
@@ -659,10 +846,9 @@ async fn remotes_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
                 }
                 press_enter();
             }
-            3 => {
-                let alias: String = Input::with_theme(theme)
-                    .with_prompt("Remote alias to remove")
-                    .interact_text()?;
+            Some(3) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                let alias = prompt_text("Remote alias to remove", None)?;
                 let res = handle_remote(RemoteCommands::Rm { alias }, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Remove Error".red().bold(), e);
@@ -674,53 +860,53 @@ async fn remotes_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
     }
 }
 
-async fn daemon_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
-    loop {
-        println!();
-        println!("{}", "=== Craft Service Daemon ===".cyan().bold());
+async fn daemon_menu(paths: &CraftPaths) -> Result<()> {
+    let mut selected = 0;
 
-        let options = &[
-            "[1] Daemon Status",
-            "[2] Start Daemon",
-            "[3] Stop Daemon",
-            "[4] Restart Daemon",
-            "[0] Back",
+    loop {
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Control the background 24/7 supervisor daemon on this system.\r\n{}",
+            "================================================================================".cyan().bold(),
+            "                          CRAFT SERVICE DAEMON CONTROL                          ".cyan().bold(),
+            "================================================================================".cyan().bold(),
+            "--------------------------------------------------------------------------------".dimmed()
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Check Daemon Status"),
+            MenuEntry::new("2", "Start Daemon"),
+            MenuEntry::new("3", "Stop Daemon"),
+            MenuEntry::new("4", "Restart Daemon"),
+            MenuEntry::new("0", "Back to Main Menu"),
         ];
 
-        let sel = Select::with_theme(theme)
-            .with_prompt("Daemon Action")
-            .items(options)
-            .default(0)
-            .interact();
-
-        let choice = match sel {
-            Ok(i) => i,
-            Err(_) => return Ok(()),
-        };
-
-        match choice {
-            0 => {
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_service(ServiceCommands::Status, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Daemon Error".red().bold(), e);
                 }
                 press_enter();
             }
-            1 => {
+            Some(1) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_service(ServiceCommands::Start { foreground: false }, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Daemon Error".red().bold(), e);
                 }
                 press_enter();
             }
-            2 => {
+            Some(2) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_service(ServiceCommands::Stop, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Daemon Error".red().bold(), e);
                 }
                 press_enter();
             }
-            3 => {
+            Some(3) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_service(ServiceCommands::Restart, paths).await;
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Daemon Error".red().bold(), e);
@@ -732,42 +918,36 @@ async fn daemon_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
     }
 }
 
-fn cache_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
-    loop {
-        println!();
-        println!("{}", "=== Cache & Storage Management ===".cyan().bold());
+fn cache_menu(paths: &CraftPaths) -> Result<()> {
+    let mut selected = 0;
 
-        let options = &[
-            "[1] Show Current Cache Size",
-            "[2] Purge All Download Caches",
-            "[0] Back",
+    loop {
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Inspect and purge cached server jarfiles, runtimes, and archives.\r\n{}",
+            "================================================================================".cyan().bold(),
+            "                         CACHE & STORAGE MANAGEMENT                             ".cyan().bold(),
+            "================================================================================".cyan().bold(),
+            "--------------------------------------------------------------------------------".dimmed()
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Show Current Cache Size"),
+            MenuEntry::new("2", "Purge All Download Caches"),
+            MenuEntry::new("0", "Back to Main Menu"),
         ];
 
-        let sel = Select::with_theme(theme)
-            .with_prompt("Cache Action")
-            .items(options)
-            .default(0)
-            .interact();
-
-        let choice = match sel {
-            Ok(i) => i,
-            Err(_) => return Ok(()),
-        };
-
-        match choice {
-            0 => {
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
                 let res = handle_cache(None, paths);
                 if let Err(e) = res {
                     eprintln!("{}: {}", "Cache Error".red().bold(), e);
                 }
                 press_enter();
             }
-            1 => {
-                let confirmed = Confirm::with_theme(theme)
-                    .with_prompt("Are you sure you want to delete all cached downloads?")
-                    .default(false)
-                    .interact()?;
-
+            Some(1) => {
+                let _ = execute!(io::stdout(), Clear(ClearType::All), MoveTo(0, 0));
+                let confirmed = prompt_confirm("Are you sure you want to delete all cached downloads?", false)?;
                 if confirmed {
                     let res = handle_cache(Some(CacheCommands::Clean { force: true }), paths);
                     if let Err(e) = res {
@@ -783,25 +963,38 @@ fn cache_menu(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<()> {
     }
 }
 
-fn prompt_select_server(paths: &CraftPaths, theme: &ColorfulTheme) -> Result<Option<String>> {
+fn prompt_select_server(paths: &CraftPaths) -> Result<Option<String>> {
     let registry = ServersRegistry::load(paths)?;
     if registry.servers.is_empty() {
         println!("{}", "No registered servers found.".yellow());
         return Ok(None);
     }
 
-    let mut items: Vec<String> = registry.servers.iter().map(|s| format!("{:<20} [{} {}]", s.name, s.software, s.version)).collect();
-    items.push("[0] Cancel".to_string());
+    let mut entries = Vec::new();
+    for (i, s) in registry.servers.iter().enumerate() {
+        let hotkey = if i < 9 {
+            (i + 1).to_string()
+        } else {
+            ((b'a' + (i - 9) as u8) as char).to_string()
+        };
+        entries.push(MenuEntry::new(
+            hotkey,
+            format!("{:<20} [{} {}]", s.name, s.software, s.version),
+        ));
+    }
+    entries.push(MenuEntry::new("0", "Cancel"));
 
-    let sel = Select::with_theme(theme)
-        .with_prompt("Select target server")
-        .items(&items)
-        .default(0)
-        .interact()?;
+    let mut selected = 0;
+    let header = format!(
+        "{}\r\n{}\r\n{}\r\n Select target server:\r\n{}",
+        "================================================================================".cyan().bold(),
+        "                             SELECT TARGET SERVER                               ".cyan().bold(),
+        "================================================================================".cyan().bold(),
+        "--------------------------------------------------------------------------------".dimmed()
+    );
 
-    if sel >= registry.servers.len() {
-        Ok(None)
-    } else {
-        Ok(Some(registry.servers[sel].name.clone()))
+    match run_menu(&header, &entries, &mut selected)? {
+        Some(idx) if idx < registry.servers.len() => Ok(Some(registry.servers[idx].name.clone())),
+        _ => Ok(None),
     }
 }
