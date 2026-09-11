@@ -48,7 +48,7 @@ pub async fn ping_menu() -> Result<()> {
     let proto_entries = vec![
         MenuEntry::new("1", "Java Edition (Server List Ping SLP)"),
         MenuEntry::new("2", "Bedrock Edition (RakNet Unconnected Ping)"),
-        MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
+        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
     ];
 
     let choice = run_menu(&proto_header, &proto_entries, &mut proto_sel)?;
@@ -158,7 +158,7 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
             MenuEntry::new("1", "Create World Snapshot"),
             MenuEntry::new("2", "List Existing Backups"),
             MenuEntry::new("3", "Restore Server from Backup"),
-            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
+            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -173,7 +173,7 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                     };
                     s_entries.push(MenuEntry::new(hotkey, s.name.clone()));
                 }
-                s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+                s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
                 let s_header = " Select server to snapshot:";
                 let mut s_sel = 0;
                 if let Some(idx) = run_menu(s_header, &s_entries, &mut s_sel)? {
@@ -189,7 +189,7 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                                 "2",
                                 "World Only Snapshot (Fastest, skips binaries/logs)",
                             ),
-                            MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
+                            MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                         ];
                         let mut m_sel = 0;
                         if let Some(m_idx) = run_menu(mode_header, &mode_entries, &mut m_sel)? {
@@ -249,7 +249,7 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                     };
                     s_entries.push(MenuEntry::new(hotkey, s.name.clone()));
                 }
-                s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+                s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
                 let s_header = " Select server to view backups:";
                 let mut s_sel = 0;
                 if let Some(idx) = run_menu(s_header, &s_entries, &mut s_sel)? {
@@ -291,7 +291,7 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                     };
                     s_entries.push(MenuEntry::new(hotkey, s.name.clone()));
                 }
-                s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+                s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
                 let s_header = " Select server to restore:";
                 let mut s_sel = 0;
                 if let Some(idx) = run_menu(s_header, &s_entries, &mut s_sel)? {
@@ -314,7 +314,7 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                             ));
                         }
                         b_entries.push(MenuEntry::new("c", "Custom Archive Path"));
-                        b_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+                        b_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                         let b_header =
                             format!(" Select backup archive to restore to '{}':", server.name);
@@ -399,7 +399,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
         let entries = vec![
             MenuEntry::new("1", "Search Plugins Online (Modrinth, Hangar, Poggit)"),
             MenuEntry::new("2", "Install Plugin by ID / Slug to Server"),
-            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
+            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -440,7 +440,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             format!("{:<18} [{}] - {}", hit.name, hit.source, desc),
                         ));
                     }
-                    p_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+                    p_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
                     let p_header =
                         format!(" Search results for '{}' - select to install:", query);
@@ -463,7 +463,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                                 };
                                 s_entries.push(MenuEntry::new(hotkey, s.name.clone()));
                             }
-                            s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+                            s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                             let s_header = format!(
                                 " Install '{}' to which server?",
@@ -535,7 +535,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                     };
                     s_entries.push(MenuEntry::new(hotkey, s.name.clone()));
                 }
-                s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+                s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let s_header = " Select server to install plugin:";
                 let mut s_sel = 0;
@@ -617,7 +617,7 @@ pub async fn remotes_menu(paths: &CraftPaths) -> Result<()> {
             MenuEntry::new("2", "Test Remote Host Connection"),
             MenuEntry::new("3", "Add New Remote Host"),
             MenuEntry::new("4", "Remove Remote Host"),
-            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
+            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -661,7 +661,7 @@ pub async fn remotes_menu(paths: &CraftPaths) -> Result<()> {
                         format!("{:<16} ({}@{})", r.alias, r.user, r.host),
                     ));
                 }
-                r_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+                r_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let mut r_sel = 0;
                 if let Some(r_idx) =
@@ -788,7 +788,7 @@ pub async fn remotes_menu(paths: &CraftPaths) -> Result<()> {
                     let hotkey = (i + 1).to_string();
                     r_entries.push(MenuEntry::new(hotkey, r.alias.clone()));
                 }
-                r_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+                r_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let mut r_sel = 0;
                 if let Some(r_idx) =
@@ -843,7 +843,7 @@ pub async fn daemon_menu(paths: &CraftPaths) -> Result<()> {
             MenuEntry::new("2", "Start Daemon (Background Supervisor)"),
             MenuEntry::new("3", "Stop Daemon"),
             MenuEntry::new("4", "Restart Daemon"),
-            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
+            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -993,7 +993,7 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
         let entries = vec![
             MenuEntry::new("1", "Show Current Cache Size"),
             MenuEntry::new("2", "Purge All Download Caches"),
-            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
+            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {

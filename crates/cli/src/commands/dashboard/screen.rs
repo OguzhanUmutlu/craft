@@ -12,6 +12,13 @@ use craft_core::Result;
 
 static ALT_SCREEN_DEPTH: AtomicUsize = AtomicUsize::new(0);
 
+/// Cleanly resets the terminal out of alternate screen and raw mode, then exits the process.
+pub fn clean_exit() -> ! {
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), LeaveAlternateScreen, Show);
+    std::process::exit(0);
+}
+
 /// Re-entrant RAII guard for the terminal alternate screen.
 /// Ensures nested submenus and dialogs do not exit alternate screen prematurely.
 pub struct AltScreenGuard;
@@ -55,13 +62,19 @@ impl MenuEntry {
             .iter()
             .map(|s| s.to_string())
             .filter(|s| {
-                // Defensive rule: If an alias is a single ASCII digit, it must match self.hotkey.
+                // Defensive rule 1: If an alias is a single ASCII digit, it must match self.hotkey.
                 // This prevents cross-digit collisions (e.g. key '2' activating option '1').
-                if s.len() == 1 && s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-                    s == &self.hotkey
-                } else {
-                    true
+                if s.len() == 1
+                    && s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
+                    && s != &self.hotkey
+                {
+                    return false;
                 }
+                // Defensive rule 2: 'q' and 'Q' are reserved globally for quitting the program completely.
+                if s.eq_ignore_ascii_case("q") && !self.hotkey.eq_ignore_ascii_case("q") {
+                    return false;
+                }
+                true
             })
             .collect();
         self
@@ -109,7 +122,7 @@ pub fn run_menu(
             }
 
             print!("\x1B[K\r\n\x1B[2m--------------------------------------------------------------------------------\x1B[K\r\n");
-            print!(" [HOTKEYS] Press key directly (0-9)  |  [↑/↓/j/k] Move  |  [Enter] Select  |  [q] Exit\x1B[0m\x1B[K\r\n");
+            print!(" [HOTKEYS] Press key (0-9)  |  [↑/↓/j/k] Move  |  [Enter] Select  |  [Esc] Back  |  [q] Exit\x1B[0m\x1B[K\r\n");
 
             execute!(stdout, Clear(ClearType::FromCursorDown))?;
             stdout.flush()?;
@@ -117,6 +130,19 @@ pub fn run_menu(
             if let Event::Key(key) = event::read()? {
                 if key.kind != KeyEventKind::Press {
                     continue;
+                }
+
+                // Global abort: Ctrl+C or raw byte 3 exits completely
+                if (key.modifiers.contains(event::KeyModifiers::CONTROL)
+                    && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('C')))
+                    || key.code == KeyCode::Char('\x03')
+                {
+                    clean_exit();
+                }
+
+                // Global quit: 'q' or 'Q' exits completely
+                if key.code == KeyCode::Char('q') || key.code == KeyCode::Char('Q') {
+                    clean_exit();
                 }
 
                 match key.code {
@@ -147,19 +173,7 @@ pub fn run_menu(
                         return Ok(None);
                     }
                     KeyCode::Char(c) => {
-                        let c_lower = c.to_ascii_lowercase();
-                        if c_lower == 'q' {
-                            if let Some(pos) = entries.iter().position(|e| {
-                                e.hotkey.eq_ignore_ascii_case("q")
-                                    || e.aliases.iter().any(|a| a.eq_ignore_ascii_case("q"))
-                            }) {
-                                *selected_idx = pos;
-                                return Ok(Some(pos));
-                            }
-                            return Ok(None);
-                        }
-
-                        let c_str = c_lower.to_string();
+                        let c_str = c.to_ascii_lowercase().to_string();
                         if let Some(pos) = entries.iter().position(|e| {
                             e.hotkey.eq_ignore_ascii_case(&c_str)
                                 || e.aliases.iter().any(|a| a.eq_ignore_ascii_case(&c_str))
@@ -206,7 +220,7 @@ pub fn show_modal_message<S: AsRef<str>>(title: &str, lines: &[S], is_error: boo
         }
 
         print!("\x1B[K\r\n{}\x1B[K\r\n", div.dimmed());
-        print!("  \x1B[2m[Press Enter, Space, Esc, or 'q' to return]\x1B[0m\x1B[K\r\n");
+        print!("  \x1B[2m[Enter / Space / Esc] Dismiss  |  [q] Quit\x1B[0m\x1B[K\r\n");
 
         execute!(stdout, Clear(ClearType::FromCursorDown))?;
         stdout.flush()?;
@@ -214,8 +228,17 @@ pub fn show_modal_message<S: AsRef<str>>(title: &str, lines: &[S], is_error: boo
         loop {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
+                    if (key.modifiers.contains(event::KeyModifiers::CONTROL)
+                        && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('C')))
+                        || key.code == KeyCode::Char('\x03')
+                        || key.code == KeyCode::Char('q')
+                        || key.code == KeyCode::Char('Q')
+                    {
+                        clean_exit();
+                    }
+
                     match key.code {
-                        KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' ') | KeyCode::Char('q') => break,
+                        KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' ') => break,
                         _ => {}
                     }
                 }
@@ -270,7 +293,7 @@ pub fn run_input_prompt(
             print!("{}{}\x1B[K\r\n", prefix.cyan().bold(), display_text);
 
             print!("\x1B[K\r\n{}\x1B[K\r\n", "--------------------------------------------------------------------------------".dimmed());
-            print!("  \x1B[2m[Enter] Confirm  |  [Esc] Cancel  |  [Backspace] Delete\x1B[0m\x1B[K\r\n");
+            print!("  \x1B[2m[Enter] Confirm  |  [Esc] Cancel  |  [Backspace] Delete  |  [Ctrl+C] Quit\x1B[0m\x1B[K\r\n");
 
             execute!(stdout, Clear(ClearType::FromCursorDown))?;
 
@@ -281,6 +304,13 @@ pub fn run_input_prompt(
             if let Event::Key(key) = event::read()? {
                 if key.kind != KeyEventKind::Press {
                     continue;
+                }
+
+                if (key.modifiers.contains(event::KeyModifiers::CONTROL)
+                    && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('C')))
+                    || key.code == KeyCode::Char('\x03')
+                {
+                    clean_exit();
                 }
 
                 match key.code {
@@ -381,7 +411,7 @@ mod tests {
         assert_eq!(entry.aliases, vec!["c".to_string(), "n".to_string()]);
 
         let entry2 = MenuEntry::new("0", "Back").with_aliases(&["b", "q", "0"]);
-        // "0" is allowed because it matches hotkey "0"
-        assert_eq!(entry2.aliases, vec!["b".to_string(), "q".to_string(), "0".to_string()]);
+        // "0" is allowed because it matches hotkey "0", but "q" is filtered out because it is reserved for quitting completely
+        assert_eq!(entry2.aliases, vec!["b".to_string(), "0".to_string()]);
     }
 }

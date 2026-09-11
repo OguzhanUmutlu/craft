@@ -85,7 +85,7 @@ pub async fn gui_create_server_wizard_with_name(
             "Bedrock Dedicated (Vanilla Bedrock BDS, PocketMine-MP, NukkitX)",
         ),
         MenuEntry::new("5", "Browse All 16 Platforms"),
-        MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
+        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
     ];
 
     let mut cat_sel = 0;
@@ -209,7 +209,7 @@ pub async fn gui_create_server_wizard_with_name(
             MenuEntry::new(hotkey, format!("{:<22} - {}", name, desc))
         })
         .collect();
-    sw_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+    sw_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
     let mut sw_sel = 0;
     let sw_choice = run_menu(&sw_header, &sw_entries, &mut sw_sel)?;
@@ -249,7 +249,7 @@ pub async fn gui_create_server_wizard_with_name(
         MenuEntry::new("7", "1.18.2"),
         MenuEntry::new("8", "1.16.5"),
         MenuEntry::new("c", "Custom Version (Type Manually)"),
-        MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
+        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
     ];
 
     let mut ver_sel = 0;
@@ -301,7 +301,7 @@ pub async fn gui_create_server_wizard_with_name(
         MenuEntry::new("3", "8G  (Large player counts / heavy plugins / mods)"),
         MenuEntry::new("4", "16G (High-capacity multi-world or network hub)"),
         MenuEntry::new("c", "Custom Limit (Type Manually)"),
-        MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
+        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
     ];
 
     let mut mem_sel = 1;
@@ -343,7 +343,7 @@ pub async fn gui_create_server_wizard_with_name(
     let start_entries = vec![
         MenuEntry::new("1", "Start Server Immediately (Background Daemon)"),
         MenuEntry::new("2", "Create Server Only (Do not start now)"),
-        MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
+        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
     ];
 
     let mut start_sel = 0;

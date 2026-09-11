@@ -29,7 +29,7 @@ pub async fn show_empty_servers_modal(paths: &CraftPaths) -> Result<bool> {
 
     let entries = vec![
         MenuEntry::new("1", "Create Your First Server (Setup Wizard)").with_aliases(&["c", "n"]),
-        MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b", "q"]),
+        MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]),
     ];
 
     let mut selected = 0;
@@ -137,7 +137,7 @@ pub async fn quick_start_menu(paths: &CraftPaths) -> Result<()> {
             ),
         ));
     }
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b", "q"]));
+    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
     let header = format!(
@@ -276,7 +276,7 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
         ));
     }
     entries.push(MenuEntry::new("a", "Stop ALL Running Servers"));
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b", "q"]));
+    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
     let header = format!(
@@ -372,7 +372,7 @@ pub async fn restart_servers_menu(paths: &CraftPaths) -> Result<()> {
             format!("{:<20} {:<10} {:<10}", s.name, s.software, s.version),
         ));
     }
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b", "q"]));
+    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
     let header = format!(
@@ -446,7 +446,7 @@ pub async fn view_servers_menu(paths: &CraftPaths) -> Result<()> {
             format!("{:<20} {:<10} {:<10}", s.name, s.software, s.version),
         ));
     }
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b", "q"]));
+    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
     let header = format!(
@@ -495,7 +495,7 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
             format!("{:<20} {:<10} {:<10}", s.name, s.software, s.version),
         ));
     }
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b", "q"]));
+    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
     let header = format!(
@@ -538,7 +538,7 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
                     "2",
                     "Permanently Delete Server Directory & World Files (-rf)",
                 ),
-                MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
+                MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
             ];
 
             let mut c_sel = 0;
@@ -620,7 +620,7 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
             // Defensive: Only option 1 and 0, aliases "c" / "n", strictly NO "2"
             let entries = vec![
                 MenuEntry::new("1", "Create Your First Server (Setup Wizard)").with_aliases(&["c", "n"]),
-                MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
+                MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
             ];
 
             match run_menu(&header, &entries, &mut selected)? {
@@ -673,7 +673,7 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
         }
 
         entries.push(MenuEntry::new("n", "Create New Server (Setup Wizard)").with_aliases(&["c"]));
-        entries.push(MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]));
+        entries.push(MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]));
 
         let sel = run_menu(&header, &entries, &mut selected)?;
 
@@ -759,7 +759,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             MenuEntry::new("6", "Create World Snapshot Backup"),
             MenuEntry::new("7", "List Existing Backups"),
             MenuEntry::new("8", "Delete / Unregister Server"),
-            MenuEntry::new("0", "Back to Server List").with_aliases(&["b", "q"]),
+            MenuEntry::new("0", "Back to Server List").with_aliases(&["b"]),
         ];
 
         let sel = run_menu(&header, &entries, &mut selected)?;
@@ -934,7 +934,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                         "Unregister from Craft (Preserve world & server files)",
                     ),
                     MenuEntry::new("2", "Permanently Delete Server Directory & Files (-rf)"),
-                    MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
+                    MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
                 let mut c_sel = 0;
                 match run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
