@@ -247,14 +247,14 @@ craft dockerize my-survival
 craft/
 ├── Cargo.toml                  # Workspace root
 ├── crates/
-│   ├── craft-core/             # Core models, TOML registry, remotes.toml, Java bytecode detector
-│   ├── craft-providers/        # Server software providers (Paper, Purpur, Mojang, Fabric, BDS, PMMP, etc.)
-│   ├── craft-daemon/           # Background process supervisor, IPC, log ring-buffer
-│   ├── craft-net/              # Native SLP ping, RakNet ping, RCON client, firewall
-│   ├── craft-plugins/          # Modrinth, Hangar, and Poggit clients & installers
-│   ├── craft-backup/           # Zero-downtime compressed world snapshots & restore
-│   ├── craft-remote/           # Async SSH orchestration, SFTP sync, PTY console, tri-platform bootstrap
-│   └── craft-cli/              # Flagship CLI binary and command routing
+│   ├── core/                   # Core models, TOML registry, remotes.toml, Java bytecode detector
+│   ├── providers/              # Server software providers (Paper, Purpur, Mojang, Fabric, BDS, PMMP, etc.)
+│   ├── daemon/                 # Background process supervisor, IPC, log ring-buffer
+│   ├── net/                    # Native SLP ping, RakNet ping, RCON client, firewall
+│   ├── plugins/                # Modrinth, Hangar, and Poggit clients & installers
+│   ├── backup/                 # Zero-downtime compressed world snapshots & restore
+│   ├── remote/                 # Async SSH orchestration, SFTP sync, PTY console, tri-platform bootstrap
+│   └── cli/                    # Flagship CLI binary and command routing
 └── data/                       # Embedded fallback version manifests
 ```
 
