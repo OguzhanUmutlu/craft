@@ -64,7 +64,47 @@ pub fn box_divider(width: usize) -> String {
 }
 
 /// Generates a centered title row with side borders: │           TITLE            │
+/// If navigation breadcrumbs exist and is_error is false, appends the breadcrumb row.
 pub fn box_title(title: &str, width: usize, is_error: bool) -> String {
+    let inner_width = width.saturating_sub(2);
+    let border_char = if is_utf8_supported() { "│" } else { "|" };
+    
+    let clean_title = strip_ansi(title);
+    let title_len = clean_title.chars().count();
+    
+    let (pad_left, pad_right) = if title_len < inner_width {
+        let remaining = inner_width - title_len;
+        (remaining / 2, remaining - remaining / 2)
+    } else {
+        (0, 0)
+    };
+
+    let title_styled = if is_error {
+        title.red().bold().to_string()
+    } else {
+        title.cyan().bold().to_string()
+    };
+
+    let title_line = format!(
+        "{}{}{}{}{}{}{}{}{}",
+        BORDER_COLOR, border_char, RESET,
+        " ".repeat(pad_left),
+        title_styled,
+        " ".repeat(pad_right),
+        BORDER_COLOR, border_char, RESET
+    );
+
+    if !is_error {
+        if let Some(bc) = super::nav::box_breadcrumbs(width) {
+            return format!("{}\r\n{}", title_line, bc);
+        }
+    }
+
+    title_line
+}
+
+/// Generates a single centered title row without navigation breadcrumbs (for modals and alerts).
+pub fn box_title_simple(title: &str, width: usize, is_error: bool) -> String {
     let inner_width = width.saturating_sub(2);
     let border_char = if is_utf8_supported() { "│" } else { "|" };
     

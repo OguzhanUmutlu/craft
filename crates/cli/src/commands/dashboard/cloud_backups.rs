@@ -7,13 +7,14 @@ use craft_core::{
 };
 
 use crate::commands::dashboard::screen::{
-    box_divider, box_title, box_top, get_content_width, print_in_place_status,
+    box_divider, box_title, box_title_simple, box_top, get_content_width, print_in_place_status,
     run_input_prompt, run_menu, run_paged_list_menu, run_password_prompt, show_modal_message,
-    AltScreenGuard, MenuEntry, PagedMenuAction,
+    AltScreenGuard, MenuEntry, NavGuard, PagedMenuAction,
 };
 
 pub async fn setup_backup_systems_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Backup Systems");
     let mut selected = 0;
 
     loop {
@@ -58,6 +59,7 @@ pub async fn setup_backup_systems_menu(paths: &CraftPaths) -> Result<()> {
 }
 
 pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
+    let _nav = NavGuard::enter("Local Storage");
     let mut current_page = 0;
     let page_size = 6;
 
@@ -129,7 +131,8 @@ pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()>
                     false,
                 )?;
             }
-            _ => return Ok(()),
+            PagedMenuAction::Back => return Ok(()),
+            _ => {}
         }
     }
 }
@@ -143,6 +146,7 @@ async fn manage_single_local_target_menu(paths: &CraftPaths, target_id: &str) ->
             Some(t) => t.clone(),
             None => return Ok(()),
         };
+        let _nav = NavGuard::enter(&target.name);
 
         let width = get_content_width(80);
         let header = format!(
@@ -156,15 +160,12 @@ async fn manage_single_local_target_menu(paths: &CraftPaths, target_id: &str) ->
             box_divider(width).dimmed(),
         );
 
-        let mut entries = vec![
+        let entries = vec![
             MenuEntry::new("1", "Change Directory Path"),
             MenuEntry::new("2", "Rename Target"),
+            MenuEntry::new("3", "Delete Target").with_aliases(&["d", "del", "rm"]),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
-
-        if registry.local_targets.len() > 1 {
-            entries.push(MenuEntry::new("3", "Delete Target"));
-        }
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
 
         match run_menu(&header, &entries, &mut selected)? {
             Some(0) => {
@@ -194,16 +195,40 @@ async fn manage_single_local_target_menu(paths: &CraftPaths, target_id: &str) ->
                     }
                 }
             }
-            Some(2) if registry.local_targets.len() > 1 => {
-                let mut reg = GlobalBackupRegistry::load(paths)?;
-                reg.local_targets.retain(|t| t.id != target_id);
-                reg.save(paths)?;
-                show_modal_message(
-                    "TARGET REMOVED",
-                    &[format!("[OK] Local storage target '{}' removed.", target.name).green().bold().to_string()],
-                    false,
-                )?;
-                return Ok(());
+            Some(2) => {
+                let warn_text = if registry.local_targets.len() <= 1 {
+                    " Warning: This is currently your only registered local storage target.\r\n"
+                } else {
+                    ""
+                };
+                let confirm_header = format!(
+                    "{}\r\n{}\r\n{}\r\n Remove storage target '{}'?\r\n Target ID: {}\r\n Directory: {}\r\n{}\r\n{}\r\n Are you sure you want to proceed?\r\n{}",
+                    box_top(width).yellow().bold(),
+                    box_title_simple("CONFIRM DELETE TARGET", width, false).yellow().bold(),
+                    box_divider(width).yellow().bold(),
+                    target.name.white().bold(),
+                    target.id,
+                    target.path.display(),
+                    warn_text,
+                    box_divider(width).dimmed(),
+                    box_divider(width).dimmed(),
+                );
+                let confirm_entries = vec![
+                    MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
+                    MenuEntry::new("2", format!("Confirm Delete of '{}'", target.name)),
+                ];
+                let mut c_sel = 0;
+                if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
+                    let mut reg = GlobalBackupRegistry::load(paths)?;
+                    reg.local_targets.retain(|t| t.id != target_id);
+                    reg.save(paths)?;
+                    show_modal_message(
+                        "TARGET REMOVED",
+                        &[format!("[OK] Local storage target '{}' removed.", target.name).green().bold().to_string()],
+                        false,
+                    )?;
+                    return Ok(());
+                }
             }
             _ => return Ok(()),
         }
@@ -211,6 +236,7 @@ async fn manage_single_local_target_menu(paths: &CraftPaths, target_id: &str) ->
 }
 
 pub(crate) async fn s3_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
+    let _nav = NavGuard::enter("S3 Storage");
     let mut current_page = 0;
     let page_size = 6;
 
@@ -329,6 +355,7 @@ async fn manage_single_s3_target_menu(paths: &CraftPaths, target_id: &str) -> Re
             Some(t) => t.clone(),
             None => return Ok(()),
         };
+        let _nav = NavGuard::enter(&target.name);
 
         let width = get_content_width(80);
         let header = format!(
@@ -412,6 +439,7 @@ async fn manage_single_s3_target_menu(paths: &CraftPaths, target_id: &str) -> Re
 }
 
 pub(crate) async fn gdrive_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
+    let _nav = NavGuard::enter("Google Drive");
     let mut current_page = 0;
     let page_size = 6;
 
@@ -522,6 +550,7 @@ async fn manage_single_gdrive_target_menu(paths: &CraftPaths, target_id: &str) -
             Some(t) => t.clone(),
             None => return Ok(()),
         };
+        let _nav = NavGuard::enter(&target.name);
 
         let width = get_content_width(80);
         let auth_type_str = if target.api_token.is_some() { "OAuth / API Token" } else { "Service Account Key" };
@@ -744,6 +773,7 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
 }
 
 pub(crate) async fn configure_policies_menu(paths: &CraftPaths) -> Result<()> {
+    let _nav = NavGuard::enter("Policies");
     let mut selected = 0;
 
     loop {

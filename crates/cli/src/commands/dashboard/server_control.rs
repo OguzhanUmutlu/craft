@@ -8,7 +8,7 @@ use crate::commands::view::handle_view;
 use super::screen::{
     box_divider, box_title, box_top, exec_console_action, get_content_width, print_in_place_status,
     run_input_prompt, run_menu, run_paged_list_menu, show_modal_message, AltScreenGuard, MenuEntry,
-    PagedMenuAction,
+    NavGuard, PagedMenuAction,
 };
 use super::wizard::gui_create_server_wizard;
 
@@ -611,6 +611,7 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
 
 pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Local Servers");
     let mut selected = 0;
     let mut current_page = 0;
     let page_size = 7;
@@ -738,23 +739,25 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
     }
 }
 
-pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
+pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &CraftPaths) -> Result<()> {
     let mut selected = 0;
+    let mut current_server_name = initial_server_name.to_string();
     let mut flash_status: Option<String> = None;
 
     loop {
         let registry = ServersRegistry::load(paths)?;
-        let server = match registry.servers.iter().find(|s| s.name == server_name) {
+        let server = match registry.servers.iter().find(|s| s.name == current_server_name) {
             Some(s) => s.clone(),
             None => {
                 show_modal_message(
                     "SERVER NOT FOUND",
-                    &[format!("Server '{}' is no longer registered.", server_name)],
+                    &[format!("Server '{}' is no longer registered.", current_server_name)],
                     true,
                 )?;
                 return Ok(());
             }
         };
+        let _nav = NavGuard::enter(&server.name);
 
         let daemon_running = DaemonClient::is_daemon_running(paths);
         let is_running = if daemon_running {
@@ -814,6 +817,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             AttachConsole,
             Backups,
             Plugins,
+            RenameServer,
             DeleteServer,
         }
 
@@ -841,6 +845,10 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
         let plg_hotkey = (actions.len() + 1).to_string();
         entries.push(MenuEntry::new(plg_hotkey, "Plugins"));
         actions.push(ControlAction::Plugins);
+
+        let ren_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(ren_hotkey, "Rename Server").with_aliases(&["r", "rename"]));
+        actions.push(ControlAction::RenameServer);
 
         let del_hotkey = (actions.len() + 1).to_string();
         entries.push(MenuEntry::new(del_hotkey, "Delete Server"));
@@ -968,6 +976,109 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             ControlAction::Plugins => {
                 server_plugins_panel(&server.name, paths).await?;
             }
+            ControlAction::RenameServer => {
+                if is_running {
+                    show_modal_message(
+                        "RENAME BLOCKED",
+                        &[
+                            format!("Cannot rename server '{}': The server is currently RUNNING.", server.name),
+                            "Please STOP the server first before renaming it.".to_string(),
+                        ],
+                        true,
+                    )?;
+                    continue;
+                }
+
+                let prompt = format!("Enter new name for server '{}':", server.name);
+                let new_name = match run_input_prompt("RENAME SERVER", &prompt, Some(&server.name))? {
+                    Some(n) => n.trim().to_string(),
+                    None => continue,
+                };
+
+                if new_name.is_empty() || new_name == server.name {
+                    continue;
+                }
+
+                if !new_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+                    show_modal_message(
+                        "INVALID NAME",
+                        &[
+                            "Server name may only contain alphanumeric characters, hyphens, and underscores.".to_string(),
+                        ],
+                        true,
+                    )?;
+                    continue;
+                }
+
+                let mut reg = ServersRegistry::load(paths)?;
+                if reg.servers.iter().any(|s| s.name.eq_ignore_ascii_case(&new_name)) {
+                    show_modal_message(
+                        "NAME TAKEN",
+                        &[format!("A server named '{}' already exists in registry.", new_name)],
+                        true,
+                    )?;
+                    continue;
+                }
+
+                let old_name = server.name.clone();
+                let old_path = server.path.clone();
+
+                // If server path is inside standard ~/.craft/servers, rename the directory
+                let new_path = if old_path.starts_with(&paths.servers_dir)
+                    && old_path.file_name().and_then(|f| f.to_str()) == Some(&old_name)
+                {
+                    let target_dir = paths.servers_dir.join(&new_name);
+                    if target_dir.exists() {
+                        show_modal_message(
+                            "DIRECTORY EXISTS",
+                            &[format!("Directory '{}' already exists on disk.", target_dir.display())],
+                            true,
+                        )?;
+                        continue;
+                    }
+                    if let Err(e) = std::fs::rename(&old_path, &target_dir) {
+                        show_modal_message(
+                            "RENAME FAILED",
+                            &[format!("Failed to rename server directory: {}", e)],
+                            true,
+                        )?;
+                        continue;
+                    }
+                    target_dir
+                } else {
+                    old_path
+                };
+
+                // Update ServersRegistry
+                if let Some(s) = reg.servers.iter_mut().find(|s| s.name == old_name) {
+                    s.name = new_name.clone();
+                    s.path = new_path;
+                    let _ = reg.save(paths);
+                }
+
+                // Update auto-backup policies in GlobalBackupRegistry
+                if let Ok(mut bkp_reg) = GlobalBackupRegistry::load(paths) {
+                    if let Some(policy) = bkp_reg.server_policies.remove(&old_name) {
+                        bkp_reg.server_policies.insert(new_name.clone(), policy);
+                        let _ = bkp_reg.save(paths);
+                    }
+                }
+
+                // Rename local backups directory if it exists
+                let old_bkp_dir = paths.backups_dir.join(&old_name);
+                let new_bkp_dir = paths.backups_dir.join(&new_name);
+                if old_bkp_dir.exists() && !new_bkp_dir.exists() {
+                    let _ = std::fs::rename(old_bkp_dir, new_bkp_dir);
+                }
+
+                current_server_name = new_name.clone();
+                flash_status = Some(
+                    format!("[OK] Server successfully renamed from '{}' to '{}'.", old_name, new_name)
+                        .green()
+                        .bold()
+                        .to_string(),
+                );
+            }
             ControlAction::DeleteServer => {
                 let width = get_content_width(80);
                 let confirm_header = format!(
@@ -1043,6 +1154,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
 
 pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Backups");
     let mut selected = 0;
 
     loop {
@@ -1558,6 +1670,7 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
 
 pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Plugins");
     let mut selected = 0;
 
     loop {

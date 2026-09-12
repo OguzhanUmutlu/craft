@@ -5,7 +5,7 @@ use craft_remote::{RemoteCraftClient, RemoteServerInfo};
 use crate::commands::dashboard::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status,
     run_input_prompt, run_menu, run_paged_list_menu, show_modal_message,
-    MenuEntry, PagedMenuAction,
+    MenuEntry, NavGuard, PagedMenuAction,
 };
 
 pub async fn manage_remote_backups(
@@ -13,6 +13,7 @@ pub async fn manage_remote_backups(
     client: &RemoteCraftClient,
     server: &RemoteServerInfo,
 ) -> Result<()> {
+    let _nav = NavGuard::enter("Backups");
     let mut current_page = 0;
     let page_size = 7;
 

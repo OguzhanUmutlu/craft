@@ -9,7 +9,7 @@ use crossterm::{
 
 use craft_core::Result;
 use super::terminal::{get_content_width, get_terminal_size};
-use super::theme::{box_bottom, box_divider, box_title, box_top, DIM, RESET};
+use super::theme::{box_bottom, box_divider, box_title_simple, box_top, DIM, RESET};
 use super::clean_exit;
 
 /// Displays an in-place single-line input prompt with full readline editing support.
@@ -56,7 +56,7 @@ fn prompt_internal(
 
             print!("{}\x1B[K\r\n", box_top(width));
             current_y += 1;
-            print!("{}\x1B[K\r\n", box_title(header_title, width, false));
+            print!("{}\x1B[K\r\n", box_title_simple(header_title, width, false));
             current_y += 1;
             print!("{}\x1B[K\r\n", box_divider(width));
             current_y += 1;

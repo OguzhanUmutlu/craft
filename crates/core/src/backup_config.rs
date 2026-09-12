@@ -216,14 +216,52 @@ impl GlobalBackupRegistry {
 
     pub fn load(paths: &CraftPaths) -> Result<Self> {
         let path = Self::config_path(paths);
-        let mut reg = if path.exists() {
+        let exists = path.exists();
+        let mut reg = if exists {
             let content = fs::read_to_string(&path)?;
             toml::from_str(&content)
                 .map_err(|e| CraftError::Config(format!("Failed to parse backup_config.toml: {}", e)))?
         } else {
             Self::default()
         };
-        reg.ensure_defaults(paths);
+        if !exists {
+            reg.ensure_defaults(paths);
+        } else {
+            // Only migrate legacy single-target fields if new arrays are empty and legacy fields exist
+            if reg.local_targets.is_empty() && reg.local_path.is_some() {
+                let p = reg.local_path.clone().unwrap_or_else(|| paths.backups_dir.clone());
+                reg.local_targets.push(LocalBackupTarget {
+                    id: "default".to_string(),
+                    name: "Default Storage".to_string(),
+                    path: p,
+                });
+            }
+            if reg.s3_targets.is_empty() && reg.s3.is_some() {
+                if let Some(ref s3) = reg.s3 {
+                    reg.s3_targets.push(S3BackupTarget {
+                        id: "default-s3".to_string(),
+                        name: s3.bucket.clone(),
+                        bucket: s3.bucket.clone(),
+                        region: s3.region.clone(),
+                        endpoint: s3.endpoint.clone(),
+                        access_key_id: s3.access_key_id.clone(),
+                        secret_access_key: s3.secret_access_key.clone(),
+                        prefix: s3.prefix.clone(),
+                    });
+                }
+            }
+            if reg.gdrive_targets.is_empty() && reg.gdrive.is_some() {
+                if let Some(ref gd) = reg.gdrive {
+                    reg.gdrive_targets.push(GDriveBackupTarget {
+                        id: "default-gdrive".to_string(),
+                        name: "Default Google Drive".to_string(),
+                        folder_id: gd.folder_id.clone(),
+                        service_account_path: gd.service_account_path.clone(),
+                        api_token: gd.api_token.clone(),
+                    });
+                }
+            }
+        }
         Ok(reg)
     }
 

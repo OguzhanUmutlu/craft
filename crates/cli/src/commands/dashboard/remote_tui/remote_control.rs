@@ -3,7 +3,7 @@ use craft_core::{CraftPaths, Result};
 use craft_remote::{RemoteCraftClient, RemoteServerInfo};
 use crate::commands::dashboard::screen::{
     box_divider, box_title, box_top, exec_console_action, get_content_width,
-    print_in_place_status, run_menu, show_modal_message, MenuEntry,
+    print_in_place_status, run_menu, show_modal_message, MenuEntry, NavGuard,
 };
 use super::remote_backups::manage_remote_backups;
 
@@ -21,6 +21,7 @@ pub async fn remote_server_control_panel(
     client: &RemoteCraftClient,
     server: &RemoteServerInfo,
 ) -> Result<()> {
+    let _nav = NavGuard::enter(&server.name);
     let mut selected = 0;
 
     loop {

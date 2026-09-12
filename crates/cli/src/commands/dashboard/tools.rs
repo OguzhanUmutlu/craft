@@ -14,12 +14,13 @@ use craft_providers::CacheManager;
 use crate::commands::remote::parse_connection_string;
 use super::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
-    run_menu, show_modal_message, AltScreenGuard, MenuEntry,
+    run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
 };
 use super::server_control::show_empty_servers_modal;
 
 pub async fn ping_menu() -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Server Ping");
     let target = match run_input_prompt(
         "SERVER NETWORK PING",
         "Enter server address (IP:Port or Domain):",
@@ -840,6 +841,7 @@ pub async fn remotes_menu(paths: &CraftPaths) -> Result<()> {
 
 pub async fn daemon_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Daemon Control");
     let mut selected = 0;
 
     loop {
@@ -1073,6 +1075,7 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
 #[allow(dead_code)]
 pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Tools");
     let mut selected = 0;
 
     loop {

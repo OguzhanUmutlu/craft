@@ -3,11 +3,12 @@ use craft_core::{CraftPaths, Result, TrashManager};
 
 use super::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status,
-    run_menu, run_paged_list_menu, show_modal_message, AltScreenGuard, MenuEntry, PagedMenuAction,
+    run_menu, run_paged_list_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard, PagedMenuAction,
 };
 
 pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Trash Bin");
     let manager = TrashManager::new(paths);
     let mut current_page = 0;
     let page_size = 7;

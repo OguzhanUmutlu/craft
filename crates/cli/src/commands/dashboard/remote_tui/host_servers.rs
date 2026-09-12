@@ -1,42 +1,134 @@
+use std::io::{self, Write};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 use colored::Colorize;
+use crossterm::{
+    cursor::{Hide, MoveTo, Show},
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
+};
 use craft_core::{CraftPaths, RemoteHostConfig, Result};
 use craft_remote::{RemoteCraftClient, RemoteServerInfo};
 use crate::commands::dashboard::screen::{
-    box_divider, box_title, box_top, get_content_width, print_in_place_status,
-    run_input_prompt, run_menu, run_paged_list_menu, show_modal_message,
-    MenuEntry, PagedMenuAction,
+    box_bottom, box_divider, box_title, box_title_simple, box_top, clean_exit,
+    get_content_width, print_in_place_status, run_input_prompt, run_menu,
+    run_paged_list_menu, show_modal_message, MenuEntry, NavGuard, PagedMenuAction,
 };
 use super::remote_control::remote_server_control_panel;
 use super::remote_backups::manage_remote_backups;
+
+async fn connect_with_cancellation(host_config: &RemoteHostConfig) -> Result<Option<RemoteCraftClient>> {
+    let (tx, rx) = mpsc::channel();
+    let cfg_clone = host_config.clone();
+    thread::spawn(move || {
+        let res = RemoteCraftClient::connect(&cfg_clone);
+        let _ = tx.send(res);
+    });
+
+    let mut stdout = io::stdout();
+    enable_raw_mode()?;
+    let _ = execute!(stdout, Hide);
+
+    let frames = [".  ", ".. ", "...", " ..", "  .", "   "];
+    let mut frame_idx = 0;
+
+    let result = (|| -> Result<Option<RemoteCraftClient>> {
+        loop {
+            // Check if connection completed
+            match rx.try_recv() {
+                Ok(Ok(client)) => return Ok(Some(client)),
+                Ok(Err(e)) => {
+                    let _ = disable_raw_mode();
+                    let _ = execute!(io::stdout(), Show);
+                    show_modal_message(
+                        "SSH CONNECTION FAILED",
+                        &[
+                            format!("Failed to connect to host '{}':", host_config.alias),
+                            format!("[ERROR] {}", e),
+                            "".to_string(),
+                            "Check network, host address, SSH credentials, and port.".to_string(),
+                        ],
+                        true,
+                    )?;
+                    return Ok(None);
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    let _ = disable_raw_mode();
+                    let _ = execute!(io::stdout(), Show);
+                    show_modal_message(
+                        "SSH CONNECTION FAILED",
+                        &[
+                            format!("Failed to connect to host '{}': connection dropped.", host_config.alias),
+                        ],
+                        true,
+                    )?;
+                    return Ok(None);
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+
+            // Render connecting status
+            let width = get_content_width(80);
+            execute!(stdout, MoveTo(0, 0))?;
+            print!("{}\x1B[K\r\n", box_top(width));
+            print!("{}\x1B[K\r\n", box_title_simple("CONNECTING TO REMOTE HOST", width, false));
+            print!("{}\x1B[K\r\n", box_divider(width));
+            print!("\x1B[K\r\n");
+            print!(
+                "  Establishing SSH connection to '{}' ({}@{}:{}) {}\x1B[K\r\n",
+                host_config.alias, host_config.user, host_config.host, host_config.port, frames[frame_idx % frames.len()]
+            );
+            print!("  Press Esc, q, Backspace, or Left arrow to cancel.\x1B[K\r\n");
+            print!("\x1B[K\r\n{}\x1B[K\r\n", box_bottom(width));
+            execute!(stdout, Clear(ClearType::FromCursorDown))?;
+            stdout.flush()?;
+
+            frame_idx = (frame_idx + 1) % frames.len();
+
+            // Poll for cancellation keys
+            if event::poll(Duration::from_millis(120))? {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind == KeyEventKind::Press {
+                        if (key.modifiers.contains(KeyModifiers::CONTROL)
+                            && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('C')))
+                            || key.code == KeyCode::Char('\x03')
+                        {
+                            clean_exit();
+                        }
+
+                        match key.code {
+                            KeyCode::Esc
+                            | KeyCode::Char('q')
+                            | KeyCode::Char('Q')
+                            | KeyCode::Left
+                            | KeyCode::Backspace => {
+                                return Ok(None);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    })();
+
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), Show);
+    result
+}
 
 pub async fn manage_host_servers(
     paths: &CraftPaths,
     host_config: &RemoteHostConfig,
 ) -> Result<()> {
-    print_in_place_status(
-        "CONNECTING TO REMOTE HOST",
-        &[format!(
-            "Establishing SSH connection to '{}' ({}@{}:{})...",
-            host_config.alias, host_config.user, host_config.host, host_config.port
-        )],
-    )?;
-
-    let client = match RemoteCraftClient::connect(host_config) {
-        Ok(c) => c,
-        Err(e) => {
-            show_modal_message(
-                "SSH CONNECTION FAILED",
-                &[
-                    format!("Failed to connect to host '{}':", host_config.alias),
-                    format!("[ERROR] {}", e),
-                    "".to_string(),
-                    "Check network, host address, SSH credentials, and port.".to_string(),
-                ],
-                true,
-            )?;
-            return Ok(());
-        }
+    let client = match connect_with_cancellation(host_config).await? {
+        Some(c) => c,
+        None => return Ok(()),
     };
+
+    let _nav = NavGuard::enter(&host_config.alias);
 
     // Check if craft is installed on remote host
     if !client.is_craft_installed() {
@@ -196,6 +288,7 @@ pub async fn manage_host_servers(
 }
 
 async fn remote_create_server_wizard(client: &RemoteCraftClient) -> Result<()> {
+    let _nav = NavGuard::enter("Create Server");
     let name = match run_input_prompt("NEW REMOTE SERVER", "Enter server name (e.g. survival):", None)? {
         Some(n) if !n.trim().is_empty() => n.trim().to_string(),
         _ => return Ok(()),
@@ -260,6 +353,7 @@ async fn remote_ping_host(
     host: &RemoteHostConfig,
     servers: &[RemoteServerInfo],
 ) -> Result<()> {
+    let _nav = NavGuard::enter("Ping Host");
     let _ = print_in_place_status(
         "PINGING REMOTE HOST",
         &[format!("Checking network latency to '{}' ({}:{})...", host.alias, host.host, host.port)],
@@ -295,6 +389,7 @@ async fn remote_ping_host(
 }
 
 async fn remote_daemon_control_menu(client: &RemoteCraftClient, host_alias: &str) -> Result<()> {
+    let _nav = NavGuard::enter("Daemon Control");
     let width = get_content_width(80);
     let mut sel = 0;
 
@@ -411,6 +506,7 @@ async fn remote_manage_all_backups_picker(
     client: &RemoteCraftClient,
     servers: &[RemoteServerInfo],
 ) -> Result<()> {
+    let _nav = NavGuard::enter("Backups");
     if servers.is_empty() {
         show_modal_message(
             "NO SERVERS",
@@ -468,6 +564,7 @@ async fn remote_trash_menu(
     host_alias: &str,
     servers: &[RemoteServerInfo],
 ) -> Result<()> {
+    let _nav = NavGuard::enter("Trash Bin");
     let mut current_page = 0;
     let page_size = 7;
     let width = get_content_width(80);

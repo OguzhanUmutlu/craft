@@ -4,6 +4,7 @@ pub mod menu;
 pub mod input;
 pub mod modal;
 pub mod console;
+pub mod nav;
 
 pub use terminal::*;
 pub use theme::*;
@@ -11,6 +12,7 @@ pub use menu::*;
 pub use input::*;
 pub use modal::*;
 pub use console::*;
+pub use nav::*;
 
 use std::io;
 use std::sync::atomic::{AtomicUsize, Ordering};

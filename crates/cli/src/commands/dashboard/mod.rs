@@ -76,6 +76,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
     }
 
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Dashboard");
     let mut selected_main = 0;
 
     loop {

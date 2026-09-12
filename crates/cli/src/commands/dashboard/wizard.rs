@@ -8,7 +8,7 @@ use crate::commands::new::handle_new;
 use super::get_system_summary;
 use super::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
-    run_menu, show_modal_message, AltScreenGuard, MenuEntry,
+    run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
 };
 
 pub async fn gui_create_server_wizard(paths: &CraftPaths) -> Result<()> {
@@ -20,6 +20,7 @@ pub async fn gui_create_server_wizard_with_name(
     paths: &CraftPaths,
 ) -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Create Server");
 
     let has_name_override = !name_override.trim().is_empty();
     let mut server_name = if has_name_override {

@@ -8,12 +8,13 @@ use craft_core::{CraftPaths, RemoteAuthType, RemoteHostConfig, RemotesRegistry, 
 use crate::commands::dashboard::screen::{
     box_divider, box_title, box_top, get_content_width, run_input_prompt,
     run_menu, run_paged_list_menu, run_password_prompt, show_modal_message, AltScreenGuard, MenuEntry,
-    PagedMenuAction,
+    NavGuard, PagedMenuAction,
 };
 use host_servers::manage_host_servers;
 
 pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Remote Hosts");
     let mut current_page = 0;
     let page_size = 7;
 
@@ -22,8 +23,8 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
         let width = get_content_width(80);
 
         let mut action_entries = vec![
-            MenuEntry::new("i", "Import SSH Hosts").with_aliases(&["import"]),
-            MenuEntry::new("a", "Add Remote Host").with_aliases(&["add", "n"]),
+            MenuEntry::new("i", "Import Host").with_aliases(&["import", "ssh"]),
+            MenuEntry::new("a", "Add Host").with_aliases(&["add", "n"]),
         ];
         if !registry.remotes.is_empty() {
             action_entries.push(MenuEntry::new("r", "Remove Host").with_aliases(&["rm", "del"]));

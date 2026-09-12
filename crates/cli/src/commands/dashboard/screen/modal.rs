@@ -8,7 +8,7 @@ use crossterm::{
 
 use craft_core::Result;
 use super::terminal::{get_content_width, get_terminal_size};
-use super::theme::{box_bottom, box_divider, box_title, box_top, DIM, RESET};
+use super::theme::{box_bottom, box_divider, box_title_simple, box_top, DIM, RESET};
 use super::clean_exit;
 
 /// Displays an in-place modal dialog box without leaving the alternate screen.
@@ -35,7 +35,7 @@ pub fn show_modal_message<S: AsRef<str>>(title: &str, lines: &[S], is_error: boo
             execute!(stdout, MoveTo(0, 0))?;
 
             print!("{}\x1B[K\r\n", box_top(width));
-            print!("{}\x1B[K\r\n", box_title(title, width, is_error));
+            print!("{}\x1B[K\r\n", box_title_simple(title, width, is_error));
             print!("{}\x1B[K\r\n", box_divider(width));
             print!("\x1B[K\r\n");
 
@@ -113,7 +113,7 @@ pub fn print_in_place_status<S: AsRef<str>>(title: &str, lines: &[S]) -> Result<
 
     execute!(stdout, MoveTo(0, 0))?;
     print!("{}\x1B[K\r\n", box_top(width));
-    print!("{}\x1B[K\r\n", box_title(title, width, false));
+    print!("{}\x1B[K\r\n", box_title_simple(title, width, false));
     print!("{}\x1B[K\r\n", box_divider(width));
     print!("\x1B[K\r\n");
     for line in lines {
