@@ -1,0 +1,72 @@
+pub mod terminal;
+pub mod theme;
+pub mod menu;
+pub mod input;
+pub mod modal;
+
+pub use terminal::*;
+pub use theme::*;
+pub use menu::*;
+pub use input::*;
+pub use modal::*;
+
+use std::io;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use crossterm::{
+    cursor::{Hide, MoveTo, Show},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+};
+
+use craft_core::Result;
+
+static ALT_SCREEN_DEPTH: AtomicUsize = AtomicUsize::new(0);
+
+/// Cleanly resets the terminal out of alternate screen and raw mode, then exits the process.
+pub fn clean_exit() -> ! {
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), LeaveAlternateScreen, Show);
+    std::process::exit(0);
+}
+
+/// Re-entrant RAII guard for the terminal alternate screen.
+/// Ensures nested submenus and dialogs do not exit alternate screen prematurely.
+pub struct AltScreenGuard;
+
+impl AltScreenGuard {
+    pub fn enter() -> Self {
+        init_terminal_panic_hook();
+        if ALT_SCREEN_DEPTH.fetch_add(1, Ordering::SeqCst) == 0 {
+            let _ = execute!(io::stdout(), EnterAlternateScreen, Hide);
+        }
+        AltScreenGuard
+    }
+}
+
+impl Drop for AltScreenGuard {
+    fn drop(&mut self) {
+        if ALT_SCREEN_DEPTH.fetch_sub(1, Ordering::SeqCst) == 1 {
+            let _ = disable_raw_mode();
+            let _ = execute!(io::stdout(), LeaveAlternateScreen, Show);
+        }
+    }
+}
+
+/// Executes an interactive console action (e.g. foreground server, craft view) inside
+/// the alternate screen TUI, disabling raw mode during execution and cleanly restoring
+/// raw mode and cursor hiding when the session completes.
+pub async fn exec_console_action<F, Fut>(action: F) -> Result<()>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
+    let mut stdout = io::stdout();
+    let _ = execute!(stdout, Clear(ClearType::All), MoveTo(0, 0), Show);
+    let _ = disable_raw_mode();
+
+    let res = action().await;
+
+    let _ = enable_raw_mode();
+    let _ = execute!(io::stdout(), Hide);
+    res
+}

@@ -1,5 +1,6 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use fs2::FileExt;
 #[cfg(target_os = "windows")]
 use sysinfo::{Pid, System};
 use crate::error::{CraftError, Result};
@@ -141,6 +142,108 @@ pub fn auto_heal_server_file<P: AsRef<Path>>(server_dir: P, target_filename: &st
     None
 }
 
+/// An RAII guard representing an exclusive process lock on a Minecraft server directory.
+/// Ensures only one process (foreground or background) can run the server at any given time.
+#[derive(Debug)]
+pub struct ServerLockGuard {
+    lock_file: fs::File,
+    pid_path: PathBuf,
+}
+
+impl ServerLockGuard {
+    /// Attempts to acquire an exclusive lock for the server at `server_path`.
+    /// If the server is already locked by an active process, returns CraftError::Other with the active PID.
+    pub fn acquire<P: AsRef<Path>>(server_path: P) -> Result<Self> {
+        let dir = server_path.as_ref();
+        let lock_path = dir.join(".server.lock");
+        let pid_path = dir.join(".server.pid");
+
+        // 1. Open or create .server.lock
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .map_err(CraftError::Io)?;
+
+        // 2. Attempt non-blocking exclusive file lock
+        if file.try_lock_exclusive().is_err() {
+            let pid_info = read_pid_file(&pid_path)
+                .map(|p| format!(" (PID: {})", p))
+                .unwrap_or_default();
+            return Err(CraftError::Other(format!(
+                "Server at '{}' is already running{}. Only one process can run the server at a time.",
+                dir.display(),
+                pid_info
+            )));
+        }
+
+        // 3. We acquired the OS lock. Now check if an orphaned process from a dead parent is still alive
+        if let Some(existing_pid) = read_pid_file(&pid_path) {
+            if is_process_running(existing_pid) {
+                return Err(CraftError::Other(format!(
+                    "Server at '{}' is already running (PID: {}). Only one process can run the server at a time.",
+                    dir.display(),
+                    existing_pid
+                )));
+            } else {
+                // Stale pid file from an unclean shutdown or killed process
+                remove_pid_file(&pid_path);
+            }
+        }
+
+        let guard = Self {
+            lock_file: file,
+            pid_path,
+        };
+        let _ = guard.record_pid(std::process::id());
+        Ok(guard)
+    }
+
+    /// Records the actual child server PID into the lock file
+    pub fn record_pid(&self, pid: u32) -> Result<()> {
+        write_pid_file(&self.pid_path, pid)
+    }
+}
+
+impl Drop for ServerLockGuard {
+    fn drop(&mut self) {
+        remove_pid_file(&self.pid_path);
+        let _ = self.lock_file.unlock();
+    }
+}
+
+/// Returns the running PID of a server if it is active, or None.
+pub fn get_server_running_pid<P: AsRef<Path>>(server_path: P) -> Option<u32> {
+    let dir = server_path.as_ref();
+    let pid_path = dir.join(".server.pid");
+    if let Some(pid) = read_pid_file(&pid_path) {
+        if is_process_running(pid) {
+            return Some(pid);
+        }
+    }
+    None
+}
+
+/// Checks whether a server at `server_path` is currently running by inspecting PID and lock file.
+pub fn is_server_locked<P: AsRef<Path>>(server_path: P) -> bool {
+    let dir = server_path.as_ref();
+    if get_server_running_pid(dir).is_some() {
+        return true;
+    }
+
+    let lock_path = dir.join(".server.lock");
+    if lock_path.exists() {
+        if let Ok(file) = fs::OpenOptions::new().read(true).write(true).open(&lock_path) {
+            if file.try_lock_exclusive().is_err() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,5 +272,42 @@ mod tests {
 
         assert_eq!(auto_heal_server_jar(dir.path()), None);
         assert!(!dir.path().join("server.jar").exists());
+    }
+
+    #[test]
+    fn test_server_lock_mutual_exclusion() {
+        let dir = tempdir().unwrap();
+        let lock1 = ServerLockGuard::acquire(dir.path()).expect("first lock should succeed");
+        lock1.record_pid(999999).unwrap();
+
+        // Second lock attempt in same directory while lock1 is held must fail
+        let lock2 = ServerLockGuard::acquire(dir.path());
+        assert!(lock2.is_err());
+        let err_msg = lock2.unwrap_err().to_string();
+        assert!(err_msg.contains("already running"));
+        assert!(err_msg.contains("999999"));
+
+        // Dropping lock1 releases the lock
+        drop(lock1);
+
+        // Now lock can be acquired again
+        let lock3 = ServerLockGuard::acquire(dir.path());
+        assert!(lock3.is_ok());
+    }
+
+    #[test]
+    fn test_server_lock_cleans_stale_pid() {
+        let dir = tempdir().unwrap();
+        let pid_file = dir.path().join(".server.pid");
+        // PID 99999999 is extraordinarily unlikely to be running
+        fs::write(&pid_file, "99999999").unwrap();
+
+        let lock = ServerLockGuard::acquire(dir.path());
+        assert!(lock.is_ok());
+        // Stale pid was replaced with current process PID
+        assert_eq!(read_pid_file(&pid_file), Some(std::process::id()));
+        drop(lock);
+        // Cleaned on drop
+        assert!(!pid_file.exists());
     }
 }

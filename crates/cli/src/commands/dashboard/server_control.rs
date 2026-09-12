@@ -8,24 +8,19 @@ use craft_daemon::DaemonClient;
 use crate::commands::run::run_foreground_server;
 use crate::commands::view::handle_view;
 use super::screen::{
-    exec_console_action, print_in_place_status, run_menu, show_modal_message, AltScreenGuard,
-    MenuEntry,
+    box_divider, box_title, box_top, exec_console_action, get_content_width, print_in_place_status,
+    run_menu, show_modal_message, AltScreenGuard, MenuEntry,
 };
 use super::wizard::gui_create_server_wizard;
 
 pub async fn show_empty_servers_modal(paths: &CraftPaths) -> Result<bool> {
+    let width = get_content_width(80);
     let header = format!(
-        "{}\r\n{}\r\n{}\r\n No servers are currently registered on this machine.\r\n Create your first Minecraft server to get started.\r\n{}",
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "                               NO SERVERS REGISTERED                            "
-            .cyan()
-            .bold(),
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "--------------------------------------------------------------------------------".dimmed()
+        "{}\r\n{}\r\n{}\r\n  No servers are currently registered on this machine.\r\n  Create your first Minecraft server to get started.\r\n{}",
+        box_top(width),
+        box_title("NO SERVERS REGISTERED", width, false),
+        box_divider(width),
+        box_divider(width)
     );
 
     let entries = vec![
@@ -65,6 +60,10 @@ pub(crate) async fn stop_server_daemon(
         .find_by_name(server_name)
         .ok_or_else(|| CraftError::ServerNotFound(format!("Server '{}' not found", server_name)))?;
     if !DaemonClient::is_daemon_running(paths) {
+        if let Some(pid) = craft_core::get_server_running_pid(&server.path) {
+            craft_core::kill_process(pid, force)?;
+            return Ok(());
+        }
         return Err(CraftError::Other(
             "Daemon is not running; no background servers active.".to_string(),
         ));
@@ -119,7 +118,8 @@ pub async fn quick_start_menu(paths: &CraftPaths) -> Result<()> {
             || s.path
                 .canonicalize()
                 .map(|p| running_paths.contains(&p))
-                .unwrap_or(false);
+                .unwrap_or(false)
+            || craft_core::is_server_locked(&s.path);
         let status_badge = if is_running {
             "[ALREADY RUNNING]".green().to_string()
         } else {
@@ -141,18 +141,13 @@ pub async fn quick_start_menu(paths: &CraftPaths) -> Result<()> {
     entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
+    let width = get_content_width(80);
     let header = format!(
-        "{}\r\n{}\r\n{}\r\n Select a server to start in the background:\r\n{}",
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "                                QUICK START SERVER                              "
-            .cyan()
-            .bold(),
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "--------------------------------------------------------------------------------".dimmed()
+        "{}\r\n{}\r\n{}\r\n  Select a server to start in the background:\r\n{}",
+        box_top(width),
+        box_title("QUICK START SERVER", width, false),
+        box_divider(width),
+        box_divider(width)
     );
 
     if let Some(idx) = run_menu(&header, &entries, &mut sel)? {
@@ -163,7 +158,8 @@ pub async fn quick_start_menu(paths: &CraftPaths) -> Result<()> {
                     .path
                     .canonicalize()
                     .map(|p| running_paths.contains(&p))
-                    .unwrap_or(false);
+                    .unwrap_or(false)
+                || craft_core::is_server_locked(&server.path);
             if is_running {
                 show_modal_message(
                     "SERVER ALREADY RUNNING",
@@ -241,6 +237,7 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
                     .canonicalize()
                     .map(|p| running_paths.contains(&p))
                     .unwrap_or(false)
+                || craft_core::is_server_locked(&s.path)
         })
         .collect();
 
@@ -265,6 +262,11 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
         } else {
             ((b'a' + (i - 9) as u8) as char).to_string()
         };
+        let status_str = if let Some(pid) = craft_core::get_server_running_pid(&s.path) {
+            format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
+        } else {
+            "[RUNNING]".green().bold().to_string()
+        };
         entries.push(MenuEntry::new(
             hotkey,
             format!(
@@ -272,7 +274,7 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
                 s.name,
                 s.software,
                 s.version,
-                "[RUNNING]".green().bold()
+                status_str
             ),
         ));
     }
@@ -280,18 +282,13 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
     entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
+    let width = get_content_width(80);
     let header = format!(
-        "{}\r\n{}\r\n{}\r\n Select a running server to stop gracefully:\r\n{}",
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "                               STOP RUNNING SERVER                              "
-            .cyan()
-            .bold(),
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "--------------------------------------------------------------------------------".dimmed()
+        "{}\r\n{}\r\n{}\r\n  Select a running server to stop gracefully:\r\n{}",
+        box_top(width),
+        box_title("STOP RUNNING SERVER", width, false),
+        box_divider(width),
+        box_divider(width)
     );
 
     if let Some(idx) = run_menu(&header, &entries, &mut sel)? {
@@ -376,18 +373,13 @@ pub async fn restart_servers_menu(paths: &CraftPaths) -> Result<()> {
     entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
+    let width = get_content_width(80);
     let header = format!(
-        "{}\r\n{}\r\n{}\r\n Select a server to restart:\r\n{}",
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "                                 RESTART SERVER                                 "
-            .cyan()
-            .bold(),
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "--------------------------------------------------------------------------------".dimmed()
+        "{}\r\n{}\r\n{}\r\n  Select a server to restart:\r\n{}",
+        box_top(width),
+        box_title("RESTART SERVER", width, false),
+        box_divider(width),
+        box_divider(width)
     );
 
     if let Some(idx) = run_menu(&header, &entries, &mut sel)? {
@@ -450,18 +442,13 @@ pub async fn view_servers_menu(paths: &CraftPaths) -> Result<()> {
     entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
+    let width = get_content_width(80);
     let header = format!(
-        "{}\r\n{}\r\n{}\r\n Select a server to attach live terminal console:\r\n{}",
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "                           ATTACH LIVE CONSOLE (VIEW)                           "
-            .cyan()
-            .bold(),
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "--------------------------------------------------------------------------------".dimmed()
+        "{}\r\n{}\r\n{}\r\n  Select a server to attach live terminal console:\r\n{}",
+        box_top(width),
+        box_title("ATTACH LIVE CONSOLE (VIEW)", width, false),
+        box_divider(width),
+        box_divider(width)
     );
 
     if let Some(idx) = run_menu(&header, &entries, &mut sel)? {
@@ -499,18 +486,13 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
     entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
     let mut sel = 0;
+    let width = get_content_width(80);
     let header = format!(
-        "{}\r\n{}\r\n{}\r\n Select a server to unregister or delete:\r\n{}",
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "                                 DELETE SERVER                                  "
-            .cyan()
-            .bold(),
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "--------------------------------------------------------------------------------".dimmed()
+        "{}\r\n{}\r\n{}\r\n  Select a server to unregister or delete:\r\n{}",
+        box_top(width),
+        box_title("DELETE SERVER", width, false),
+        box_divider(width),
+        box_divider(width)
     );
 
     if let Some(idx) = run_menu(&header, &entries, &mut sel)? {
@@ -518,16 +500,13 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
             let server = &registry.servers[idx];
 
             let confirm_header = format!(
-                "{}\r\n{}\r\n{}\r\n How do you want to remove server '{}'?\r\n{}",
-                "================================================================================"
-                    .cyan()
-                    .bold(),
-                format!("REMOVE SERVER: {}", server.name).cyan().bold(),
-                "================================================================================"
-                    .cyan()
-                    .bold(),
-                server.name,
-                "--------------------------------------------------------------------------------".dimmed()
+                "{}\r\n{}\r\n{}\r\n  Server: {}\r\n  Path:   {}\r\n  Choose removal option:\r\n{}",
+                box_top(width),
+                box_title(&format!("REMOVE SERVER: {}", server.name), width, true),
+                box_divider(width),
+                server.name.white().bold(),
+                server.path.display(),
+                box_divider(width)
             );
 
             let confirm_entries = vec![
@@ -604,18 +583,13 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
         };
 
         if registry.servers.is_empty() {
+            let width = get_content_width(80);
             let header = format!(
                 "{}\r\n{}\r\n{}\r\n No servers currently registered on this host.\r\n{}",
-                "================================================================================"
-                    .cyan()
-                    .bold(),
-                "                               REGISTERED SERVERS                               "
-                    .cyan()
-                    .bold(),
-                "================================================================================"
-                    .cyan()
-                    .bold(),
-                "--------------------------------------------------------------------------------".dimmed()
+                box_top(width).cyan().bold(),
+                box_title("REGISTERED SERVERS", width, false).cyan().bold(),
+                box_divider(width).cyan().bold(),
+                box_divider(width).dimmed(),
             );
 
             // Defensive: Only option 1 and 0, aliases "c" / "n", strictly NO "2"
@@ -633,18 +607,13 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
             continue;
         }
 
+        let width = get_content_width(80);
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Select a server to inspect details, control lifecycle, or attach console.\r\n{}",
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "                               REGISTERED SERVERS                               "
-                .cyan()
-                .bold(),
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "--------------------------------------------------------------------------------".dimmed()
+            box_top(width).cyan().bold(),
+            box_title("REGISTERED SERVERS", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
         );
 
         let mut entries = Vec::new();
@@ -653,9 +622,14 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                 || s.path
                     .canonicalize()
                     .map(|p| running_paths.contains(&p))
-                    .unwrap_or(false);
+                    .unwrap_or(false)
+                || craft_core::is_server_locked(&s.path);
             let status_str = if is_running {
-                "[RUNNING]".green().bold().to_string()
+                if let Some(pid) = craft_core::get_server_running_pid(&s.path) {
+                    format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
+                } else {
+                    "[RUNNING]".green().bold().to_string()
+                }
             } else {
                 "[STOPPED]".dimmed().to_string()
             };
@@ -724,27 +698,31 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             }
         } else {
             false
+        } || craft_core::is_server_locked(&server.path);
+
+        let running_pid = if is_running {
+            craft_core::get_server_running_pid(&server.path)
+        } else {
+            None
         };
 
         let status_badge = if is_running {
-            "[RUNNING]".green().bold()
+            if let Some(pid) = running_pid {
+                format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
+            } else {
+                "[RUNNING]".green().bold().to_string()
+            }
         } else {
-            "[STOPPED]".dimmed()
+            "[STOPPED]".dimmed().to_string()
         };
 
-        let title = format!(
-            "                           SERVER: {:<20} {}",
-            server.name, status_badge
-        );
+        let width = get_content_width(80);
+        let title = format!("SERVER: {} {}", server.name, status_badge);
         let mut header = format!(
             "{}\r\n{}\r\n{}\r\n Platform: {:<12} | Version: {:<10} | Memory: {}\r\n Path: {}\r\n",
-            "================================================================================"
-                .cyan()
-                .bold(),
-            title,
-            "================================================================================"
-                .cyan()
-                .bold(),
+            box_top(width).cyan().bold(),
+            box_title(&title, width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
             server.software.white().bold(),
             server.version.cyan(),
             server.memory.as_deref().unwrap_or("Default (2G)"),
@@ -755,7 +733,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             header.push_str(&format!(" {}\r\n", msg));
         }
 
-        header.push_str(&"--------------------------------------------------------------------------------".dimmed().to_string());
+        header.push_str(&box_divider(width).dimmed().to_string());
 
         let entries = vec![
             MenuEntry::new("1", "Start Server (Background Daemon)"),
@@ -808,7 +786,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                 // Start foreground
                 if is_running {
                     flash_status = Some(
-                        format!("[INFO] Server '{}' is already running in daemon. Stop it before starting in foreground.", server.name)
+                        format!("[INFO] Server '{}' is already running. Stop it before starting in foreground.", server.name)
                             .yellow()
                             .bold()
                             .to_string(),
@@ -817,11 +795,13 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     let server_path = server.path.clone();
                     let server_name = server.name.clone();
                     let res = exec_console_action(|| async {
-                        println!("{}", "================================================================================".cyan().bold());
-                        println!("                    SERVER CONSOLE (FOREGROUND): {:<20}", server_name.bold());
-                        println!("{}", "================================================================================".cyan().bold());
+                        let width = get_content_width(80);
+                        let title = format!("SERVER CONSOLE (FOREGROUND): {}", server_name);
+                        println!("{}", box_top(width).cyan().bold());
+                        println!("{}", box_title(&title, width, false).cyan().bold());
+                        println!("{}", box_divider(width).cyan().bold());
                         println!(" {}", "Type commands below  |  Press Ctrl+C or type 'stop' to safely stop the server".dimmed());
-                        println!("{}\r\n", "--------------------------------------------------------------------------------".dimmed());
+                        println!("{}\r\n", box_divider(width).dimmed());
                         let _ = io::stdout().flush();
                         run_foreground_server(&server_path).await
                     })
@@ -918,11 +898,13 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                 } else {
                     let server_name = server.name.clone();
                     let _ = exec_console_action(|| async {
-                        println!("{}", "================================================================================".cyan().bold());
-                        println!("                       ATTACHED CONSOLE: {:<20}", server_name.bold());
-                        println!("{}", "================================================================================".cyan().bold());
+                        let width = get_content_width(80);
+                        let title = format!("ATTACHED CONSOLE: {}", server_name);
+                        println!("{}", box_top(width).cyan().bold());
+                        println!("{}", box_title(&title, width, false).cyan().bold());
+                        println!("{}", box_divider(width).cyan().bold());
                         println!(" {}", "Type commands to send to server  |  Press Ctrl+C to detach and return to TUI".dimmed());
-                        println!("{}\r\n", "--------------------------------------------------------------------------------".dimmed());
+                        println!("{}\r\n", box_divider(width).dimmed());
                         let _ = io::stdout().flush();
                         handle_view(&server_name, None, paths).await
                     })
@@ -993,17 +975,14 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             }
             Some(7) => {
                 // Delete server
+                let width = get_content_width(80);
                 let confirm_header = format!(
                     "{}\r\n{}\r\n{}\r\n Are you sure you want to remove server '{}'?\r\n{}",
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    format!("DELETE SERVER: {}", server.name).cyan().bold(),
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
+                    box_top(width).cyan().bold(),
+                    box_title(&format!("DELETE SERVER: {}", server.name), width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
                     server.name,
-                    "--------------------------------------------------------------------------------".dimmed()
+                    box_divider(width).dimmed(),
                 );
                 let confirm_entries = vec![
                     MenuEntry::new(

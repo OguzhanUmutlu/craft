@@ -6,8 +6,8 @@ use craft_providers::get_all_softwares;
 use crate::commands::new::handle_new;
 use super::get_system_summary;
 use super::screen::{
-    print_in_place_status, run_input_prompt, run_menu, show_modal_message, AltScreenGuard,
-    MenuEntry,
+    box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
+    run_menu, show_modal_message, AltScreenGuard, MenuEntry,
 };
 
 pub async fn gui_create_server_wizard(paths: &CraftPaths) -> Result<()> {
@@ -115,19 +115,14 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::Category => {
+                let width = get_content_width(80);
                 let cat_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose platform category for server '{}':\r\n{}",
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    "                       STEP 2/6: SELECT PLATFORM CATEGORY                       "
-                        .cyan()
-                        .bold(),
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
+                    box_top(width).cyan().bold(),
+                    box_title("STEP 2/6: SELECT PLATFORM CATEGORY", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
                     server_name,
-                    "--------------------------------------------------------------------------------".dimmed()
+                    box_divider(width).dimmed(),
                 );
 
                 let cat_entries = vec![
@@ -136,7 +131,7 @@ pub async fn gui_create_server_wizard_with_name(
                     MenuEntry::new("3", "Network Proxies"),
                     MenuEntry::new("4", "Hybrid & Cross-Play"),
                     MenuEntry::new("5", "Browse All 16 Platforms"),
-                    MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                    MenuEntry::new("0", if has_name_override { "Cancel" } else { "Back" }).with_aliases(&["b"]),
                 ];
 
                 let cat_choice = run_menu(&cat_header, &cat_entries, &mut cat_sel)?;
@@ -172,18 +167,13 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::JavaType => {
+                let width = get_content_width(80);
                 let jt_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose server type for Java Edition:\r\n{}",
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    "                         STEP 2: SELECT JAVA SERVER TYPE                        "
-                        .cyan()
-                        .bold(),
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    "--------------------------------------------------------------------------------".dimmed()
+                    box_top(width).cyan().bold(),
+                    box_title("STEP 2: SELECT JAVA SERVER TYPE", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    box_divider(width).dimmed(),
                 );
 
                 let jt_entries = vec![
@@ -307,18 +297,13 @@ pub async fn gui_create_server_wizard_with_name(
                         .collect(),
                 };
 
+                let width = get_content_width(80);
                 let sw_header = format!(
                     "{}\r\n{}\r\n{}\r\n Select the server software implementation:\r\n{}",
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    "                        STEP 3/6: SELECT SERVER SOFTWARE                        "
-                        .cyan()
-                        .bold(),
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    "--------------------------------------------------------------------------------".dimmed()
+                    box_top(width).cyan().bold(),
+                    box_title("STEP 3/6: SELECT SERVER SOFTWARE", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    box_divider(width).dimmed(),
                 );
 
                 let mut sw_entries: Vec<MenuEntry> = software_choices
@@ -353,19 +338,14 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::Version => {
+                let width = get_content_width(80);
                 let ver_header = format!(
                     "{}\r\n{}\r\n{}\r\n Select Minecraft release version for {}:\r\n{}",
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    "                        STEP 4/6: SELECT SERVER VERSION                         "
-                        .cyan()
-                        .bold(),
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
+                    box_top(width).cyan().bold(),
+                    box_title("STEP 4/6: SELECT SERVER VERSION", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
                     selected_sw_name,
-                    "--------------------------------------------------------------------------------".dimmed()
+                    box_divider(width).dimmed(),
                 );
 
                 let ver_entries = vec![
@@ -439,21 +419,16 @@ pub async fn gui_create_server_wizard_with_name(
 
             WizardStep::Memory => {
                 let (_os, total_ram, used_ram, ram_pct) = get_system_summary();
+                let width = get_content_width(80);
                 let mem_header = format!(
                     "{}\r\n{}\r\n{}\r\n Host RAM: {:.1} / {:.1} GB ({:.1}%) | Choose memory allocation limit:\r\n{}",
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    "                       STEP 5/6: ALLOCATE SERVER MEMORY                         "
-                        .cyan()
-                        .bold(),
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
+                    box_top(width).cyan().bold(),
+                    box_title("STEP 5/6: ALLOCATE SERVER MEMORY", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
                     used_ram,
                     total_ram,
                     ram_pct,
-                    "--------------------------------------------------------------------------------".dimmed()
+                    box_divider(width).dimmed(),
                 );
 
                 let mem_entries = vec![
@@ -503,19 +478,14 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::Autostart => {
+                let width = get_content_width(80);
                 let start_header = format!(
                     "{}\r\n{}\r\n{}\r\n How should server '{}' be initialized upon creation?\r\n{}",
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    "                         STEP 6/6: INITIALIZATION MODE                          "
-                        .cyan()
-                        .bold(),
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
+                    box_top(width).cyan().bold(),
+                    box_title("STEP 6/6: INITIALIZATION MODE", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
                     server_name,
-                    "--------------------------------------------------------------------------------".dimmed()
+                    box_divider(width).dimmed(),
                 );
 
                 let start_entries = vec![

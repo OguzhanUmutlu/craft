@@ -31,7 +31,9 @@ pub async fn handle_restart(
         };
 
         let running_servers: Vec<_> = registry.servers.iter()
-            .filter(|s| running_paths.contains(&s.path) || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false))
+            .filter(|s| running_paths.contains(&s.path)
+                || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false)
+                || craft_core::is_server_locked(&s.path))
             .collect();
 
         if running_servers.is_empty() {

@@ -42,7 +42,10 @@ pub async fn handle_run(
             };
 
             let server_items: Vec<String> = registry.servers.iter().map(|s| {
-                let status = if running_paths.contains(&s.path) || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false) {
+                let is_running = running_paths.contains(&s.path)
+                    || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false)
+                    || craft_core::is_server_locked(&s.path);
+                let status = if is_running {
                     "[ALREADY RUNNING]"
                 } else {
                     "[STOPPED]"
@@ -99,6 +102,9 @@ pub async fn handle_run(
 }
 
 pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
+    let canonical = server_path.canonicalize().unwrap_or_else(|_| server_path.to_path_buf());
+    let lock_guard = craft_core::ServerLockGuard::acquire(&canonical)?;
+
     // Self-healing: ensure server jar / binary is in place
     let paths = CraftPaths::new();
     let expected_file = paths.as_ref().ok().and_then(|p| {
@@ -171,6 +177,10 @@ pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
     let mut child = cmd.spawn()
         .map_err(|e| CraftError::Process(format!("Failed to start server: {}", e)))?;
 
+    if let Some(pid) = child.id() {
+        let _ = lock_guard.record_pid(pid);
+    }
+
     #[cfg(unix)]
     let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).ok();
 
@@ -232,6 +242,7 @@ pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
                     let updated = content.replace("eula=false", "eula=true");
                     let _ = fs::write(&eula_file, updated);
                     println!("{}", "EULA accepted. Restarting server...".green());
+                    drop(lock_guard);
                     return Box::pin(run_foreground_server(server_path)).await;
                 } else {
                     println!("{}", "EULA was not accepted. Server will not run.".red());

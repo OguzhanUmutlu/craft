@@ -13,8 +13,8 @@ use craft_providers::CacheManager;
 
 use crate::commands::remote::parse_connection_string;
 use super::screen::{
-    print_in_place_status, run_input_prompt, run_menu, show_modal_message, AltScreenGuard,
-    MenuEntry,
+    box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
+    run_menu, show_modal_message, AltScreenGuard, MenuEntry,
 };
 use super::server_control::show_empty_servers_modal;
 
@@ -30,19 +30,14 @@ pub async fn ping_menu() -> Result<()> {
     };
 
     let mut proto_sel = 0;
+    let width = get_content_width(80);
     let proto_header = format!(
         "{}\r\n{}\r\n{}\r\n Target: {}\r\n Select protocol query mode:\r\n{}",
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "                             SELECT PING PROTOCOL                               "
-            .cyan()
-            .bold(),
-        "================================================================================"
-            .cyan()
-            .bold(),
+        box_top(width).cyan().bold(),
+        box_title("SELECT PING PROTOCOL", width, false).cyan().bold(),
+        box_divider(width).cyan().bold(),
         target,
-        "--------------------------------------------------------------------------------".dimmed()
+        box_divider(width).dimmed(),
     );
 
     let proto_entries = vec![
@@ -140,18 +135,13 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
             return Ok(());
         }
 
+        let width = get_content_width(80);
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Create compressed backups, inspect archive history, or restore worlds.\r\n{}",
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "                       WORLD SNAPSHOTS & BACKUP MANAGER                         "
-                .cyan()
-                .bold(),
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "--------------------------------------------------------------------------------".dimmed()
+            box_top(width).cyan().bold(),
+            box_title("WORLD SNAPSHOTS & BACKUP MANAGER", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
         );
 
         let entries = vec![
@@ -382,18 +372,13 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
     let mut selected = 0;
 
     loop {
+        let width = get_content_width(80);
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Search and install Minecraft plugins and extensions with one click.\r\n{}",
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "                         PLUGINS & EXTENSIONS MANAGER                           "
-                .cyan()
-                .bold(),
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "--------------------------------------------------------------------------------".dimmed()
+            box_top(width).cyan().bold(),
+            box_title("PLUGINS & EXTENSIONS MANAGER", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
         );
 
         let entries = vec![
@@ -428,8 +413,14 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                     )?;
                 } else {
                     let mut p_entries = Vec::new();
-                    for (i, hit) in results.iter().take(9).enumerate() {
-                        let hotkey = (i + 1).to_string();
+                    for (i, hit) in results.iter().enumerate() {
+                        let hotkey = if i < 9 {
+                            (i + 1).to_string()
+                        } else if i < 35 {
+                            ((b'a' + (i - 9) as u8) as char).to_string()
+                        } else {
+                            format!("{}", i + 1)
+                        };
                         let desc = if hit.description.len() > 40 {
                             format!("{}...", &hit.description[..37])
                         } else {
@@ -598,18 +589,13 @@ pub async fn remotes_menu(paths: &CraftPaths) -> Result<()> {
     let mut selected = 0;
 
     loop {
+        let width = get_content_width(80);
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Manage remote game server hosts and orchestrated deployments over SSH.\r\n{}",
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "                            REMOTE VPS HOSTS (SSH)                              "
-                .cyan()
-                .bold(),
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "--------------------------------------------------------------------------------".dimmed()
+            box_top(width).cyan().bold(),
+            box_title("REMOTE VPS HOSTS (SSH)", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
         );
 
         let entries = vec![
@@ -823,19 +809,14 @@ pub async fn daemon_menu(paths: &CraftPaths) -> Result<()> {
             "[OFFLINE]".yellow().bold()
         };
 
+        let width = get_content_width(80);
         let header = format!(
             "{}\r\n{}\r\n{}\r\n System Supervisor Daemon Status: {}\r\n{}",
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "                          CRAFT SERVICE DAEMON CONTROL                          "
-                .cyan()
-                .bold(),
-            "================================================================================"
-                .cyan()
-                .bold(),
+            box_top(width).cyan().bold(),
+            box_title("CRAFT SERVICE DAEMON CONTROL", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
             status_badge,
-            "--------------------------------------------------------------------------------".dimmed()
+            box_divider(width).dimmed(),
         );
 
         let entries = vec![
@@ -974,20 +955,15 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
         let size = cache.get_cache_size();
         let mb = (size as f64) / (1024.0 * 1024.0);
 
+        let width = get_content_width(80);
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Total Download Cache: {:.2} MB | Location: {}\r\n{}",
-            "================================================================================"
-                .cyan()
-                .bold(),
-            "                         CACHE & STORAGE MANAGEMENT                             "
-                .cyan()
-                .bold(),
-            "================================================================================"
-                .cyan()
-                .bold(),
+            box_top(width).cyan().bold(),
+            box_title("CACHE & STORAGE MANAGEMENT", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
             mb,
             paths.cache_dir.display(),
-            "--------------------------------------------------------------------------------".dimmed()
+            box_divider(width).dimmed(),
         );
 
         let entries = vec![
@@ -1008,19 +984,14 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
                 )?;
             }
             Some(1) => {
+                let width = get_content_width(80);
                 let conf_header = format!(
                     "{}\r\n{}\r\n{}\r\n Delete all cached jarfiles and archives ({:.2} MB)?\r\n{}",
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
-                    "                               CONFIRM CACHE PURGE                              "
-                        .cyan()
-                        .bold(),
-                    "================================================================================"
-                        .cyan()
-                        .bold(),
+                    box_top(width).cyan().bold(),
+                    box_title("CONFIRM CACHE PURGE", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
                     mb,
-                    "--------------------------------------------------------------------------------".dimmed()
+                    box_divider(width).dimmed(),
                 );
                 let conf_entries = vec![
                     MenuEntry::new("1", "Yes, Purge All Download Caches"),

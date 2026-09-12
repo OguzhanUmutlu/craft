@@ -44,17 +44,12 @@ pub(crate) fn build_dashboard_header(
         "[OFFLINE]".yellow().bold()
     };
 
+    let width = get_content_width(80);
     format!(
         "{}\r\n{}\r\n{}\r\n Host: {:<16} | RAM: {:.1} / {:.1} GB ({:.1}%) | Daemon: {}\r\n Registered Servers: {:<4} | Active Running: {:<4}\r\n{}",
-        "================================================================================"
-            .cyan()
-            .bold(),
-        "                         CRAFT SERVER MANAGER DASHBOARD                         "
-            .cyan()
-            .bold(),
-        "================================================================================"
-            .cyan()
-            .bold(),
+        box_top(width).cyan().bold(),
+        box_title("CRAFT SERVER MANAGER DASHBOARD", width, false).cyan().bold(),
+        box_divider(width).cyan().bold(),
         os.white().bold(),
         used_ram,
         total_ram,
@@ -62,7 +57,7 @@ pub(crate) fn build_dashboard_header(
         daemon_badge,
         registered_count.to_string().cyan().bold(),
         running_count.to_string().green().bold(),
-        "--------------------------------------------------------------------------------".dimmed()
+        box_divider(width).dimmed(),
     )
 }
 
@@ -102,6 +97,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                         .canonicalize()
                         .map(|p| running_paths.contains(&p))
                         .unwrap_or(false)
+                    || craft_core::is_server_locked(&s.path)
             })
             .count();
 

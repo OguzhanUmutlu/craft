@@ -7,7 +7,7 @@ use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{broadcast, Mutex};
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
-use craft_core::{auto_heal_server_file, auto_heal_server_jar, CraftError, CraftPaths, Result, ServersRegistry};
+use craft_core::{auto_heal_server_file, auto_heal_server_jar, CraftError, CraftPaths, Result, ServerLockGuard, ServersRegistry};
 use crate::ring_buffer::RingBuffer;
 
 struct ActiveServer {
@@ -15,6 +15,7 @@ struct ActiveServer {
     stdin: Arc<Mutex<Option<ChildStdin>>>,
     ring_buffer: Arc<Mutex<RingBuffer>>,
     log_broadcaster: broadcast::Sender<String>,
+    _lock: Arc<ServerLockGuard>,
 }
 
 #[derive(Clone)]
@@ -63,19 +64,41 @@ impl Supervisor {
                 }
             }
         } else {
-            false
+            craft_core::is_server_locked(&canonical)
         }
     }
 
     pub async fn get_running_paths(&self) -> Vec<PathBuf> {
         let mut result = Vec::new();
-        let servers = self.servers.lock().await;
+        let mut servers = self.servers.lock().await;
+        let mut to_remove = Vec::new();
+
         for (path, active) in servers.iter() {
             let mut child = active.child.lock().await;
-            if let Ok(None) = child.try_wait() {
-                result.push(path.clone());
+            match child.try_wait() {
+                Ok(None) => {
+                    result.push(path.clone());
+                }
+                _ => {
+                    to_remove.push(path.clone());
+                }
             }
         }
+
+        for path in to_remove {
+            servers.remove(&path);
+        }
+
+        // Also check registry for servers running externally (e.g. foreground)
+        if let Ok(registry) = ServersRegistry::load(&self.paths) {
+            for server in registry.servers {
+                let canonical = server.path.canonicalize().unwrap_or_else(|_| server.path.clone());
+                if !result.contains(&canonical) && craft_core::is_server_locked(&canonical) {
+                    result.push(canonical);
+                }
+            }
+        }
+
         result
     }
 
@@ -83,11 +106,17 @@ impl Supervisor {
         let canonical = server_path.canonicalize().unwrap_or_else(|_| server_path.to_path_buf());
 
         if self.is_running(&canonical).await {
+            let pid_info = craft_core::get_server_running_pid(&canonical)
+                .map(|p| format!(" (PID: {})", p))
+                .unwrap_or_default();
             return Err(CraftError::Other(format!(
-                "Server at '{}' is already running",
-                server_path.display()
+                "Server at '{}' is already running{}. Only one process can run the server at a time.",
+                server_path.display(),
+                pid_info
             )));
         }
+
+        let lock_guard = ServerLockGuard::acquire(&canonical)?;
 
         let script = if cfg!(windows) {
             canonical.join("start.cmd")
@@ -177,6 +206,10 @@ impl Supervisor {
         let mut child = cmd.spawn()
             .map_err(|e| CraftError::Process(format!("Failed to spawn server process: {}", e)))?;
 
+        if let Some(pid) = child.id() {
+            let _ = lock_guard.record_pid(pid);
+        }
+
         let stdin = child.stdin.take();
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
@@ -223,6 +256,7 @@ impl Supervisor {
             stdin: Arc::new(Mutex::new(stdin)),
             ring_buffer,
             log_broadcaster,
+            _lock: Arc::new(lock_guard),
         };
 
         let mut servers = self.servers.lock().await;
@@ -237,59 +271,77 @@ impl Supervisor {
         let (child, stdin) = {
             let servers = self.servers.lock().await;
             if let Some(active) = servers.get(&canonical) {
-                (active.child.clone(), active.stdin.clone())
+                (Some(active.child.clone()), Some(active.stdin.clone()))
             } else {
-                return Err(CraftError::Other(format!(
-                    "Server '{}' is not running",
-                    server_path.display()
-                )));
+                (None, None)
             }
         };
 
-        if !force {
-            // Attempt graceful stop command via stdin
-            if let Some(ref mut input) = *stdin.lock().await {
-                let _ = input.write_all(b"stop\n").await;
-                let _ = input.flush().await;
+        if let (Some(child), Some(stdin)) = (child, stdin) {
+            if !force {
+                // Attempt graceful stop command via stdin
+                if let Some(ref mut input) = *stdin.lock().await {
+                    let _ = input.write_all(b"stop\n").await;
+                    let _ = input.flush().await;
+                }
+
+                // Wait up to 10 seconds for graceful exit
+                for _ in 0..20 {
+                    sleep(Duration::from_millis(500)).await;
+                    let mut c = child.lock().await;
+                    if let Ok(Some(_)) = c.try_wait() {
+                        let mut servers = self.servers.lock().await;
+                        servers.remove(&canonical);
+                        return Ok(());
+                    }
+                }
             }
 
-            // Wait up to 10 seconds for graceful exit
-            for _ in 0..20 {
+            // Force kill if graceful stop timed out or force was requested
+            warn!("Force killing server '{}'", server_path.display());
+            let mut c = child.lock().await;
+            if let Some(pid) = c.id() {
+                #[cfg(not(target_os = "windows"))]
+                {
+                    // Kill the entire process group (-pid)
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", &format!("-{}", pid)])
+                        .status();
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    // Force kill the full process tree (/F /T)
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/T", "/PID", &pid.to_string()])
+                        .status();
+                }
+            }
+            let _ = c.kill().await;
+
+            let mut servers = self.servers.lock().await;
+            servers.remove(&canonical);
+
+            Ok(())
+        } else if let Some(pid) = craft_core::get_server_running_pid(&canonical) {
+            info!("Stopping externally running server at '{}' (PID: {})", canonical.display(), pid);
+            craft_core::kill_process(pid, force)?;
+            // Wait up to 5 seconds for process to exit
+            for _ in 0..10 {
                 sleep(Duration::from_millis(500)).await;
-                let mut c = child.lock().await;
-                if let Ok(Some(_)) = c.try_wait() {
-                    let mut servers = self.servers.lock().await;
-                    servers.remove(&canonical);
+                if !craft_core::is_process_running(pid) {
                     return Ok(());
                 }
             }
-        }
-
-        // Force kill if graceful stop timed out or force was requested
-        warn!("Force killing server '{}'", server_path.display());
-        let mut c = child.lock().await;
-        if let Some(pid) = c.id() {
-            #[cfg(not(target_os = "windows"))]
-            {
-                // Kill the entire process group (-pid)
-                let _ = std::process::Command::new("kill")
-                    .args(["-9", &format!("-{}", pid)])
-                    .status();
+            if !force {
+                let _ = craft_core::kill_process(pid, true);
             }
-            #[cfg(target_os = "windows")]
-            {
-                // Force kill the full process tree (/F /T)
-                let _ = std::process::Command::new("taskkill")
-                    .args(["/F", "/T", "/PID", &pid.to_string()])
-                    .status();
-            }
+            Ok(())
+        } else {
+            Err(CraftError::Other(format!(
+                "Server '{}' is not running",
+                server_path.display()
+            )))
         }
-        let _ = c.kill().await;
-
-        let mut servers = self.servers.lock().await;
-        servers.remove(&canonical);
-
-        Ok(())
     }
 
     pub async fn send_input(&self, server_path: &Path, input: &str) -> Result<()> {

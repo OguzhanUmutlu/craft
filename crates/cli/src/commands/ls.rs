@@ -37,10 +37,21 @@ pub async fn handle_ls(paths: &CraftPaths) -> Result<()> {
 
     for server in &registry.servers {
         let is_running = running_paths.contains(&server.path)
-            || server.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false);
+            || server.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false)
+            || craft_core::is_server_locked(&server.path);
+
+        let running_pid = if is_running {
+            craft_core::get_server_running_pid(&server.path)
+        } else {
+            None
+        };
 
         let status_cell = if is_running {
-            Cell::new("RUNNING").fg(Color::Green)
+            if let Some(pid) = running_pid {
+                Cell::new(format!("RUNNING (PID: {})", pid)).fg(Color::Green)
+            } else {
+                Cell::new("RUNNING").fg(Color::Green)
+            }
         } else {
             Cell::new("STOPPED").fg(Color::DarkGrey)
         };

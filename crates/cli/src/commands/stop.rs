@@ -13,6 +13,34 @@ pub async fn handle_stop(
     paths: &CraftPaths,
 ) -> Result<()> {
     if !DaemonClient::is_daemon_running(paths) {
+        let server_path_opt = if !name_arg.is_empty() || custom_path.is_some() {
+            paths.resolve_server_path(
+                custom_path.as_deref(),
+                if name_arg.is_empty() { None } else { Some(name_arg) },
+                true,
+            ).ok()
+        } else {
+            None
+        };
+
+        if let Some(ref sp) = server_path_opt {
+            if let Some(pid) = craft_core::get_server_running_pid(sp) {
+                println!("{}", format!("Stopping server at '{}' (PID: {})...", sp.display(), pid).yellow());
+                craft_core::kill_process(pid, force)?;
+                for _ in 0..10 {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                    if !craft_core::is_process_running(pid) {
+                        break;
+                    }
+                }
+                if !craft_core::is_process_running(pid) {
+                    craft_core::remove_pid_file(sp.join(".server.pid"));
+                }
+                println!("{}", format!("Server '{}' stopped successfully.", sp.display()).green());
+                return Ok(());
+            }
+        }
+
         println!("{}", "Craft daemon is not running. No background servers active.".yellow());
         return Ok(());
     }

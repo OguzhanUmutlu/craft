@@ -375,6 +375,12 @@ impl DaemonClient {
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
 
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+
         cmd.stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
