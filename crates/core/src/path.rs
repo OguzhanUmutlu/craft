@@ -12,6 +12,7 @@ pub struct CraftPaths {
     pub run_dir: PathBuf,
     pub locks_dir: PathBuf,
     pub logs_dir: PathBuf,
+    pub trash_dir: PathBuf,
     pub servers_file: PathBuf,
     pub remotes_file: PathBuf,
     pub config_file: PathBuf,
@@ -27,6 +28,7 @@ impl CraftPaths {
         let run_dir = home.join("run");
         let locks_dir = run_dir.join("locks");
         let logs_dir = home.join("logs");
+        let trash_dir = home.join("trash");
 
         let servers_file = home.join("servers.toml");
         let remotes_file = home.join("remotes.toml");
@@ -42,6 +44,7 @@ impl CraftPaths {
             run_dir,
             locks_dir,
             logs_dir,
+            trash_dir,
             servers_file,
             remotes_file,
             config_file,
@@ -68,9 +71,10 @@ impl CraftPaths {
         let run_dir = home.join("run");
         let locks_dir = run_dir.join("locks");
         let logs_dir = home.join("logs");
+        let trash_dir = home.join("trash");
 
         // Ensure all primary directories exist
-        for dir in [&home, &servers_dir, &cache_dir, &backups_dir, &run_dir, &locks_dir, &logs_dir] {
+        for dir in [&home, &servers_dir, &cache_dir, &backups_dir, &trash_dir, &run_dir, &locks_dir, &logs_dir] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
             }
@@ -90,6 +94,7 @@ impl CraftPaths {
             run_dir,
             locks_dir,
             logs_dir,
+            trash_dir,
             servers_file,
             remotes_file,
             config_file,

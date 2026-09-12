@@ -4,6 +4,7 @@ pub mod tools;
 pub mod wizard;
 pub mod remote_tui;
 pub mod cloud_backups;
+pub mod trash_tui;
 
 use std::io::{self, IsTerminal};
 use colored::Colorize;
@@ -17,11 +18,7 @@ pub use server_control::*;
 pub use tools::*;
 pub use wizard::*;
 pub use remote_tui::remote_servers_menu;
-
-
-
-
-
+pub use trash_tui::*;
 
 pub(crate) fn get_system_summary() -> (String, f64, f64, f64) {
     let mut sys = System::new();
@@ -120,11 +117,28 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
             running_count,
         );
 
+        let cache_bytes = craft_providers::CacheManager::new(paths).get_cache_size();
+        let cache_mb = (cache_bytes as f64) / (1024.0 * 1024.0);
+        let purge_label = format!("Purge Cache ({:.1} MB)", cache_mb);
+
+        let trash_count = craft_core::TrashManager::new(paths)
+            .list_items()
+            .map(|i| i.len())
+            .unwrap_or(0);
+        let trash_label = if trash_count > 0 {
+            format!("Trash Bin ({} items)", trash_count)
+        } else {
+            "Trash Bin".to_string()
+        };
+
         let entries = vec![
             MenuEntry::new("1", "Local Servers"),
             MenuEntry::new("2", "Remote Servers"),
-            MenuEntry::new("3", "Backup Systems").with_aliases(&["b", "s"]),
-            MenuEntry::new("4", "Tools").with_aliases(&["t", "u"]),
+            MenuEntry::new("3", "Backup Systems").with_aliases(&["b"]),
+            MenuEntry::new("4", "Server Network Ping").with_aliases(&["p"]),
+            MenuEntry::new("5", "Daemon Control").with_aliases(&["d"]),
+            MenuEntry::new("6", purge_label).with_aliases(&["c"]),
+            MenuEntry::new("7", trash_label).with_aliases(&["t"]),
             MenuEntry::new("0", "Exit").with_aliases(&["q"]),
         ];
 
@@ -141,10 +155,45 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                 cloud_backups::setup_backup_systems_menu(paths).await?;
             }
             Some(3) => {
-                tools_menu(paths).await?;
+                ping_menu().await?;
             }
-            Some(4) | None => {
-                break;
+            Some(4) => {
+                daemon_menu(paths).await?;
+            }
+            Some(5) => {
+                let width = get_content_width(80);
+                let confirm_header = format!(
+                    "{}\r\n{}\r\n{}\r\n Are you sure you want to purge the download cache?\r\n Total Cache Size: {:.2} MB\r\n Location: {}\r\n{}",
+                    box_top(width).yellow().bold(),
+                    box_title("PURGE CACHE", width, false).yellow().bold(),
+                    box_divider(width).yellow().bold(),
+                    cache_mb,
+                    paths.cache_dir.display(),
+                    box_divider(width).dimmed(),
+                );
+                let confirm_entries = vec![
+                    MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
+                    MenuEntry::new("2", "Confirm Purge Cache"),
+                ];
+                let mut c_sel = 0;
+                if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
+                    match craft_providers::CacheManager::new(paths).clean_cache() {
+                        Ok(freed) => {
+                            let freed_mb = (freed as f64) / (1024.0 * 1024.0);
+                            show_modal_message(
+                                "CACHE PURGED",
+                                &[format!("[OK] Cleared {:.2} MB of downloaded caches.", freed_mb).green().bold().to_string()],
+                                false,
+                            )?;
+                        }
+                        Err(e) => {
+                            show_modal_message("ERROR", &[format!("[ERROR] Failed to purge cache: {}", e)], true)?;
+                        }
+                    }
+                }
+            }
+            Some(6) => {
+                trash_bin_menu(paths).await?;
             }
             _ => break,
         }

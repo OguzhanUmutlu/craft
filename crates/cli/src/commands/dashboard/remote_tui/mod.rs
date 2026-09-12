@@ -7,62 +7,72 @@ use colored::Colorize;
 use craft_core::{CraftPaths, RemoteAuthType, RemoteHostConfig, RemotesRegistry, Result};
 use crate::commands::dashboard::screen::{
     box_divider, box_title, box_top, get_content_width, run_input_prompt,
-    run_menu, run_password_prompt, show_modal_message, AltScreenGuard, MenuEntry,
+    run_menu, run_paged_list_menu, run_password_prompt, show_modal_message, AltScreenGuard, MenuEntry,
+    PagedMenuAction,
 };
 use host_servers::manage_host_servers;
 
 pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
-    let mut selected = 0;
+    let mut current_page = 0;
+    let page_size = 7;
 
     loop {
         let registry = RemotesRegistry::load(paths)?;
         let width = get_content_width(80);
 
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Connect to remote VPS/cloud hosts over SSH to inspect servers and backups.\r\n Configured Hosts: {}\r\n{}",
-            box_top(width).cyan().bold(),
-            box_title("REMOTE SERVERS & HOSTS (SSH)", width, false).cyan().bold(),
-            box_divider(width).cyan().bold(),
-            registry.remotes.len().to_string().cyan().bold(),
-            box_divider(width).dimmed(),
-        );
-
-        let mut entries = Vec::new();
-
-        for (idx, r) in registry.remotes.iter().enumerate() {
-            let hotkey = (idx + 1).to_string();
-            let auth_tag = match r.auth_type {
-                RemoteAuthType::Key => "[KEY]",
-                RemoteAuthType::Agent => "[AGENT]",
-                RemoteAuthType::Password => "[PASS]",
-            };
-            entries.push(MenuEntry::new(
-                hotkey,
-                format!("{:<18} ({}@{}:{}) {}", r.alias, r.user, r.host, r.port, auth_tag.dimmed()),
-            ));
-        }
-
-        entries.push(MenuEntry::new("i", "Import SSH Hosts").with_aliases(&["import"]));
-        entries.push(MenuEntry::new("a", "Add Remote Host").with_aliases(&["add", "n"]));
+        let mut action_entries = vec![
+            MenuEntry::new("i", "Import SSH Hosts").with_aliases(&["import"]),
+            MenuEntry::new("a", "Add Remote Host").with_aliases(&["add", "n"]),
+        ];
         if !registry.remotes.is_empty() {
-            entries.push(MenuEntry::new("r", "Remove Host").with_aliases(&["rm", "del"]));
+            action_entries.push(MenuEntry::new("r", "Remove Host").with_aliases(&["rm", "del"]));
         }
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
 
-        let selection = run_menu(&header, &entries, &mut selected)?;
+        let action = run_paged_list_menu(
+            &registry.remotes,
+            &mut current_page,
+            page_size,
+            |page, total_pages, total_count| {
+                let count_str = if total_count == 0 {
+                    "No remote hosts configured yet.".dimmed().to_string()
+                } else {
+                    format!("Configured Hosts: {}", total_count).cyan().bold().to_string()
+                };
+                let page_info = if total_pages > 1 {
+                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                } else {
+                    "".to_string()
+                };
 
-        let num_hosts = registry.remotes.len();
+                format!(
+                    "{}\r\n{}\r\n{}\r\n Connect to remote VPS/cloud hosts over SSH to inspect servers and backups.\r\n {}{}\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title("REMOTE SERVERS & HOSTS (SSH)", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    count_str,
+                    page_info,
+                    box_divider(width).dimmed(),
+                )
+            },
+            |_local_idx, _global_idx, r| {
+                let auth_tag = match r.auth_type {
+                    RemoteAuthType::Key => "[KEY]",
+                    RemoteAuthType::Agent => "[AGENT]",
+                    RemoteAuthType::Password => "[PASS]",
+                };
+                format!("{:<18} ({}@{}:{}) {}", r.alias, r.user, r.host, r.port, auth_tag.dimmed())
+            },
+            &action_entries,
+            false,
+        )?;
 
-        match selection {
-            Some(idx) if idx < num_hosts => {
-                // Selected a host
-                let host = &registry.remotes[idx];
+        match action {
+            PagedMenuAction::Select(global_idx) if global_idx < registry.remotes.len() => {
+                let host = &registry.remotes[global_idx];
                 manage_host_servers(paths, host).await?;
             }
-            Some(idx) => {
-                let action_idx = idx - num_hosts;
-                if action_idx == 0 {
+            PagedMenuAction::Action(act) if act == "i" => {
                     // Import from ~/.ssh/config
                     let detected = craft_remote::discover_ssh_hosts();
                     if detected.is_empty() {
@@ -131,109 +141,109 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
                             )?;
                         }
                     }
-                } else if action_idx == 1 {
-                    // Add Host Manually
-                    let alias = match run_input_prompt("NEW REMOTE HOST", "Host Alias (e.g. production-vps):", None)? {
-                        Some(a) if !a.trim().is_empty() => a.trim().to_string(),
-                        _ => continue,
-                    };
+                }
+            PagedMenuAction::Action(act) if act == "a" => {
+                // Add Host Manually
+                let alias = match run_input_prompt("NEW REMOTE HOST", "Host Alias (e.g. production-vps):", None)? {
+                    Some(a) if !a.trim().is_empty() => a.trim().to_string(),
+                    _ => continue,
+                };
 
-                    let host_addr = match run_input_prompt("HOST ADDRESS", "IP Address or Hostname:", None)? {
-                        Some(h) if !h.trim().is_empty() => h.trim().to_string(),
-                        _ => continue,
-                    };
+                let host_addr = match run_input_prompt("HOST ADDRESS", "IP Address or Hostname:", None)? {
+                    Some(h) if !h.trim().is_empty() => h.trim().to_string(),
+                    _ => continue,
+                };
 
-                    let port = match run_input_prompt("SSH PORT", "SSH Port:", Some("22"))? {
-                        Some(p) => p.trim().parse::<u16>().unwrap_or(22),
-                        None => 22,
-                    };
+                let port = match run_input_prompt("SSH PORT", "SSH Port:", Some("22"))? {
+                    Some(p) => p.trim().parse::<u16>().unwrap_or(22),
+                    None => 22,
+                };
 
-                    let default_user = std::env::var("USER").unwrap_or_else(|_| "root".to_string());
-                    let user = match run_input_prompt("SSH USER", "SSH Username:", Some(&default_user))? {
-                        Some(u) if !u.trim().is_empty() => u.trim().to_string(),
-                        _ => default_user,
-                    };
+                let default_user = std::env::var("USER").unwrap_or_else(|_| "root".to_string());
+                let user = match run_input_prompt("SSH USER", "SSH Username:", Some(&default_user))? {
+                    Some(u) if !u.trim().is_empty() => u.trim().to_string(),
+                    _ => default_user,
+                };
 
-                    let auth_header = " Choose authentication method:";
-                    let auth_entries = vec![
-                        MenuEntry::new("1", "SSH Private Key"),
-                        MenuEntry::new("2", "Password"),
-                        MenuEntry::new("3", "SSH Agent"),
-                        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
-                    ];
-                    let mut a_sel = 0;
-                    let (auth_type, key_path, password) = match run_menu(auth_header, &auth_entries, &mut a_sel)? {
-                        Some(0) => {
-                            let kp = run_input_prompt("SSH KEY PATH", "Path to private key:", Some("~/.ssh/id_ed25519"))?;
-                            let key = kp.map(|k| PathBuf::from(k.trim()));
-                            (RemoteAuthType::Key, key, None)
-                        }
-                        Some(1) => {
-                            let pass = run_password_prompt("SSH PASSWORD", "Enter SSH password:")?;
-                            (RemoteAuthType::Password, None, pass)
-                        }
-                        Some(2) => {
-                            (RemoteAuthType::Agent, None, None)
-                        }
-                        _ => continue,
-                    };
-
-                    let mut reg = RemotesRegistry::load(paths)?;
-                    reg.add(RemoteHostConfig {
-                        alias: alias.clone(),
-                        host: host_addr,
-                        port,
-                        user,
-                        auth_type,
-                        key_path,
-                        password,
-                        remote_dir: None,
-                        os_type: None,
-                    })?;
-                    reg.save(paths)?;
-
-
-                    show_modal_message(
-                        "HOST ADDED",
-                        &[format!("[OK] Remote host '{}' added successfully!", alias)
-                            .green()
-                            .bold()
-                            .to_string()],
-                        false,
-                    )?;
-                } else if action_idx == 2 && !registry.remotes.is_empty() {
-                    // Remove Host
-                    let rm_header = " Select host to remove:";
-                    let mut rm_entries = Vec::new();
-                    for (i, h) in registry.remotes.iter().enumerate() {
-                        let hk = (i + 1).to_string();
-                        rm_entries.push(MenuEntry::new(hk, h.alias.clone()));
+                let auth_header = " Choose authentication method:";
+                let auth_entries = vec![
+                    MenuEntry::new("1", "SSH Private Key"),
+                    MenuEntry::new("2", "Password"),
+                    MenuEntry::new("3", "SSH Agent"),
+                    MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                ];
+                let mut a_sel = 0;
+                let (auth_type, key_path, password) = match run_menu(auth_header, &auth_entries, &mut a_sel)? {
+                    Some(0) => {
+                        let kp = run_input_prompt("SSH KEY PATH", "Path to private key:", Some("~/.ssh/id_ed25519"))?;
+                        let key = kp.map(|k| PathBuf::from(k.trim()));
+                        (RemoteAuthType::Key, key, None)
                     }
-                    rm_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
-
-                    let mut rm_sel = 0;
-                    if let Some(r_idx) = run_menu(rm_header, &rm_entries, &mut rm_sel)? {
-                        if r_idx < registry.remotes.len() {
-                            let to_remove = &registry.remotes[r_idx];
-                            let mut reg = RemotesRegistry::load(paths)?;
-                            reg.remove(&to_remove.alias);
-                            reg.save(paths)?;
-
-                            show_modal_message(
-                                "HOST REMOVED",
-                                &[format!("[OK] Host '{}' removed from registry.", to_remove.alias)
-                                    .green()
-                                    .bold()
-                                    .to_string()],
-                                false,
-                            )?;
-                        }
+                    Some(1) => {
+                        let pass = run_password_prompt("SSH PASSWORD", "Enter SSH password:")?;
+                        (RemoteAuthType::Password, None, pass)
                     }
-                } else {
-                    return Ok(());
+                    Some(2) => {
+                        (RemoteAuthType::Agent, None, None)
+                    }
+                    _ => continue,
+                };
+
+                let mut reg = RemotesRegistry::load(paths)?;
+                reg.add(RemoteHostConfig {
+                    alias: alias.clone(),
+                    host: host_addr,
+                    port,
+                    user,
+                    auth_type,
+                    key_path,
+                    password,
+                    remote_dir: None,
+                    os_type: None,
+                })?;
+                reg.save(paths)?;
+
+
+                show_modal_message(
+                    "HOST ADDED",
+                    &[format!("[OK] Remote host '{}' added successfully!", alias)
+                        .green()
+                        .bold()
+                        .to_string()],
+                    false,
+                )?;
+            }
+            PagedMenuAction::Action(act) if act == "r" && !registry.remotes.is_empty() => {
+                // Remove Host
+                let rm_header = " Select host to remove:";
+                let mut rm_entries = Vec::new();
+                for (i, h) in registry.remotes.iter().enumerate() {
+                    let hk = (i + 1).to_string();
+                    rm_entries.push(MenuEntry::new(hk, h.alias.clone()));
+                }
+                rm_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+
+                let mut rm_sel = 0;
+                if let Some(r_idx) = run_menu(rm_header, &rm_entries, &mut rm_sel)? {
+                    if r_idx < registry.remotes.len() {
+                        let to_remove = &registry.remotes[r_idx];
+                        let mut reg = RemotesRegistry::load(paths)?;
+                        reg.remove(&to_remove.alias);
+                        reg.save(paths)?;
+
+                        show_modal_message(
+                            "HOST REMOVED",
+                            &[format!("[OK] Host '{}' removed from registry.", to_remove.alias)
+                                .green()
+                                .bold()
+                                .to_string()],
+                            false,
+                        )?;
+                    }
                 }
             }
-            None => return Ok(()),
+            PagedMenuAction::Back => return Ok(()),
+            _ => {}
         }
     }
 }

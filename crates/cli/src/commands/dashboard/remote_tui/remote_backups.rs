@@ -4,7 +4,8 @@ use craft_core::{CraftPaths, Result};
 use craft_remote::{RemoteCraftClient, RemoteServerInfo};
 use crate::commands::dashboard::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status,
-    run_input_prompt, run_menu, show_modal_message, MenuEntry,
+    run_input_prompt, run_menu, run_paged_list_menu, show_modal_message,
+    MenuEntry, PagedMenuAction,
 };
 
 pub async fn manage_remote_backups(
@@ -12,7 +13,8 @@ pub async fn manage_remote_backups(
     client: &RemoteCraftClient,
     server: &RemoteServerInfo,
 ) -> Result<()> {
-    let mut selected = 0;
+    let mut current_page = 0;
+    let page_size = 7;
 
     loop {
         let (is_running, pid) = client.check_server_running(&server.name, &server.path);
@@ -39,46 +41,54 @@ pub async fn manage_remote_backups(
         };
 
         let width = get_content_width(80);
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Server: {:<20} | Status: {}\r\n Backups Directory: ~/.craft/backups/{}/\r\n Total Archives: {}\r\n{}\r\n Note: Server must be STOPPED before restoring to prevent world corruption.\r\n{}",
-            box_top(width).cyan().bold(),
-            box_title(&format!("REMOTE BACKUPS: {}", server.name), width, false).cyan().bold(),
-            box_divider(width).cyan().bold(),
-            server.name.white().bold(),
-            status_str,
-            server.name,
-            backups.len(),
-            box_divider(width).dimmed(),
-            box_divider(width).dimmed(),
-        );
+        let action_entries = vec![
+            MenuEntry::new("c", "Create Backup").with_aliases(&["n"]),
+        ];
 
-        let mut entries = Vec::new();
-        entries.push(MenuEntry::new("c", "Create Backup").with_aliases(&["n"]));
+        let action = run_paged_list_menu(
+            &backups,
+            &mut current_page,
+            page_size,
+            |page, total_pages, total_count| {
+                let count_str = if total_count == 0 {
+                    "No backups found for this server.".dimmed().to_string()
+                } else {
+                    format!("Total Archives: {}", total_count).white().bold().to_string()
+                };
+                let page_info = if total_pages > 1 {
+                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                } else {
+                    "".to_string()
+                };
 
-        for (idx, b) in backups.iter().enumerate() {
-            let hotkey = if idx < 9 {
-                (idx + 1).to_string()
-            } else {
-                ((b'a' + (idx - 9) as u8) as char).to_string()
-            };
-            let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
-            let size_label = if b.size_bytes > 0 {
-                format!("{:.1} MB", mb)
-            } else {
-                "archive".to_string()
-            };
-            entries.push(MenuEntry::new(
-                hotkey,
-                format!("{:<36} ({}, {})", b.filename, size_label, b.created_at),
-            ));
-        }
+                format!(
+                    "{}\r\n{}\r\n{}\r\n Server: {:<20} | Status: {}\r\n Backups Directory: ~/.craft/backups/{}/\r\n {}{}\r\n Note: Server must be STOPPED before restoring to prevent corruption.\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title(&format!("REMOTE BACKUPS: {}", server.name), width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    server.name.white().bold(),
+                    status_str,
+                    server.name,
+                    count_str,
+                    page_info,
+                    box_divider(width).dimmed(),
+                )
+            },
+            |_local_idx, _global_idx, b| {
+                let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
+                let size_label = if b.size_bytes > 0 {
+                    format!("{:.1} MB", mb)
+                } else {
+                    "archive".to_string()
+                };
+                format!("{:<36} ({}, {})", b.filename, size_label, b.created_at)
+            },
+            &action_entries,
+            false,
+        )?;
 
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
-
-        let selection = run_menu(&header, &entries, &mut selected)?;
-
-        match selection {
-            Some(0) => {
+        match action {
+            PagedMenuAction::Action(act) if act == "c" => {
                 // Create backup
                 let scope_header = " Choose remote backup scope:";
                 let scope_entries = vec![
@@ -123,9 +133,8 @@ pub async fn manage_remote_backups(
                     }
                 }
             }
-            Some(idx) if idx > 0 && idx <= backups.len() => {
-                let backup_idx = idx - 1;
-                let backup = &backups[backup_idx];
+            PagedMenuAction::Select(global_idx) if global_idx < backups.len() => {
+                let backup = &backups[global_idx];
 
                 let action_header = format!(
                     " Backup Archive: {}\r\n Size: {:.2} MB | Created: {}\r\n Select action:",
@@ -137,6 +146,7 @@ pub async fn manage_remote_backups(
                 let action_entries = vec![
                     MenuEntry::new("1", "Restore Backup"),
                     MenuEntry::new("2", "Download Backup"),
+                    MenuEntry::new("3", "Move to Trash"),
                     MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
 
@@ -272,11 +282,31 @@ pub async fn manage_remote_backups(
                                 }
                             }
                         }
+                        2 => {
+                            // Move to Trash
+                            let _ = print_in_place_status(
+                                "TRASHING BACKUP",
+                                &[format!("Moving '{}' to remote trash...", backup.filename)],
+                            );
+                            match client.trash_backup(&server.name, &backup.filename) {
+                                Ok(_) => {
+                                    show_modal_message(
+                                        "BACKUP TRASHED",
+                                        &[format!("[OK] Moved '{}' to remote trash bin (~/.craft/trash/).", backup.filename).green().bold().to_string()],
+                                        false,
+                                    )?;
+                                }
+                                Err(e) => {
+                                    show_modal_message("ERROR", &[format!("[ERROR] Failed to trash backup: {}", e)], true)?;
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
             }
-            _ => return Ok(()),
+            PagedMenuAction::Back => return Ok(()),
+            _ => {}
         }
     }
 }

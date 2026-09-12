@@ -8,8 +8,8 @@ use craft_core::{
 
 use crate::commands::dashboard::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status,
-    run_input_prompt, run_menu, run_password_prompt, show_modal_message,
-    AltScreenGuard, MenuEntry,
+    run_input_prompt, run_menu, run_paged_list_menu, run_password_prompt, show_modal_message,
+    AltScreenGuard, MenuEntry, PagedMenuAction,
 };
 
 pub async fn setup_backup_systems_menu(paths: &CraftPaths) -> Result<()> {
@@ -58,43 +58,47 @@ pub async fn setup_backup_systems_menu(paths: &CraftPaths) -> Result<()> {
 }
 
 pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
-    let mut selected = 0;
+    let mut current_page = 0;
+    let page_size = 6;
 
     loop {
         let registry = GlobalBackupRegistry::load(paths)?;
         let width = get_content_width(80);
+        let action_entries = vec![
+            MenuEntry::new("a", "Add Local Storage").with_aliases(&["add", "n"]),
+        ];
 
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Registered local directories and mounted drives for server backups:\r\n{}",
-            box_top(width).cyan().bold(),
-            box_title("LOCAL STORAGE TARGETS", width, false).cyan().bold(),
-            box_divider(width).cyan().bold(),
-            box_divider(width).dimmed(),
-        );
+        let action = run_paged_list_menu(
+            &registry.local_targets,
+            &mut current_page,
+            page_size,
+            |page, total_pages, total_count| {
+                let page_info = if total_pages > 1 {
+                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                } else {
+                    "".to_string()
+                };
+                format!(
+                    "{}\r\n{}\r\n{}\r\n Registered local directories and mounted drives for server backups (Total: {}){}:\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title("LOCAL STORAGE TARGETS", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    total_count,
+                    page_info,
+                    box_divider(width).dimmed(),
+                )
+            },
+            |_local_idx, _global_idx, t| format!("{:<20} {}", t.name, t.path.display()),
+            &action_entries,
+            false,
+        )?;
 
-        let mut entries = Vec::new();
-        for (i, t) in registry.local_targets.iter().enumerate() {
-            let hk = if i < 9 {
-                (i + 1).to_string()
-            } else {
-                ((b'a' + (i - 9) as u8) as char).to_string()
-            };
-            entries.push(MenuEntry::new(
-                hk,
-                format!("{:<20} {}", t.name, t.path.display()),
-            ));
-        }
-
-        entries.push(MenuEntry::new("a", "Add Local Storage").with_aliases(&["add", "n"]));
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
-
-        let num_targets = registry.local_targets.len();
-        match run_menu(&header, &entries, &mut selected)? {
-            Some(idx) if idx < num_targets => {
-                let target_id = registry.local_targets[idx].id.clone();
+        match action {
+            PagedMenuAction::Select(global_idx) if global_idx < registry.local_targets.len() => {
+                let target_id = registry.local_targets[global_idx].id.clone();
                 manage_single_local_target_menu(paths, &target_id).await?;
             }
-            Some(idx) if idx == num_targets => {
+            PagedMenuAction::Action(act) if act == "a" => {
                 // Add Local Storage
                 let name = match run_input_prompt("TARGET NAME", "Storage Name / Label (e.g. External Drive):", None)? {
                     Some(n) if !n.trim().is_empty() => n.trim().to_string(),
@@ -207,43 +211,47 @@ async fn manage_single_local_target_menu(paths: &CraftPaths, target_id: &str) ->
 }
 
 pub(crate) async fn s3_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
-    let mut selected = 0;
+    let mut current_page = 0;
+    let page_size = 6;
 
     loop {
         let registry = GlobalBackupRegistry::load(paths)?;
         let width = get_content_width(80);
+        let action_entries = vec![
+            MenuEntry::new("a", "Add S3 Storage").with_aliases(&["add", "n"]),
+        ];
 
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Registered S3-compatible cloud providers (AWS S3, Cloudflare R2, MinIO, Wasabi):\r\n{}",
-            box_top(width).cyan().bold(),
-            box_title("S3 STORAGE PROVIDERS", width, false).cyan().bold(),
-            box_divider(width).cyan().bold(),
-            box_divider(width).dimmed(),
-        );
+        let action = run_paged_list_menu(
+            &registry.s3_targets,
+            &mut current_page,
+            page_size,
+            |page, total_pages, total_count| {
+                let page_info = if total_pages > 1 {
+                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                } else {
+                    "".to_string()
+                };
+                format!(
+                    "{}\r\n{}\r\n{}\r\n Registered S3-compatible cloud providers (Total: {}){}:\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title("S3 STORAGE PROVIDERS", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    total_count,
+                    page_info,
+                    box_divider(width).dimmed(),
+                )
+            },
+            |_local_idx, _global_idx, t| format!("{:<20} s3://{} ({})", t.name, t.bucket, t.region),
+            &action_entries,
+            false,
+        )?;
 
-        let mut entries = Vec::new();
-        for (i, t) in registry.s3_targets.iter().enumerate() {
-            let hk = if i < 9 {
-                (i + 1).to_string()
-            } else {
-                ((b'a' + (i - 9) as u8) as char).to_string()
-            };
-            entries.push(MenuEntry::new(
-                hk,
-                format!("{:<20} s3://{} ({})", t.name, t.bucket, t.region),
-            ));
-        }
-
-        entries.push(MenuEntry::new("a", "Add S3 Storage").with_aliases(&["add", "n"]));
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
-
-        let num_targets = registry.s3_targets.len();
-        match run_menu(&header, &entries, &mut selected)? {
-            Some(idx) if idx < num_targets => {
-                let target_id = registry.s3_targets[idx].id.clone();
+        match action {
+            PagedMenuAction::Select(global_idx) if global_idx < registry.s3_targets.len() => {
+                let target_id = registry.s3_targets[global_idx].id.clone();
                 manage_single_s3_target_menu(paths, &target_id).await?;
             }
-            Some(idx) if idx == num_targets => {
+            PagedMenuAction::Action(act) if act == "a" => {
                 let _ = add_s3_target_wizard(paths).await?;
             }
             _ => return Ok(()),
@@ -404,43 +412,47 @@ async fn manage_single_s3_target_menu(paths: &CraftPaths, target_id: &str) -> Re
 }
 
 pub(crate) async fn gdrive_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
-    let mut selected = 0;
+    let mut current_page = 0;
+    let page_size = 6;
 
     loop {
         let registry = GlobalBackupRegistry::load(paths)?;
         let width = get_content_width(80);
+        let action_entries = vec![
+            MenuEntry::new("a", "Add Google Drive").with_aliases(&["add", "n"]),
+        ];
 
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Registered Google Drive storage folders for backups:\r\n{}",
-            box_top(width).cyan().bold(),
-            box_title("GOOGLE DRIVE PROVIDERS", width, false).cyan().bold(),
-            box_divider(width).cyan().bold(),
-            box_divider(width).dimmed(),
-        );
+        let action = run_paged_list_menu(
+            &registry.gdrive_targets,
+            &mut current_page,
+            page_size,
+            |page, total_pages, total_count| {
+                let page_info = if total_pages > 1 {
+                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                } else {
+                    "".to_string()
+                };
+                format!(
+                    "{}\r\n{}\r\n{}\r\n Registered Google Drive storage folders for backups (Total: {}){}:\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title("GOOGLE DRIVE PROVIDERS", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    total_count,
+                    page_info,
+                    box_divider(width).dimmed(),
+                )
+            },
+            |_local_idx, _global_idx, t| format!("{:<20} Folder: {}", t.name, t.folder_id),
+            &action_entries,
+            false,
+        )?;
 
-        let mut entries = Vec::new();
-        for (i, t) in registry.gdrive_targets.iter().enumerate() {
-            let hk = if i < 9 {
-                (i + 1).to_string()
-            } else {
-                ((b'a' + (i - 9) as u8) as char).to_string()
-            };
-            entries.push(MenuEntry::new(
-                hk,
-                format!("{:<20} Folder: {}", t.name, t.folder_id),
-            ));
-        }
-
-        entries.push(MenuEntry::new("a", "Add Google Drive").with_aliases(&["add", "n"]));
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
-
-        let num_targets = registry.gdrive_targets.len();
-        match run_menu(&header, &entries, &mut selected)? {
-            Some(idx) if idx < num_targets => {
-                let target_id = registry.gdrive_targets[idx].id.clone();
+        match action {
+            PagedMenuAction::Select(global_idx) if global_idx < registry.gdrive_targets.len() => {
+                let target_id = registry.gdrive_targets[global_idx].id.clone();
                 manage_single_gdrive_target_menu(paths, &target_id).await?;
             }
-            Some(idx) if idx == num_targets => {
+            PagedMenuAction::Action(act) if act == "a" => {
                 let _ = add_gdrive_target_wizard(paths).await?;
             }
             _ => return Ok(()),

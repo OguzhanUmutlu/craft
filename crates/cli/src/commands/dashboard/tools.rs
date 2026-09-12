@@ -1070,6 +1070,7 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
     }
 }
 
+#[allow(dead_code)]
 pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
     let mut selected = 0;

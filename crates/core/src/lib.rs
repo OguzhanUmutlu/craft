@@ -5,6 +5,7 @@ pub mod remote_config;
 pub mod backup_config;
 pub mod java;
 pub mod process;
+pub mod trash;
 
 pub use error::{CraftError, Result};
 pub use path::CraftPaths;
@@ -14,6 +15,7 @@ pub use backup_config::{
     AutoBackupPolicy, GDriveBackupConfig, GDriveBackupTarget, GlobalBackupRegistry,
     LocalBackupTarget, S3BackupConfig, S3BackupTarget,
 };
+pub use trash::{TrashItem, TrashManifest, TrashManager};
 pub use java::{JavaInstallation, get_jar_java_version, get_java_installations, find_best_java};
 pub use process::{
     is_process_running, kill_process, read_pid_file, write_pid_file, remove_pid_file,

@@ -263,4 +263,148 @@ impl RemoteCraftClient {
         }
         Ok(())
     }
+
+    /// Creates a new server on the remote host using craft create
+    pub fn create_server(&self, name: &str, software: &str, version: &str, port: u16) -> Result<()> {
+        let cmd = format!(
+            "{} create --name \"{}\" --software \"{}\" --version \"{}\" --port {} --non-interactive",
+            self.craft_bin(), name, software, version, port
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Failed to create remote server: {}", err.trim())));
+        }
+        Ok(())
+    }
+
+    /// Checks the status of the remote service daemon
+    pub fn daemon_status(&self) -> Result<bool> {
+        let cmd = format!("{} daemon status 2>/dev/null", self.craft_bin());
+        if let Ok((code, stdout, _)) = self.session.exec(&cmd) {
+            Ok(code == 0 && stdout.to_lowercase().contains("online"))
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Starts the remote service daemon
+    pub fn daemon_start(&self) -> Result<()> {
+        let cmd = format!("{} daemon start", self.craft_bin());
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Failed to start remote daemon: {}", err.trim())));
+        }
+        Ok(())
+    }
+
+    /// Stops the remote service daemon
+    pub fn daemon_stop(&self) -> Result<()> {
+        let cmd = format!("{} daemon stop", self.craft_bin());
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Failed to stop remote daemon: {}", err.trim())));
+        }
+        Ok(())
+    }
+
+    /// Restarts the remote service daemon
+    pub fn daemon_restart(&self) -> Result<()> {
+        let cmd = format!("{} daemon restart", self.craft_bin());
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Failed to restart remote daemon: {}", err.trim())));
+        }
+        Ok(())
+    }
+
+    /// Cleans the downloaded asset cache on the remote host
+    pub fn clean_cache(&self) -> Result<()> {
+        let cmd = format!("{} cache clean", self.craft_bin());
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Failed to clean remote cache: {}", err.trim())));
+        }
+        Ok(())
+    }
+
+    /// Moves a remote backup archive into ~/.craft/trash/
+    pub fn trash_backup(&self, server_name: &str, backup_filename: &str) -> Result<()> {
+        let cmd = format!(
+            "mkdir -p ~/.craft/trash && mv ~/.craft/backups/{}/{} ~/.craft/trash/ 2>&1",
+            server_name, backup_filename
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Failed to trash remote backup: {}", err.trim())));
+        }
+        Ok(())
+    }
+
+    /// Lists trashed backup archives on the remote host
+    pub fn list_trash(&self) -> Result<Vec<RemoteBackupInfo>> {
+        let cmd = "ls -lh ~/.craft/trash/ 2>/dev/null";
+        let (code, out, _) = self.session.exec(cmd)?;
+        if code != 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut list = Vec::new();
+        for line in out.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 9 {
+                let fname = parts[8..].join(" ");
+                if fname.ends_with(".tar.gz") || fname.ends_with(".bak") {
+                    list.push(RemoteBackupInfo {
+                        filename: fname.clone(),
+                        remote_path: format!("~/.craft/trash/{}", fname),
+                        size_bytes: 0,
+                        created_at: parts[5..8].join(" "),
+                    });
+                }
+            }
+        }
+        Ok(list)
+    }
+
+    /// Restores an archive from remote trash into a server's backups folder
+    pub fn restore_trash(&self, filename: &str, target_server: &str) -> Result<()> {
+        let cmd = format!(
+            "mkdir -p ~/.craft/backups/{} && mv ~/.craft/trash/\"{}\" ~/.craft/backups/{}/",
+            target_server, filename, target_server
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Failed to restore remote trash: {}", err.trim())));
+        }
+        Ok(())
+    }
+
+    /// Permanently deletes an archive from remote trash
+    pub fn delete_trash_item(&self, filename: &str) -> Result<()> {
+        let cmd = format!("rm -f ~/.craft/trash/\"{}\"", filename);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Failed to delete remote trash item: {}", err.trim())));
+        }
+        Ok(())
+    }
+
+    /// Empties all items in the remote trash directory
+    pub fn empty_trash(&self) -> Result<()> {
+        let cmd = "rm -rf ~/.craft/trash/*";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Failed to empty remote trash: {}", err.trim())));
+        }
+        Ok(())
+    }
 }

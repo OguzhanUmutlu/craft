@@ -1,13 +1,14 @@
 use colored::Colorize;
 
 use craft_backup::{BackupEngine, GDriveStorageProvider, S3StorageProvider, StorageProvider};
-use craft_core::{CraftError, CraftPaths, GlobalBackupRegistry, Result, ServersRegistry};
+use craft_core::{CraftError, CraftPaths, GlobalBackupRegistry, Result, ServersRegistry, TrashManager};
 use craft_daemon::DaemonClient;
 
 use crate::commands::view::handle_view;
 use super::screen::{
     box_divider, box_title, box_top, exec_console_action, get_content_width, print_in_place_status,
-    run_input_prompt, run_menu, show_modal_message, AltScreenGuard, MenuEntry,
+    run_input_prompt, run_menu, run_paged_list_menu, show_modal_message, AltScreenGuard, MenuEntry,
+    PagedMenuAction,
 };
 use super::wizard::gui_create_server_wizard;
 
@@ -611,6 +612,8 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
 pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
     let mut selected = 0;
+    let mut current_page = 0;
+    let page_size = 7;
 
     loop {
         let registry = ServersRegistry::load(paths)?;
@@ -651,82 +654,83 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
         }
 
         let width = get_content_width(80);
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Manage local servers on this host.\r\n{}",
-            box_top(width).cyan().bold(),
-            box_title("LOCAL SERVERS", width, false).cyan().bold(),
-            box_divider(width).cyan().bold(),
-            box_divider(width).dimmed(),
-        );
+        let action_entries = vec![
+            MenuEntry::new("n", "Create Server").with_aliases(&["c"]),
+        ];
 
-
-        let mut entries = Vec::new();
-        for (idx, s) in registry.servers.iter().enumerate() {
-            let is_running = running_paths.contains(&s.path)
-                || s.path
-                    .canonicalize()
-                    .map(|p| running_paths.contains(&p))
-                    .unwrap_or(false)
-                || craft_core::is_server_locked(&s.path);
-            let status_str = if is_running {
-                if let Some(pid) = craft_core::get_server_running_pid(&s.path) {
-                    format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
+        let action = super::screen::run_paged_list_menu(
+            &registry.servers,
+            &mut current_page,
+            page_size,
+            |page, total_pages, total_count| {
+                let page_info = if total_pages > 1 {
+                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
                 } else {
-                    "[RUNNING]".green().bold().to_string()
-                }
-            } else {
-                "[STOPPED]".dimmed().to_string()
-            };
-            let hotkey = if idx < 9 {
-                (idx + 1).to_string()
-            } else {
-                ((b'a' + (idx - 9) as u8) as char).to_string()
-            };
-            entries.push(MenuEntry::new(
-                hotkey,
+                    "".to_string()
+                };
+                format!(
+                    "{}\r\n{}\r\n{}\r\n Manage local servers on this host (Total: {}){}.\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title("LOCAL SERVERS", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    total_count,
+                    page_info,
+                    box_divider(width).dimmed(),
+                )
+            },
+            |_local_idx, _global_idx, s| {
+                let is_running = running_paths.contains(&s.path)
+                    || s.path
+                        .canonicalize()
+                        .map(|p| running_paths.contains(&p))
+                        .unwrap_or(false)
+                    || craft_core::is_server_locked(&s.path);
+                let status_str = if is_running {
+                    if let Some(pid) = craft_core::get_server_running_pid(&s.path) {
+                        format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
+                    } else {
+                        "[RUNNING]".green().bold().to_string()
+                    }
+                } else {
+                    "[STOPPED]".dimmed().to_string()
+                };
                 format!(
                     "{:<20} {:<10} {:<10} {}",
                     s.name, s.software, s.version, status_str
-                ),
-            ));
-        }
+                )
+            },
+            &action_entries,
+            true,
+        )?;
 
-        entries.push(MenuEntry::new("n", "Create Server").with_aliases(&["c"]));
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
-
-        let sel = super::screen::run_menu_with_space(&header, &entries, &mut selected)?;
-
-        match sel {
-            super::screen::MenuAction::Space(idx) => {
-                if idx < registry.servers.len() {
-                    let chosen = &registry.servers[idx];
-                    let is_running = running_paths.contains(&chosen.path)
-                        || chosen.path
-                            .canonicalize()
-                            .map(|p| running_paths.contains(&p))
-                            .unwrap_or(false)
-                        || craft_core::is_server_locked(&chosen.path);
-                    if is_running {
-                        let _ = print_in_place_status(
-                            "STOPPING SERVER",
-                            &[format!("Stopping '{}' gracefully...", chosen.name)],
-                        );
-                        let _ = stop_server_daemon(&chosen.name, false, paths).await;
-                    } else {
-                        let _ = print_in_place_status(
-                            "STARTING SERVER",
-                            &[format!("Starting '{}' in background...", chosen.name)],
-                        );
-                        let _ = start_server_daemon(&chosen.name, paths).await;
-                    }
-                }
-                continue;
-            }
-            super::screen::MenuAction::Select(idx) if idx < registry.servers.len() => {
-                let chosen = &registry.servers[idx];
+        match action {
+            super::screen::PagedMenuAction::Select(global_idx) if global_idx < registry.servers.len() => {
+                let chosen = &registry.servers[global_idx];
                 server_control_panel(&chosen.name, paths).await?;
             }
-            super::screen::MenuAction::Select(idx) if idx == registry.servers.len() => {
+            super::screen::PagedMenuAction::Space(global_idx) if global_idx < registry.servers.len() => {
+                let chosen = &registry.servers[global_idx];
+                let is_running = running_paths.contains(&chosen.path)
+                    || chosen.path
+                        .canonicalize()
+                        .map(|p| running_paths.contains(&p))
+                        .unwrap_or(false)
+                    || craft_core::is_server_locked(&chosen.path);
+                if is_running {
+                    let _ = print_in_place_status(
+                        "STOPPING SERVER",
+                        &[format!("Stopping '{}' gracefully...", chosen.name)],
+                    );
+                    let _ = stop_server_daemon(&chosen.name, false, paths).await;
+                } else {
+                    let _ = print_in_place_status(
+                        "STARTING SERVER",
+                        &[format!("Starting '{}' in background...", chosen.name)],
+                    );
+                    let _ = start_server_daemon(&chosen.name, paths).await;
+                }
+            }
+            super::screen::PagedMenuAction::Action(act) if act == "n" => {
                 gui_create_server_wizard(paths).await?;
             }
             _ => return Ok(()),
@@ -1098,10 +1102,11 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
 
         let entries = vec![
             MenuEntry::new("1", "Create Backup"),
-            MenuEntry::new("2", "List Backups"),
+            MenuEntry::new("2", "Browse & Manage Backups"),
             MenuEntry::new("3", "Restore Backup"),
             MenuEntry::new("4", "Auto-Backup Policy"),
             MenuEntry::new("5", "Backup Method"),
+            MenuEntry::new("6", "Trash Bin").with_aliases(&["t"]),
             MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
 
@@ -1230,23 +1235,176 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                 show_modal_message("SNAPSHOT CREATED", &summary_lines, false)?;
             }
             Some(1) => {
-                // List backups
-                let list = engine.list_backups(&server.name);
-                if list.is_empty() {
-                    show_modal_message(
-                        "NO BACKUPS FOUND",
-                        &[format!("No local backups found for server '{}'.", server.name)],
+                // Browse & Manage backups
+                let mut b_page = 0;
+                let page_size = 7;
+                loop {
+                    let list = engine.list_backups(&server.name);
+                    if list.is_empty() {
+                        show_modal_message(
+                            "NO BACKUPS FOUND",
+                            &[format!("No local backups found for server '{}'.", server.name)],
+                            false,
+                        )?;
+                        break;
+                    }
+
+                    let width = get_content_width(80);
+                    let action = run_paged_list_menu(
+                        &list,
+                        &mut b_page,
+                        page_size,
+                        |page, total_pages, total_count| {
+                            let page_info = if total_pages > 1 {
+                                format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                            } else {
+                                "".to_string()
+                            };
+                            format!(
+                                "{}\r\n{}\r\n{}\r\n Server: {}\r\n Total Backups: {}{}\r\n Select a backup archive to restore or move to trash.\r\n{}",
+                                box_top(width).cyan().bold(),
+                                box_title(&format!("BACKUPS: {}", server.name), width, false).cyan().bold(),
+                                box_divider(width).cyan().bold(),
+                                server.name.white().bold(),
+                                total_count.to_string().cyan().bold(),
+                                page_info,
+                                box_divider(width).dimmed(),
+                            )
+                        },
+                        |_local_idx, _global_idx, b| {
+                            let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
+                            format!("{:<38} ({:.2} MB, {})", b.filename, mb, b.created_at)
+                        },
+                        &[],
                         false,
                     )?;
-                } else {
-                    let lines: Vec<String> = list
-                        .iter()
-                        .map(|b| {
-                            let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
-                            format!("{:<40} {:>8.2} MB  {}", b.filename, mb, b.created_at)
-                        })
-                        .collect();
-                    show_modal_message(&format!("BACKUPS: {}", server.name), &lines, false)?;
+
+                    match action {
+                        PagedMenuAction::Select(global_idx) if global_idx < list.len() => {
+                            let backup = &list[global_idx];
+                            let mb = (backup.size_bytes as f64) / (1024.0 * 1024.0);
+                            let action_header = format!(
+                                " Backup: {}\r\n Size:   {:.2} MB | Created: {}\r\n Path:   {}\r\n Select action:",
+                                backup.filename.white().bold(),
+                                mb,
+                                backup.created_at,
+                                backup.path.display(),
+                            );
+                            let action_entries = vec![
+                                MenuEntry::new("1", "Restore Backup"),
+                                MenuEntry::new("2", "Move to Trash"),
+                                MenuEntry::new("0", "Back").with_aliases(&["b"]),
+                            ];
+                            let mut act_sel = 0;
+                            if let Some(act) = run_menu(&action_header, &action_entries, &mut act_sel)? {
+                                match act {
+                                    0 => {
+                                        // Restore
+                                        if craft_core::is_server_locked(&server.path)
+                                            || craft_core::get_server_running_pid(&server.path).is_some()
+                                        {
+                                            let pid_info = craft_core::get_server_running_pid(&server.path)
+                                                .map(|p| format!(" (PID: {})", p))
+                                                .unwrap_or_default();
+                                            show_modal_message(
+                                                "RESTORE BLOCKED: SERVER IS RUNNING",
+                                                &[
+                                                    format!("Cannot restore backup to server '{}': The server is currently RUNNING{}.", server.name, pid_info),
+                                                    "You MUST stop the server before restoring a backup to prevent world corruption.".to_string(),
+                                                    "".to_string(),
+                                                    "Please stop the server first, then try restoring again.".to_string(),
+                                                ],
+                                                true,
+                                            )?;
+                                            continue;
+                                        }
+
+                                        let confirm_header = format!(
+                                            "{}\r\n{}\r\n{}\r\n WARNING: Restoring will overwrite server files with archive '{}'!\r\n Server: {}\r\n Path:   {}\r\n{}\r\n Are you sure you want to proceed with restore?\r\n{}",
+                                            box_top(width).yellow().bold(),
+                                            box_title("CONFIRM BACKUP RESTORE", width, false).yellow().bold(),
+                                            box_divider(width).yellow().bold(),
+                                            backup.filename.white().bold(),
+                                            server.name.white().bold(),
+                                            server.path.display(),
+                                            box_divider(width).dimmed(),
+                                            box_divider(width).dimmed(),
+                                        );
+                                        let confirm_entries = vec![
+                                            MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
+                                            MenuEntry::new("2", format!("Confirm Restore of '{}'", backup.filename)),
+                                        ];
+                                        let mut c_sel = 0;
+                                        if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
+                                            let _ = print_in_place_status(
+                                                "RESTORING SERVER",
+                                                &[format!("Unpacking backup '{}' into '{}'...", backup.filename, server.path.display())],
+                                            );
+                                            match engine.restore_backup(&backup.path, &server.path) {
+                                                Ok(_) => {
+                                                    show_modal_message(
+                                                        "RESTORE COMPLETE",
+                                                        &[format!("[OK] Successfully restored server '{}' from backup!", server.name)
+                                                            .green()
+                                                            .bold()
+                                                            .to_string()],
+                                                        false,
+                                                    )?;
+                                                }
+                                                Err(e) => {
+                                                    show_modal_message("RESTORE FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    1 => {
+                                        // Move to Trash
+                                        let confirm_header = format!(
+                                            "{}\r\n{}\r\n{}\r\n Move backup '{}' to the Trash Bin?\r\n Server: {}\r\n Size:   {:.2} MB\r\n\r\n Backups in the trash are securely hashed with SHA-256 and can be restored or permanently deleted.\r\n{}",
+                                            box_top(width).yellow().bold(),
+                                            box_title("CONFIRM MOVE TO TRASH", width, false).yellow().bold(),
+                                            box_divider(width).yellow().bold(),
+                                            backup.filename.white().bold(),
+                                            server.name.white().bold(),
+                                            mb,
+                                            box_divider(width).dimmed(),
+                                        );
+                                        let confirm_entries = vec![
+                                            MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
+                                            MenuEntry::new("2", format!("Move '{}' to Trash", backup.filename)),
+                                        ];
+                                        let mut c_sel = 0;
+                                        if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
+                                            let _ = print_in_place_status(
+                                                "MOVING TO TRASH",
+                                                &[format!("Calculating SHA-256 hash and moving '{}' to trash...", backup.filename)],
+                                            );
+                                            let manager = TrashManager::new(paths);
+                                            match manager.trash_file(&backup.path, Some(&server.name)) {
+                                                Ok(item) => {
+                                                    show_modal_message(
+                                                        "MOVED TO TRASH",
+                                                        &[
+                                                            format!("[OK] Backup successfully moved to Trash Bin.").green().bold().to_string(),
+                                                            format!("Archive: {}", item.original_name),
+                                                            format!("SHA-256: {}", item.content_hash).dimmed().to_string(),
+                                                        ],
+                                                        false,
+                                                    )?;
+                                                }
+                                                Err(e) => {
+                                                    show_modal_message("TRASH ERROR", &[format!("[ERROR] {}", e)], true)?;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        PagedMenuAction::Back => break,
+                        _ => {}
+                    }
                 }
             }
             Some(2) => {
@@ -1267,36 +1425,80 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                 }
 
                 let list = engine.list_backups(&server.name);
-                let mut b_entries = Vec::new();
-                for (bi, b) in list.iter().enumerate() {
-                    let hotkey = if bi < 9 {
-                        (bi + 1).to_string()
-                    } else {
-                        ((b'a' + (bi - 9) as u8) as char).to_string()
-                    };
-                    let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
-                    b_entries.push(MenuEntry::new(
-                        hotkey,
-                        format!("{:<32} ({:.1} MB)", b.filename, mb),
-                    ));
-                }
-                b_entries.push(MenuEntry::new("c", "Custom Archive"));
-                b_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+                let mut b_page = 0;
+                let page_size = 7;
+                let action_entries = vec![
+                    MenuEntry::new("c", "Custom Archive"),
+                ];
+                let width = get_content_width(80);
 
-                let b_header = format!(" Select backup archive to restore to '{}':", server.name);
-                let mut b_sel = 0;
-                if let Some(b_idx) = run_menu(&b_header, &b_entries, &mut b_sel)? {
-                    let target_archive = if b_idx < list.len() {
-                        list[b_idx].path.clone()
-                    } else if b_idx == list.len() {
-                        match run_input_prompt("CUSTOM ARCHIVE", "Enter path to archive (.tar.gz / .zip):", None)? {
-                            Some(p) if !p.trim().is_empty() => std::path::PathBuf::from(p.trim()),
-                            _ => continue,
+                let target_archive = loop {
+                    let action = run_paged_list_menu(
+                        &list,
+                        &mut b_page,
+                        page_size,
+                        |page, total_pages, total_count| {
+                            let page_info = if total_pages > 1 {
+                                format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                            } else {
+                                "".to_string()
+                            };
+                            format!(
+                                "{}\r\n{}\r\n{}\r\n Server: {}\r\n Select backup archive to restore (Total: {}){}:\r\n{}",
+                                box_top(width).cyan().bold(),
+                                box_title(&format!("RESTORE BACKUP: {}", server.name), width, false).cyan().bold(),
+                                box_divider(width).cyan().bold(),
+                                server.name.white().bold(),
+                                total_count,
+                                page_info,
+                                box_divider(width).dimmed(),
+                            )
+                        },
+                        |_local_idx, _global_idx, b| {
+                            let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
+                            format!("{:<38} ({:.2} MB, {})", b.filename, mb, b.created_at)
+                        },
+                        &action_entries,
+                        false,
+                    )?;
+
+                    match action {
+                        PagedMenuAction::Select(global_idx) if global_idx < list.len() => {
+                            break Some(list[global_idx].path.clone());
                         }
-                    } else {
-                        continue;
-                    };
+                        PagedMenuAction::Action(act) if act == "c" => {
+                            match run_input_prompt("CUSTOM ARCHIVE", "Enter path to archive (.tar.gz / .zip):", None)? {
+                                Some(p) if !p.trim().is_empty() => break Some(std::path::PathBuf::from(p.trim())),
+                                _ => continue,
+                            }
+                        }
+                        PagedMenuAction::Back => break None,
+                        _ => {}
+                    }
+                };
 
+                let target_archive = match target_archive {
+                    Some(p) => p,
+                    None => continue,
+                };
+
+                let confirm_header = format!(
+                    "{}\r\n{}\r\n{}\r\n WARNING: Restoring will overwrite server files with archive '{}'!\r\n Server: {}\r\n Path:   {}\r\n{}\r\n Are you sure you want to proceed with restore?\r\n{}",
+                    box_top(width).yellow().bold(),
+                    box_title("CONFIRM BACKUP RESTORE", width, false).yellow().bold(),
+                    box_divider(width).yellow().bold(),
+                    target_archive.file_name().and_then(|f| f.to_str()).unwrap_or("backup"),
+                    server.name.white().bold(),
+                    server.path.display(),
+                    box_divider(width).dimmed(),
+                    box_divider(width).dimmed(),
+                );
+                let confirm_entries = vec![
+                    MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
+                    MenuEntry::new("2", "Confirm Restore"),
+                ];
+                let mut c_sel = 0;
+                if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
                     let _ = print_in_place_status(
                         "RESTORING SERVER",
                         &[format!("Unpacking backup '{}' into '{}'...", target_archive.display(), server.path.display())],
@@ -1344,6 +1546,10 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                         )?;
                     }
                 }
+            }
+            Some(5) => {
+                // Trash Bin
+                super::trash_tui::trash_bin_menu(paths).await?;
             }
             _ => return Ok(()),
         }
