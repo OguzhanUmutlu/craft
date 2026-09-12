@@ -341,6 +341,9 @@ impl DaemonClient {
         tokio::select! {
             _ = rx_task => {},
             _ = tx_task => {},
+            _ = tokio::signal::ctrl_c() => {
+                println!("\r\n\x1b[33m[Craft] Detached from server console.\x1b[0m");
+            }
         }
 
         Ok(())

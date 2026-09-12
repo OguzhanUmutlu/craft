@@ -1,3 +1,4 @@
+use std::io::{self, Write};
 use colored::Colorize;
 
 use craft_backup::BackupEngine;
@@ -692,6 +693,7 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
 
 pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
     let mut selected = 0;
+    let mut flash_status: Option<String> = None;
 
     loop {
         let registry = ServersRegistry::load(paths)?;
@@ -734,8 +736,8 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             "                           SERVER: {:<20} {}",
             server.name, status_badge
         );
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Platform: {:<12} | Version: {:<10} | Memory: {}\r\n Path: {}\r\n{}",
+        let mut header = format!(
+            "{}\r\n{}\r\n{}\r\n Platform: {:<12} | Version: {:<10} | Memory: {}\r\n Path: {}\r\n",
             "================================================================================"
                 .cyan()
                 .bold(),
@@ -747,8 +749,13 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             server.version.cyan(),
             server.memory.as_deref().unwrap_or("Default (2G)"),
             server.path.display(),
-            "--------------------------------------------------------------------------------".dimmed()
         );
+
+        if let Some(msg) = flash_status.take() {
+            header.push_str(&format!(" {}\r\n", msg));
+        }
+
+        header.push_str(&"--------------------------------------------------------------------------------".dimmed().to_string());
 
         let entries = vec![
             MenuEntry::new("1", "Start Server (Background Daemon)"),
@@ -768,11 +775,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             Some(0) => {
                 // Start background
                 if is_running {
-                    show_modal_message(
-                        "ALREADY RUNNING",
-                        &[format!("Server '{}' is already running.", server.name)],
-                        false,
-                    )?;
+                    flash_status = Some(format!("[INFO] Server '{}' is already running.", server.name).yellow().bold().to_string());
                 } else {
                     print_in_place_status(
                         "STARTING SERVER",
@@ -782,56 +785,99 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                         )],
                     )?;
                     match start_server_daemon(&server.name, paths).await {
-                        Ok(_) => show_modal_message(
-                            "SERVER STARTED",
-                            &[format!("[OK] Server '{}' started in daemon.", server.name)
-                                .green()
-                                .bold()
-                                .to_string()],
-                            false,
-                        )?,
-                        Err(e) => show_modal_message(
-                            "START FAILED",
-                            &[format!("[ERROR] {}", e)],
-                            true,
-                        )?,
+                        Ok(_) => {
+                            flash_status = Some(
+                                format!("[OK] Server '{}' started in daemon.", server.name)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
+                        Err(e) => {
+                            flash_status = Some(
+                                format!("[ERROR] Failed to start server: {}", e)
+                                    .red()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
                     }
                 }
             }
             Some(1) => {
                 // Start foreground
-                let _ = exec_console_action(|| async {
-                    run_foreground_server(&server.path).await
-                })
-                .await;
+                if is_running {
+                    flash_status = Some(
+                        format!("[INFO] Server '{}' is already running in daemon. Stop it before starting in foreground.", server.name)
+                            .yellow()
+                            .bold()
+                            .to_string(),
+                    );
+                } else {
+                    let server_path = server.path.clone();
+                    let server_name = server.name.clone();
+                    let res = exec_console_action(|| async {
+                        println!("{}", "================================================================================".cyan().bold());
+                        println!("                    SERVER CONSOLE (FOREGROUND): {:<20}", server_name.bold());
+                        println!("{}", "================================================================================".cyan().bold());
+                        println!(" {}", "Type commands below  |  Press Ctrl+C or type 'stop' to safely stop the server".dimmed());
+                        println!("{}\r\n", "--------------------------------------------------------------------------------".dimmed());
+                        let _ = io::stdout().flush();
+                        run_foreground_server(&server_path).await
+                    })
+                    .await;
+
+                    match res {
+                        Ok(_) => {
+                            flash_status = Some(
+                                format!("[OK] Foreground server '{}' has stopped.", server_name)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
+                        Err(e) => {
+                            flash_status = Some(
+                                format!("[ERROR] Server process ended: {}", e)
+                                    .red()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
+                    }
+                }
             }
             Some(2) => {
                 // Stop
                 if !is_running {
-                    show_modal_message(
-                        "SERVER NOT RUNNING",
-                        &[format!("Server '{}' is not currently running.", server.name)],
-                        false,
-                    )?;
+                    flash_status = Some(
+                        format!("[INFO] Server '{}' is not currently running.", server.name)
+                            .yellow()
+                            .bold()
+                            .to_string(),
+                    );
                 } else {
                     print_in_place_status(
                         "STOPPING SERVER",
                         &[format!("Stopping server '{}'...", server.name)],
                     )?;
                     match stop_server_daemon(&server.name, false, paths).await {
-                        Ok(_) => show_modal_message(
-                            "SERVER STOPPED",
-                            &[format!("[OK] Server '{}' stopped.", server.name)
-                                .green()
-                                .bold()
-                                .to_string()],
-                            false,
-                        )?,
-                        Err(e) => show_modal_message(
-                            "STOP FAILED",
-                            &[format!("[ERROR] {}", e)],
-                            true,
-                        )?,
+                        Ok(_) => {
+                            flash_status = Some(
+                                format!("[OK] Server '{}' stopped.", server.name)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
+                        Err(e) => {
+                            flash_status = Some(
+                                format!("[ERROR] Failed to stop server: {}", e)
+                                    .red()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
                     }
                 }
             }
@@ -842,27 +888,52 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     &[format!("Restarting server '{}'...", server.name)],
                 )?;
                 match restart_server_daemon(&server.name, false, paths).await {
-                    Ok(_) => show_modal_message(
-                        "SERVER RESTARTED",
-                        &[format!("[OK] Server '{}' restarted.", server.name)
-                            .green()
-                            .bold()
-                            .to_string()],
-                        false,
-                    )?,
-                    Err(e) => show_modal_message(
-                        "RESTART FAILED",
-                        &[format!("[ERROR] {}", e)],
-                        true,
-                    )?,
+                    Ok(_) => {
+                        flash_status = Some(
+                            format!("[OK] Server '{}' restarted in daemon.", server.name)
+                                .green()
+                                .bold()
+                                .to_string(),
+                        );
+                    }
+                    Err(e) => {
+                        flash_status = Some(
+                            format!("[ERROR] Failed to restart server: {}", e)
+                                .red()
+                                .bold()
+                                .to_string(),
+                        );
+                    }
                 }
             }
             Some(4) => {
                 // View live console
-                let _ = exec_console_action(|| async {
-                    handle_view(&server.name, None, paths).await
-                })
-                .await;
+                if !is_running {
+                    flash_status = Some(
+                        format!("[INFO] Server '{}' is not currently running.", server.name)
+                            .yellow()
+                            .bold()
+                            .to_string(),
+                    );
+                } else {
+                    let server_name = server.name.clone();
+                    let _ = exec_console_action(|| async {
+                        println!("{}", "================================================================================".cyan().bold());
+                        println!("                       ATTACHED CONSOLE: {:<20}", server_name.bold());
+                        println!("{}", "================================================================================".cyan().bold());
+                        println!(" {}", "Type commands to send to server  |  Press Ctrl+C to detach and return to TUI".dimmed());
+                        println!("{}\r\n", "--------------------------------------------------------------------------------".dimmed());
+                        let _ = io::stdout().flush();
+                        handle_view(&server_name, None, paths).await
+                    })
+                    .await;
+                    flash_status = Some(
+                        format!("[OK] Detached from '{}' console.", server.name)
+                            .green()
+                            .bold()
+                            .to_string(),
+                    );
+                }
             }
             Some(5) => {
                 // Create backup
@@ -875,19 +946,25 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     .create_backup(&server.name, &server.path, None, false)
                     .await
                 {
-                    Ok(file) => show_modal_message(
-                        "BACKUP CREATED",
-                        &[format!("[OK] Archive: {}", file.display())
+                    Ok(file) => {
+                        flash_status = Some(
+                            format!(
+                                "[OK] Backup archive created: {}",
+                                file.file_name().unwrap_or_default().to_string_lossy()
+                            )
                             .green()
                             .bold()
-                            .to_string()],
-                        false,
-                    )?,
-                    Err(e) => show_modal_message(
-                        "BACKUP FAILED",
-                        &[format!("[ERROR] {}", e)],
-                        true,
-                    )?,
+                            .to_string(),
+                        );
+                    }
+                    Err(e) => {
+                        flash_status = Some(
+                            format!("[ERROR] Backup failed: {}", e)
+                                .red()
+                                .bold()
+                                .to_string(),
+                        );
+                    }
                 }
             }
             Some(6) => {

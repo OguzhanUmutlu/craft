@@ -387,20 +387,22 @@ pub fn print_in_place_status<S: AsRef<str>>(title: &str, lines: &[S]) -> Result<
     Ok(())
 }
 
-/// Temporarily leaves alternate screen to execute an interactive console (e.g. craft view),
-/// automatically restoring the alternate screen and raw mode when the session finishes.
+/// Executes an interactive console action (e.g. foreground server, craft view) inside
+/// the alternate screen TUI, disabling raw mode during execution and cleanly restoring
+/// raw mode and cursor hiding when the session completes.
 pub async fn exec_console_action<F, Fut>(action: F) -> Result<()>
 where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<()>>,
 {
+    let mut stdout = io::stdout();
+    let _ = execute!(stdout, Clear(ClearType::All), MoveTo(0, 0), Show);
     let _ = disable_raw_mode();
-    let _ = execute!(io::stdout(), LeaveAlternateScreen, Show);
 
     let res = action().await;
 
-    let _ = execute!(io::stdout(), EnterAlternateScreen, Hide);
     let _ = enable_raw_mode();
+    let _ = execute!(io::stdout(), Hide);
     res
 }
 

@@ -171,8 +171,50 @@ pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
     let mut child = cmd.spawn()
         .map_err(|e| CraftError::Process(format!("Failed to start server: {}", e)))?;
 
-    let status = child.wait().await
-        .map_err(|e| CraftError::Process(format!("Error waiting for server process: {}", e)))?;
+    #[cfg(unix)]
+    let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).ok();
+
+    let status = tokio::select! {
+        res = child.wait() => {
+            res.map_err(|e| CraftError::Process(format!("Error waiting for server process: {}", e)))?
+        }
+        _ = async {
+            #[cfg(unix)]
+            if let Some(ref mut s) = sigint {
+                s.recv().await;
+            } else {
+                let _ = tokio::signal::ctrl_c().await;
+            }
+            #[cfg(not(unix))]
+            let _ = tokio::signal::ctrl_c().await;
+        } => {
+            println!("\r\n{}", "[Craft] Stop signal received. Waiting for server shutdown sequence to finish...".yellow().bold());
+            tokio::select! {
+                res = child.wait() => {
+                    res.map_err(|e| CraftError::Process(format!("Error waiting for server process: {}", e)))?
+                }
+                _ = async {
+                    #[cfg(unix)]
+                    if let Some(ref mut s) = sigint {
+                        s.recv().await;
+                    } else {
+                        let _ = tokio::signal::ctrl_c().await;
+                    }
+                    #[cfg(not(unix))]
+                    let _ = tokio::signal::ctrl_c().await;
+                } => {
+                    println!("{}", "[Craft] Second interrupt received. Forcing immediate termination...".red().bold());
+                    let _ = child.kill().await;
+                    child.wait().await.map_err(|e| CraftError::Process(format!("Error after killing server: {}", e)))?
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(15)) => {
+                    println!("{}", "[Craft] Shutdown timed out. Forcing process kill...".red().bold());
+                    let _ = child.kill().await;
+                    child.wait().await.map_err(|e| CraftError::Process(format!("Error after killing server: {}", e)))?
+                }
+            }
+        }
+    };
 
     // Check EULA after exit if it failed because EULA was not accepted
     let eula_file = server_path.join("eula.txt");
@@ -200,5 +242,7 @@ pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
     }
 
     println!("{}", format!("\nServer process exited with code {:?}", status.code()).dimmed());
+    println!("{}", "[Craft] Returning to Server Control menu...".cyan().dimmed());
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     Ok(())
 }
