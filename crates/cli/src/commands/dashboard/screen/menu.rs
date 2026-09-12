@@ -51,12 +51,40 @@ impl MenuEntry {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuAction {
+    Select(usize),
+    Space(usize),
+    Back,
+}
+
 /// Runs an in-place alternate screen menu loop with responsive virtual scrolling, arrow keys, and hotkeys.
 pub fn run_menu(
     header: &str,
     entries: &[MenuEntry],
     selected_idx: &mut usize,
 ) -> Result<Option<usize>> {
+    match run_menu_ext(header, entries, selected_idx, false)? {
+        MenuAction::Select(idx) => Ok(Some(idx)),
+        MenuAction::Space(idx) => Ok(Some(idx)),
+        MenuAction::Back => Ok(None),
+    }
+}
+
+pub fn run_menu_with_space(
+    header: &str,
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+) -> Result<MenuAction> {
+    run_menu_ext(header, entries, selected_idx, true)
+}
+
+pub fn run_menu_ext(
+    header: &str,
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+    allow_space: bool,
+) -> Result<MenuAction> {
     let mut stdout = io::stdout();
     enable_raw_mode()?;
     let _ = execute!(stdout, Hide);
@@ -67,7 +95,7 @@ pub fn run_menu(
 
     let mut scroll_offset: usize = 0;
 
-    let result = (|| -> Result<Option<usize>> {
+    let result = (|| -> Result<MenuAction> {
         loop {
             let (term_w, term_h) = get_terminal_size();
             let width = get_content_width(80);
@@ -128,7 +156,13 @@ pub fn run_menu(
             }
 
             print!("\x1B[K\r\n{}\x1B[K\r\n", box_divider(width));
-            if term_w < 70 {
+            if allow_space {
+                if term_w < 70 {
+                    print!(" [HOTKEYS] (0-9) | [Space] Toggle | [Enter] Select | [Esc] Back | [q] Exit\x1B[0m\x1B[K\r\n");
+                } else {
+                    print!(" [HOTKEYS] (0-9)  |  [↑/↓/j/k] Move  |  [Space] Toggle  |  [Enter/→] Select  |  [Esc/←] Back  |  [q] Exit\x1B[0m\x1B[K\r\n");
+                }
+            } else if term_w < 70 {
                 print!(" [HOTKEYS] (0-9) | [↑/↓] Move | [Enter] Select | [Esc] Back | [q] Exit\x1B[0m\x1B[K\r\n");
             } else {
                 print!(" [HOTKEYS] (0-9)  |  [↑/↓/j/k] Move  |  [PgUp/PgDn] Scroll  |  [Enter/→] Select  |  [Esc/←] Back  |  [q] Exit\x1B[0m\x1B[K\r\n");
@@ -182,11 +216,14 @@ pub fn run_menu(
                     KeyCode::End => {
                         *selected_idx = entries.len().saturating_sub(1);
                     }
+                    KeyCode::Char(' ') if allow_space => {
+                        return Ok(MenuAction::Space(*selected_idx));
+                    }
                     KeyCode::Enter | KeyCode::Right => {
-                        return Ok(Some(*selected_idx));
+                        return Ok(MenuAction::Select(*selected_idx));
                     }
                     KeyCode::Esc | KeyCode::Left => {
-                        return Ok(None);
+                        return Ok(MenuAction::Back);
                     }
                     KeyCode::Char(c) => {
                         let c_str = c.to_ascii_lowercase().to_string();
@@ -195,7 +232,7 @@ pub fn run_menu(
                                 || e.aliases.iter().any(|a| a.eq_ignore_ascii_case(&c_str))
                         }) {
                             *selected_idx = pos;
-                            return Ok(Some(pos));
+                            return Ok(MenuAction::Select(pos));
                         }
                     }
                     _ => {}

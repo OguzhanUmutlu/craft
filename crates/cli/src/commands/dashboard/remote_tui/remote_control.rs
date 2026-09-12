@@ -57,27 +57,27 @@ pub async fn remote_server_control_panel(
 
         if is_running {
             // Dynamic Toggle: Stop button
-            menu_entries.push(MenuEntry::new("1", "Stop Server (Remote)").with_aliases(&["s"]));
+            menu_entries.push(MenuEntry::new("1", "Stop Server").with_aliases(&["s"]));
             action_map.push(RemoteControlAction::ToggleStop);
 
-            menu_entries.push(MenuEntry::new("2", "Restart Server (Remote)").with_aliases(&["r"]));
+            menu_entries.push(MenuEntry::new("2", "Restart Server").with_aliases(&["r"]));
             action_map.push(RemoteControlAction::Restart);
 
-            menu_entries.push(MenuEntry::new("3", "Attach Live Console (SSH)").with_aliases(&["a", "v", "c"]));
+            menu_entries.push(MenuEntry::new("3", "Live Console").with_aliases(&["a", "v", "c"]));
             action_map.push(RemoteControlAction::AttachConsole);
 
-            menu_entries.push(MenuEntry::new("4", "Manage Backups (Remote)").with_aliases(&["b"]));
+            menu_entries.push(MenuEntry::new("4", "Backups").with_aliases(&["b"]));
             action_map.push(RemoteControlAction::Backups);
         } else {
             // Dynamic Toggle: Start button
-            menu_entries.push(MenuEntry::new("1", "Start Server (Remote)").with_aliases(&["s"]));
+            menu_entries.push(MenuEntry::new("1", "Start Server").with_aliases(&["s"]));
             action_map.push(RemoteControlAction::ToggleStart);
 
-            menu_entries.push(MenuEntry::new("2", "Manage Backups (Remote)").with_aliases(&["b"]));
+            menu_entries.push(MenuEntry::new("2", "Backups").with_aliases(&["b"]));
             action_map.push(RemoteControlAction::Backups);
         }
 
-        menu_entries.push(MenuEntry::new("0", "Back to Remote Servers").with_aliases(&["q"]));
+        menu_entries.push(MenuEntry::new("0", "Back").with_aliases(&["q"]));
         action_map.push(RemoteControlAction::Back);
 
         let selection = run_menu(&header, &menu_entries, &mut selected)?;

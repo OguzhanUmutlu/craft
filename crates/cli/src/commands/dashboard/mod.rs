@@ -123,9 +123,9 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
         let entries = vec![
             MenuEntry::new("1", "Local Servers"),
             MenuEntry::new("2", "Remote Servers"),
-            MenuEntry::new("3", "World Snapshots & Backups").with_aliases(&["b", "s"]),
-            MenuEntry::new("4", "Tools & Utilities").with_aliases(&["t", "u"]),
-            MenuEntry::new("0", "Exit Craft").with_aliases(&["q"]),
+            MenuEntry::new("3", "Backup Systems").with_aliases(&["b", "s"]),
+            MenuEntry::new("4", "Tools").with_aliases(&["t", "u"]),
+            MenuEntry::new("0", "Exit").with_aliases(&["q"]),
         ];
 
         let selection = run_menu(&header, &entries, &mut selected_main)?;
@@ -138,7 +138,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                 remote_servers_menu(paths).await?;
             }
             Some(2) => {
-                backups_menu(paths).await?;
+                cloud_backups::setup_backup_systems_menu(paths).await?;
             }
             Some(3) => {
                 tools_menu(paths).await?;

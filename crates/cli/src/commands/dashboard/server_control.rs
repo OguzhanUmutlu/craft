@@ -22,8 +22,8 @@ pub async fn show_empty_servers_modal(paths: &CraftPaths) -> Result<bool> {
     );
 
     let entries = vec![
-        MenuEntry::new("1", "Create Your First Server").with_aliases(&["c", "n"]),
-        MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]),
+        MenuEntry::new("1", "Create Server").with_aliases(&["c", "n"]),
+        MenuEntry::new("0", "Back").with_aliases(&["b"]),
     ];
 
     let mut selected = 0;
@@ -140,7 +140,7 @@ pub async fn quick_start_menu(paths: &CraftPaths) -> Result<()> {
                 ),
             ));
         }
-        entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
         let width = get_content_width(80);
         let mut header = format!(
@@ -253,7 +253,7 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
             header.push_str("  No servers are currently running on this host.\r\n");
             header.push_str(&box_divider(width).dimmed().to_string());
 
-            let entries = vec![MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"])];
+            let entries = vec![MenuEntry::new("0", "Back").with_aliases(&["b"])];
             let mut exit_sel = 0;
             let _ = run_menu(&header, &entries, &mut exit_sel)?;
             return Ok(());
@@ -283,9 +283,9 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
             ));
         }
         if running_servers.len() > 1 {
-            entries.push(MenuEntry::new("a", "Stop ALL Running Servers"));
+            entries.push(MenuEntry::new("a", "Stop All Servers"));
         }
-        entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
         let width = get_content_width(80);
         let mut header = format!(
@@ -380,9 +380,9 @@ pub async fn restart_servers_menu(paths: &CraftPaths) -> Result<()> {
             ));
         }
         if registry.servers.len() > 1 {
-            entries.push(MenuEntry::new("a", "Restart ALL Registered Servers"));
+            entries.push(MenuEntry::new("a", "Restart All Servers"));
         }
-        entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
         let width = get_content_width(80);
         let mut header = format!(
@@ -471,14 +471,14 @@ pub async fn view_servers_menu(paths: &CraftPaths) -> Result<()> {
             format!("{:<20} {:<10} {:<10}", s.name, s.software, s.version),
         ));
     }
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
+    entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
     let mut sel = 0;
     let width = get_content_width(80);
     let header = format!(
         "{}\r\n{}\r\n{}\r\n  Select a server to attach live terminal console:\r\n{}",
         box_top(width),
-        box_title("ATTACH LIVE CONSOLE (VIEW)", width, false),
+        box_title("LIVE CONSOLE", width, false),
         box_divider(width),
         box_divider(width)
     );
@@ -515,7 +515,7 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
             format!("{:<20} {:<10} {:<10}", s.name, s.software, s.version),
         ));
     }
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
+    entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
     let mut sel = 0;
     let width = get_content_width(80);
@@ -542,14 +542,8 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
             );
 
             let confirm_entries = vec![
-                MenuEntry::new(
-                    "1",
-                    "Unregister from Craft (Preserve world & server files on disk)",
-                ),
-                MenuEntry::new(
-                    "2",
-                    "Permanently Delete Server Directory & World Files (-rf)",
-                ),
+                MenuEntry::new("1", "Unregister (Keep Files)"),
+                MenuEntry::new("2", "Delete Server & Files"),
                 MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
             ];
 
@@ -583,8 +577,8 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
                         box_divider(width).dimmed(),
                     );
                     let second_entries = vec![
-                        MenuEntry::new("1", "Cancel (Keep server and data safe)").with_aliases(&["0", "b"]),
-                        MenuEntry::new("2", format!("Confirm Permanent Deletion of '{}'", server.name)),
+                        MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
+                        MenuEntry::new("2", format!("Confirm Delete '{}'", server.name)),
                     ];
                     let mut second_sel = 0;
                     if let Some(1) = run_menu(&second_header, &second_entries, &mut second_sel)? {
@@ -643,8 +637,8 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
 
             // Defensive: Only option 1 and 0, aliases "c" / "n", strictly NO "2"
             let entries = vec![
-                MenuEntry::new("1", "Create Your First Server").with_aliases(&["c", "n"]),
-                MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
+                MenuEntry::new("1", "Create Server").with_aliases(&["c", "n"]),
+                MenuEntry::new("0", "Back").with_aliases(&["b"]),
             ];
 
             match run_menu(&header, &entries, &mut selected)? {
@@ -658,9 +652,9 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
 
         let width = get_content_width(80);
         let header = format!(
-            "{}\r\n{}\r\n{}\r\n Select a server to inspect details, control lifecycle, or attach console.\r\n{}",
+            "{}\r\n{}\r\n{}\r\n Manage local servers on this host.\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("LOCAL SERVERS (HOST)", width, false).cyan().bold(),
+            box_title("LOCAL SERVERS", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             box_divider(width).dimmed(),
         );
@@ -697,17 +691,42 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
             ));
         }
 
-        entries.push(MenuEntry::new("n", "Create New Server").with_aliases(&["c"]));
-        entries.push(MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]));
+        entries.push(MenuEntry::new("n", "Create Server").with_aliases(&["c"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
-        let sel = run_menu(&header, &entries, &mut selected)?;
+        let sel = super::screen::run_menu_with_space(&header, &entries, &mut selected)?;
 
         match sel {
-            Some(idx) if idx < registry.servers.len() => {
+            super::screen::MenuAction::Space(idx) => {
+                if idx < registry.servers.len() {
+                    let chosen = &registry.servers[idx];
+                    let is_running = running_paths.contains(&chosen.path)
+                        || chosen.path
+                            .canonicalize()
+                            .map(|p| running_paths.contains(&p))
+                            .unwrap_or(false)
+                        || craft_core::is_server_locked(&chosen.path);
+                    if is_running {
+                        let _ = print_in_place_status(
+                            "STOPPING SERVER",
+                            &[format!("Stopping '{}' gracefully...", chosen.name)],
+                        );
+                        let _ = stop_server_daemon(&chosen.name, false, paths).await;
+                    } else {
+                        let _ = print_in_place_status(
+                            "STARTING SERVER",
+                            &[format!("Starting '{}' in background...", chosen.name)],
+                        );
+                        let _ = start_server_daemon(&chosen.name, paths).await;
+                    }
+                }
+                continue;
+            }
+            super::screen::MenuAction::Select(idx) if idx < registry.servers.len() => {
                 let chosen = &registry.servers[idx];
                 server_control_panel(&chosen.name, paths).await?;
             }
-            Some(idx) if idx == registry.servers.len() => {
+            super::screen::MenuAction::Select(idx) if idx == registry.servers.len() => {
                 gui_create_server_wizard(paths).await?;
             }
             _ => return Ok(()),
@@ -804,7 +823,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             entries.push(MenuEntry::new("2", "Restart Server"));
             actions.push(ControlAction::Restart);
 
-            entries.push(MenuEntry::new("3", "Attach Live Console"));
+            entries.push(MenuEntry::new("3", "Live Console"));
             actions.push(ControlAction::AttachConsole);
         } else {
             entries.push(MenuEntry::new("1", "Start Server"));
@@ -812,18 +831,18 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
         }
 
         let bkp_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(bkp_hotkey, "World Snapshots & Backups"));
+        entries.push(MenuEntry::new(bkp_hotkey, "Backups"));
         actions.push(ControlAction::Backups);
 
         let plg_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(plg_hotkey, "Browse & Manage Plugins"));
+        entries.push(MenuEntry::new(plg_hotkey, "Plugins"));
         actions.push(ControlAction::Plugins);
 
         let del_hotkey = (actions.len() + 1).to_string();
         entries.push(MenuEntry::new(del_hotkey, "Delete Server"));
         actions.push(ControlAction::DeleteServer);
 
-        entries.push(MenuEntry::new("0", "Back to Server List").with_aliases(&["b"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
         let sel = run_menu(&header, &entries, &mut selected)?;
 
@@ -956,8 +975,8 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     box_divider(width).dimmed(),
                 );
                 let confirm_entries = vec![
-                    MenuEntry::new("1", "Unregister Server (Keep files on disk)"),
-                    MenuEntry::new("2", "Permanently Delete Server & Files"),
+                    MenuEntry::new("1", "Unregister (Keep Files)"),
+                    MenuEntry::new("2", "Delete Server & Files"),
                     MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
                 let mut c_sel = 0;
@@ -989,8 +1008,8 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                             box_divider(width).dimmed(),
                         );
                         let second_entries = vec![
-                            MenuEntry::new("1", "Cancel (Keep server and data safe)").with_aliases(&["0", "b"]),
-                            MenuEntry::new("2", format!("Confirm Permanent Deletion of '{}'", server.name)),
+                            MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
+                            MenuEntry::new("2", format!("Confirm Delete '{}'", server.name)),
                         ];
                         let mut second_sel = 0;
                         if let Some(1) = run_menu(&second_header, &second_entries, &mut second_sel)? {
@@ -1037,25 +1056,7 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
         };
 
         let backup_reg = GlobalBackupRegistry::load(paths)?;
-        let current_method_id = server.backup_method.as_deref().unwrap_or("local");
-        let method_display = match current_method_id {
-            "s3" => {
-                if let Some(ref s3) = backup_reg.s3 {
-                    format!("AWS S3 / R2 / MinIO [Bucket: {}]", s3.bucket).green().bold().to_string()
-                } else {
-                    "AWS S3 [NOT CONFIGURED IN CLOUD BACKUPS]".yellow().to_string()
-                }
-            }
-            "gdrive" => {
-                if let Some(ref gd) = backup_reg.gdrive {
-                    format!("Google Drive [Folder: {}]", gd.folder_id).green().bold().to_string()
-                } else {
-                    "Google Drive [NOT CONFIGURED IN CLOUD BACKUPS]".yellow().to_string()
-                }
-            }
-            "multi" => "Multi-Destination (Local + All Cloud)".cyan().bold().to_string(),
-            _ => "Local Disk Storage (~/.craft/backups)".white().bold().to_string(),
-        };
+        let method_display = backup_reg.format_method_display(server.backup_method.as_deref());
 
         let policy = backup_reg.server_policies.get(&server.name);
         let policy_str = if let Some(p) = policy {
@@ -1068,7 +1069,16 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
             "[AUTO: Disabled]".dimmed().to_string()
         };
 
-        let engine = BackupEngine::new(paths);
+        let local_dir = if let Some(ref m) = server.backup_method {
+            if let Some(id) = m.strip_prefix("local:") {
+                backup_reg.find_local(id).map(|t| t.path.clone()).unwrap_or_else(|| backup_reg.default_local_path(paths))
+            } else {
+                backup_reg.default_local_path(paths)
+            }
+        } else {
+            backup_reg.default_local_path(paths)
+        };
+        let engine = BackupEngine::with_dir(local_dir);
         let existing_backups = engine.list_backups(&server.name);
         let total_size_mb: f64 = existing_backups.iter().map(|b| b.size_bytes as f64).sum::<f64>() / (1024.0 * 1024.0);
 
@@ -1076,7 +1086,7 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Server:         {}\r\n Active Method:  {}\r\n Auto-Backup:    {}\r\n Local Archives: {} ({:.2} MB total)\r\n{}",
             box_top(width).cyan().bold(),
-            box_title(&format!("BACKUPS & SNAPSHOTS: {}", server.name), width, false).cyan().bold(),
+            box_title(&format!("BACKUPS: {}", server.name), width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             server.name.white().bold(),
             method_display,
@@ -1087,104 +1097,21 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Select Active Backup Method"),
-            MenuEntry::new("2", "Create Backup Now"),
-            MenuEntry::new("3", "List Existing Backups"),
-            MenuEntry::new("4", "Restore Server from Backup"),
-            MenuEntry::new("5", "Configure Auto-Backup Schedule"),
-            MenuEntry::new("0", "Back to Server Menu").with_aliases(&["b", "q"]),
+            MenuEntry::new("1", "Create Backup"),
+            MenuEntry::new("2", "List Backups"),
+            MenuEntry::new("3", "Restore Backup"),
+            MenuEntry::new("4", "Auto-Backup Policy"),
+            MenuEntry::new("5", "Backup Method"),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
             Some(0) => {
-                // Select active backup method
-                let mut method_sel = 0;
-                let s3_label = if let Some(ref s3) = backup_reg.s3 {
-                    format!("AWS S3 / R2 / MinIO [Configured: {}]", s3.bucket)
-                } else {
-                    "AWS S3 / R2 / MinIO [Configure First]".to_string()
-                };
-                let gd_label = if let Some(ref gd) = backup_reg.gdrive {
-                    format!("Google Drive [Configured: {}]", gd.folder_id)
-                } else {
-                    "Google Drive [Configure First]".to_string()
-                };
-
-                let method_entries = vec![
-                    MenuEntry::new("1", "Local Disk Storage (~/.craft/backups)"),
-                    MenuEntry::new("2", s3_label),
-                    MenuEntry::new("3", gd_label),
-                    MenuEntry::new("4", "Multi-Destination (Local + Cloud)"),
-                    MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
-                ];
-
-                let method_header = format!(" Select backup system for server '{}':", server.name);
-                if let Some(m_idx) = run_menu(&method_header, &method_entries, &mut method_sel)? {
-                    let new_method = match m_idx {
-                        0 => Some("local".to_string()),
-                        1 => {
-                            if backup_reg.s3.is_none() {
-                                show_modal_message(
-                                    "S3 NOT CONFIGURED",
-                                    &[
-                                        "No S3 / R2 / MinIO credentials are configured yet.",
-                                        "Opening S3 setup wizard now...",
-                                    ],
-                                    false,
-                                )?;
-                                super::cloud_backups::configure_s3_menu(paths).await?;
-                                let updated_reg = GlobalBackupRegistry::load(paths)?;
-                                if updated_reg.s3.is_none() {
-                                    continue;
-                                }
-                            }
-                            Some("s3".to_string())
-                        }
-                        2 => {
-                            if backup_reg.gdrive.is_none() {
-                                show_modal_message(
-                                    "GDRIVE NOT CONFIGURED",
-                                    &[
-                                        "No Google Drive credentials are configured yet.",
-                                        "Opening Google Drive setup wizard now...",
-                                    ],
-                                    false,
-                                )?;
-                                super::cloud_backups::configure_gdrive_menu(paths).await?;
-                                let updated_reg = GlobalBackupRegistry::load(paths)?;
-                                if updated_reg.gdrive.is_none() {
-                                    continue;
-                                }
-                            }
-                            Some("gdrive".to_string())
-                        }
-                        3 => Some("multi".to_string()),
-                        _ => continue,
-                    };
-
-                    let mut reg = ServersRegistry::load(paths)?;
-                    if let Some(s) = reg.servers.iter_mut().find(|s| s.name == server.name) {
-                        s.backup_method = new_method.clone();
-                        reg.save(paths)?;
-                        show_modal_message(
-                            "BACKUP METHOD UPDATED",
-                            &[
-                                format!("[OK] Server '{}' now uses backup method: {}", server.name, new_method.as_deref().unwrap_or("local"))
-                                    .green()
-                                    .bold()
-                                    .to_string(),
-                            ],
-                            false,
-                        )?;
-                    }
-                }
-            }
-            Some(1) => {
                 // Create backup now using selected method
                 let scope_header = " Choose backup scope:";
                 let scope_entries = vec![
-                    MenuEntry::new("1", "Full Server Snapshot"),
-                    MenuEntry::new("2", "World Only Snapshot"),
+                    MenuEntry::new("1", "Full Backup"),
+                    MenuEntry::new("2", "World Only"),
                     MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
                 let mut sc_sel = 0;
@@ -1216,46 +1143,93 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                 ];
 
                 let method = server.backup_method.as_deref().unwrap_or("local");
-                if method == "s3" || method == "multi" {
-                    if let Some(ref s3_config) = backup_reg.s3 {
-                        let _ = print_in_place_status(
-                            "UPLOADING TO S3",
-                            &[format!("Uploading '{}' to S3 bucket '{}'...", fname, s3_config.bucket)],
-                        );
-                        let provider = S3StorageProvider::new(s3_config.clone());
-                        let remote_key = if let Some(ref pfx) = s3_config.prefix {
-                            format!("{}/{}/{}", pfx.trim_end_matches('/'), server.name, fname)
-                        } else {
-                            format!("{}/{}", server.name, fname)
-                        };
-                        match provider.upload_file(&archive_path, &remote_key).await {
-                            Ok(_) => summary_lines.push(format!("[OK] S3 Upload complete: s3://{}/{}", s3_config.bucket, remote_key).green().to_string()),
-                            Err(e) => summary_lines.push(format!("[WARN] S3 Upload failed: {}", e).yellow().to_string()),
-                        }
-                    } else if method == "s3" {
-                        summary_lines.push("[WARN] S3 is not configured in Cloud Backups; kept locally.".yellow().to_string());
+
+                // Upload to S3 if method matches
+                let s3_targets_to_upload: Vec<craft_core::S3BackupConfig> = if let Some(id) = method.strip_prefix("s3:") {
+                    backup_reg.find_s3(id).cloned().map(|t| t.into()).into_iter().collect()
+                } else if method == "s3" {
+                    if let Some(first) = backup_reg.s3_targets.first() {
+                        vec![first.clone().into()]
+                    } else if let Some(ref legacy) = backup_reg.s3 {
+                        vec![legacy.clone()]
+                    } else {
+                        vec![]
+                    }
+                } else if method == "multi" {
+                    if !backup_reg.s3_targets.is_empty() {
+                        backup_reg.s3_targets.iter().map(|t| t.clone().into()).collect()
+                    } else if let Some(ref legacy) = backup_reg.s3 {
+                        vec![legacy.clone()]
+                    } else {
+                        vec![]
+                    }
+                } else {
+                    vec![]
+                };
+
+                if method.starts_with("s3") && s3_targets_to_upload.is_empty() {
+                    summary_lines.push("[WARN] Selected S3 provider is not configured; kept locally.".yellow().to_string());
+                }
+
+                for s3_config in s3_targets_to_upload {
+                    let _ = print_in_place_status(
+                        "UPLOADING TO S3",
+                        &[format!("Uploading '{}' to S3 bucket '{}'...", fname, s3_config.bucket)],
+                    );
+                    let provider = S3StorageProvider::new(s3_config.clone());
+                    let remote_key = if let Some(ref pfx) = s3_config.prefix {
+                        format!("{}/{}/{}", pfx.trim_end_matches('/'), server.name, fname)
+                    } else {
+                        format!("{}/{}", server.name, fname)
+                    };
+                    match provider.upload_file(&archive_path, &remote_key).await {
+                        Ok(_) => summary_lines.push(format!("[OK] S3 Upload complete: s3://{}/{}", s3_config.bucket, remote_key).green().to_string()),
+                        Err(e) => summary_lines.push(format!("[WARN] S3 Upload failed ({}): {}", s3_config.bucket, e).yellow().to_string()),
                     }
                 }
 
-                if method == "gdrive" || method == "multi" {
-                    if let Some(ref gd_config) = backup_reg.gdrive {
-                        let _ = print_in_place_status(
-                            "UPLOADING TO GDRIVE",
-                            &[format!("Uploading '{}' to Google Drive folder '{}'...", fname, gd_config.folder_id)],
-                        );
-                        let provider = GDriveStorageProvider::new(gd_config.clone());
-                        match provider.upload_file(&archive_path, fname).await {
-                            Ok(_) => summary_lines.push(format!("[OK] Google Drive Upload complete: folder {}", gd_config.folder_id).green().to_string()),
-                            Err(e) => summary_lines.push(format!("[WARN] Google Drive Upload failed: {}", e).yellow().to_string()),
-                        }
-                    } else if method == "gdrive" {
-                        summary_lines.push("[WARN] Google Drive is not configured; kept locally.".yellow().to_string());
+                // Upload to Google Drive if method matches
+                let gd_targets_to_upload: Vec<craft_core::GDriveBackupConfig> = if let Some(id) = method.strip_prefix("gdrive:") {
+                    backup_reg.find_gdrive(id).cloned().map(|t| t.into()).into_iter().collect()
+                } else if method == "gdrive" {
+                    if let Some(first) = backup_reg.gdrive_targets.first() {
+                        vec![first.clone().into()]
+                    } else if let Some(ref legacy) = backup_reg.gdrive {
+                        vec![legacy.clone()]
+                    } else {
+                        vec![]
+                    }
+                } else if method == "multi" {
+                    if !backup_reg.gdrive_targets.is_empty() {
+                        backup_reg.gdrive_targets.iter().map(|t| t.clone().into()).collect()
+                    } else if let Some(ref legacy) = backup_reg.gdrive {
+                        vec![legacy.clone()]
+                    } else {
+                        vec![]
+                    }
+                } else {
+                    vec![]
+                };
+
+                if method.starts_with("gdrive") && gd_targets_to_upload.is_empty() {
+                    summary_lines.push("[WARN] Selected Google Drive provider is not configured; kept locally.".yellow().to_string());
+                }
+
+                for gd_config in gd_targets_to_upload {
+                    let _ = print_in_place_status(
+                        "UPLOADING TO GDRIVE",
+                        &[format!("Uploading '{}' to Google Drive folder '{}'...", fname, gd_config.folder_id)],
+                    );
+                    let provider = GDriveStorageProvider::new(gd_config.clone());
+                    match provider.upload_file(&archive_path, fname).await {
+                        Ok(_) => summary_lines.push(format!("[OK] Google Drive Upload complete: folder {}", gd_config.folder_id).green().to_string()),
+                        Err(e) => summary_lines.push(format!("[WARN] Google Drive Upload failed: {}", e).yellow().to_string()),
                     }
                 }
 
                 show_modal_message("SNAPSHOT CREATED", &summary_lines, false)?;
             }
-            Some(2) => {
+            Some(1) => {
                 // List backups
                 let list = engine.list_backups(&server.name);
                 if list.is_empty() {
@@ -1275,7 +1249,7 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                     show_modal_message(&format!("BACKUPS: {}", server.name), &lines, false)?;
                 }
             }
-            Some(3) => {
+            Some(2) => {
                 // Restore server from backup
                 if craft_core::is_server_locked(&server.path) || craft_core::get_server_running_pid(&server.path).is_some() {
                     let pid_info = craft_core::get_server_running_pid(&server.path).map(|p| format!(" (PID: {})", p)).unwrap_or_default();
@@ -1306,14 +1280,14 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                         format!("{:<32} ({:.1} MB)", b.filename, mb),
                     ));
                 }
-                b_entries.push(MenuEntry::new("c", "Custom Archive Path"));
+                b_entries.push(MenuEntry::new("c", "Custom Archive"));
                 b_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let b_header = format!(" Select backup archive to restore to '{}':", server.name);
                 let mut b_sel = 0;
                 if let Some(b_idx) = run_menu(&b_header, &b_entries, &mut b_sel)? {
                     let target_archive = if b_idx < list.len() {
-                        paths.backups_dir.join(&server.name).join(&list[b_idx].filename)
+                        list[b_idx].path.clone()
                     } else if b_idx == list.len() {
                         match run_input_prompt("CUSTOM ARCHIVE", "Enter path to archive (.tar.gz / .zip):", None)? {
                             Some(p) if !p.trim().is_empty() => std::path::PathBuf::from(p.trim()),
@@ -1346,9 +1320,30 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                     }
                 }
             }
-            Some(4) => {
+            Some(3) => {
                 // Configure Auto-Backup Schedule
                 super::cloud_backups::configure_single_policy(paths, &server.name).await?;
+            }
+            Some(4) => {
+                // Select active backup method
+                if let Some(new_method) = super::cloud_backups::pick_server_backup_method(paths, &server.name).await? {
+                    let mut reg = ServersRegistry::load(paths)?;
+                    if let Some(s) = reg.servers.iter_mut().find(|s| s.name == server.name) {
+                        s.backup_method = Some(new_method.clone());
+                        reg.save(paths)?;
+                        let display = GlobalBackupRegistry::load(paths)?.format_method_display(Some(&new_method));
+                        show_modal_message(
+                            "BACKUP METHOD UPDATED",
+                            &[
+                                format!("[OK] Server '{}' backup system updated: {}", server.name, display)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            ],
+                            false,
+                        )?;
+                    }
+                }
             }
             _ => return Ok(()),
         }
@@ -1391,10 +1386,10 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Search & Install Plugins Online"),
-            MenuEntry::new("2", "Install Plugin by Slug / ID"),
-            MenuEntry::new("3", "Manage Installed Plugins"),
-            MenuEntry::new("0", "Back to Server Menu").with_aliases(&["b", "q"]),
+            MenuEntry::new("1", "Search Online"),
+            MenuEntry::new("2", "Install by Slug / ID"),
+            MenuEntry::new("3", "Manage Installed"),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -1571,7 +1566,7 @@ async fn manage_installed_plugins_menu(server_name: &str, plugins_dir: &std::pat
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Server: '{}'\r\n Select a plugin jar to toggle status or delete:\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("MANAGE INSTALLED PLUGINS", width, false).cyan().bold(),
+            box_title("INSTALLED PLUGINS", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             server_name,
             box_divider(width).dimmed(),
@@ -1599,14 +1594,26 @@ async fn manage_installed_plugins_menu(server_name: &str, plugins_dir: &std::pat
         }
         entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
 
-        match run_menu(&header, &entries, &mut selected)? {
-            Some(idx) if idx < plugins.len() => {
+        match super::screen::run_menu_with_space(&header, &entries, &mut selected)? {
+            super::screen::MenuAction::Space(idx) if idx < plugins.len() => {
+                let chosen = &plugins[idx];
+                if chosen.is_enabled {
+                    let new_path = chosen.path.with_extension("jar.disabled");
+                    let _ = std::fs::rename(&chosen.path, new_path);
+                } else {
+                    let stem = chosen.path.to_string_lossy();
+                    if let Some(orig) = stem.strip_suffix(".disabled") {
+                        let _ = std::fs::rename(&chosen.path, orig);
+                    }
+                }
+            }
+            super::screen::MenuAction::Select(idx) if idx < plugins.len() => {
                 let chosen = &plugins[idx];
                 let item_header = format!(" Plugin: {}\r\n Choose action:", chosen.filename);
-                let toggle_label = if chosen.is_enabled { "Disable Plugin (rename to .disabled)" } else { "Enable Plugin (rename to .jar)" };
+                let toggle_label = if chosen.is_enabled { "Disable Plugin" } else { "Enable Plugin" };
                 let item_entries = vec![
                     MenuEntry::new("1", toggle_label),
-                    MenuEntry::new("2", "Delete Plugin File"),
+                    MenuEntry::new("2", "Delete Plugin"),
                     MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
                 let mut item_sel = 0;

@@ -43,12 +43,12 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
             ));
         }
 
-        entries.push(MenuEntry::new("i", "Import Hosts from ~/.ssh/config").with_aliases(&["import"]));
-        entries.push(MenuEntry::new("a", "Add Remote Host Manually").with_aliases(&["add", "n"]));
+        entries.push(MenuEntry::new("i", "Import SSH Hosts").with_aliases(&["import"]));
+        entries.push(MenuEntry::new("a", "Add Remote Host").with_aliases(&["add", "n"]));
         if !registry.remotes.is_empty() {
-            entries.push(MenuEntry::new("r", "Remove Configured Host").with_aliases(&["rm", "del"]));
+            entries.push(MenuEntry::new("r", "Remove Host").with_aliases(&["rm", "del"]));
         }
-        entries.push(MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
 
         let selection = run_menu(&header, &entries, &mut selected)?;
 
@@ -156,8 +156,8 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
 
                     let auth_header = " Choose authentication method:";
                     let auth_entries = vec![
-                        MenuEntry::new("1", "SSH Private Key File (~/.ssh/id_rsa or ~/.ssh/id_ed25519)"),
-                        MenuEntry::new("2", "Password Authentication"),
+                        MenuEntry::new("1", "SSH Private Key"),
+                        MenuEntry::new("2", "Password"),
                         MenuEntry::new("3", "SSH Agent"),
                         MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                     ];

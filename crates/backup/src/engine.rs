@@ -20,9 +20,18 @@ pub struct BackupEngine {
 
 impl BackupEngine {
     pub fn new(paths: &CraftPaths) -> Self {
+        let dir = if let Ok(reg) = craft_core::GlobalBackupRegistry::load(paths) {
+            reg.default_local_path(paths)
+        } else {
+            paths.backups_dir.clone()
+        };
         Self {
-            backups_dir: paths.backups_dir.clone(),
+            backups_dir: dir,
         }
+    }
+
+    pub fn with_dir(backups_dir: PathBuf) -> Self {
+        Self { backups_dir }
     }
 
     pub fn server_backup_dir(&self, server_name: &str) -> PathBuf {

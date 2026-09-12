@@ -53,7 +53,7 @@ pub async fn manage_remote_backups(
         );
 
         let mut entries = Vec::new();
-        entries.push(MenuEntry::new("c", "Create New Remote Backup").with_aliases(&["n"]));
+        entries.push(MenuEntry::new("c", "Create Backup").with_aliases(&["n"]));
 
         for (idx, b) in backups.iter().enumerate() {
             let hotkey = if idx < 9 {
@@ -73,7 +73,7 @@ pub async fn manage_remote_backups(
             ));
         }
 
-        entries.push(MenuEntry::new("0", "Back to Remote Server").with_aliases(&["b"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
         let selection = run_menu(&header, &entries, &mut selected)?;
 
@@ -82,8 +82,8 @@ pub async fn manage_remote_backups(
                 // Create backup
                 let scope_header = " Choose remote backup scope:";
                 let scope_entries = vec![
-                    MenuEntry::new("1", "Full Server Snapshot"),
-                    MenuEntry::new("2", "World & Configs Only"),
+                    MenuEntry::new("1", "Full Backup"),
+                    MenuEntry::new("2", "World Only"),
                     MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
                 let mut scope_sel = 0;
@@ -135,8 +135,8 @@ pub async fn manage_remote_backups(
                 );
 
                 let action_entries = vec![
-                    MenuEntry::new("1", "Restore Backup into Server (Remote)"),
-                    MenuEntry::new("2", "Download Backup to Local Machine (SFTP)"),
+                    MenuEntry::new("1", "Restore Backup"),
+                    MenuEntry::new("2", "Download Backup"),
                     MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
 
@@ -178,16 +178,16 @@ pub async fn manage_remote_backups(
                             );
 
                             let confirm_entries = vec![
-                                MenuEntry::new("1", "Cancel (Do not restore)").with_aliases(&["0", "b"]),
+                                MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
                                 MenuEntry::new("2", format!("Confirm Restore of '{}'", backup.filename)),
                             ];
 
                             let mut c_sel = 0;
                             if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
-                                print_in_place_status(
+                                let _ = print_in_place_status(
                                     "RESTORING REMOTE BACKUP",
                                     &[format!("Restoring '{}' on remote server...", backup.filename)],
-                                )?;
+                                );
 
                                 match client.restore_backup(&server.name, &server.path, &backup.filename) {
                                     Ok(_) => {
@@ -217,9 +217,9 @@ pub async fn manage_remote_backups(
                             // Download
                             let dest_header = " Select local destination for downloaded backup:";
                             let dest_entries = vec![
-                                MenuEntry::new("1", "Current Working Directory (.)"),
-                                MenuEntry::new("2", "Craft Downloads Directory (~/.craft/downloads/)"),
-                                MenuEntry::new("3", "Custom Local Directory"),
+                                MenuEntry::new("1", "Current Directory (.)"),
+                                MenuEntry::new("2", "Downloads Directory (~/.craft/downloads)"),
+                                MenuEntry::new("3", "Custom Directory"),
                                 MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                             ];
 

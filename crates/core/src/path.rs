@@ -20,6 +20,36 @@ pub struct CraftPaths {
 }
 
 impl CraftPaths {
+    pub fn from_base(home: PathBuf) -> Self {
+        let servers_dir = home.join("servers");
+        let cache_dir = home.join("cache");
+        let backups_dir = home.join("backups");
+        let run_dir = home.join("run");
+        let locks_dir = run_dir.join("locks");
+        let logs_dir = home.join("logs");
+
+        let servers_file = home.join("servers.toml");
+        let remotes_file = home.join("remotes.toml");
+        let config_file = home.join("config.toml");
+        let socket_file = run_dir.join("daemon.sock");
+        let pid_file = run_dir.join("daemon.pid");
+
+        Self {
+            home,
+            servers_dir,
+            cache_dir,
+            backups_dir,
+            run_dir,
+            locks_dir,
+            logs_dir,
+            servers_file,
+            remotes_file,
+            config_file,
+            socket_file,
+            pid_file,
+        }
+    }
+
     pub fn new() -> Result<Self> {
         let home = if let Ok(val) = env::var("CRAFT_HOME") {
             PathBuf::from(val)

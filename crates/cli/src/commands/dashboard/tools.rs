@@ -852,20 +852,20 @@ pub async fn daemon_menu(paths: &CraftPaths) -> Result<()> {
 
         let width = get_content_width(80);
         let header = format!(
-            "{}\r\n{}\r\n{}\r\n System Supervisor Daemon Status: {}\r\n{}",
+            "{}\r\n{}\r\n{}\r\n Daemon Status: {}\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("CRAFT SERVICE DAEMON CONTROL", width, false).cyan().bold(),
+            box_title("DAEMON CONTROL", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             status_badge,
             box_divider(width).dimmed(),
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Check Daemon Status"),
-            MenuEntry::new("2", "Start Service Daemon"),
+            MenuEntry::new("1", "Daemon Status"),
+            MenuEntry::new("2", "Start Daemon"),
             MenuEntry::new("3", "Stop Daemon"),
             MenuEntry::new("4", "Restart Daemon"),
-            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
+            MenuEntry::new("0", "Back").with_aliases(&["b"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -1000,7 +1000,7 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Total Download Cache: {:.2} MB | Location: {}\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("CACHE & STORAGE MANAGEMENT", width, false).cyan().bold(),
+            box_title("CACHE & STORAGE", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             mb,
             paths.cache_dir.display(),
@@ -1008,9 +1008,9 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Show Current Cache Size"),
-            MenuEntry::new("2", "Purge All Download Caches"),
-            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
+            MenuEntry::new("1", "Cache Size"),
+            MenuEntry::new("2", "Purge Cache"),
+            MenuEntry::new("0", "Back").with_aliases(&["b"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -1035,7 +1035,7 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
                     box_divider(width).dimmed(),
                 );
                 let conf_entries = vec![
-                    MenuEntry::new("1", "Yes, Purge All Download Caches"),
+                    MenuEntry::new("1", "Purge Cache"),
                     MenuEntry::new("2", "Cancel"),
                 ];
                 let mut c_sel = 1;
@@ -1075,20 +1075,25 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
     let mut selected = 0;
 
     loop {
+        let cache = CacheManager::new(paths);
+        let size = cache.get_cache_size();
+        let mb = (size as f64) / (1024.0 * 1024.0);
+
         let width = get_content_width(80);
         let header = format!(
-            "{}\r\n{}\r\n{}\r\n Auxiliary utilities for diagnostics, background daemon, and cache.\r\n{}",
+            "{}\r\n{}\r\n{}\r\n Auxiliary utilities for diagnostics, daemon, and cache.\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("TOOLS & UTILITIES", width, false).cyan().bold(),
+            box_title("TOOLS", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             box_divider(width).dimmed(),
         );
 
+        let purge_label = format!("Purge Cache ({:.2} MB)", mb);
         let entries = vec![
-            MenuEntry::new("1", "Server Network Ping"),
-            MenuEntry::new("2", "Service Daemon Control"),
-            MenuEntry::new("3", "Cache & Storage Management"),
-            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
+            MenuEntry::new("1", "Server Ping"),
+            MenuEntry::new("2", "Daemon Control"),
+            MenuEntry::new("3", purge_label),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -1099,7 +1104,45 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 daemon_menu(paths).await?;
             }
             Some(2) => {
-                cache_menu(paths)?;
+                let width = get_content_width(80);
+                let conf_header = format!(
+                    "{}\r\n{}\r\n{}\r\n Delete all cached jarfiles and archives ({:.2} MB)?\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title("CONFIRM CACHE PURGE", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    mb,
+                    box_divider(width).dimmed(),
+                );
+                let conf_entries = vec![
+                    MenuEntry::new("1", "Purge Cache"),
+                    MenuEntry::new("2", "Cancel"),
+                ];
+                let mut c_sel = 1;
+                if let Some(0) = run_menu(&conf_header, &conf_entries, &mut c_sel)? {
+                    match cache.clean_cache() {
+                        Ok(cleaned) => {
+                            let cl_mb = (cleaned as f64) / (1024.0 * 1024.0);
+                            show_modal_message(
+                                "CACHE PURGED",
+                                &[format!(
+                                    "[OK] Cleared {:.2} MB of downloaded caches.",
+                                    cl_mb
+                                )
+                                .green()
+                                .bold()
+                                .to_string()],
+                                false,
+                            )?;
+                        }
+                        Err(e) => {
+                            show_modal_message(
+                                "PURGE FAILED",
+                                &[format!("[ERROR] {}", e)],
+                                true,
+                            )?;
+                        }
+                    }
+                }
             }
             _ => return Ok(()),
         }

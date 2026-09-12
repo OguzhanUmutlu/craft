@@ -50,9 +50,9 @@ pub async fn manage_host_servers(
         );
 
         let warn_entries = vec![
-            MenuEntry::new("1", "Run Remote Bootstrap & Install Craft").with_aliases(&["b", "i"]),
-            MenuEntry::new("2", "Continue Anyway (Assume craft is in a custom path)").with_aliases(&["c"]),
-            MenuEntry::new("0", "Cancel & Return to Remote Hosts").with_aliases(&["q"]),
+            MenuEntry::new("1", "Bootstrap & Install Craft").with_aliases(&["b", "i"]),
+            MenuEntry::new("2", "Continue Anyway").with_aliases(&["c"]),
+            MenuEntry::new("0", "Cancel").with_aliases(&["q"]),
         ];
 
         let mut w_sel = 0;
@@ -126,7 +126,7 @@ pub async fn manage_host_servers(
             );
 
             let entries = vec![
-                MenuEntry::new("0", "Back to Remote Hosts").with_aliases(&["b", "q"]),
+                MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
             ];
 
             let mut empty_sel = 0;
@@ -174,7 +174,7 @@ pub async fn manage_host_servers(
             ));
         }
 
-        entries.push(MenuEntry::new("0", "Back to Remote Hosts").with_aliases(&["b", "q"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
 
         match run_menu(&header, &entries, &mut selected)? {
             Some(idx) if idx < servers.len() => {
