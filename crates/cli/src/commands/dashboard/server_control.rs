@@ -1,15 +1,13 @@
-use std::io::{self, Write};
 use colored::Colorize;
 
 use craft_backup::BackupEngine;
 use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
 use craft_daemon::DaemonClient;
 
-use crate::commands::run::run_foreground_server;
 use crate::commands::view::handle_view;
 use super::screen::{
-    box_divider, box_title, box_top, exec_console_action, get_content_width, run_menu,
-    show_modal_message, AltScreenGuard, MenuEntry,
+    box_divider, box_title, box_top, exec_console_action, get_content_width, print_in_place_status,
+    run_menu, show_modal_message, AltScreenGuard, MenuEntry,
 };
 use super::wizard::gui_create_server_wizard;
 
@@ -174,6 +172,13 @@ pub async fn quick_start_menu(paths: &CraftPaths) -> Result<()> {
                             .to_string(),
                     );
                 } else {
+                    let _ = print_in_place_status(
+                        "STARTING SERVER",
+                        &[
+                            format!("Initializing background daemon for '{}'...", server.name),
+                            "Launching server process in supervisor...".to_string(),
+                        ],
+                    );
                     match start_server_daemon(&server.name, paths).await {
                         Ok(_) => {
                             flash_status = Some(
@@ -297,6 +302,14 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
         match run_menu(&header, &entries, &mut sel)? {
             Some(idx) if idx < running_servers.len() => {
                 let server = running_servers[idx];
+                let _ = print_in_place_status(
+                    "STOPPING SERVER",
+                    &[
+                        format!("Stopping server '{}' gracefully...", server.name),
+                        "Saving worlds and player states...".to_string(),
+                        "Waiting for process termination...".to_string(),
+                    ],
+                );
                 match stop_server_daemon(&server.name, false, paths).await {
                     Ok(_) => {
                         flash_status = Some(
@@ -318,6 +331,13 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
             }
             Some(idx) if running_servers.len() > 1 && idx == running_servers.len() => {
                 // Stop ALL
+                let _ = print_in_place_status(
+                    "STOPPING SERVERS",
+                    &[
+                        "Stopping all running servers gracefully...".to_string(),
+                        "Saving worlds and player states...".to_string(),
+                    ],
+                );
                 let mut stopped = 0;
                 for s in &running_servers {
                     let _ = stop_server_daemon(&s.name, false, paths).await;
@@ -379,6 +399,13 @@ pub async fn restart_servers_menu(paths: &CraftPaths) -> Result<()> {
         match run_menu(&header, &entries, &mut sel)? {
             Some(idx) if idx < registry.servers.len() => {
                 let server = &registry.servers[idx];
+                let _ = print_in_place_status(
+                    "RESTARTING SERVER",
+                    &[
+                        format!("Restarting server '{}' gracefully...", server.name),
+                        "Saving worlds and re-launching daemon...".to_string(),
+                    ],
+                );
                 match restart_server_daemon(&server.name, false, paths).await {
                     Ok(_) => {
                         flash_status = Some(
@@ -400,6 +427,13 @@ pub async fn restart_servers_menu(paths: &CraftPaths) -> Result<()> {
             }
             Some(idx) if registry.servers.len() > 1 && idx == registry.servers.len() => {
                 // Restart ALL
+                let _ = print_in_place_status(
+                    "RESTARTING SERVERS",
+                    &[
+                        "Restarting all servers gracefully...".to_string(),
+                        "Saving worlds and player states...".to_string(),
+                    ],
+                );
                 let mut restarted = 0;
                 for s in &registry.servers {
                     let _ = restart_server_daemon(&s.name, false, paths).await;
@@ -538,23 +572,40 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
                     )?;
                 }
                 Some(1) => {
-                    let mut reg = ServersRegistry::load(paths)?;
-                    reg.remove(&server.path);
-                    reg.save(paths)?;
-                    if server.path.exists() {
-                        let _ = std::fs::remove_dir_all(&server.path);
+                    let second_header = format!(
+                        "{}\r\n{}\r\n{}\r\n WARNING: This will permanently erase server '{}' and ALL world data!\r\n Directory: {}\r\n This action is IRREVERSIBLE and CANNOT be undone.\r\n{}\r\n Are you ABSOLUTELY sure you want to proceed?\r\n{}",
+                        box_top(width).red().bold(),
+                        box_title("FINAL CONFIRMATION: PERMANENT REMOVAL", width, false).red().bold(),
+                        box_divider(width).red().bold(),
+                        server.name.red().bold(),
+                        server.path.display(),
+                        box_divider(width).dimmed(),
+                        box_divider(width).dimmed(),
+                    );
+                    let second_entries = vec![
+                        MenuEntry::new("1", "Cancel (Keep server and data safe)").with_aliases(&["0", "b"]),
+                        MenuEntry::new("2", format!("Confirm Permanent Deletion of '{}'", server.name)),
+                    ];
+                    let mut second_sel = 0;
+                    if let Some(1) = run_menu(&second_header, &second_entries, &mut second_sel)? {
+                        let mut reg = ServersRegistry::load(paths)?;
+                        reg.remove(&server.path);
+                        reg.save(paths)?;
+                        if server.path.exists() {
+                            let _ = std::fs::remove_dir_all(&server.path);
+                        }
+                        show_modal_message(
+                            "SERVER DELETED",
+                            &[format!(
+                                "[OK] Server '{}' and its directory permanently removed.",
+                                server.name
+                            )
+                            .green()
+                            .bold()
+                            .to_string()],
+                            false,
+                        )?;
                     }
-                    show_modal_message(
-                        "SERVER DELETED",
-                        &[format!(
-                            "[OK] Server '{}' and its directory permanently removed.",
-                            server.name
-                        )
-                        .green()
-                        .bold()
-                        .to_string()],
-                        false,
-                    )?;
                 }
                 _ => {}
             }
@@ -583,9 +634,9 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
         if registry.servers.is_empty() {
             let width = get_content_width(80);
             let header = format!(
-                "{}\r\n{}\r\n{}\r\n No servers currently registered on this host.\r\n{}",
+                "{}\r\n{}\r\n{}\r\n No servers currently registered on this local host.\r\n{}",
                 box_top(width).cyan().bold(),
-                box_title("REGISTERED SERVERS", width, false).cyan().bold(),
+                box_title("LOCAL SERVERS (HOST)", width, false).cyan().bold(),
                 box_divider(width).cyan().bold(),
                 box_divider(width).dimmed(),
             );
@@ -609,10 +660,11 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Select a server to inspect details, control lifecycle, or attach console.\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("REGISTERED SERVERS", width, false).cyan().bold(),
+            box_title("LOCAL SERVERS (HOST)", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             box_divider(width).dimmed(),
         );
+
 
         let mut entries = Vec::new();
         for (idx, s) in registry.servers.iter().enumerate() {
@@ -733,26 +785,90 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
 
         header.push_str(&box_divider(width).dimmed().to_string());
 
-        let entries = vec![
-            MenuEntry::new("1", "Start Server (Background)"),
-            MenuEntry::new("2", "Start Server (Foreground)"),
-            MenuEntry::new("3", "Stop Server"),
-            MenuEntry::new("4", "Restart Server"),
-            MenuEntry::new("5", "Attach Live Console"),
-            MenuEntry::new("6", "Create World Backup"),
-            MenuEntry::new("7", "List Existing Backups"),
-            MenuEntry::new("8", "Delete Server"),
-            MenuEntry::new("0", "Back to Server List").with_aliases(&["b"]),
-        ];
+        enum ControlAction {
+            ToggleStartStop,
+            Restart,
+            AttachConsole,
+            CreateBackup,
+            ListBackups,
+            DeleteServer,
+        }
+
+        let mut entries = Vec::new();
+        let mut actions = Vec::new();
+
+        if is_running {
+            entries.push(MenuEntry::new("1", "Stop Server"));
+            actions.push(ControlAction::ToggleStartStop);
+
+            entries.push(MenuEntry::new("2", "Restart Server"));
+            actions.push(ControlAction::Restart);
+
+            entries.push(MenuEntry::new("3", "Attach Live Console"));
+            actions.push(ControlAction::AttachConsole);
+        } else {
+            entries.push(MenuEntry::new("1", "Start Server"));
+            actions.push(ControlAction::ToggleStartStop);
+        }
+
+        let bkp_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(bkp_hotkey, "Create World Backup"));
+        actions.push(ControlAction::CreateBackup);
+
+        let list_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(list_hotkey, "List Existing Backups"));
+        actions.push(ControlAction::ListBackups);
+
+        let del_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(del_hotkey, "Delete Server"));
+        actions.push(ControlAction::DeleteServer);
+
+        entries.push(MenuEntry::new("0", "Back to Server List").with_aliases(&["b"]));
 
         let sel = run_menu(&header, &entries, &mut selected)?;
 
-        match sel {
-            Some(0) => {
-                // Start background
+        let action = match sel {
+            Some(idx) if idx < actions.len() => &actions[idx],
+            _ => return Ok(()),
+        };
+
+        match action {
+            ControlAction::ToggleStartStop => {
                 if is_running {
-                    flash_status = Some(format!("[INFO] Server '{}' is already running.", server.name).yellow().bold().to_string());
+                    let _ = print_in_place_status(
+                        "STOPPING SERVER",
+                        &[
+                            format!("Stopping server '{}' gracefully...", server.name),
+                            "Saving world and player data...".to_string(),
+                            "Waiting for process termination...".to_string(),
+                        ],
+                    );
+                    match stop_server_daemon(&server.name, false, paths).await {
+                        Ok(_) => {
+                            flash_status = Some(
+                                format!("[OK] Server '{}' stopped.", server.name)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
+                        Err(e) => {
+                            flash_status = Some(
+                                format!("[ERROR] Failed to stop server: {}", e)
+                                    .red()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
+                    }
                 } else {
+                    let _ = print_in_place_status(
+                        "STARTING SERVER",
+                        &[
+                            format!("Starting server '{}' in background daemon...", server.name),
+                            "Initializing supervisor process...".to_string(),
+                        ],
+                    );
                     match start_server_daemon(&server.name, paths).await {
                         Ok(_) => {
                             flash_status = Some(
@@ -773,83 +889,14 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     }
                 }
             }
-            Some(1) => {
-                // Start foreground
-                if is_running {
-                    flash_status = Some(
-                        format!("[INFO] Server '{}' is already running. Stop it before starting in foreground.", server.name)
-                            .yellow()
-                            .bold()
-                            .to_string(),
-                    );
-                } else {
-                    let server_path = server.path.clone();
-                    let server_name = server.name.clone();
-                    let res = exec_console_action(|| async {
-                        let width = get_content_width(80);
-                        let title = format!("SERVER CONSOLE (FOREGROUND): {}", server_name);
-                        println!("{}", box_top(width).cyan().bold());
-                        println!("{}", box_title(&title, width, false).cyan().bold());
-                        println!("{}", box_divider(width).cyan().bold());
-                        println!(" {}", "Type commands below  |  Press Ctrl+C or type 'stop' to safely stop the server".dimmed());
-                        println!("{}\r\n", box_divider(width).dimmed());
-                        let _ = io::stdout().flush();
-                        run_foreground_server(&server_path).await
-                    })
-                    .await;
-
-                    match res {
-                        Ok(_) => {
-                            flash_status = Some(
-                                format!("[OK] Foreground server '{}' has stopped.", server_name)
-                                    .green()
-                                    .bold()
-                                    .to_string(),
-                            );
-                        }
-                        Err(e) => {
-                            flash_status = Some(
-                                format!("[ERROR] Server process ended: {}", e)
-                                    .red()
-                                    .bold()
-                                    .to_string(),
-                            );
-                        }
-                    }
-                }
-            }
-            Some(2) => {
-                // Stop
-                if !is_running {
-                    flash_status = Some(
-                        format!("[INFO] Server '{}' is not currently running.", server.name)
-                            .yellow()
-                            .bold()
-                            .to_string(),
-                    );
-                } else {
-                    match stop_server_daemon(&server.name, false, paths).await {
-                        Ok(_) => {
-                            flash_status = Some(
-                                format!("[OK] Server '{}' stopped.", server.name)
-                                    .green()
-                                    .bold()
-                                    .to_string(),
-                            );
-                        }
-                        Err(e) => {
-                            flash_status = Some(
-                                format!("[ERROR] Failed to stop server: {}", e)
-                                    .red()
-                                    .bold()
-                                    .to_string(),
-                            );
-                        }
-                    }
-                }
-            }
-            Some(3) => {
-                // Restart
+            ControlAction::Restart => {
+                let _ = print_in_place_status(
+                    "RESTARTING SERVER",
+                    &[
+                        format!("Stopping server '{}' gracefully...", server.name),
+                        "Re-launching server via background daemon...".to_string(),
+                    ],
+                );
                 match restart_server_daemon(&server.name, false, paths).await {
                     Ok(_) => {
                         flash_status = Some(
@@ -869,39 +916,37 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     }
                 }
             }
-            Some(4) => {
-                // View live console
-                if !is_running {
-                    flash_status = Some(
-                        format!("[INFO] Server '{}' is not currently running.", server.name)
-                            .yellow()
-                            .bold()
-                            .to_string(),
-                    );
-                } else {
-                    let server_name = server.name.clone();
-                    let _ = exec_console_action(|| async {
-                        let width = get_content_width(80);
-                        let title = format!("ATTACHED CONSOLE: {}", server_name);
-                        println!("{}", box_top(width).cyan().bold());
-                        println!("{}", box_title(&title, width, false).cyan().bold());
-                        println!("{}", box_divider(width).cyan().bold());
-                        println!(" {}", "Type commands to send to server  |  Press Ctrl+C to detach and return to TUI".dimmed());
-                        println!("{}\r\n", box_divider(width).dimmed());
-                        let _ = io::stdout().flush();
-                        handle_view(&server_name, None, paths).await
-                    })
-                    .await;
-                    flash_status = Some(
-                        format!("[OK] Detached from '{}' console.", server.name)
-                            .green()
-                            .bold()
-                            .to_string(),
-                    );
+            ControlAction::AttachConsole => {
+                let server_name = server.name.clone();
+                let server_path = server.path.clone();
+                let res = super::screen::run_virtual_console(&server_name, &server_path, paths).await;
+                match res {
+                    Ok(_) => {
+                        flash_status = Some(
+                            format!("[OK] Detached from '{}' console.", server_name)
+                                .green()
+                                .bold()
+                                .to_string(),
+                        );
+                    }
+                    Err(e) => {
+                        flash_status = Some(
+                            format!("[ERROR] Console session: {}", e)
+                                .red()
+                                .bold()
+                                .to_string(),
+                        );
+                    }
                 }
             }
-            Some(5) => {
-                // Create backup
+            ControlAction::CreateBackup => {
+                let _ = print_in_place_status(
+                    "CREATING BACKUP",
+                    &[
+                        format!("Creating world snapshot for '{}'...", server.name),
+                        "Compressing server files and world data...".to_string(),
+                    ],
+                );
                 let engine = BackupEngine::new(paths);
                 match engine
                     .create_backup(&server.name, &server.path, None, false)
@@ -928,8 +973,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     }
                 }
             }
-            Some(6) => {
-                // List backups
+            ControlAction::ListBackups => {
                 let engine = BackupEngine::new(paths);
                 let list = engine.list_backups(&server.name);
                 if list.is_empty() {
@@ -952,8 +996,7 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     show_modal_message("EXISTING BACKUPS", &lines, false)?;
                 }
             }
-            Some(7) => {
-                // Delete server
+            ControlAction::DeleteServer => {
                 let width = get_content_width(80);
                 let confirm_header = format!(
                     "{}\r\n{}\r\n{}\r\n Are you sure you want to remove server '{}'?\r\n{}",
@@ -985,26 +1028,43 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                         return Ok(());
                     }
                     Some(1) => {
-                        let mut reg = ServersRegistry::load(paths)?;
-                        reg.remove(&server.path);
-                        reg.save(paths)?;
-                        if server.path.exists() {
-                            let _ = std::fs::remove_dir_all(&server.path);
+                        // SECOND CONFIRMATION
+                        let second_header = format!(
+                            "{}\r\n{}\r\n{}\r\n WARNING: This will permanently erase server '{}' and ALL world data!\r\n Directory: {}\r\n This action is IRREVERSIBLE and CANNOT be undone.\r\n{}\r\n Are you ABSOLUTELY sure you want to proceed?\r\n{}",
+                            box_top(width).red().bold(),
+                            box_title("FINAL CONFIRMATION: PERMANENT REMOVAL", width, false).red().bold(),
+                            box_divider(width).red().bold(),
+                            server.name.red().bold(),
+                            server.path.display(),
+                            box_divider(width).dimmed(),
+                            box_divider(width).dimmed(),
+                        );
+                        let second_entries = vec![
+                            MenuEntry::new("1", "Cancel (Keep server and data safe)").with_aliases(&["0", "b"]),
+                            MenuEntry::new("2", format!("Confirm Permanent Deletion of '{}'", server.name)),
+                        ];
+                        let mut second_sel = 0;
+                        if let Some(1) = run_menu(&second_header, &second_entries, &mut second_sel)? {
+                            let mut reg = ServersRegistry::load(paths)?;
+                            reg.remove(&server.path);
+                            reg.save(paths)?;
+                            if server.path.exists() {
+                                let _ = std::fs::remove_dir_all(&server.path);
+                            }
+                            show_modal_message(
+                                "SERVER DELETED",
+                                &[format!(
+                                    "[OK] Server '{}' and directory permanently removed.",
+                                    server.name
+                                )],
+                                false,
+                            )?;
+                            return Ok(());
                         }
-                        show_modal_message(
-                            "SERVER DELETED",
-                            &[format!(
-                                "[OK] Server '{}' and directory removed.",
-                                server.name
-                            )],
-                            false,
-                        )?;
-                        return Ok(());
                     }
                     _ => {}
                 }
             }
-            _ => return Ok(()),
         }
     }
 }

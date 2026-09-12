@@ -406,7 +406,7 @@ pub async fn handle_new(
             .default(0)
             .interact()?
     } else {
-        1 // Foreground by default in non-interactive
+        0 // Background Daemon by default in non-interactive
     };
 
     match start_choice {

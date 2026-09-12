@@ -63,7 +63,15 @@ impl CacheManager {
         if let Some(parent) = target_file.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::copy(&cached, &target_file)?;
+        if target_file.exists() {
+            let _ = fs::remove_file(&target_file);
+        }
+
+        // Try hardlink first to share disk blocks and save storage across servers
+        if fs::hard_link(&cached, &target_file).is_err() {
+            // Fallback to copy if cross-filesystem (EXDEV) or unsupported
+            fs::copy(&cached, &target_file)?;
+        }
 
         Ok(target_file)
     }
@@ -194,3 +202,46 @@ fn compute_sha256(path: &Path) -> Result<String> {
     }
     Ok(hex::encode(hasher.finalize()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cache_hardlink_and_fallback() {
+        let temp_dir = std::env::temp_dir().join(format!("craft_test_cache_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        let cache_dir = temp_dir.join("cache");
+        let server_dir = temp_dir.join("server");
+        fs::create_dir_all(&cache_dir).unwrap();
+        fs::create_dir_all(&server_dir).unwrap();
+
+        let cached_file = cache_dir.join("paper-1.21.4.jar");
+        fs::write(&cached_file, b"test-minecraft-jar-content").unwrap();
+
+        let target_file = server_dir.join("server.jar");
+        if target_file.exists() {
+            let _ = fs::remove_file(&target_file);
+        }
+
+        if fs::hard_link(&cached_file, &target_file).is_err() {
+            fs::copy(&cached_file, &target_file).unwrap();
+        }
+
+        assert!(target_file.exists());
+        assert_eq!(fs::read(&target_file).unwrap(), b"test-minecraft-jar-content");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let meta1 = fs::metadata(&cached_file).unwrap();
+            let meta2 = fs::metadata(&target_file).unwrap();
+            if meta1.dev() == meta2.dev() {
+                assert_eq!(meta1.ino(), meta2.ino());
+            }
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+}
+

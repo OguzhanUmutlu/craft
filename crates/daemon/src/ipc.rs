@@ -300,39 +300,66 @@ impl DaemonClient {
         }
     }
 
-    pub async fn attach_console(mut self, path: &Path) -> Result<()> {
+    pub async fn attach_console_stream(
+        mut self,
+        path: &Path,
+    ) -> Result<(String, tokio::sync::mpsc::Sender<String>, tokio::sync::mpsc::Receiver<String>)> {
         write_frame(&mut self.stream, &IpcRequest::AttachConsole { path: path.to_path_buf() }).await?;
 
         // Read initial response (should be LogBacklog)
-        match read_frame::<_, IpcResponse>(&mut self.stream).await? {
-            Some(IpcResponse::LogBacklog { data, .. }) => {
-                print!("{}", data);
-                let _ = std::io::Write::flush(&mut std::io::stdout());
-            }
+        let initial_data = match read_frame::<_, IpcResponse>(&mut self.stream).await? {
+            Some(IpcResponse::LogBacklog { data, .. }) => data,
             Some(IpcResponse::Error { error }) => return Err(CraftError::Other(error)),
             _ => return Err(CraftError::Ipc("Expected log backlog from daemon".to_string())),
-        }
-
-        println!("\x1b[36m--- Attached to server console (Type 'stop' or commands, press Ctrl+C to exit) ---\x1b[0m");
+        };
 
         let (mut reader, mut writer) = tokio::io::split(self.stream);
         let path_clone = path.to_path_buf();
 
-        let rx_task = tokio::spawn(async move {
+        let (tx_to_daemon, mut rx_from_client) = tokio::sync::mpsc::channel::<String>(64);
+        let (tx_to_client, rx_from_daemon) = tokio::sync::mpsc::channel::<String>(256);
+
+        tokio::spawn(async move {
             while let Ok(Some(resp)) = read_frame::<_, IpcResponse>(&mut reader).await {
                 if let IpcResponse::LogChunk { data, .. } = resp {
-                    print!("{}", data);
-                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                    if tx_to_client.send(data).await.is_err() {
+                        break;
+                    }
                 }
+            }
+        });
+
+        tokio::spawn(async move {
+            while let Some(line) = rx_from_client.recv().await {
+                let input = if line.ends_with('\n') { line } else { format!("{}\n", line) };
+                let req = IpcRequest::SendInput { path: path_clone.clone(), input };
+                if write_frame(&mut writer, &req).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        Ok((initial_data, tx_to_daemon, rx_from_daemon))
+    }
+
+    pub async fn attach_console(self, path: &Path) -> Result<()> {
+        let (backlog, tx_to_daemon, mut rx_from_daemon) = self.attach_console_stream(path).await?;
+        print!("{}", backlog);
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+
+        println!("\x1b[36m--- Attached to server console (Type 'stop' or commands, press Ctrl+C to exit) ---\x1b[0m");
+
+        let rx_task = tokio::spawn(async move {
+            while let Some(data) = rx_from_daemon.recv().await {
+                print!("{}", data);
+                let _ = std::io::Write::flush(&mut std::io::stdout());
             }
         });
 
         let tx_task = tokio::spawn(async move {
             let mut stdin = tokio::io::BufReader::new(tokio::io::stdin()).lines();
             while let Ok(Some(line)) = stdin.next_line().await {
-                let input = format!("{}\n", line);
-                let req = IpcRequest::SendInput { path: path_clone.clone(), input };
-                if write_frame(&mut writer, &req).await.is_err() {
+                if tx_to_daemon.send(line).await.is_err() {
                     break;
                 }
             }

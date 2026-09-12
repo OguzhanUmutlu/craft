@@ -3,12 +3,14 @@ pub mod theme;
 pub mod menu;
 pub mod input;
 pub mod modal;
+pub mod console;
 
 pub use terminal::*;
 pub use theme::*;
 pub use menu::*;
 pub use input::*;
 pub use modal::*;
+pub use console::*;
 
 use std::io;
 use std::sync::atomic::{AtomicUsize, Ordering};

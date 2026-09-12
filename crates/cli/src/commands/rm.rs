@@ -110,6 +110,19 @@ pub async fn handle_rm(
                 println!("{}", "Operation cancelled. Files have NOT been deleted.".cyan());
                 return Ok(());
             }
+
+            let double_confirmed = Confirm::with_theme(&theme)
+                .with_prompt(format!(
+                    "FINAL CONFIRMATION: Are you ABSOLUTELY sure? All world data and configs in '{}' will be lost forever!",
+                    server_path.display()
+                ))
+                .default(false)
+                .interact()?;
+
+            if !double_confirmed {
+                println!("{}", "Operation cancelled on final confirmation. Files have NOT been deleted.".cyan());
+                return Ok(());
+            }
         }
 
         fs::remove_dir_all(&server_path)?;

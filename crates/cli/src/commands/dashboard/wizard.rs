@@ -1,6 +1,7 @@
 use colored::Colorize;
 
 use craft_core::{CraftPaths, Result, ServersRegistry};
+use craft_daemon::DaemonClient;
 use craft_providers::get_all_softwares;
 
 use crate::commands::new::handle_new;
@@ -531,7 +532,7 @@ pub async fn gui_create_server_wizard_with_name(
         Some(&memory),
         true,       // agree_eula
         false,      // tmp
-        !start_now, // no_start
+        true,       // no_start: wizard manages starting via daemon directly
         true,       // yes = true (non-interactive execution)
         true,       // aikar G1GC flags
         false,      // zgc
@@ -543,6 +544,14 @@ pub async fn gui_create_server_wizard_with_name(
 
     match res {
         Ok(_) => {
+            if start_now {
+                let s_path = paths.servers_dir.join(&server_name);
+                let _ = DaemonClient::ensure_daemon_started(paths).await;
+                if let Ok(mut client) = DaemonClient::connect(paths).await {
+                    let _ = client.start_server(&s_path).await;
+                }
+            }
+
             let status_note = if start_now {
                 "[RUNNING] Server has started in the background daemon."
                     .green()

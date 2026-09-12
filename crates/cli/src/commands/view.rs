@@ -55,14 +55,19 @@ pub async fn handle_view(
     }
 
     let registry = ServersRegistry::load(paths)?;
-    if registry.find_by_path(&server_path).is_none() {
-        return Err(CraftError::ServerNotFound(format!(
+    let entry = registry.find_by_path(&server_path).ok_or_else(|| {
+        CraftError::ServerNotFound(format!(
             "Server '{}' is not registered.",
             server_path.display()
-        )));
-    }
+        ))
+    })?;
 
-    println!("{}", format!("Attaching to console for '{}'...", server_path.display()).cyan());
-    client.attach_console(&server_path).await?;
+    let s_name = entry.name.clone();
+    if std::io::stdout().is_terminal() {
+        crate::commands::dashboard::screen::run_virtual_console(&s_name, &server_path, paths).await?;
+    } else {
+        println!("{}", format!("Attaching to console for '{}'...", server_path.display()).cyan());
+        client.attach_console(&server_path).await?;
+    }
     Ok(())
 }

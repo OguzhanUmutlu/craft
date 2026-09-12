@@ -148,8 +148,10 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
             MenuEntry::new("1", "Create World Snapshot"),
             MenuEntry::new("2", "List Existing Backups"),
             MenuEntry::new("3", "Restore Server from Backup"),
+            MenuEntry::new("4", "Enterprise Cloud & Auto-Backup Policies"),
             MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
         ];
+
 
         match run_menu(&header, &entries, &mut selected)? {
             Some(0) => {
@@ -281,7 +283,24 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                 if let Some(idx) = run_menu(s_header, &s_entries, &mut s_sel)? {
                     if idx < registry.servers.len() {
                         let server = &registry.servers[idx];
+
+                        if craft_core::is_server_locked(&server.path) || craft_core::get_server_running_pid(&server.path).is_some() {
+                            let pid_info = craft_core::get_server_running_pid(&server.path).map(|p| format!(" (PID: {})", p)).unwrap_or_default();
+                            show_modal_message(
+                                "RESTORE BLOCKED: SERVER IS RUNNING",
+                                &[
+                                    format!("Cannot restore backup to server '{}': The server is currently RUNNING{}.", server.name, pid_info),
+                                    "You MUST stop the server before restoring a backup to prevent world corruption.".to_string(),
+                                    "".to_string(),
+                                    "Please stop the server first, then try restoring again.".to_string(),
+                                ],
+                                true,
+                            )?;
+                            continue;
+                        }
+
                         let engine = BackupEngine::new(paths);
+
                         let list = engine.list_backups(&server.name);
 
                         let mut b_entries = Vec::new();
@@ -356,10 +375,14 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                     }
                 }
             }
+            Some(3) => {
+                super::cloud_backups::enterprise_backups_menu(paths).await?;
+            }
             _ => return Ok(()),
         }
     }
 }
+
 
 pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
@@ -1022,3 +1045,48 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
         }
     }
 }
+
+pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let mut selected = 0;
+
+    loop {
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Auxiliary utilities for backups, plugin management, diagnostics, and daemon.\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("TOOLS & UTILITIES", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "World Snapshots & Backups"),
+            MenuEntry::new("2", "Browse & Install Plugins"),
+            MenuEntry::new("3", "Server Network Ping"),
+            MenuEntry::new("4", "Service Daemon Control"),
+            MenuEntry::new("5", "Cache & Storage Management"),
+            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                backups_menu(paths).await?;
+            }
+            Some(1) => {
+                plugins_menu(paths).await?;
+            }
+            Some(2) => {
+                ping_menu().await?;
+            }
+            Some(3) => {
+                daemon_menu(paths).await?;
+            }
+            Some(4) => {
+                cache_menu(paths)?;
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+

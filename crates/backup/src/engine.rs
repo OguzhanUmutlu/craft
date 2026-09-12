@@ -107,6 +107,16 @@ impl BackupEngine {
             return Err(CraftError::InvalidPath(backup_file.to_string_lossy().to_string()));
         }
 
+        // Strict safety check: Never restore a backup while server is running!
+        if craft_core::process::is_server_locked(server_path)
+            || craft_core::process::get_server_running_pid(server_path).is_some()
+        {
+            return Err(CraftError::Other(format!(
+                "Cannot restore backup to server at '{}': The server is currently running. You MUST stop the server before restoring a backup to prevent world corruption.",
+                server_path.display()
+            )));
+        }
+
         let file = File::open(backup_file)?;
         let gz = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(gz);
@@ -117,7 +127,35 @@ impl BackupEngine {
 
         Ok(())
     }
+
+    /// Downloads a backup from a storage provider and restores it safely
+    pub async fn restore_from_provider<P: crate::providers::StorageProvider>(
+        &self,
+        provider: &P,
+        remote_key: &str,
+        server_path: &Path,
+    ) -> Result<()> {
+        // Strict safety check upfront before downloading
+        if craft_core::process::is_server_locked(server_path)
+            || craft_core::process::get_server_running_pid(server_path).is_some()
+        {
+            return Err(CraftError::Other(format!(
+                "Cannot restore backup to server at '{}': The server is currently running. You MUST stop the server before restoring a backup to prevent world corruption.",
+                server_path.display()
+            )));
+        }
+
+        let temp_dir = tempfile::tempdir()
+            .map_err(|e| CraftError::Other(format!("Failed to create temporary directory for restore: {}", e)))?;
+        let temp_file = temp_dir.path().join("downloaded_backup.tar.gz");
+
+        provider.download_file(remote_key, &temp_file).await?;
+        self.restore_backup(&temp_file, server_path)?;
+
+        Ok(())
+    }
 }
+
 
 fn should_exclude(rel_path: &Path) -> bool {
     let components: Vec<_> = rel_path.iter().map(|c| c.to_string_lossy().to_string()).collect();
@@ -272,4 +310,36 @@ mod tests {
         assert!(!restore_world.join("server.jar").exists());
         assert!(!restore_world.join("logs/latest.log").exists());
     }
+
+    #[test]
+    fn test_restore_fails_when_server_is_running() {
+        let tmp = tempdir().unwrap();
+        let server_dir = tmp.path().join("server");
+        fs::create_dir_all(&server_dir).unwrap();
+        fs::write(server_dir.join("world.txt"), b"original").unwrap();
+
+        // Create a backup archive
+        let archive_path = tmp.path().join("backup.tar.gz");
+        compress_server_directory(&server_dir, &archive_path, false).unwrap();
+
+        // Simulate server running by locking it with ServerLockGuard
+        let guard = craft_core::process::ServerLockGuard::acquire(&server_dir).unwrap();
+
+        let engine = BackupEngine {
+            backups_dir: tmp.path().join("backups"),
+        };
+
+        // Restoring should fail because server is running/locked
+        let result = engine.restore_backup(&archive_path, &server_dir);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("server is currently running"));
+
+        drop(guard);
+
+        // Once dropped, restore should succeed
+        let result_ok = engine.restore_backup(&archive_path, &server_dir);
+        assert!(result_ok.is_ok());
+    }
 }
+

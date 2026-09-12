@@ -105,4 +105,30 @@ impl<'a> SftpOps<'a> {
             false
         }
     }
+
+    pub fn read_file_to_string(&self, remote_path: &Path) -> Result<String> {
+        let sftp = self.session.sftp()?;
+        let mut file = sftp.open(remote_path)
+            .map_err(|e| CraftError::Other(format!("Failed to open remote file '{}': {}", remote_path.display(), e)))?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)
+            .map_err(|e| CraftError::Other(format!("Failed to read remote file: {}", e)))?;
+        Ok(content)
+    }
+
+    pub fn list_dir(&self, remote_path: &Path) -> Result<Vec<(String, ssh2::FileStat)>> {
+        let sftp = self.session.sftp()?;
+        let entries = sftp.readdir(remote_path)
+            .map_err(|e| CraftError::Other(format!("Failed to readdir '{}': {}", remote_path.display(), e)))?;
+        let mut result = Vec::new();
+        for (path, stat) in entries {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name != "." && name != ".." {
+                    result.push((name.to_string(), stat));
+                }
+            }
+        }
+        Ok(result)
+    }
 }
+

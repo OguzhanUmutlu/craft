@@ -134,7 +134,10 @@ pub fn auto_heal_server_file<P: AsRef<Path>>(server_dir: P, target_filename: &st
     candidates.sort_by_key(|(_, size)| std::cmp::Reverse(*size));
 
     if let Some((best_path, _)) = candidates.first() {
-        if fs::copy(best_path, &target).is_ok() {
+        if target.exists() {
+            let _ = fs::remove_file(&target);
+        }
+        if fs::hard_link(best_path, &target).is_ok() || fs::copy(best_path, &target).is_ok() {
             return best_path.file_name().and_then(|n| n.to_str()).map(|s| s.to_string());
         }
     }

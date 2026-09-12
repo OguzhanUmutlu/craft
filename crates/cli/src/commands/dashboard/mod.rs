@@ -2,6 +2,8 @@ pub mod screen;
 pub mod server_control;
 pub mod tools;
 pub mod wizard;
+pub mod remote_tui;
+pub mod cloud_backups;
 
 use std::io::{self, IsTerminal};
 use colored::Colorize;
@@ -14,6 +16,12 @@ pub use screen::*;
 pub use server_control::*;
 pub use tools::*;
 pub use wizard::*;
+pub use remote_tui::remote_servers_menu;
+
+
+
+
+
 
 pub(crate) fn get_system_summary() -> (String, f64, f64, f64) {
     let mut sys = System::new();
@@ -113,19 +121,11 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Manage Servers"),
-            MenuEntry::new("2", "Create New Server"),
-            MenuEntry::new("3", "Quick Start Server"),
-            MenuEntry::new("4", "Stop Running Server"),
-            MenuEntry::new("5", "Restart Server"),
-            MenuEntry::new("6", "Attach Live Console"),
-            MenuEntry::new("7", "Server Network Ping"),
-            MenuEntry::new("8", "World Snapshots & Backups"),
-            MenuEntry::new("9", "Browse & Install Plugins"),
-            MenuEntry::new("r", "Remote VPS Hosts"),
-            MenuEntry::new("d", "Service Daemon Control"),
-            MenuEntry::new("c", "Cache & Storage Management"),
-            MenuEntry::new("0", "Exit Craft"),
+            MenuEntry::new("1", "Local Servers"),
+            MenuEntry::new("2", "Remote Servers"),
+            MenuEntry::new("3", "Create New Server").with_aliases(&["c", "n"]),
+            MenuEntry::new("4", "Tools & Utilities").with_aliases(&["t", "u"]),
+            MenuEntry::new("0", "Exit Craft").with_aliases(&["q"]),
         ];
 
         let selection = run_menu(&header, &entries, &mut selected_main)?;
@@ -135,39 +135,15 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                 manage_servers_menu(paths).await?;
             }
             Some(1) => {
-                gui_create_server_wizard(paths).await?;
+                remote_servers_menu(paths).await?;
             }
             Some(2) => {
-                quick_start_menu(paths).await?;
+                gui_create_server_wizard(paths).await?;
             }
             Some(3) => {
-                stop_servers_menu(paths).await?;
+                tools_menu(paths).await?;
             }
-            Some(4) => {
-                restart_servers_menu(paths).await?;
-            }
-            Some(5) => {
-                view_servers_menu(paths).await?;
-            }
-            Some(6) => {
-                ping_menu().await?;
-            }
-            Some(7) => {
-                backups_menu(paths).await?;
-            }
-            Some(8) => {
-                plugins_menu(paths).await?;
-            }
-            Some(9) => {
-                remotes_menu(paths).await?;
-            }
-            Some(10) => {
-                daemon_menu(paths).await?;
-            }
-            Some(11) => {
-                cache_menu(paths)?;
-            }
-            Some(12) | None => {
+            Some(4) | None => {
                 break;
             }
             _ => break,
@@ -176,3 +152,4 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
 
     Ok(())
 }
+
