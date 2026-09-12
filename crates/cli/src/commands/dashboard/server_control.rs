@@ -8,8 +8,8 @@ use craft_daemon::DaemonClient;
 use crate::commands::run::run_foreground_server;
 use crate::commands::view::handle_view;
 use super::screen::{
-    box_divider, box_title, box_top, exec_console_action, get_content_width, print_in_place_status,
-    run_menu, show_modal_message, AltScreenGuard, MenuEntry,
+    box_divider, box_title, box_top, exec_console_action, get_content_width, run_menu,
+    show_modal_message, AltScreenGuard, MenuEntry,
 };
 use super::wizard::gui_create_server_wizard;
 
@@ -24,7 +24,7 @@ pub async fn show_empty_servers_modal(paths: &CraftPaths) -> Result<bool> {
     );
 
     let entries = vec![
-        MenuEntry::new("1", "Create Your First Server (Setup Wizard)").with_aliases(&["c", "n"]),
+        MenuEntry::new("1", "Create Your First Server").with_aliases(&["c", "n"]),
         MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]),
     ];
 
@@ -96,327 +96,325 @@ pub(crate) async fn restart_server_daemon(
 
 pub async fn quick_start_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
-    let registry = ServersRegistry::load(paths)?;
-    if registry.servers.is_empty() {
-        show_empty_servers_modal(paths).await?;
-        return Ok(());
-    }
-
-    let running_paths = if DaemonClient::is_daemon_running(paths) {
-        if let Ok(mut c) = DaemonClient::connect(paths).await {
-            c.get_running().await.unwrap_or_default()
-        } else {
-            Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
-
-    let mut entries = Vec::new();
-    for (i, s) in registry.servers.iter().enumerate() {
-        let is_running = running_paths.contains(&s.path)
-            || s.path
-                .canonicalize()
-                .map(|p| running_paths.contains(&p))
-                .unwrap_or(false)
-            || craft_core::is_server_locked(&s.path);
-        let status_badge = if is_running {
-            "[ALREADY RUNNING]".green().to_string()
-        } else {
-            "[STOPPED]".dimmed().to_string()
-        };
-        let hotkey = if i < 9 {
-            (i + 1).to_string()
-        } else {
-            ((b'a' + (i - 9) as u8) as char).to_string()
-        };
-        entries.push(MenuEntry::new(
-            hotkey,
-            format!(
-                "{:<20} {:<10} {:<10} {}",
-                s.name, s.software, s.version, status_badge
-            ),
-        ));
-    }
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
-
     let mut sel = 0;
-    let width = get_content_width(80);
-    let header = format!(
-        "{}\r\n{}\r\n{}\r\n  Select a server to start in the background:\r\n{}",
-        box_top(width),
-        box_title("QUICK START SERVER", width, false),
-        box_divider(width),
-        box_divider(width)
-    );
+    let mut flash_status: Option<String> = None;
 
-    if let Some(idx) = run_menu(&header, &entries, &mut sel)? {
-        if idx < registry.servers.len() {
-            let server = &registry.servers[idx];
-            let is_running = running_paths.contains(&server.path)
-                || server
-                    .path
-                    .canonicalize()
-                    .map(|p| running_paths.contains(&p))
-                    .unwrap_or(false)
-                || craft_core::is_server_locked(&server.path);
-            if is_running {
-                show_modal_message(
-                    "SERVER ALREADY RUNNING",
-                    &[
-                        format!("Server '{}' is already running!", server.name),
-                        "Use 'Attach Live Console' or 'Stop Server' from the dashboard."
-                            .to_string(),
-                    ],
-                    false,
-                )?;
-            } else {
-                print_in_place_status(
-                    "STARTING SERVER",
-                    &[format!(
-                        "Starting server '{}' in background daemon...",
-                        server.name
-                    )],
-                )?;
-                match start_server_daemon(&server.name, paths).await {
-                    Ok(_) => {
-                        show_modal_message(
-                            "SERVER STARTED",
-                            &[
-                                format!("[OK] Server '{}' started successfully!", server.name)
-                                    .green()
-                                    .bold()
-                                    .to_string(),
-                                format!("Platform: {} {}", server.software, server.version),
-                                format!("Path:     {}", server.path.display()),
-                            ],
-                            false,
-                        )?;
-                    }
-                    Err(e) => {
-                        show_modal_message(
-                            "START FAILED",
-                            &[format!(
-                                "[ERROR] Failed to start server '{}': {}",
-                                server.name, e
-                            )],
-                            true,
-                        )?;
-                    }
-                }
-            }
+    loop {
+        let registry = ServersRegistry::load(paths)?;
+        if registry.servers.is_empty() {
+            show_empty_servers_modal(paths).await?;
+            return Ok(());
         }
-    }
-    Ok(())
-}
 
-pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
-    let _guard = AltScreenGuard::enter();
-    let registry = ServersRegistry::load(paths)?;
-    if registry.servers.is_empty() {
-        show_empty_servers_modal(paths).await?;
-        return Ok(());
-    }
-
-    let running_paths = if DaemonClient::is_daemon_running(paths) {
-        if let Ok(mut c) = DaemonClient::connect(paths).await {
-            c.get_running().await.unwrap_or_default()
+        let running_paths = if DaemonClient::is_daemon_running(paths) {
+            if let Ok(mut c) = DaemonClient::connect(paths).await {
+                c.get_running().await.unwrap_or_default()
+            } else {
+                Vec::new()
+            }
         } else {
             Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
+        };
 
-    let running_servers: Vec<_> = registry
-        .servers
-        .iter()
-        .filter(|s| {
-            running_paths.contains(&s.path)
+        let mut entries = Vec::new();
+        for (i, s) in registry.servers.iter().enumerate() {
+            let is_running = running_paths.contains(&s.path)
                 || s.path
                     .canonicalize()
                     .map(|p| running_paths.contains(&p))
                     .unwrap_or(false)
-                || craft_core::is_server_locked(&s.path)
-        })
-        .collect();
+                || craft_core::is_server_locked(&s.path);
+            let status_badge = if is_running {
+                "[ALREADY RUNNING]".green().to_string()
+            } else {
+                "[STOPPED]".dimmed().to_string()
+            };
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            };
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!(
+                    "{:<20} {:<10} {:<10} {}",
+                    s.name, s.software, s.version, status_badge
+                ),
+            ));
+        }
+        entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
 
-    if running_servers.is_empty() {
-        show_modal_message(
-            "NO RUNNING SERVERS",
-            &[
-                "No servers are currently running on this host."
-                    .yellow()
-                    .to_string(),
-                "Use 'Quick Start Server' to launch one.".to_string(),
-            ],
-            false,
-        )?;
-        return Ok(());
-    }
+        let width = get_content_width(80);
+        let mut header = format!(
+            "{}\r\n{}\r\n{}\r\n  Select a server to start in the background:\r\n",
+            box_top(width).cyan().bold(),
+            box_title("QUICK START SERVER", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+        );
+        if let Some(msg) = flash_status.take() {
+            header.push_str(&format!("  {}\r\n", msg));
+        }
+        header.push_str(&box_divider(width).dimmed().to_string());
 
-    let mut entries = Vec::new();
-    for (i, s) in running_servers.iter().enumerate() {
-        let hotkey = if i < 9 {
-            (i + 1).to_string()
-        } else {
-            ((b'a' + (i - 9) as u8) as char).to_string()
-        };
-        let status_str = if let Some(pid) = craft_core::get_server_running_pid(&s.path) {
-            format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
-        } else {
-            "[RUNNING]".green().bold().to_string()
-        };
-        entries.push(MenuEntry::new(
-            hotkey,
-            format!(
-                "{:<20} {:<10} {:<10} {}",
-                s.name,
-                s.software,
-                s.version,
-                status_str
-            ),
-        ));
-    }
-    entries.push(MenuEntry::new("a", "Stop ALL Running Servers"));
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
-
-    let mut sel = 0;
-    let width = get_content_width(80);
-    let header = format!(
-        "{}\r\n{}\r\n{}\r\n  Select a running server to stop gracefully:\r\n{}",
-        box_top(width),
-        box_title("STOP RUNNING SERVER", width, false),
-        box_divider(width),
-        box_divider(width)
-    );
-
-    if let Some(idx) = run_menu(&header, &entries, &mut sel)? {
-        if idx < running_servers.len() {
-            let server = running_servers[idx];
-            print_in_place_status(
-                "STOPPING SERVER",
-                &[format!(
-                    "Sending stop command to server '{}'...",
-                    server.name
-                )],
-            )?;
-            match stop_server_daemon(&server.name, false, paths).await {
-                Ok(_) => {
-                    show_modal_message(
-                        "SERVER STOPPED",
-                        &[format!(
-                            "[OK] Server '{}' stopped successfully.",
-                            server.name
-                        )
-                        .green()
-                        .bold()
-                        .to_string()],
-                        false,
-                    )?;
-                }
-                Err(e) => {
-                    show_modal_message(
-                        "STOP FAILED",
-                        &[format!(
-                            "[ERROR] Failed to stop server '{}': {}",
-                            server.name, e
-                        )],
-                        true,
-                    )?;
+        match run_menu(&header, &entries, &mut sel)? {
+            Some(idx) if idx < registry.servers.len() => {
+                let server = &registry.servers[idx];
+                let is_running = running_paths.contains(&server.path)
+                    || server
+                        .path
+                        .canonicalize()
+                        .map(|p| running_paths.contains(&p))
+                        .unwrap_or(false)
+                    || craft_core::is_server_locked(&server.path);
+                if is_running {
+                    flash_status = Some(
+                        format!("[INFO] Server '{}' is already running.", server.name)
+                            .yellow()
+                            .bold()
+                            .to_string(),
+                    );
+                } else {
+                    match start_server_daemon(&server.name, paths).await {
+                        Ok(_) => {
+                            flash_status = Some(
+                                format!("[OK] Server '{}' started in daemon.", server.name)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
+                        Err(e) => {
+                            flash_status = Some(
+                                format!("[ERROR] Failed to start server: {}", e)
+                                    .red()
+                                    .bold()
+                                    .to_string(),
+                            );
+                        }
+                    }
                 }
             }
-        } else if idx == running_servers.len() {
-            // Stop ALL
-            print_in_place_status(
-                "STOPPING ALL SERVERS",
-                &["Stopping all active background servers...".to_string()],
-            )?;
-            let mut stopped = 0;
-            for s in &running_servers {
-                let _ = stop_server_daemon(&s.name, false, paths).await;
-                stopped += 1;
-            }
-            show_modal_message(
-                "SERVERS STOPPED",
-                &[format!("[OK] Stopped {} servers.", stopped)
-                    .green()
-                    .bold()
-                    .to_string()],
-                false,
-            )?;
+            _ => return Ok(()),
         }
     }
-    Ok(())
+}
+
+pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let mut sel = 0;
+    let mut flash_status: Option<String> = None;
+
+    loop {
+        let registry = ServersRegistry::load(paths)?;
+        if registry.servers.is_empty() {
+            show_empty_servers_modal(paths).await?;
+            return Ok(());
+        }
+
+        let running_paths = if DaemonClient::is_daemon_running(paths) {
+            if let Ok(mut c) = DaemonClient::connect(paths).await {
+                c.get_running().await.unwrap_or_default()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+
+        let running_servers: Vec<_> = registry
+            .servers
+            .iter()
+            .filter(|s| {
+                running_paths.contains(&s.path)
+                    || s.path
+                        .canonicalize()
+                        .map(|p| running_paths.contains(&p))
+                        .unwrap_or(false)
+                    || craft_core::is_server_locked(&s.path)
+            })
+            .collect();
+
+        if running_servers.is_empty() {
+            let width = get_content_width(80);
+            let mut header = format!(
+                "{}\r\n{}\r\n{}\r\n",
+                box_top(width).cyan().bold(),
+                box_title("STOP RUNNING SERVER", width, false).cyan().bold(),
+                box_divider(width).cyan().bold(),
+            );
+            if let Some(msg) = flash_status {
+                header.push_str(&format!("  {}\r\n", msg));
+            }
+            header.push_str("  No servers are currently running on this host.\r\n");
+            header.push_str(&box_divider(width).dimmed().to_string());
+
+            let entries = vec![MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"])];
+            let mut exit_sel = 0;
+            let _ = run_menu(&header, &entries, &mut exit_sel)?;
+            return Ok(());
+        }
+
+        let mut entries = Vec::new();
+        for (i, s) in running_servers.iter().enumerate() {
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            };
+            let status_str = if let Some(pid) = craft_core::get_server_running_pid(&s.path) {
+                format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
+            } else {
+                "[RUNNING]".green().bold().to_string()
+            };
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!(
+                    "{:<20} {:<10} {:<10} {}",
+                    s.name,
+                    s.software,
+                    s.version,
+                    status_str
+                ),
+            ));
+        }
+        if running_servers.len() > 1 {
+            entries.push(MenuEntry::new("a", "Stop ALL Running Servers"));
+        }
+        entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
+
+        let width = get_content_width(80);
+        let mut header = format!(
+            "{}\r\n{}\r\n{}\r\n  Select a running server to stop gracefully:\r\n",
+            box_top(width).cyan().bold(),
+            box_title("STOP RUNNING SERVER", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+        );
+        if let Some(msg) = flash_status.take() {
+            header.push_str(&format!("  {}\r\n", msg));
+        }
+        header.push_str(&box_divider(width).dimmed().to_string());
+
+        match run_menu(&header, &entries, &mut sel)? {
+            Some(idx) if idx < running_servers.len() => {
+                let server = running_servers[idx];
+                match stop_server_daemon(&server.name, false, paths).await {
+                    Ok(_) => {
+                        flash_status = Some(
+                            format!("[OK] Server '{}' stopped.", server.name)
+                                .green()
+                                .bold()
+                                .to_string(),
+                        );
+                    }
+                    Err(e) => {
+                        flash_status = Some(
+                            format!("[ERROR] Failed to stop server: {}", e)
+                                .red()
+                                .bold()
+                                .to_string(),
+                        );
+                    }
+                }
+            }
+            Some(idx) if running_servers.len() > 1 && idx == running_servers.len() => {
+                // Stop ALL
+                let mut stopped = 0;
+                for s in &running_servers {
+                    let _ = stop_server_daemon(&s.name, false, paths).await;
+                    stopped += 1;
+                }
+                flash_status = Some(
+                    format!("[OK] Stopped {} servers.", stopped)
+                        .green()
+                        .bold()
+                        .to_string(),
+                );
+            }
+            _ => return Ok(()),
+        }
+    }
 }
 
 pub async fn restart_servers_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
-    let registry = ServersRegistry::load(paths)?;
-    if registry.servers.is_empty() {
-        show_empty_servers_modal(paths).await?;
-        return Ok(());
-    }
-
-    let mut entries = Vec::new();
-    for (i, s) in registry.servers.iter().enumerate() {
-        let hotkey = if i < 9 {
-            (i + 1).to_string()
-        } else {
-            ((b'a' + (i - 9) as u8) as char).to_string()
-        };
-        entries.push(MenuEntry::new(
-            hotkey,
-            format!("{:<20} {:<10} {:<10}", s.name, s.software, s.version),
-        ));
-    }
-    entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
-
     let mut sel = 0;
-    let width = get_content_width(80);
-    let header = format!(
-        "{}\r\n{}\r\n{}\r\n  Select a server to restart:\r\n{}",
-        box_top(width),
-        box_title("RESTART SERVER", width, false),
-        box_divider(width),
-        box_divider(width)
-    );
+    let mut flash_status: Option<String> = None;
 
-    if let Some(idx) = run_menu(&header, &entries, &mut sel)? {
-        if idx < registry.servers.len() {
-            let server = &registry.servers[idx];
-            print_in_place_status(
-                "RESTARTING SERVER",
-                &[format!("Restarting server '{}'...", server.name)],
-            )?;
-            match restart_server_daemon(&server.name, false, paths).await {
-                Ok(_) => {
-                    show_modal_message(
-                        "SERVER RESTARTED",
-                        &[format!(
-                            "[OK] Server '{}' restarted successfully.",
-                            server.name
-                        )
-                        .green()
-                        .bold()
-                        .to_string()],
-                        false,
-                    )?;
-                }
-                Err(e) => {
-                    show_modal_message(
-                        "RESTART FAILED",
-                        &[format!(
-                            "[ERROR] Failed to restart server '{}': {}",
-                            server.name, e
-                        )],
-                        true,
-                    )?;
+    loop {
+        let registry = ServersRegistry::load(paths)?;
+        if registry.servers.is_empty() {
+            show_empty_servers_modal(paths).await?;
+            return Ok(());
+        }
+
+        let mut entries = Vec::new();
+        for (i, s) in registry.servers.iter().enumerate() {
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            };
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<20} {:<10} {:<10}", s.name, s.software, s.version),
+            ));
+        }
+        if registry.servers.len() > 1 {
+            entries.push(MenuEntry::new("a", "Restart ALL Registered Servers"));
+        }
+        entries.push(MenuEntry::new("0", "Back to Dashboard").with_aliases(&["b"]));
+
+        let width = get_content_width(80);
+        let mut header = format!(
+            "{}\r\n{}\r\n{}\r\n  Select a server to restart:\r\n",
+            box_top(width).cyan().bold(),
+            box_title("RESTART SERVER", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+        );
+        if let Some(msg) = flash_status.take() {
+            header.push_str(&format!("  {}\r\n", msg));
+        }
+        header.push_str(&box_divider(width).dimmed().to_string());
+
+        match run_menu(&header, &entries, &mut sel)? {
+            Some(idx) if idx < registry.servers.len() => {
+                let server = &registry.servers[idx];
+                match restart_server_daemon(&server.name, false, paths).await {
+                    Ok(_) => {
+                        flash_status = Some(
+                            format!("[OK] Server '{}' restarted in daemon.", server.name)
+                                .green()
+                                .bold()
+                                .to_string(),
+                        );
+                    }
+                    Err(e) => {
+                        flash_status = Some(
+                            format!("[ERROR] Failed to restart server: {}", e)
+                                .red()
+                                .bold()
+                                .to_string(),
+                        );
+                    }
                 }
             }
+            Some(idx) if registry.servers.len() > 1 && idx == registry.servers.len() => {
+                // Restart ALL
+                let mut restarted = 0;
+                for s in &registry.servers {
+                    let _ = restart_server_daemon(&s.name, false, paths).await;
+                    restarted += 1;
+                }
+                flash_status = Some(
+                    format!("[OK] Restarted {} servers.", restarted)
+                        .green()
+                        .bold()
+                        .to_string(),
+                );
+            }
+            _ => return Ok(()),
         }
     }
-    Ok(())
 }
 
 pub async fn view_servers_menu(paths: &CraftPaths) -> Result<()> {
@@ -594,7 +592,7 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
 
             // Defensive: Only option 1 and 0, aliases "c" / "n", strictly NO "2"
             let entries = vec![
-                MenuEntry::new("1", "Create Your First Server (Setup Wizard)").with_aliases(&["c", "n"]),
+                MenuEntry::new("1", "Create Your First Server").with_aliases(&["c", "n"]),
                 MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
             ];
 
@@ -647,7 +645,7 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
             ));
         }
 
-        entries.push(MenuEntry::new("n", "Create New Server (Setup Wizard)").with_aliases(&["c"]));
+        entries.push(MenuEntry::new("n", "Create New Server").with_aliases(&["c"]));
         entries.push(MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]));
 
         let sel = run_menu(&header, &entries, &mut selected)?;
@@ -736,14 +734,14 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
         header.push_str(&box_divider(width).dimmed().to_string());
 
         let entries = vec![
-            MenuEntry::new("1", "Start Server (Background Daemon)"),
-            MenuEntry::new("2", "Start Server (Foreground Terminal)"),
+            MenuEntry::new("1", "Start Server (Background)"),
+            MenuEntry::new("2", "Start Server (Foreground)"),
             MenuEntry::new("3", "Stop Server"),
             MenuEntry::new("4", "Restart Server"),
-            MenuEntry::new("5", "Attach Live Console (craft view)"),
-            MenuEntry::new("6", "Create World Snapshot Backup"),
+            MenuEntry::new("5", "Attach Live Console"),
+            MenuEntry::new("6", "Create World Backup"),
             MenuEntry::new("7", "List Existing Backups"),
-            MenuEntry::new("8", "Delete / Unregister Server"),
+            MenuEntry::new("8", "Delete Server"),
             MenuEntry::new("0", "Back to Server List").with_aliases(&["b"]),
         ];
 
@@ -755,13 +753,6 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                 if is_running {
                     flash_status = Some(format!("[INFO] Server '{}' is already running.", server.name).yellow().bold().to_string());
                 } else {
-                    print_in_place_status(
-                        "STARTING SERVER",
-                        &[format!(
-                            "Starting server '{}' in background daemon...",
-                            server.name
-                        )],
-                    )?;
                     match start_server_daemon(&server.name, paths).await {
                         Ok(_) => {
                             flash_status = Some(
@@ -837,10 +828,6 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                             .to_string(),
                     );
                 } else {
-                    print_in_place_status(
-                        "STOPPING SERVER",
-                        &[format!("Stopping server '{}'...", server.name)],
-                    )?;
                     match stop_server_daemon(&server.name, false, paths).await {
                         Ok(_) => {
                             flash_status = Some(
@@ -863,10 +850,6 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             }
             Some(3) => {
                 // Restart
-                print_in_place_status(
-                    "RESTARTING SERVER",
-                    &[format!("Restarting server '{}'...", server.name)],
-                )?;
                 match restart_server_daemon(&server.name, false, paths).await {
                     Ok(_) => {
                         flash_status = Some(
@@ -919,10 +902,6 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             }
             Some(5) => {
                 // Create backup
-                print_in_place_status(
-                    "CREATING BACKUP",
-                    &[format!("Creating snapshot for server '{}'...", server.name)],
-                )?;
                 let engine = BackupEngine::new(paths);
                 match engine
                     .create_backup(&server.name, &server.path, None, false)
@@ -985,11 +964,8 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     box_divider(width).dimmed(),
                 );
                 let confirm_entries = vec![
-                    MenuEntry::new(
-                        "1",
-                        "Unregister from Craft (Preserve world & server files)",
-                    ),
-                    MenuEntry::new("2", "Permanently Delete Server Directory & Files (-rf)"),
+                    MenuEntry::new("1", "Unregister Server (Keep files on disk)"),
+                    MenuEntry::new("2", "Permanently Delete Server & Files"),
                     MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
                 let mut c_sel = 0;

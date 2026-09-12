@@ -113,17 +113,17 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Manage Servers (Start, Stop, Restart, Console, Delete)"),
-            MenuEntry::new("2", "Create New Server (Interactive Wizard)"),
+            MenuEntry::new("1", "Manage Servers"),
+            MenuEntry::new("2", "Create New Server"),
             MenuEntry::new("3", "Quick Start Server"),
             MenuEntry::new("4", "Stop Running Server"),
             MenuEntry::new("5", "Restart Server"),
-            MenuEntry::new("6", "Attach Live Console (craft view)"),
-            MenuEntry::new("7", "Server Network Ping (Java SLP & Bedrock)"),
-            MenuEntry::new("8", "World Snapshots & Backup Manager"),
-            MenuEntry::new("9", "Browse & Install Plugins (Modrinth / Hangar)"),
-            MenuEntry::new("r", "Remote VPS Hosts (SSH Management)"),
-            MenuEntry::new("d", "Service Daemon Control (Start / Stop / Restart)"),
+            MenuEntry::new("6", "Attach Live Console"),
+            MenuEntry::new("7", "Server Network Ping"),
+            MenuEntry::new("8", "World Snapshots & Backups"),
+            MenuEntry::new("9", "Browse & Install Plugins"),
+            MenuEntry::new("r", "Remote VPS Hosts"),
+            MenuEntry::new("d", "Service Daemon Control"),
             MenuEntry::new("c", "Cache & Storage Management"),
             MenuEntry::new("0", "Exit Craft"),
         ];

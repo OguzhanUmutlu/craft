@@ -177,11 +177,8 @@ pub async fn gui_create_server_wizard_with_name(
                 );
 
                 let jt_entries = vec![
-                    MenuEntry::new(
-                        "1",
-                        "Plugins & Vanilla (Paper, Purpur, Folia, Spigot, Vanilla)",
-                    ),
-                    MenuEntry::new("2", "Modded Servers (Fabric, Quilt, NeoForge)"),
+                    MenuEntry::new("1", "Plugins & Vanilla"),
+                    MenuEntry::new("2", "Modded Servers"),
                     MenuEntry::new("0", "Back to Platform Categories").with_aliases(&["b"]),
                 ];
 
@@ -349,18 +346,15 @@ pub async fn gui_create_server_wizard_with_name(
                 );
 
                 let ver_entries = vec![
-                    MenuEntry::new(
-                        "1",
-                        "latest (Recommended - Automatically resolves latest release)",
-                    ),
-                    MenuEntry::new("2", "1.21.4 (Latest Stable Java Release)"),
+                    MenuEntry::new("1", "latest (Recommended)"),
+                    MenuEntry::new("2", "1.21.4"),
                     MenuEntry::new("3", "1.21.1"),
                     MenuEntry::new("4", "1.20.4"),
                     MenuEntry::new("5", "1.20.1"),
                     MenuEntry::new("6", "1.19.4"),
                     MenuEntry::new("7", "1.18.2"),
                     MenuEntry::new("8", "1.16.5"),
-                    MenuEntry::new("c", "Custom Version (Type Manually)"),
+                    MenuEntry::new("c", "Custom Version"),
                     MenuEntry::new("0", "Back").with_aliases(&["b"]),
                 ];
 
@@ -432,11 +426,11 @@ pub async fn gui_create_server_wizard_with_name(
                 );
 
                 let mem_entries = vec![
-                    MenuEntry::new("1", "2G  (Standard lightweight / proxy testing)"),
-                    MenuEntry::new("2", "4G  (Recommended standard survival server)"),
-                    MenuEntry::new("3", "8G  (Large player counts / heavy plugins / mods)"),
-                    MenuEntry::new("4", "16G (High-capacity multi-world or network hub)"),
-                    MenuEntry::new("c", "Custom Limit (Type Manually)"),
+                    MenuEntry::new("1", "2G"),
+                    MenuEntry::new("2", "4G (Recommended)"),
+                    MenuEntry::new("3", "8G"),
+                    MenuEntry::new("4", "16G"),
+                    MenuEntry::new("c", "Custom Limit"),
                     MenuEntry::new("0", "Back").with_aliases(&["b"]),
                 ];
 
@@ -489,8 +483,8 @@ pub async fn gui_create_server_wizard_with_name(
                 );
 
                 let start_entries = vec![
-                    MenuEntry::new("1", "Start Server Immediately (Background Daemon)"),
-                    MenuEntry::new("2", "Create Server Only (Do not start now)"),
+                    MenuEntry::new("1", "Start Server Immediately"),
+                    MenuEntry::new("2", "Create Server Only"),
                     MenuEntry::new("0", "Back").with_aliases(&["b"]),
                 ];
 

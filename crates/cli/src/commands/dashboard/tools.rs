@@ -41,8 +41,8 @@ pub async fn ping_menu() -> Result<()> {
     );
 
     let proto_entries = vec![
-        MenuEntry::new("1", "Java Edition (Server List Ping SLP)"),
-        MenuEntry::new("2", "Bedrock Edition (RakNet Unconnected Ping)"),
+        MenuEntry::new("1", "Java Edition (SLP)"),
+        MenuEntry::new("2", "Bedrock Edition (RakNet)"),
         MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
     ];
 
@@ -171,14 +171,8 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                         let server = &registry.servers[idx];
                         let mode_header = " Choose backup scope:";
                         let mode_entries = vec![
-                            MenuEntry::new(
-                                "1",
-                                "Full Server Snapshot (All configs, plugins, and worlds)",
-                            ),
-                            MenuEntry::new(
-                                "2",
-                                "World Only Snapshot (Fastest, skips binaries/logs)",
-                            ),
+                            MenuEntry::new("1", "Full Server Snapshot"),
+                            MenuEntry::new("2", "World Only Snapshot"),
                             MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                         ];
                         let mut m_sel = 0;
@@ -382,8 +376,8 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Search Plugins Online (Modrinth, Hangar, Poggit)"),
-            MenuEntry::new("2", "Install Plugin by ID / Slug to Server"),
+            MenuEntry::new("1", "Search Plugins Online"),
+            MenuEntry::new("2", "Install Plugin by ID / Slug"),
             MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
         ];
 
@@ -821,7 +815,7 @@ pub async fn daemon_menu(paths: &CraftPaths) -> Result<()> {
 
         let entries = vec![
             MenuEntry::new("1", "Check Daemon Status"),
-            MenuEntry::new("2", "Start Daemon (Background Supervisor)"),
+            MenuEntry::new("2", "Start Service Daemon"),
             MenuEntry::new("3", "Stop Daemon"),
             MenuEntry::new("4", "Restart Daemon"),
             MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
