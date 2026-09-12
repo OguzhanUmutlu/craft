@@ -120,8 +120,8 @@ impl PaperProvider {
                     let dl = downloads.get("server:default")
                         .or_else(|| downloads.values().next())?;
                     let file_url = dl.get("url")?.as_str()?.to_string();
-                    let sha256 = dl.get("checksums")?.get("sha256").and_then(|s| s.as_str()).map(|s| s.to_string());
-                    let filename = dl.get("name").and_then(|s| s.as_str()).unwrap_or("server.jar").to_string();
+                    let sha256 = dl.get("checksums").and_then(|c| c.get("sha256")).and_then(|s| s.as_str()).map(|s| s.to_string());
+                    let filename = "server.jar".to_string();
 
                     Some(AssetDownload {
                         filename,

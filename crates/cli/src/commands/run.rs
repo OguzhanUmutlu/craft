@@ -81,6 +81,14 @@ pub async fn handle_run(
     if here {
         run_foreground_server(&server_path).await
     } else {
+        let registry = ServersRegistry::load(paths).ok();
+        let expected_file = registry.as_ref()
+            .and_then(|r| r.find_by_path(&server_path))
+            .and_then(|s| craft_providers::find_software(&s.software))
+            .map(|sw| sw.default_server_file())
+            .unwrap_or("server.jar");
+        let _ = craft_core::auto_heal_server_file(&server_path, expected_file);
+
         DaemonClient::ensure_daemon_started(paths).await?;
         let mut client = DaemonClient::connect(paths).await?;
         client.start_server(&server_path).await?;
@@ -91,6 +99,25 @@ pub async fn handle_run(
 }
 
 pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
+    // Self-healing: ensure server jar / binary is in place
+    let paths = CraftPaths::new();
+    let expected_file = paths.as_ref().ok().and_then(|p| {
+        ServersRegistry::load(p).ok().and_then(|r| {
+            r.find_by_path(server_path).and_then(|s| {
+                craft_providers::find_software(&s.software).map(|sw| sw.default_server_file())
+            })
+        })
+    }).unwrap_or("server.jar");
+
+    if let Some(source) = craft_core::auto_heal_server_file(server_path, expected_file) {
+        println!("{}", format!("Self-healing: Restored {} from '{}'", expected_file, source).yellow());
+    }
+    if expected_file != "server.jar" && !server_path.join(expected_file).exists() {
+        if let Some(source) = craft_core::auto_heal_server_jar(server_path) {
+            println!("{}", format!("Self-healing: Restored server.jar from '{}'", source).yellow());
+        }
+    }
+
     let script = if cfg!(windows) {
         server_path.join("start.cmd")
     } else {
@@ -102,6 +129,28 @@ pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
             "Start script not found at '{}'",
             script.display()
         )));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = fs::metadata(&script) {
+            let mut perms = meta.permissions();
+            if perms.mode() & 0o111 == 0 {
+                perms.set_mode(0o755);
+                let _ = fs::set_permissions(&script, perms);
+            }
+        }
+        let bedrock_bin = server_path.join("bedrock_server");
+        if bedrock_bin.exists() {
+            if let Ok(meta) = fs::metadata(&bedrock_bin) {
+                let mut perms = meta.permissions();
+                if perms.mode() & 0o111 == 0 {
+                    perms.set_mode(0o755);
+                    let _ = fs::set_permissions(&bedrock_bin, perms);
+                }
+            }
+        }
     }
 
     let mut cmd = if cfg!(windows) {

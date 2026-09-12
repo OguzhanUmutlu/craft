@@ -3,7 +3,7 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use colored::Colorize;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
-use craft_core::{find_best_java, get_jar_java_version, CraftError, CraftPaths, Result, ServerConfig, ServersRegistry};
+use craft_core::{auto_heal_server_file, find_best_java, get_jar_java_version, CraftError, CraftPaths, Result, ServerConfig, ServersRegistry};
 use craft_daemon::DaemonClient;
 use craft_providers::{find_software, get_all_softwares, CacheManager, ServerEdition};
 use crate::commands::run::run_foreground_server;
@@ -289,6 +289,9 @@ pub async fn handle_new(
 
     // Run post download hooks
     software.post_download(&target_dir, &version).await?;
+
+    // Self-healing: ensure default server file exists (e.g. if provider downloaded versioned name)
+    auto_heal_server_file(&target_dir, software.default_server_file());
 
     // Check Java version requirements for Java edition
     let mut java_path = None;

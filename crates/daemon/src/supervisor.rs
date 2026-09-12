@@ -7,7 +7,7 @@ use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{broadcast, Mutex};
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
-use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
+use craft_core::{auto_heal_server_file, auto_heal_server_jar, CraftError, CraftPaths, Result, ServersRegistry};
 use crate::ring_buffer::RingBuffer;
 
 struct ActiveServer {
@@ -95,11 +95,49 @@ impl Supervisor {
             canonical.join("start.sh")
         };
 
+        // Self-healing: ensure server jar / binary is in place
+        let expected_file = ServersRegistry::load(&self.paths).ok().and_then(|r| {
+            r.find_by_path(&canonical).and_then(|s| {
+                craft_providers::find_software(&s.software).map(|sw| sw.default_server_file())
+            })
+        }).unwrap_or("server.jar");
+
+        if let Some(source) = auto_heal_server_file(&canonical, expected_file) {
+            info!("Self-healing: Restored {} from '{}' in '{}'", expected_file, source, canonical.display());
+        }
+        if expected_file != "server.jar" && !canonical.join(expected_file).exists() {
+            if let Some(source) = auto_heal_server_jar(&canonical) {
+                info!("Self-healing: Restored server.jar from '{}' in '{}'", source, canonical.display());
+            }
+        }
+
         if !script.exists() {
             return Err(CraftError::Other(format!(
                 "Start script not found at '{}'",
                 script.display()
             )));
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(meta) = std::fs::metadata(&script) {
+                let mut perms = meta.permissions();
+                if perms.mode() & 0o111 == 0 {
+                    perms.set_mode(0o755);
+                    let _ = std::fs::set_permissions(&script, perms);
+                }
+            }
+            let bedrock_bin = canonical.join("bedrock_server");
+            if bedrock_bin.exists() {
+                if let Ok(meta) = std::fs::metadata(&bedrock_bin) {
+                    let mut perms = meta.permissions();
+                    if perms.mode() & 0o111 == 0 {
+                        perms.set_mode(0o755);
+                        let _ = std::fs::set_permissions(&bedrock_bin, perms);
+                    }
+                }
+            }
         }
 
         // Check EULA

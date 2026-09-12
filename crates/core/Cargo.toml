@@ -20,3 +20,6 @@ dialoguer.workspace = true
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+tempfile.workspace = true

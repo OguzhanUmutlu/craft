@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use colored::Colorize;
-use craft_core::{find_best_java, get_jar_java_version, CraftError, CraftPaths, Result, ServersRegistry};
+use craft_core::{auto_heal_server_file, find_best_java, get_jar_java_version, CraftError, CraftPaths, Result, ServersRegistry};
 use craft_providers::find_software;
 
 pub async fn handle_fix(
@@ -32,6 +32,14 @@ pub async fn handle_fix(
 
     let mut fixed_items = Vec::new();
 
+    // 0. Ensure server file exists (restore from archive if missing)
+    let expected_file = software.default_server_file();
+    if !server_path.join(expected_file).exists() {
+        if let Some(source) = auto_heal_server_file(&server_path, expected_file) {
+            fixed_items.push(format!("Restored {} from '{}'", expected_file, source));
+        }
+    }
+
     // 1. Inspect Java and re-detect if needed
     let mut resolved_java = server_config.java_path.clone();
     if software.edition() == craft_providers::ServerEdition::Java {
@@ -54,13 +62,23 @@ pub async fn handle_fix(
         }
     }
 
-    // 2. Regenerate start script if missing or damaged
+    // 2. Regenerate start script if missing or Java runtime updated
     let script_name = if cfg!(windows) { "start.cmd" } else { "start.sh" };
     let script_path = server_path.join(script_name);
-    if !script_path.exists() {
+    let mut script_needs_regen = !script_path.exists();
+    if resolved_java != server_config.java_path {
+        script_needs_regen = true;
+    }
+    if script_needs_regen {
         let memory = server_config.memory.as_deref().unwrap_or("2G");
-        software.generate_start_script(&server_path, &server_config.version, resolved_java.as_deref(), memory)?;
-        fixed_items.push(format!("Regenerated missing {}", script_name));
+        software.generate_start_script_with_flags(
+            &server_path,
+            &server_config.version,
+            resolved_java.as_deref(),
+            memory,
+            server_config.jvm_args.as_deref(),
+        )?;
+        fixed_items.push(format!("Updated {}", script_name));
     }
 
     // 3. Fix Unix permissions
