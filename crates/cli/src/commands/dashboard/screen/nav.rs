@@ -3,6 +3,25 @@ use colored::Colorize;
 use super::theme::{is_utf8_supported, strip_ansi, BORDER_COLOR, RESET};
 
 static NAV_STACK: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static ROOT_CRUMBS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Configures root prefix breadcrumbs for remote node presentation mode.
+pub fn set_root_breadcrumbs(crumbs: &[&str]) {
+    if let Ok(mut rc) = ROOT_CRUMBS.lock() {
+        rc.clear();
+        for c in crumbs {
+            rc.push(c.to_string());
+        }
+    }
+}
+
+/// Clears root prefix breadcrumbs.
+#[allow(dead_code)]
+pub fn clear_root_breadcrumbs() {
+    if let Ok(mut rc) = ROOT_CRUMBS.lock() {
+        rc.clear();
+    }
+}
 
 /// RAII Guard that manages navigation breadcrumbs on screen headers.
 pub struct NavGuard;
@@ -26,7 +45,13 @@ impl Drop for NavGuard {
 
 /// Returns a copy of the current navigation path.
 pub fn get_breadcrumbs() -> Vec<String> {
-    NAV_STACK.lock().map(|s| s.clone()).unwrap_or_default()
+    let mut res = ROOT_CRUMBS.lock().map(|r| r.clone()).unwrap_or_default();
+    if let Ok(stack) = NAV_STACK.lock() {
+        for s in stack.iter() {
+            res.push(s.clone());
+        }
+    }
+    res
 }
 
 /// Formats breadcrumb items into a single line, squeezing intermediate items if needed.
@@ -170,5 +195,21 @@ mod tests {
         // Very narrow width
         let narrow = format_breadcrumbs(&crumbs, 20);
         assert!(narrow.chars().count() <= 20);
+    }
+
+    #[test]
+    fn test_root_breadcrumbs_remote_node() {
+        set_root_breadcrumbs(&["Dashboard", "Remote Hosts", "saga"]);
+        {
+            let _n1 = NavGuard::enter("Servers");
+            assert_eq!(get_breadcrumbs(), vec!["Dashboard", "Remote Hosts", "saga", "Servers"]);
+            {
+                let _n2 = NavGuard::enter("test");
+                assert_eq!(get_breadcrumbs(), vec!["Dashboard", "Remote Hosts", "saga", "Servers", "test"]);
+            }
+            assert_eq!(get_breadcrumbs(), vec!["Dashboard", "Remote Hosts", "saga", "Servers"]);
+        }
+        clear_root_breadcrumbs();
+        assert!(get_breadcrumbs().is_empty());
     }
 }

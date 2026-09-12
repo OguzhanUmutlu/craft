@@ -25,6 +25,24 @@ use crossterm::{
 use craft_core::Result;
 
 static ALT_SCREEN_DEPTH: AtomicUsize = AtomicUsize::new(0);
+static REMOTE_NODE_NAME: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Sets the remote node presentation context (used when streamed from remote host).
+pub fn set_remote_node(name: Option<String>) {
+    if let Ok(mut rn) = REMOTE_NODE_NAME.lock() {
+        *rn = name;
+    }
+}
+
+/// Retrieves the active remote node alias, if running in remote node mode.
+pub fn get_remote_node() -> Option<String> {
+    REMOTE_NODE_NAME.lock().ok().and_then(|rn| rn.clone())
+}
+
+/// Returns true if the TUI is running in remote node presentation mode.
+pub fn is_remote_node() -> bool {
+    REMOTE_NODE_NAME.lock().ok().and_then(|rn| rn.clone()).is_some()
+}
 
 /// Cleanly resets the terminal out of alternate screen and raw mode, then exits the process.
 pub fn clean_exit() -> ! {

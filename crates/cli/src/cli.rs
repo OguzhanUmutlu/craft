@@ -15,7 +15,14 @@ pub struct Cli {
 pub enum Commands {
     /// Open the interactive Craft Server Manager Dashboard
     #[command(alias = "dashboard", alias = "ui", alias = "tui")]
-    Manage,
+    Manage {
+        /// Remote node presentation mode (used when streamed from a remote host)
+        #[arg(long = "remote-node", alias = "remote-ui", alias = "node")]
+        remote_node: Option<String>,
+        /// Target remote host alias (to connect and stream remote dashboard from local CLI)
+        #[arg(long = "remote")]
+        remote: Option<String>,
+    },
 
     /// Set up a new Minecraft server (interactive wizard if software omitted)
     #[command(alias = "create", alias = "init")]
@@ -487,5 +494,31 @@ pub enum DeployCommands {
         #[arg(short, long)]
         force: bool,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_manage_flags_parsing() {
+        let cli = Cli::try_parse_from(["craft", "manage", "--remote-node", "saga"]).unwrap();
+        match cli.command {
+            Some(Commands::Manage { remote_node, remote }) => {
+                assert_eq!(remote_node.as_deref(), Some("saga"));
+                assert_eq!(remote, None);
+            }
+            _ => panic!("Expected Manage command"),
+        }
+
+        let cli_ui = Cli::try_parse_from(["craft", "ui", "--remote", "saga"]).unwrap();
+        match cli_ui.command {
+            Some(Commands::Manage { remote_node, remote }) => {
+                assert_eq!(remote_node, None);
+                assert_eq!(remote.as_deref(), Some("saga"));
+            }
+            _ => panic!("Expected Manage command"),
+        }
+    }
 }
 

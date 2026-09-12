@@ -65,8 +65,17 @@ async fn main() {
                 Ok(())
             }
         }
-        Some(Commands::Manage) => {
-            handle_dashboard(&paths).await
+        Some(Commands::Manage { remote_node, remote }) => {
+            if let Some(alias) = remote {
+                let remote_cmd = format!("~/.local/bin/craft ui --remote-node \"{}\" 2>/dev/null || craft ui --remote-node \"{}\"", alias, alias);
+                execute_remote(&alias, &remote_cmd, true, &paths)
+            } else {
+                if let Some(ref node) = remote_node {
+                    crate::commands::dashboard::screen::set_remote_node(Some(node.clone()));
+                    crate::commands::dashboard::screen::set_root_breadcrumbs(&["Dashboard", "Remote Hosts", node]);
+                }
+                handle_dashboard(&paths).await
+            }
         }
         Some(Commands::New {
             name,

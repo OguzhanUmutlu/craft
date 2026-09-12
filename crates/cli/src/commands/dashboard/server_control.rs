@@ -611,7 +611,12 @@ pub async fn rm_servers_menu(paths: &CraftPaths) -> Result<()> {
 
 pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
-    let _nav = NavGuard::enter("Local Servers");
+    let nav_label = if super::screen::is_remote_node() {
+        "Servers"
+    } else {
+        "Local Servers"
+    };
+    let _nav = NavGuard::enter(nav_label);
     let mut selected = 0;
     let mut current_page = 0;
     let page_size = 7;
@@ -631,11 +636,22 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
 
         if registry.servers.is_empty() {
             let width = get_content_width(80);
+            let title = if let Some(alias) = super::screen::get_remote_node() {
+                format!("REMOTE SERVERS: {}", alias)
+            } else {
+                "LOCAL SERVERS (HOST)".to_string()
+            };
+            let desc = if let Some(alias) = super::screen::get_remote_node() {
+                format!(" No servers currently registered on remote host '{}'.\r\n", alias)
+            } else {
+                " No servers currently registered on this local host.\r\n".to_string()
+            };
             let header = format!(
-                "{}\r\n{}\r\n{}\r\n No servers currently registered on this local host.\r\n{}",
+                "{}\r\n{}\r\n{}\r\n{}{}",
                 box_top(width).cyan().bold(),
-                box_title("LOCAL SERVERS (HOST)", width, false).cyan().bold(),
+                box_title(&title, width, false).cyan().bold(),
                 box_divider(width).cyan().bold(),
+                desc,
                 box_divider(width).dimmed(),
             );
 
@@ -669,13 +685,22 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                 } else {
                     "".to_string()
                 };
+                let title = if let Some(alias) = super::screen::get_remote_node() {
+                    format!("REMOTE SERVERS: {}", alias)
+                } else {
+                    "LOCAL SERVERS".to_string()
+                };
+                let desc = if let Some(alias) = super::screen::get_remote_node() {
+                    format!(" Manage servers on remote host '{}' (Total: {}){}.\r\n", alias, total_count, page_info)
+                } else {
+                    format!(" Manage local servers on this host (Total: {}){}.\r\n", total_count, page_info)
+                };
                 format!(
-                    "{}\r\n{}\r\n{}\r\n Manage local servers on this host (Total: {}){}.\r\n{}",
+                    "{}\r\n{}\r\n{}\r\n{}{}",
                     box_top(width).cyan().bold(),
-                    box_title("LOCAL SERVERS", width, false).cyan().bold(),
+                    box_title(&title, width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
-                    total_count,
-                    page_info,
+                    desc,
                     box_divider(width).dimmed(),
                 )
             },
@@ -793,15 +818,28 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
         };
 
         let width = get_content_width(80);
-        let title = format!("SERVER: {} {}", server.name, status_badge);
+        let title_prefix = if super::screen::is_remote_node() {
+            "REMOTE SERVER"
+        } else {
+            "SERVER"
+        };
+        let title = format!("{}: {} {}", title_prefix, server.name, status_badge);
+        let remote_line = if let Some(alias) = super::screen::get_remote_node() {
+            format!(" Remote Host: {}\r\n", alias.cyan().bold())
+        } else {
+            String::new()
+        };
+        let path_label = if super::screen::is_remote_node() { "Remote Path" } else { "Path" };
         let mut header = format!(
-            "{}\r\n{}\r\n{}\r\n Platform: {:<12} | Version: {:<10} | Memory: {}\r\n Path: {}\r\n",
+            "{}\r\n{}\r\n{}\r\n Platform: {:<12} | Version: {:<10} | Memory: {}\r\n{}{}: {}\r\n",
             box_top(width).cyan().bold(),
             box_title(&title, width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             server.software.white().bold(),
             server.version.cyan(),
             server.memory.as_deref().unwrap_or("Default (2G)"),
+            remote_line,
+            path_label,
             server.path.display(),
         );
 

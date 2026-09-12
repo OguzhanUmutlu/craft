@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::io::{self, Write};
 use std::sync::mpsc;
 use std::thread;
@@ -19,7 +21,7 @@ use crate::commands::dashboard::screen::{
 use super::remote_control::remote_server_control_panel;
 use super::remote_backups::manage_remote_backups;
 
-async fn connect_with_cancellation(host_config: &RemoteHostConfig) -> Result<Option<RemoteCraftClient>> {
+pub async fn connect_with_cancellation(host_config: &RemoteHostConfig) -> Result<Option<RemoteCraftClient>> {
     let (tx, rx) = mpsc::channel();
     let cfg_clone = host_config.clone();
     thread::spawn(move || {
@@ -120,7 +122,7 @@ async fn connect_with_cancellation(host_config: &RemoteHostConfig) -> Result<Opt
 }
 
 pub async fn manage_host_servers(
-    paths: &CraftPaths,
+    _paths: &CraftPaths,
     host_config: &RemoteHostConfig,
 ) -> Result<()> {
     let client = match connect_with_cancellation(host_config).await? {
@@ -178,13 +180,49 @@ pub async fn manage_host_servers(
         }
     }
 
-    // Ensure remote daemon is running by default if craft is installed
-    if client.is_craft_installed() {
-        let _ = client.ensure_daemon_started();
+    if !client.is_craft_installed() {
+        show_modal_message(
+            "CRAFT NOT INSTALLED",
+            &[
+                format!("Craft CLI is required to manage servers on '{}'.", host_config.alias),
+                "Please run bootstrap to install Craft.".to_string(),
+            ],
+            true,
+        )?;
+        return Ok(());
     }
 
+    // Ensure remote daemon is running by default if craft is installed
+    let _ = client.ensure_daemon_started();
+
+    // Launch remote TUI session directly over interactive PTY
+    let remote_cmd = format!(
+        "export PATH=\"$HOME/.local/bin:$PATH\"; ~/.local/bin/craft ui --remote-node \"{}\" 2>/dev/null || craft ui --remote-node \"{}\"",
+        host_config.alias, host_config.alias
+    );
+    if let Err(e) = craft_remote::run_remote_pty_session(&client.session, &remote_cmd) {
+        show_modal_message(
+            "REMOTE TUI ERROR",
+            &[
+                format!("Failed to run remote TUI session on '{}':", host_config.alias),
+                format!("[ERROR] {}", e),
+            ],
+            true,
+        )?;
+    }
+
+    Ok(())
+}
+
+async fn remote_manage_servers_menu(
+    paths: &CraftPaths,
+    client: &RemoteCraftClient,
+    host_config: &RemoteHostConfig,
+) -> Result<()> {
+    let _nav = NavGuard::enter("Servers");
     let mut current_page = 0;
-    let page_size = 6;
+    let page_size = 7;
+    let width = get_content_width(80);
 
     loop {
         let servers = match client.list_servers() {
@@ -199,48 +237,52 @@ pub async fn manage_host_servers(
             }
         };
 
-        let width = get_content_width(80);
+        if servers.is_empty() {
+            let header = format!(
+                "{}\r\n{}\r\n{}\r\n  No servers are currently registered on remote host '{}'.\r\n  Create your first Minecraft server to get started.\r\n{}",
+                box_top(width),
+                box_title(&format!("REMOTE SERVERS: {}", host_config.alias), width, false),
+                box_divider(width),
+                host_config.alias,
+                box_divider(width)
+            );
 
-        let mut action_entries = vec![
-            MenuEntry::new("n", "New Server").with_aliases(&["c", "create", "new"]),
-            MenuEntry::new("p", "Ping Host / Servers"),
-            MenuEntry::new("b", "Remote Backups"),
-            MenuEntry::new("d", "Daemon Control"),
-            MenuEntry::new("k", "Purge Cache"),
-            MenuEntry::new("t", "Trash Bin"),
-        ];
-        if !client.is_craft_installed() {
-            action_entries.push(MenuEntry::new("i", "Install Craft").with_aliases(&["bootstrap"]));
-        } else {
-            action_entries.push(MenuEntry::new("u", "Uninstall Craft").with_aliases(&["uninstall"]));
+            let entries = vec![
+                MenuEntry::new("1", "New Server").with_aliases(&["c", "n", "create", "new"]),
+                MenuEntry::new("0", "Back").with_aliases(&["b"]),
+            ];
+
+            let mut selected = 0;
+            match run_menu(&header, &entries, &mut selected)? {
+                Some(0) => {
+                    remote_create_server_wizard(client).await?;
+                }
+                _ => return Ok(()),
+            }
+            continue;
         }
+
+        let action_entries = vec![
+            MenuEntry::new("n", "New Server").with_aliases(&["c", "create", "new"]),
+        ];
 
         let action = run_paged_list_menu(
             &servers,
             &mut current_page,
             page_size,
             |page, total_pages, total_count| {
-                let count_str = if total_count == 0 {
-                    "No Craft servers currently registered on this remote host.".dimmed().to_string()
-                } else {
-                    format!("Total Registered Servers: {}", total_count).white().bold().to_string()
-                };
                 let page_info = if total_pages > 1 {
                     format!(" | Page {} of {}", page, total_pages).cyan().to_string()
                 } else {
                     "".to_string()
                 };
-
                 format!(
-                    "{}\r\n{}\r\n{}\r\n Host: {:<16} | {}@{}:{}\r\n {}{}\r\n Select a server or choose a remote host management tool:\r\n{}",
+                    "{}\r\n{}\r\n{}\r\n Manage game servers on remote host '{}' (Total: {}){}.\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title(&format!("REMOTE HOST: {}", host_config.alias), width, false).cyan().bold(),
+                    box_title(&format!("REMOTE SERVERS: {}", host_config.alias), width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
-                    host_config.alias.white().bold(),
-                    host_config.user,
-                    host_config.host,
-                    host_config.port,
-                    count_str,
+                    host_config.alias,
+                    total_count,
                     page_info,
                     box_divider(width).dimmed(),
                 )
@@ -261,65 +303,38 @@ pub async fn manage_host_servers(
                 )
             },
             &action_entries,
-            false,
+            true,
         )?;
 
         match action {
             PagedMenuAction::Select(idx) => {
                 if idx < servers.len() {
-                    remote_server_control_panel(paths, &client, &servers[idx]).await?;
+                    remote_server_control_panel(paths, client, &servers[idx]).await?;
                 }
             }
-            PagedMenuAction::Action(act) => match act.as_str() {
-                "n" => {
-                    remote_create_server_wizard(&client).await?;
-                }
-                "p" => {
-                    remote_ping_host(&client, host_config, &servers).await?;
-                }
-                "b" => {
-                    remote_manage_all_backups_picker(paths, &client, &servers).await?;
-                }
-                "d" => {
-                    remote_daemon_control_menu(&client, &host_config.alias).await?;
-                }
-                "k" => {
-                    remote_purge_cache_action(&client, &host_config.alias).await?;
-                }
-                "t" => {
-                    remote_trash_menu(&client, &host_config.alias, &servers).await?;
-                }
-                "u" => {
-                    if remote_uninstall_craft_wizard(&client, &host_config.alias).await? {
-                        return Ok(());
+            PagedMenuAction::Space(idx) => {
+                if idx < servers.len() {
+                    let s = &servers[idx];
+                    let (is_running, _) = client.check_server_running(&s.name, &s.path);
+                    if is_running {
+                        let _ = print_in_place_status(
+                            "STOPPING SERVER",
+                            &[format!("Stopping remote server '{}'...", s.name)],
+                        );
+                        let _ = client.stop_server(&s.name);
+                    } else {
+                        let _ = print_in_place_status(
+                            "STARTING SERVER",
+                            &[format!("Starting remote server '{}'...", s.name)],
+                        );
+                        let _ = client.start_server(&s.name);
                     }
                 }
-                "i" => {
-                    print_in_place_status(
-                        "BOOTSTRAPPING REMOTE HOST",
-                        &[format!("Installing Craft daemon and CLI on '{}'...", host_config.alias)],
-                    )?;
-                    match craft_remote::run_bootstrap(&client.session) {
-                        Ok(_) => {
-                            show_modal_message(
-                                "BOOTSTRAP COMPLETE",
-                                &[format!("[OK] Successfully installed Craft on '{}' at ~/.local/bin/craft!", host_config.alias).green().bold().to_string()],
-                                false,
-                            )?;
-                        }
-                        Err(e) => {
-                            show_modal_message(
-                                "BOOTSTRAP FAILED",
-                                &[format!("[ERROR] {}", e)],
-                                true,
-                            )?;
-                        }
-                    }
-                }
-                _ => {}
-            },
-            PagedMenuAction::Back => return Ok(()),
-            _ => {}
+            }
+            PagedMenuAction::Action(act) if act == "n" => {
+                remote_create_server_wizard(client).await?;
+            }
+            _ => return Ok(()),
         }
     }
 }
@@ -769,7 +784,7 @@ async fn remote_trash_menu(
     }
 }
 
-async fn remote_uninstall_craft_wizard(client: &RemoteCraftClient, host_alias: &str) -> Result<bool> {
+pub async fn remote_uninstall_craft_wizard(client: &RemoteCraftClient, host_alias: &str) -> Result<bool> {
     let _nav = NavGuard::enter("Uninstall Craft");
     let width = get_content_width(80);
 

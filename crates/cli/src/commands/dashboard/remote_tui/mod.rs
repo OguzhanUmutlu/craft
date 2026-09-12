@@ -10,7 +10,7 @@ use crate::commands::dashboard::screen::{
     run_menu, run_paged_list_menu, run_password_prompt, show_modal_message, AltScreenGuard, MenuEntry,
     NavGuard, PagedMenuAction,
 };
-use host_servers::manage_host_servers;
+use host_servers::{connect_with_cancellation, manage_host_servers, remote_uninstall_craft_wizard};
 
 pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
@@ -28,6 +28,7 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
         ];
         if !registry.remotes.is_empty() {
             action_entries.push(MenuEntry::new("r", "Remove Host").with_aliases(&["rm", "del"]));
+            action_entries.push(MenuEntry::new("u", "Uninstall Craft").with_aliases(&["uninstall"]));
         }
 
         let action = run_paged_list_menu(
@@ -241,6 +242,32 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
                             false,
                         )?;
                     }
+                }
+            }
+            PagedMenuAction::Action(act) if act == "u" && !registry.remotes.is_empty() => {
+                let target_host = if registry.remotes.len() == 1 {
+                    &registry.remotes[0]
+                } else {
+                    let un_header = " Select remote host to uninstall Craft from:";
+                    let mut un_entries = Vec::new();
+                    for (i, h) in registry.remotes.iter().enumerate() {
+                        let hk = (i + 1).to_string();
+                        un_entries.push(MenuEntry::new(
+                            hk,
+                            format!("{:<16} ({}@{}:{})", h.alias, h.user, h.host, h.port),
+                        ));
+                    }
+                    un_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+
+                    let mut un_sel = 0;
+                    match run_menu(un_header, &un_entries, &mut un_sel)? {
+                        Some(u_idx) if u_idx < registry.remotes.len() => &registry.remotes[u_idx],
+                        _ => continue,
+                    }
+                };
+
+                if let Some(client) = connect_with_cancellation(target_host).await? {
+                    let _ = remote_uninstall_craft_wizard(&client, &target_host.alias).await?;
                 }
             }
             PagedMenuAction::Back => return Ok(()),
