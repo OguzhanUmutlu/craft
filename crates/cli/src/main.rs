@@ -70,10 +70,12 @@ async fn main() {
         }
         Some(Commands::New {
             name,
+            name_opt,
             software,
             version,
             software_opt,
             version_opt,
+            port,
             path,
             memory,
             agree_eula,
@@ -86,15 +88,25 @@ async fn main() {
             jvm_flags,
             remote,
         }) => {
+            let server_name = if !name.trim().is_empty() {
+                name
+            } else if let Some(n) = name_opt {
+                n
+            } else {
+                String::new()
+            };
             let sw = software.or(software_opt);
             let ver = version.or(version_opt);
             if let Some(alias) = remote {
                 let mut remote_cmd = format!(
                     "craft new {} {} {}",
-                    name,
+                    server_name,
                     sw.as_deref().unwrap_or("paper"),
                     ver.as_deref().unwrap_or("latest"),
                 );
+                if let Some(p) = port {
+                    remote_cmd.push_str(&format!(" --port {}", p));
+                }
                 if let Some(ref m) = memory {
                     remote_cmd.push_str(&format!(" --memory {}", m));
                 }
@@ -120,13 +132,14 @@ async fn main() {
                     remote_cmd.push_str(&format!(" --jvm-flags \"{}\"", flags.join(" ")));
                 }
                 execute_remote(&alias, &remote_cmd, false, &paths)
-            } else if (name.is_empty() || sw.is_none()) && std::io::stdin().is_terminal() && !yes {
-                gui_create_server_wizard_with_name(&name, &paths).await
+            } else if (server_name.is_empty() || sw.is_none()) && std::io::stdin().is_terminal() && !yes {
+                gui_create_server_wizard_with_name(&server_name, &paths).await
             } else {
                 handle_new(
-                    &name,
+                    &server_name,
                     sw.as_deref(),
                     ver.as_deref(),
+                    port,
                     path,
                     memory.as_deref(),
                     agree_eula,
@@ -141,7 +154,7 @@ async fn main() {
                 ).await
             }
         }
-        Some(Commands::Run { name, path, here, remote }) => {
+        Some(Commands::Run { name, path, here, daemon: _, remote }) => {
             if let Some(alias) = remote {
                 let remote_cmd = format!("craft run {}{}", name, if here { " --here" } else { "" });
                 execute_remote(&alias, &remote_cmd, here, &paths)

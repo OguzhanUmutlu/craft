@@ -132,7 +132,7 @@ impl RemoteCraftClient {
 
     /// Starts a remote server in daemon mode
     pub fn start_server(&self, server_name: &str) -> Result<()> {
-        let cmd = format!("{} start {} --daemon", self.craft_bin(), server_name);
+        let cmd = format!("{} start {}", self.craft_bin(), server_name);
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
             let err = if !stderr.trim().is_empty() { stderr } else { stdout };
@@ -264,17 +264,65 @@ impl RemoteCraftClient {
         Ok(())
     }
 
-    /// Creates a new server on the remote host using craft create
+    /// Creates a new server on the remote host using craft new
     pub fn create_server(&self, name: &str, software: &str, version: &str, port: u16) -> Result<()> {
         let cmd = format!(
-            "{} create --name \"{}\" --software \"{}\" --version \"{}\" --port {} --non-interactive",
-            self.craft_bin(), name, software, version, port
+            "{} new \"{}\" \"{}\" \"{}\" --yes --agree-eula --no-start",
+            self.craft_bin(), name, software, version
         );
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
             let err = if !stderr.trim().is_empty() { stderr } else { stdout };
             return Err(CraftError::Other(format!("Failed to create remote server: {}", err.trim())));
         }
+
+        // Configure port in server.properties if customized
+        let server_dir = format!("~/.craft/servers/{}", name);
+        let props_file = format!("{}/server.properties", server_dir);
+        let port_script = format!(
+            "if [ -f \"{p}\" ]; then \
+                if grep -q '^server-port=' \"{p}\"; then \
+                    sed -i 's/^server-port=.*/server-port={port}/' \"{p}\"; \
+                else \
+                    echo \"server-port={port}\" >> \"{p}\"; \
+                fi; \
+            else \
+                echo \"server-port={port}\" > \"{p}\"; \
+            fi; \
+            if [ -f \"{p}\" ] && grep -q '^server-portv6=' \"{p}\"; then \
+                sed -i 's/^server-portv6=.*/server-portv6={port_v6}/' \"{p}\"; \
+            fi",
+            p = props_file,
+            port = port,
+            port_v6 = port.saturating_add(1),
+        );
+        let _ = self.session.exec(&port_script);
+
+        // Also update port in ~/.craft/servers.toml if it exists
+        if let Ok((0, stdout, _)) = self.session.exec("cat ~/.craft/servers.toml 2>/dev/null") {
+            if !stdout.trim().is_empty() {
+                if let Ok(mut parsed) = toml::from_str::<toml::Value>(&stdout) {
+                    let mut modified = false;
+                    if let Some(servers) = parsed.get_mut("servers").and_then(|s| s.as_array_mut()) {
+                        for s in servers {
+                            if s.get("name").and_then(|v| v.as_str()) == Some(name) {
+                                if let Some(tbl) = s.as_table_mut() {
+                                    tbl.insert("port".to_string(), toml::Value::Integer(port as i64));
+                                    modified = true;
+                                }
+                            }
+                        }
+                    }
+                    if modified {
+                        if let Ok(new_toml) = toml::to_string(&parsed) {
+                            let write_cmd = format!("cat << 'EOF' > ~/.craft/servers.toml\n{}\nEOF", new_toml);
+                            let _ = self.session.exec(&write_cmd);
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 

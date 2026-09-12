@@ -13,6 +13,7 @@ pub async fn handle_new(
     name_input: &str,
     software_input: Option<&str>,
     version_input: Option<&str>,
+    port_input: Option<u16>,
     custom_path: Option<PathBuf>,
     memory_input: Option<&str>,
     mut agree_eula: bool,
@@ -376,11 +377,36 @@ pub async fn handle_new(
         auto: false,
         java_path,
         memory: Some(memory.to_string()),
-        port: None,
+        port: port_input.or(Some(25565)),
         jvm_args: final_jvm_flags,
         created_at: Some(chrono::Utc::now()),
         backup_method: None,
     };
+
+    // Configure port in server.properties if specified
+    if let Some(p) = port_input {
+        let props_path = target_dir.join("server.properties");
+        if props_path.exists() {
+            if let Ok(content) = fs::read_to_string(&props_path) {
+                let mut new_lines = Vec::new();
+                let mut found = false;
+                for line in content.lines() {
+                    if line.starts_with("server-port=") {
+                        new_lines.push(format!("server-port={}", p));
+                        found = true;
+                    } else {
+                        new_lines.push(line.to_string());
+                    }
+                }
+                if !found {
+                    new_lines.push(format!("server-port={}", p));
+                }
+                let _ = fs::write(&props_path, new_lines.join("\n") + "\n");
+            }
+        } else {
+            let _ = fs::write(&props_path, format!("server-port={}\n", p));
+        }
+    }
 
     let mut registry = ServersRegistry::load(paths)?;
     let _ = registry.add(server_config);

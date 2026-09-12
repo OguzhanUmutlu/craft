@@ -23,6 +23,9 @@ pub enum Commands {
         /// Server name (or omit to launch the interactive setup wizard)
         #[arg(default_value = "")]
         name: String,
+        /// Explicit server name option
+        #[arg(long = "name")]
+        name_opt: Option<String>,
         /// Server software (paper, purpur, folia, fabric, quilt, neoforge, velocity, etc.)
         #[arg(value_name = "SOFTWARE")]
         software: Option<String>,
@@ -30,11 +33,14 @@ pub enum Commands {
         #[arg(value_name = "VERSION")]
         version: Option<String>,
         /// Explicit server software option
-        #[arg(short = 's', long = "software-id")]
+        #[arg(short = 's', long = "software-id", alias = "software")]
         software_opt: Option<String>,
         /// Explicit software version option
-        #[arg(short = 'v', long = "version-id")]
+        #[arg(short = 'v', long = "version-id", alias = "version")]
         version_opt: Option<String>,
+        /// Server network port (default: 25565)
+        #[arg(short = 'p', long = "port")]
+        port: Option<u16>,
         /// Custom destination path
         #[arg(long)]
         path: Option<PathBuf>,
@@ -82,6 +88,9 @@ pub enum Commands {
         /// Run in foreground in current terminal session
         #[arg(short = 'H', long = "here")]
         here: bool,
+        /// Run in background daemon supervisor mode (default)
+        #[arg(short = 'd', long = "daemon")]
+        daemon: bool,
         /// Target remote host alias
         #[arg(long)]
         remote: Option<String>,

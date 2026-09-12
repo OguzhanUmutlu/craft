@@ -529,7 +529,8 @@ pub async fn gui_create_server_wizard_with_name(
         &server_name,
         Some(selected_sw_id),
         Some(&version),
-        None,
+        None,       // port: defaults to 25565
+        None,       // custom_path
         Some(&memory),
         true,       // agree_eula
         false,      // tmp
