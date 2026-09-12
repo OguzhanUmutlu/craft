@@ -24,6 +24,8 @@ pub struct ServerConfig {
     pub jvm_args: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backup_method: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -160,6 +162,7 @@ mod tests {
             port: Some(25565),
             jvm_args: None,
             created_at: Some(Utc::now()),
+            backup_method: None,
         };
 
         assert!(registry.add(server.clone()).is_ok());
@@ -195,6 +198,7 @@ mod tests {
             port: Some(25565),
             jvm_args: Some(vec!["-XX:+UseG1GC".to_string()]),
             created_at: Some(Utc::now()),
+            backup_method: None,
         });
 
         let serialized = toml::to_string(&registry).expect("Failed to serialize");

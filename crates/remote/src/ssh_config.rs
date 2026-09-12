@@ -108,17 +108,29 @@ pub fn discover_ssh_hosts() -> Vec<RemoteHostConfig> {
             let user = h.user.unwrap_or_else(|| default_user.clone());
             let port = h.port.unwrap_or(22);
 
+            let key_path = if let Some(ref p) = h.identity_file {
+                let expanded = crate::session::expand_tilde(p);
+                if expanded.exists() {
+                    Some(p.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             RemoteHostConfig {
                 alias: h.pattern,
                 host: host_addr,
                 port,
                 user,
                 auth_type: RemoteAuthType::Key,
-                key_path: h.identity_file,
+                key_path,
                 password: None,
                 remote_dir: None,
                 os_type: None,
             }
+
         })
         .collect()
 }

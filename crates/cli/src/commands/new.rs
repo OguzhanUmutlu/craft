@@ -379,6 +379,7 @@ pub async fn handle_new(
         port: None,
         jvm_args: final_jvm_flags,
         created_at: Some(chrono::Utc::now()),
+        backup_method: None,
     };
 
     let mut registry = ServersRegistry::load(paths)?;

@@ -32,60 +32,88 @@ impl RemoteSession {
         session.handshake()
             .map_err(|e| CraftError::Other(format!("SSH handshake failed: {}", e)))?;
 
-        // Authenticate
-        match config.auth_type {
-            RemoteAuthType::Key => {
-                let key_path = if let Some(ref p) = config.key_path {
-                    p.clone()
-                } else {
-                    find_default_private_key()
-                        .ok_or_else(|| CraftError::Other("No default SSH private key found in ~/.ssh/".to_string()))?
-                };
-
-                let expanded_key = expand_tilde(&key_path);
-                if !expanded_key.exists() {
-                    return Err(CraftError::Other(format!("SSH private key not found at '{}'", expanded_key.display())));
-                }
-
-                session.userauth_pubkey_file(&config.user, None, &expanded_key, config.password.as_deref())
-                    .map_err(|e| CraftError::Other(format!("SSH key authentication failed for {}: {}", config.user, e)))?;
-            }
-            RemoteAuthType::Agent => {
-                let mut agent = session.agent()
-                    .map_err(|e| CraftError::Other(format!("Failed to connect to SSH agent: {}", e)))?;
-                agent.connect()
-                    .map_err(|e| CraftError::Other(format!("Could not connect to SSH agent: {}", e)))?;
-                agent.list_identities()
-                    .map_err(|e| CraftError::Other(format!("Failed to list SSH agent identities: {}", e)))?;
-
-                let identities = agent.identities()
-                    .map_err(|e| CraftError::Other(format!("Failed to get identities: {}", e)))?;
-
-                let mut authed = false;
-                for identity in identities {
-                    if agent.userauth(&config.user, &identity).is_ok() {
-                        authed = true;
-                        break;
+        // Authenticate (OpenSSH-style resilient chain):
+        if config.auth_type == RemoteAuthType::Password {
+            let password = config.password.as_deref().ok_or_else(|| {
+                CraftError::Other("Password authentication specified but no password configured".to_string())
+            })?;
+            session.userauth_password(&config.user, password)
+                .map_err(|e| CraftError::Other(format!("SSH password authentication failed for {}: {}", config.user, e)))?;
+        } else {
+            // 1. Try SSH Agent first (matches standard OpenSSH behavior)
+            if let Ok(mut agent) = session.agent() {
+                if agent.connect().is_ok() {
+                    if let Ok(identities) = agent.identities() {
+                        for identity in identities {
+                            if agent.userauth(&config.user, &identity).is_ok() {
+                                break;
+                            }
+                        }
                     }
                 }
+            }
 
-                if !authed {
-                    return Err(CraftError::Other(format!("SSH agent authentication failed for user '{}'", config.user)));
+            // 2. If not yet authenticated, try explicit configured key_path (if present and file exists)
+            if !session.authenticated() {
+                if let Some(ref p) = config.key_path {
+                    let expanded = expand_tilde(p);
+                    if expanded.exists() {
+                        let _ = session.userauth_pubkey_file(&config.user, None, &expanded, config.password.as_deref());
+                    }
                 }
             }
-            RemoteAuthType::Password => {
-                let password = config.password.as_deref().ok_or_else(|| {
-                    CraftError::Other("Password authentication specified but no password configured".to_string())
-                })?;
 
-                session.userauth_password(&config.user, password)
-                    .map_err(|e| CraftError::Other(format!("SSH password authentication failed for {}: {}", config.user, e)))?;
+            // 3. If still not authenticated, try standard candidate private keys in ~/.ssh/
+            if !session.authenticated() {
+                if let Some(user_dirs) = directories::UserDirs::new() {
+                    let ssh_dir = user_dirs.home_dir().join(".ssh");
+                    let candidates = [
+                        ssh_dir.join("id_ed25519"),
+                        ssh_dir.join("id_rsa"),
+                        ssh_dir.join("id_ecdsa"),
+                    ];
+                    for cand in &candidates {
+                        if cand.is_file()
+                            && session.userauth_pubkey_file(&config.user, None, cand, config.password.as_deref()).is_ok()
+                        {
+                            break;
+                        }
+                    }
+
+                }
+            }
+
+            // 4. If password is also provided, try password fallback
+            if !session.authenticated() {
+                if let Some(ref pass) = config.password {
+                    let _ = session.userauth_password(&config.user, pass);
+                }
             }
         }
 
         if !session.authenticated() {
-            return Err(CraftError::Other("SSH authentication was rejected".to_string()));
+            let detail = match config.auth_type {
+                RemoteAuthType::Password => format!("Password authentication failed for user '{}'.", config.user),
+                _ => {
+                    if let Some(ref kp) = config.key_path {
+                        let exp = expand_tilde(kp);
+                        if !exp.exists() {
+                            format!(
+                                "Configured key '{}' does not exist, and SSH agent / default keys in ~/.ssh/ could not authenticate as '{}'.",
+                                kp.display(),
+                                config.user
+                            )
+                        } else {
+                            format!("Authentication rejected for user '{}' with key '{}' and SSH agent.", config.user, kp.display())
+                        }
+                    } else {
+                        format!("Authentication failed for user '{}' (no valid key or SSH agent identity accepted).", config.user)
+                    }
+                }
+            };
+            return Err(CraftError::Other(detail));
         }
+
 
         Ok(Self {
             session,
@@ -164,20 +192,8 @@ impl RemoteSession {
     }
 }
 
-fn find_default_private_key() -> Option<PathBuf> {
-    let home = directories::UserDirs::new()?.home_dir().to_path_buf();
-    let ssh_dir = home.join(".ssh");
-
-    let candidates = [
-        ssh_dir.join("id_ed25519"),
-        ssh_dir.join("id_rsa"),
-        ssh_dir.join("id_ecdsa"),
-    ];
-
-    candidates.into_iter().find(|candidate| candidate.is_file())
-}
-
 pub fn expand_tilde(path: &Path) -> PathBuf {
+
     let s = path.to_string_lossy();
     if s.starts_with("~/") || s == "~" {
         if let Some(user_dirs) = directories::UserDirs::new() {
