@@ -10,7 +10,7 @@ use crate::commands::dashboard::screen::{
     run_menu, run_paged_list_menu, run_password_prompt, show_modal_message, AltScreenGuard, MenuEntry,
     NavGuard, PagedMenuAction,
 };
-use host_servers::{connect_with_cancellation, manage_host_servers, remote_uninstall_craft_wizard};
+pub use host_servers::{connect_with_cancellation, manage_host_servers, remote_uninstall_craft_wizard};
 
 pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();

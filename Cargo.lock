@@ -297,7 +297,7 @@ dependencies = [
 
 [[package]]
 name = "craft"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "craft-backup"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "craft-core",
@@ -345,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "craft-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "dialoguer",
@@ -366,7 +366,7 @@ dependencies = [
 
 [[package]]
 name = "craft-daemon"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "bytes",
  "chrono",
@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "craft-net"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "bytes",
  "craft-core",
@@ -395,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "craft-plugins"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "craft-core",
  "reqwest",
@@ -408,7 +408,7 @@ dependencies = [
 
 [[package]]
 name = "craft-providers"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "craft-core",
  "flate2",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "craft-remote"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "colored",

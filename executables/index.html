@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Craft Binaries &amp; Executables</title>
+  <meta name="description" content="Official static binary downloads and release distribution for Craft Server Manager.">
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #121824;
+      --card-border: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #10b981;
+      --accent-hover: #059669;
+      --cyan: #06b6d4;
+      --code-bg: #0f172a;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.5;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      margin-bottom: 0.75rem;
+    }
+    h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      margin-bottom: 0.5rem;
+    }
+    p.lead {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .cmd-box {
+      background: var(--code-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 0.5rem;
+      padding: 0.75rem 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.875rem;
+      color: #38bdf8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      overflow-x: auto;
+    }
+    .copy-btn {
+      background: #1e293b;
+      color: #94a3b8;
+      border: none;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { background: var(--accent); color: #000; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.875rem;
+    }
+    th, td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    tr:last-child td { border-bottom: none; }
+    .btn-download {
+      display: inline-block;
+      padding: 0.35rem 0.75rem;
+      background: var(--accent);
+      color: #0b0f17;
+      font-weight: 600;
+      border-radius: 0.375rem;
+      text-decoration: none;
+      font-size: 0.75rem;
+      transition: background 0.2s;
+    }
+    .btn-download:hover { background: var(--accent-hover); }
+    .link-secondary {
+      color: #38bdf8;
+      text-decoration: none;
+      margin-left: 0.5rem;
+      font-size: 0.75rem;
+    }
+    .link-secondary:hover { text-decoration: underline; }
+    .endpoints {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .endpoint-item {
+      background: var(--code-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+    }
+    .endpoint-item h3 {
+      font-size: 0.875rem;
+      margin-bottom: 0.25rem;
+      color: var(--text-main);
+    }
+    .endpoint-item a {
+      color: var(--cyan);
+      font-size: 0.8rem;
+      font-family: monospace;
+      text-decoration: none;
+    }
+    .endpoint-item a:hover { text-decoration: underline; }
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">Official Distribution Portal</div>
+      <h1>Craft Executables &amp; Releases</h1>
+      <p class="lead">High-performance Minecraft Server Management CLI &amp; Daemon</p>
+    </header>
+
+    <!-- One-line Installers -->
+    <div class="card">
+      <h2>One-Line Quick Installation</h2>
+      <div class="cmd-box">
+        <code>curl -fsSL https://craft.oguzhanumutlu.com/install.sh | bash</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('curl -fsSL https://craft.oguzhanumutlu.com/install.sh | bash'); this.innerText='Copied!';">Copy</button>
+      </div>
+      <div class="cmd-box">
+        <code>irm https://craft.oguzhanumutlu.com/install.ps1 | iex</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('irm https://craft.oguzhanumutlu.com/install.ps1 | iex'); this.innerText='Copied!';">Copy</button>
+      </div>
+      <div class="cmd-box">
+        <code>curl -fsSL https://craft.oguzhanumutlu.com/docker-compose.yml -o docker-compose.yml &amp;&amp; docker compose up -d</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('curl -fsSL https://craft.oguzhanumutlu.com/docker-compose.yml -o docker-compose.yml && docker compose up -d'); this.innerText='Copied!';">Copy</button>
+      </div>
+    </div>
+
+    <!-- Download Targets Table -->
+    <div class="card">
+      <h2>Binary Downloads</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Platform</th>
+            <th>Architecture</th>
+            <th>Packages</th>
+            <th>Checksum</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Linux</strong></td>
+            <td>x86_64 / amd64</td>
+            <td>
+              <a href="/downloads/craft-linux-amd64.tar.gz" class="btn-download">.tar.gz</a>
+              <a href="/downloads/craft-linux-amd64" class="link-secondary">Binary</a>
+            </td>
+            <td><a href="/downloads/craft-linux-amd64.sha256" class="link-secondary">SHA-256</a></td>
+          </tr>
+          <tr>
+            <td><strong>Windows</strong></td>
+            <td>x64 / amd64</td>
+            <td>
+              <a href="/downloads/craft-windows-amd64.zip" class="btn-download">.zip</a>
+              <a href="/downloads/craft-windows-amd64.exe" class="link-secondary">.exe</a>
+            </td>
+            <td>-</td>
+          </tr>
+          <tr>
+            <td><strong>macOS</strong></td>
+            <td>Apple Silicon (arm64)</td>
+            <td>
+              <a href="/downloads/craft-darwin-arm64.tar.gz" class="btn-download">.tar.gz</a>
+              <a href="/downloads/craft-darwin-arm64" class="link-secondary">Binary</a>
+            </td>
+            <td>-</td>
+          </tr>
+          <tr>
+            <td><strong>macOS</strong></td>
+            <td>Intel (amd64)</td>
+            <td>
+              <a href="/downloads/craft-darwin-amd64.tar.gz" class="btn-download">.tar.gz</a>
+              <a href="/downloads/craft-darwin-amd64" class="link-secondary">Binary</a>
+            </td>
+            <td>-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Programmatic Endpoints -->
+    <div class="card">
+      <h2>Programmatic &amp; Automation Endpoints</h2>
+      <div class="endpoints">
+        <div class="endpoint-item">
+          <h3>Latest Version Tag</h3>
+          <a href="/version">/version</a>
+        </div>
+        <div class="endpoint-item">
+          <h3>Release Manifest (JSON)</h3>
+          <a href="/releases.json">/releases.json</a>
+        </div>
+        <div class="endpoint-item">
+          <h3>Linux Shell Installer</h3>
+          <a href="/install.sh">/install.sh</a>
+        </div>
+        <div class="endpoint-item">
+          <h3>Windows PowerShell Installer</h3>
+          <a href="/install.ps1">/install.ps1</a>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>&copy; Craft Server Manager &bull; <a href="https://craft.oguzhanumutlu.com">Documentation Portal</a> &bull; <a href="https://github.com/OguzhanUmutlu/craft">GitHub Repository</a></p>
+    </footer>
+  </div>
+</body>
+</html>

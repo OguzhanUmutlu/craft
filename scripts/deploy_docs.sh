@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-# ANSI styling
+# ==============================================================================
+# Craft Documentation & Portal Deployment Tool (Cloudflare Workers)
+# ==============================================================================
+
 BOLD='\033[1m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -13,6 +16,43 @@ NC='\033[0m'
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCS_DIR="${ROOT_DIR}/docs"
 
+DRY_RUN=false
+CI_MODE=false
+SUBCOMMAND="deploy"
+
+# Parse arguments
+ARGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --ci)
+            CI_MODE=true
+            shift
+            ;;
+        --skip-build)
+            shift
+            ;;
+        --version)
+            shift 2
+            ;;
+        build|preview|dev|whoami|status|login|help|--help|-h)
+            SUBCOMMAND="$1"
+            shift
+            ;;
+        deploy)
+            SUBCOMMAND="deploy"
+            shift
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
 banner() {
     echo -e "${CYAN}${BOLD}"
     echo "  ____            __ _    ____                 "
@@ -20,7 +60,7 @@ banner() {
     echo "| |   | '__/ _\` | |_| __|| | | |/ _ \ / __/ __|"
     echo "| |___| | | (_| |  _| |_ | |_| | (_) | (__\__ \\"
     echo " \____|_|  \__,_|_|  \__||____/ \___/ \___|___/"
-    echo "  Cloudflare Workers Deployment Tool           "
+    echo "  Documentation Portal Deployment Tool         "
     echo -e "${NC}"
 }
 
@@ -55,42 +95,21 @@ cmd_login() {
 }
 
 sync_static_assets() {
-    echo -e "${BLUE}==> Synchronizing static deployment assets into docs/public...${NC}"
-    mkdir -p "${DOCS_DIR}/public/downloads"
-    rm -f "${DOCS_DIR}/public/downloads/craft-darwin-universal"*
+    echo -e "${BLUE}==> Synchronizing static scripts and compose manifests into docs/public...${NC}"
+    mkdir -p "${DOCS_DIR}/public"
+    
+    # Keep docs bundle lightweight: clean legacy heavy binary blobs
+    rm -rf "${DOCS_DIR}/public/downloads"
 
     # Sync docker-compose.yml
     if [ -f "${ROOT_DIR}/docker-compose.yml" ]; then
-        cp "${ROOT_DIR}/docker-compose.yml" "${DOCS_DIR}/public/docker-compose.yml"
+        cp -f "${ROOT_DIR}/docker-compose.yml" "${DOCS_DIR}/public/docker-compose.yml"
         echo -e "${GREEN}[OK] Synced docker-compose.yml to docs/public/${NC}"
     fi
 
-    # Sync Linux release binary & archive
-    if [ -f "${ROOT_DIR}/target/release/craft" ]; then
-        cp "${ROOT_DIR}/target/release/craft" "${DOCS_DIR}/public/downloads/craft-linux-amd64"
-        tar -czf "${DOCS_DIR}/public/downloads/craft-linux-amd64.tar.gz" -C "${DOCS_DIR}/public/downloads" craft-linux-amd64
-        echo -e "${GREEN}[OK] Synced Linux x86_64 binary and archive${NC}"
-    fi
-
-    # Sync Windows release binary & zip
-    if [ -f "${ROOT_DIR}/target/x86_64-pc-windows-gnu/release/craft.exe" ]; then
-        cp "${ROOT_DIR}/target/x86_64-pc-windows-gnu/release/craft.exe" "${DOCS_DIR}/public/downloads/craft-windows-amd64.exe"
-        (cd "${DOCS_DIR}/public/downloads" && cp craft-windows-amd64.exe craft.exe && zip -9 -q craft-windows-amd64.zip craft.exe && rm craft.exe)
-        echo -e "${GREEN}[OK] Synced Windows x64 binary and zip archive${NC}"
-    fi
-
-    # Sync macOS Apple Silicon binary & archive
-    if [ -f "${ROOT_DIR}/target/aarch64-apple-darwin/release/craft" ]; then
-        cp "${ROOT_DIR}/target/aarch64-apple-darwin/release/craft" "${DOCS_DIR}/public/downloads/craft-darwin-arm64"
-        tar -czf "${DOCS_DIR}/public/downloads/craft-darwin-arm64.tar.gz" -C "${DOCS_DIR}/public/downloads" craft-darwin-arm64
-        echo -e "${GREEN}[OK] Synced macOS ARM64 binary and archive${NC}"
-    fi
-
-    # Sync macOS Intel binary & archive
-    if [ -f "${ROOT_DIR}/target/x86_64-apple-darwin/release/craft" ]; then
-        cp "${ROOT_DIR}/target/x86_64-apple-darwin/release/craft" "${DOCS_DIR}/public/downloads/craft-darwin-amd64"
-        tar -czf "${DOCS_DIR}/public/downloads/craft-darwin-amd64.tar.gz" -C "${DOCS_DIR}/public/downloads" craft-darwin-amd64
-        echo -e "${GREEN}[OK] Synced macOS AMD64 binary and archive${NC}"
+    # Sync installer scripts
+    if [ -f "${ROOT_DIR}/docs/public/install.sh" ]; then
+        chmod +x "${ROOT_DIR}/docs/public/install.sh"
     fi
 }
 
@@ -113,20 +132,24 @@ cmd_deploy() {
     banner
     check_prereqs
 
-    echo -e "${BLUE}==> Verifying Cloudflare credentials...${NC}"
-    if ! cd "${DOCS_DIR}" && npx wrangler whoami &> /dev/null; then
-        echo -e "${YELLOW}Wrangler is not logged in. Launching login flow...${NC}"
-        cd "${DOCS_DIR}" && npx wrangler login
+    if [ "$CI_MODE" = false ] && [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+        echo -e "${BLUE}==> Verifying Cloudflare credentials...${NC}"
+        if ! cd "${DOCS_DIR}" && npx wrangler whoami &> /dev/null; then
+            echo -e "${YELLOW}Wrangler is not logged in. Launching login flow...${NC}"
+            cd "${DOCS_DIR}" && npx wrangler login
+        fi
     fi
 
-    sync_static_assets
-    echo ""
-    echo -e "${BLUE}==> Compiling web application...${NC}"
-    cd "${DOCS_DIR}" && npm run build
+    cmd_build
+
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${YELLOW}[DRY RUN] Docs build verified. Skipping deployment.${NC}"
+        exit 0
+    fi
 
     echo ""
     echo -e "${BLUE}==> Deploying static assets to Cloudflare Workers...${NC}"
-    cd "${DOCS_DIR}" && npx wrangler deploy "$@"
+    cd "${DOCS_DIR}" && npx wrangler deploy "${ARGS[@]}"
 
     echo ""
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
@@ -134,13 +157,13 @@ cmd_deploy() {
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
     echo -e " Live URL:      ${CYAN}${BOLD}https://craft.oguzhanumutlu.com${NC}"
     echo -e " Assets Source: ${YELLOW}${DOCS_DIR}/dist${NC}"
-    echo -e "  Config:        ${YELLOW}${DOCS_DIR}/wrangler.jsonc${NC}"
+    echo -e " Config:        ${YELLOW}${DOCS_DIR}/wrangler.jsonc${NC}"
     echo -e "${GREEN}${BOLD}==================================================================${NC}"
 }
 
 cmd_help() {
     banner
-    echo -e "${BOLD}Usage:${NC} ./scripts/deploy_docs.sh [COMMAND]"
+    echo -e "${BOLD}Usage:${NC} ./scripts/deploy_docs.sh [COMMAND] [OPTIONS]"
     echo ""
     echo -e "${BOLD}Commands:${NC}"
     echo -e "  ${GREEN}deploy${NC}    Build production assets and deploy to Cloudflare Workers (default)"
@@ -150,13 +173,16 @@ cmd_help() {
     echo -e "  ${GREEN}login${NC}     Log in to Cloudflare via Wrangler OAuth"
     echo -e "  ${GREEN}help${NC}      Show this help message"
     echo ""
+    echo -e "${BOLD}Options:${NC}"
+    echo -e "  --dry-run   Build and verify static bundle without publishing to Cloudflare"
+    echo -e "  --ci        Run in non-interactive CI mode"
+    echo ""
     echo -e "Target domain: ${CYAN}https://craft.oguzhanumutlu.com${NC}"
 }
 
-case "${1:-deploy}" in
+case "$SUBCOMMAND" in
     deploy)
-        shift 2>/dev/null || true
-        cmd_deploy "$@"
+        cmd_deploy
         ;;
     build)
         cmd_build
@@ -174,8 +200,7 @@ case "${1:-deploy}" in
         cmd_help
         ;;
     *)
-        echo -e "${RED}Unknown command: $1${NC}"
-        echo ""
+        echo -e "${RED}Unknown command: $SUBCOMMAND${NC}"
         cmd_help
         exit 1
         ;;

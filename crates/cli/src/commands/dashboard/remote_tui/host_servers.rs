@@ -192,6 +192,114 @@ pub async fn manage_host_servers(
         return Ok(());
     }
 
+    // Bidirectional version check: remote vs local
+    let remote_version = client.get_craft_version();
+    let local_version = craft_core::CRAFT_VERSION;
+
+    if let Some(ref r_ver) = remote_version {
+        let r_semver = craft_core::parse_semver(r_ver);
+        let l_semver = craft_core::parse_semver(local_version);
+
+        let is_remote_outdated = match (r_semver, l_semver) {
+            (Some(r), Some(l)) => r < l,
+            _ => r_ver != local_version,
+        };
+
+        let is_local_outdated = match (r_semver, l_semver) {
+            (Some(r), Some(l)) => l < r,
+            _ => false,
+        };
+
+        if is_remote_outdated {
+            // Case 1: Remote is outdated
+            let width = get_content_width(80);
+            let update_header = format!(
+                "{}\r\n{}\r\n{}\r\n Remote Host:          {}\r\n Remote Craft Version: {} [OUTDATED]\r\n Local Craft Version:  {} [NEWER]\r\n\r\n An updated version of Craft is available on this local machine.\r\n Would you like to update the remote binary now?\r\n{}\r\n Choose an action:\r\n{}",
+                box_top(width).cyan().bold(),
+                box_title("REMOTE CRAFT UPDATE AVAILABLE", width, false).cyan().bold(),
+                box_divider(width).cyan().bold(),
+                host_config.alias.cyan().bold(),
+                r_ver.yellow().bold(),
+                local_version.green().bold(),
+                box_divider(width).dimmed(),
+                box_divider(width).dimmed(),
+            );
+
+            let update_entries = vec![
+                MenuEntry::new("1", "Update Remote Craft Now").with_aliases(&["u", "update", "y", "yes"]),
+                MenuEntry::new("2", "Continue Without Updating").with_aliases(&["c", "continue", "n", "no"]),
+                MenuEntry::new("0", "Cancel").with_aliases(&["q"]),
+            ];
+
+            let mut u_sel = 0;
+            match run_menu(&update_header, &update_entries, &mut u_sel)? {
+                Some(0) => {
+                    print_in_place_status(
+                        "UPDATING REMOTE CRAFT",
+                        &[format!("Updating Craft binary on '{}' to v{}...", host_config.alias, local_version)],
+                    )?;
+
+                    match craft_remote::run_bootstrap(&client.session) {
+                        Ok(_) => {
+                            let _ = client.ensure_daemon_started();
+                            show_modal_message(
+                                "UPDATE COMPLETE",
+                                &[format!(
+                                    "[OK] Craft successfully updated to v{} on '{}'!",
+                                    local_version, host_config.alias
+                                )
+                                .green()
+                                .bold()
+                                .to_string()],
+                                false,
+                            )?;
+                        }
+                        Err(e) => {
+                            show_modal_message(
+                                "UPDATE FAILED",
+                                &[format!("[ERROR] Failed to update remote Craft: {}", e)],
+                                true,
+                            )?;
+                            return Ok(());
+                        }
+                    }
+                }
+                Some(1) => {
+                    // Continue without updating
+                }
+                _ => return Ok(()),
+            }
+        } else if is_local_outdated {
+            // Case 2: Local is outdated
+            let width = get_content_width(80);
+            let adv_header = format!(
+                "{}\r\n{}\r\n{}\r\n Remote Host:          {}\r\n Remote Craft Version: {} [NEWER]\r\n Local Craft Version:  {} [OUTDATED]\r\n\r\n Warning: Remote host '{}' is running a newer Craft version.\r\n Updating remote is disabled to prevent downgrading remote services.\r\n We recommend updating Craft on your local machine.\r\n{}\r\n Choose an action:\r\n{}",
+                box_top(width).yellow().bold(),
+                box_title("LOCAL CRAFT OUTDATED", width, false).yellow().bold(),
+                box_divider(width).yellow().bold(),
+                host_config.alias.cyan().bold(),
+                r_ver.green().bold(),
+                local_version.yellow().bold(),
+                host_config.alias.cyan().bold(),
+                box_divider(width).dimmed(),
+                box_divider(width).dimmed(),
+            );
+
+            let adv_entries = vec![
+                MenuEntry::new("1", "Continue Connecting to Remote Host").with_aliases(&["c", "continue", "y"]),
+                MenuEntry::new("0", "Cancel").with_aliases(&["q"]),
+            ];
+
+            let mut a_sel = 0;
+            match run_menu(&adv_header, &adv_entries, &mut a_sel)? {
+                Some(0) => {
+                    // Continue connecting to remote host
+                }
+                _ => return Ok(()),
+            }
+        }
+    }
+
     // Ensure remote daemon is running by default if craft is installed
     let _ = client.ensure_daemon_started();
 

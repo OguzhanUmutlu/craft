@@ -67,8 +67,18 @@ async fn main() {
         }
         Some(Commands::Manage { remote_node, remote }) => {
             if let Some(alias) = remote {
-                let remote_cmd = format!("~/.local/bin/craft ui --remote-node \"{}\" 2>/dev/null || craft ui --remote-node \"{}\"", alias, alias);
-                execute_remote(&alias, &remote_cmd, true, &paths)
+                let registry = match craft_core::RemotesRegistry::load(&paths) {
+                    Ok(r) => r,
+                    Err(e) => return eprintln!("{}: {}", "Error".red().bold(), e),
+                };
+                if let Some(host_config) = registry.find(&alias) {
+                    commands::dashboard::remote_tui::manage_host_servers(&paths, host_config).await
+                } else {
+                    Err(craft_core::CraftError::Other(format!(
+                        "Remote host '{}' not found in registry. Use 'craft remote add' or 'craft ui' to add it.",
+                        alias
+                    )))
+                }
             } else {
                 if let Some(ref node) = remote_node {
                     crate::commands::dashboard::screen::set_remote_node(Some(node.clone()));

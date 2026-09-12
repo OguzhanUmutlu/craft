@@ -47,6 +47,31 @@ impl RemoteCraftClient {
         }
     }
 
+    /// Extracts version string from craft --version stdout
+    pub fn parse_version_str(out: &str) -> Option<String> {
+        let trimmed = out.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let token = trimmed.split_whitespace().last()?;
+        let v = token.trim_start_matches('v').trim();
+        if !v.is_empty() {
+            Some(v.to_string())
+        } else {
+            None
+        }
+    }
+
+    /// Retrieves the installed Craft version from the remote host (e.g., "1.0.0")
+    pub fn get_craft_version(&self) -> Option<String> {
+        if let Ok((code, out, _)) = self.session.exec("~/.local/bin/craft --version 2>/dev/null || /usr/local/bin/craft --version 2>/dev/null || craft --version 2>/dev/null") {
+            if code == 0 {
+                return Self::parse_version_str(&out);
+            }
+        }
+        None
+    }
+
     /// Resolves the craft binary invocation path on remote
     fn craft_bin(&self) -> &'static str {
         // Will check standard PATH, falling back to ~/.local/bin/craft
@@ -490,5 +515,20 @@ impl RemoteCraftClient {
             return Err(CraftError::Other(format!("Failed to empty remote trash: {}", err.trim())));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_version_str() {
+        assert_eq!(RemoteCraftClient::parse_version_str("craft 1.0.0\n"), Some("1.0.0".to_string()));
+        assert_eq!(RemoteCraftClient::parse_version_str("craft 1.0.1"), Some("1.0.1".to_string()));
+        assert_eq!(RemoteCraftClient::parse_version_str("1.0.1\n"), Some("1.0.1".to_string()));
+        assert_eq!(RemoteCraftClient::parse_version_str("craft version 1.0.1\n"), Some("1.0.1".to_string()));
+        assert_eq!(RemoteCraftClient::parse_version_str(""), None);
+        assert_eq!(RemoteCraftClient::parse_version_str("   \n"), None);
     }
 }

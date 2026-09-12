@@ -100,3 +100,4 @@ desktop.ini
 
 .fuse_hidden*
 package-lock.json
+dist/

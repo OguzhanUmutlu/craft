@@ -1,0 +1,12 @@
+{
+  "$schema": "../docs/node_modules/wrangler/config-schema.json",
+  "name": "craft-executables",
+  "account_id": "ae162084a3a396cee2e0d1e87bc35c08",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}
