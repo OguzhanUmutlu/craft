@@ -123,7 +123,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
         let entries = vec![
             MenuEntry::new("1", "Local Servers"),
             MenuEntry::new("2", "Remote Servers"),
-            MenuEntry::new("3", "Create New Server").with_aliases(&["c", "n"]),
+            MenuEntry::new("3", "World Snapshots & Backups").with_aliases(&["b", "s"]),
             MenuEntry::new("4", "Tools & Utilities").with_aliases(&["t", "u"]),
             MenuEntry::new("0", "Exit Craft").with_aliases(&["q"]),
         ];
@@ -138,7 +138,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                 remote_servers_menu(paths).await?;
             }
             Some(2) => {
-                gui_create_server_wizard(paths).await?;
+                backups_menu(paths).await?;
             }
             Some(3) => {
                 tools_menu(paths).await?;

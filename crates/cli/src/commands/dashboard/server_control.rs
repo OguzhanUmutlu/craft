@@ -1,13 +1,13 @@
 use colored::Colorize;
 
-use craft_backup::BackupEngine;
-use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
+use craft_backup::{BackupEngine, GDriveStorageProvider, S3StorageProvider, StorageProvider};
+use craft_core::{CraftError, CraftPaths, GlobalBackupRegistry, Result, ServersRegistry};
 use craft_daemon::DaemonClient;
 
 use crate::commands::view::handle_view;
 use super::screen::{
     box_divider, box_title, box_top, exec_console_action, get_content_width, print_in_place_status,
-    run_menu, show_modal_message, AltScreenGuard, MenuEntry,
+    run_input_prompt, run_menu, show_modal_message, AltScreenGuard, MenuEntry,
 };
 use super::wizard::gui_create_server_wizard;
 
@@ -789,8 +789,8 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
             ToggleStartStop,
             Restart,
             AttachConsole,
-            CreateBackup,
-            ListBackups,
+            Backups,
+            Plugins,
             DeleteServer,
         }
 
@@ -812,12 +812,12 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
         }
 
         let bkp_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(bkp_hotkey, "Create World Backup"));
-        actions.push(ControlAction::CreateBackup);
+        entries.push(MenuEntry::new(bkp_hotkey, "World Snapshots & Backups"));
+        actions.push(ControlAction::Backups);
 
-        let list_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(list_hotkey, "List Existing Backups"));
-        actions.push(ControlAction::ListBackups);
+        let plg_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(plg_hotkey, "Browse & Manage Plugins"));
+        actions.push(ControlAction::Plugins);
 
         let del_hotkey = (actions.len() + 1).to_string();
         entries.push(MenuEntry::new(del_hotkey, "Delete Server"));
@@ -939,62 +939,11 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     }
                 }
             }
-            ControlAction::CreateBackup => {
-                let _ = print_in_place_status(
-                    "CREATING BACKUP",
-                    &[
-                        format!("Creating world snapshot for '{}'...", server.name),
-                        "Compressing server files and world data...".to_string(),
-                    ],
-                );
-                let engine = BackupEngine::new(paths);
-                match engine
-                    .create_backup(&server.name, &server.path, None, false)
-                    .await
-                {
-                    Ok(file) => {
-                        flash_status = Some(
-                            format!(
-                                "[OK] Backup archive created: {}",
-                                file.file_name().unwrap_or_default().to_string_lossy()
-                            )
-                            .green()
-                            .bold()
-                            .to_string(),
-                        );
-                    }
-                    Err(e) => {
-                        flash_status = Some(
-                            format!("[ERROR] Backup failed: {}", e)
-                                .red()
-                                .bold()
-                                .to_string(),
-                        );
-                    }
-                }
+            ControlAction::Backups => {
+                server_backups_panel(&server.name, paths).await?;
             }
-            ControlAction::ListBackups => {
-                let engine = BackupEngine::new(paths);
-                let list = engine.list_backups(&server.name);
-                if list.is_empty() {
-                    show_modal_message(
-                        "NO BACKUPS",
-                        &[format!(
-                            "No existing backups found for server '{}'.",
-                            server.name
-                        )],
-                        false,
-                    )?;
-                } else {
-                    let lines: Vec<String> = list
-                        .iter()
-                        .map(|b| {
-                            let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
-                            format!("{:<40} {:>8.2} MB  {}", b.filename, mb, b.created_at)
-                        })
-                        .collect();
-                    show_modal_message("EXISTING BACKUPS", &lines, false)?;
-                }
+            ControlAction::Plugins => {
+                server_plugins_panel(&server.name, paths).await?;
             }
             ControlAction::DeleteServer => {
                 let width = get_content_width(80);
@@ -1065,6 +1014,626 @@ pub(crate) async fn server_control_panel(server_name: &str, paths: &CraftPaths) 
                     _ => {}
                 }
             }
+        }
+    }
+}
+
+pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let mut selected = 0;
+
+    loop {
+        let registry = ServersRegistry::load(paths)?;
+        let server = match registry.find_by_name(server_name) {
+            Some(s) => s.clone(),
+            None => {
+                show_modal_message(
+                    "SERVER NOT FOUND",
+                    &[format!("Server '{}' is no longer registered.", server_name)],
+                    true,
+                )?;
+                return Ok(());
+            }
+        };
+
+        let backup_reg = GlobalBackupRegistry::load(paths)?;
+        let current_method_id = server.backup_method.as_deref().unwrap_or("local");
+        let method_display = match current_method_id {
+            "s3" => {
+                if let Some(ref s3) = backup_reg.s3 {
+                    format!("AWS S3 / R2 / MinIO [Bucket: {}]", s3.bucket).green().bold().to_string()
+                } else {
+                    "AWS S3 [NOT CONFIGURED IN CLOUD BACKUPS]".yellow().to_string()
+                }
+            }
+            "gdrive" => {
+                if let Some(ref gd) = backup_reg.gdrive {
+                    format!("Google Drive [Folder: {}]", gd.folder_id).green().bold().to_string()
+                } else {
+                    "Google Drive [NOT CONFIGURED IN CLOUD BACKUPS]".yellow().to_string()
+                }
+            }
+            "multi" => "Multi-Destination (Local + All Cloud)".cyan().bold().to_string(),
+            _ => "Local Disk Storage (~/.craft/backups)".white().bold().to_string(),
+        };
+
+        let policy = backup_reg.server_policies.get(&server.name);
+        let policy_str = if let Some(p) = policy {
+            if p.enabled {
+                format!("[AUTO: Every {}h | Keep {}]", p.interval_hours, p.retention_count).green().to_string()
+            } else {
+                "[AUTO: Disabled]".dimmed().to_string()
+            }
+        } else {
+            "[AUTO: Disabled]".dimmed().to_string()
+        };
+
+        let engine = BackupEngine::new(paths);
+        let existing_backups = engine.list_backups(&server.name);
+        let total_size_mb: f64 = existing_backups.iter().map(|b| b.size_bytes as f64).sum::<f64>() / (1024.0 * 1024.0);
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:         {}\r\n Active Method:  {}\r\n Auto-Backup:    {}\r\n Local Archives: {} ({:.2} MB total)\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title(&format!("BACKUPS & SNAPSHOTS: {}", server.name), width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server.name.white().bold(),
+            method_display,
+            policy_str,
+            existing_backups.len().to_string().cyan().bold(),
+            total_size_mb,
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Select Active Backup Method"),
+            MenuEntry::new("2", "Create Backup Now"),
+            MenuEntry::new("3", "List Existing Backups"),
+            MenuEntry::new("4", "Restore Server from Backup"),
+            MenuEntry::new("5", "Configure Auto-Backup Schedule"),
+            MenuEntry::new("0", "Back to Server Menu").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                // Select active backup method
+                let mut method_sel = 0;
+                let s3_label = if let Some(ref s3) = backup_reg.s3 {
+                    format!("AWS S3 / R2 / MinIO [Configured: {}]", s3.bucket)
+                } else {
+                    "AWS S3 / R2 / MinIO [Configure First]".to_string()
+                };
+                let gd_label = if let Some(ref gd) = backup_reg.gdrive {
+                    format!("Google Drive [Configured: {}]", gd.folder_id)
+                } else {
+                    "Google Drive [Configure First]".to_string()
+                };
+
+                let method_entries = vec![
+                    MenuEntry::new("1", "Local Disk Storage (~/.craft/backups)"),
+                    MenuEntry::new("2", s3_label),
+                    MenuEntry::new("3", gd_label),
+                    MenuEntry::new("4", "Multi-Destination (Local + Cloud)"),
+                    MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                ];
+
+                let method_header = format!(" Select backup system for server '{}':", server.name);
+                if let Some(m_idx) = run_menu(&method_header, &method_entries, &mut method_sel)? {
+                    let new_method = match m_idx {
+                        0 => Some("local".to_string()),
+                        1 => {
+                            if backup_reg.s3.is_none() {
+                                show_modal_message(
+                                    "S3 NOT CONFIGURED",
+                                    &[
+                                        "No S3 / R2 / MinIO credentials are configured yet.",
+                                        "Opening S3 setup wizard now...",
+                                    ],
+                                    false,
+                                )?;
+                                super::cloud_backups::configure_s3_menu(paths).await?;
+                                let updated_reg = GlobalBackupRegistry::load(paths)?;
+                                if updated_reg.s3.is_none() {
+                                    continue;
+                                }
+                            }
+                            Some("s3".to_string())
+                        }
+                        2 => {
+                            if backup_reg.gdrive.is_none() {
+                                show_modal_message(
+                                    "GDRIVE NOT CONFIGURED",
+                                    &[
+                                        "No Google Drive credentials are configured yet.",
+                                        "Opening Google Drive setup wizard now...",
+                                    ],
+                                    false,
+                                )?;
+                                super::cloud_backups::configure_gdrive_menu(paths).await?;
+                                let updated_reg = GlobalBackupRegistry::load(paths)?;
+                                if updated_reg.gdrive.is_none() {
+                                    continue;
+                                }
+                            }
+                            Some("gdrive".to_string())
+                        }
+                        3 => Some("multi".to_string()),
+                        _ => continue,
+                    };
+
+                    let mut reg = ServersRegistry::load(paths)?;
+                    if let Some(s) = reg.servers.iter_mut().find(|s| s.name == server.name) {
+                        s.backup_method = new_method.clone();
+                        reg.save(paths)?;
+                        show_modal_message(
+                            "BACKUP METHOD UPDATED",
+                            &[
+                                format!("[OK] Server '{}' now uses backup method: {}", server.name, new_method.as_deref().unwrap_or("local"))
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            ],
+                            false,
+                        )?;
+                    }
+                }
+            }
+            Some(1) => {
+                // Create backup now using selected method
+                let scope_header = " Choose backup scope:";
+                let scope_entries = vec![
+                    MenuEntry::new("1", "Full Server Snapshot"),
+                    MenuEntry::new("2", "World Only Snapshot"),
+                    MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                ];
+                let mut sc_sel = 0;
+                let world_only = match run_menu(scope_header, &scope_entries, &mut sc_sel)? {
+                    Some(0) => false,
+                    Some(1) => true,
+                    _ => continue,
+                };
+
+                let _ = print_in_place_status(
+                    "CREATING BACKUP",
+                    &[
+                        format!("Creating snapshot for '{}'...", server.name),
+                        "Compressing archive data...".to_string(),
+                    ],
+                );
+
+                let archive_path = match engine.create_backup(&server.name, &server.path, None, world_only).await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        show_modal_message("BACKUP FAILED", &[format!("[ERROR] {}", e)], true)?;
+                        continue;
+                    }
+                };
+
+                let fname = archive_path.file_name().and_then(|f| f.to_str()).unwrap_or("backup.tar.gz");
+                let mut summary_lines = vec![
+                    format!("[OK] Local archive saved: {}", archive_path.display()).green().bold().to_string(),
+                ];
+
+                let method = server.backup_method.as_deref().unwrap_or("local");
+                if method == "s3" || method == "multi" {
+                    if let Some(ref s3_config) = backup_reg.s3 {
+                        let _ = print_in_place_status(
+                            "UPLOADING TO S3",
+                            &[format!("Uploading '{}' to S3 bucket '{}'...", fname, s3_config.bucket)],
+                        );
+                        let provider = S3StorageProvider::new(s3_config.clone());
+                        let remote_key = if let Some(ref pfx) = s3_config.prefix {
+                            format!("{}/{}/{}", pfx.trim_end_matches('/'), server.name, fname)
+                        } else {
+                            format!("{}/{}", server.name, fname)
+                        };
+                        match provider.upload_file(&archive_path, &remote_key).await {
+                            Ok(_) => summary_lines.push(format!("[OK] S3 Upload complete: s3://{}/{}", s3_config.bucket, remote_key).green().to_string()),
+                            Err(e) => summary_lines.push(format!("[WARN] S3 Upload failed: {}", e).yellow().to_string()),
+                        }
+                    } else if method == "s3" {
+                        summary_lines.push("[WARN] S3 is not configured in Cloud Backups; kept locally.".yellow().to_string());
+                    }
+                }
+
+                if method == "gdrive" || method == "multi" {
+                    if let Some(ref gd_config) = backup_reg.gdrive {
+                        let _ = print_in_place_status(
+                            "UPLOADING TO GDRIVE",
+                            &[format!("Uploading '{}' to Google Drive folder '{}'...", fname, gd_config.folder_id)],
+                        );
+                        let provider = GDriveStorageProvider::new(gd_config.clone());
+                        match provider.upload_file(&archive_path, fname).await {
+                            Ok(_) => summary_lines.push(format!("[OK] Google Drive Upload complete: folder {}", gd_config.folder_id).green().to_string()),
+                            Err(e) => summary_lines.push(format!("[WARN] Google Drive Upload failed: {}", e).yellow().to_string()),
+                        }
+                    } else if method == "gdrive" {
+                        summary_lines.push("[WARN] Google Drive is not configured; kept locally.".yellow().to_string());
+                    }
+                }
+
+                show_modal_message("SNAPSHOT CREATED", &summary_lines, false)?;
+            }
+            Some(2) => {
+                // List backups
+                let list = engine.list_backups(&server.name);
+                if list.is_empty() {
+                    show_modal_message(
+                        "NO BACKUPS FOUND",
+                        &[format!("No local backups found for server '{}'.", server.name)],
+                        false,
+                    )?;
+                } else {
+                    let lines: Vec<String> = list
+                        .iter()
+                        .map(|b| {
+                            let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
+                            format!("{:<40} {:>8.2} MB  {}", b.filename, mb, b.created_at)
+                        })
+                        .collect();
+                    show_modal_message(&format!("BACKUPS: {}", server.name), &lines, false)?;
+                }
+            }
+            Some(3) => {
+                // Restore server from backup
+                if craft_core::is_server_locked(&server.path) || craft_core::get_server_running_pid(&server.path).is_some() {
+                    let pid_info = craft_core::get_server_running_pid(&server.path).map(|p| format!(" (PID: {})", p)).unwrap_or_default();
+                    show_modal_message(
+                        "RESTORE BLOCKED: SERVER IS RUNNING",
+                        &[
+                            format!("Cannot restore backup to server '{}': The server is currently RUNNING{}.", server.name, pid_info),
+                            "You MUST stop the server before restoring a backup to prevent world corruption.".to_string(),
+                            "".to_string(),
+                            "Please stop the server first, then try restoring again.".to_string(),
+                        ],
+                        true,
+                    )?;
+                    continue;
+                }
+
+                let list = engine.list_backups(&server.name);
+                let mut b_entries = Vec::new();
+                for (bi, b) in list.iter().enumerate() {
+                    let hotkey = if bi < 9 {
+                        (bi + 1).to_string()
+                    } else {
+                        ((b'a' + (bi - 9) as u8) as char).to_string()
+                    };
+                    let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
+                    b_entries.push(MenuEntry::new(
+                        hotkey,
+                        format!("{:<32} ({:.1} MB)", b.filename, mb),
+                    ));
+                }
+                b_entries.push(MenuEntry::new("c", "Custom Archive Path"));
+                b_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+
+                let b_header = format!(" Select backup archive to restore to '{}':", server.name);
+                let mut b_sel = 0;
+                if let Some(b_idx) = run_menu(&b_header, &b_entries, &mut b_sel)? {
+                    let target_archive = if b_idx < list.len() {
+                        paths.backups_dir.join(&server.name).join(&list[b_idx].filename)
+                    } else if b_idx == list.len() {
+                        match run_input_prompt("CUSTOM ARCHIVE", "Enter path to archive (.tar.gz / .zip):", None)? {
+                            Some(p) if !p.trim().is_empty() => std::path::PathBuf::from(p.trim()),
+                            _ => continue,
+                        }
+                    } else {
+                        continue;
+                    };
+
+                    let _ = print_in_place_status(
+                        "RESTORING SERVER",
+                        &[format!("Unpacking backup '{}' into '{}'...", target_archive.display(), server.path.display())],
+                    );
+                    match engine.restore_backup(&target_archive, &server.path) {
+                        Ok(_) => {
+                            show_modal_message(
+                                "RESTORE COMPLETE",
+                                &[
+                                    format!("[OK] Successfully restored server '{}' from backup!", server.name)
+                                        .green()
+                                        .bold()
+                                        .to_string(),
+                                ],
+                                false,
+                            )?;
+                        }
+                        Err(e) => {
+                            show_modal_message("RESTORE FAILED", &[format!("[ERROR] {}", e)], true)?;
+                        }
+                    }
+                }
+            }
+            Some(4) => {
+                // Configure Auto-Backup Schedule
+                super::cloud_backups::configure_single_policy(paths, &server.name).await?;
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let mut selected = 0;
+
+    loop {
+        let registry = ServersRegistry::load(paths)?;
+        let server = match registry.find_by_name(server_name) {
+            Some(s) => s.clone(),
+            None => {
+                show_modal_message(
+                    "SERVER NOT FOUND",
+                    &[format!("Server '{}' is no longer registered.", server_name)],
+                    true,
+                )?;
+                return Ok(());
+            }
+        };
+
+        let plugins_dir = server.path.join("plugins");
+        let installed_plugins = list_server_plugins(&plugins_dir);
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:    {} ({:<10} {})\r\n Directory: {}\r\n Installed: {} plugin jar(s)\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title(&format!("PLUGINS: {}", server.name), width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server.name.white().bold(),
+            server.software.cyan(),
+            server.version,
+            plugins_dir.display(),
+            installed_plugins.len().to_string().cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Search & Install Plugins Online"),
+            MenuEntry::new("2", "Install Plugin by Slug / ID"),
+            MenuEntry::new("3", "Manage Installed Plugins"),
+            MenuEntry::new("0", "Back to Server Menu").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                // Search online
+                let query = match run_input_prompt(
+                    "SEARCH PLUGINS",
+                    "Enter search keyword (e.g. essentials, viaversion, luckperms, worldedit):",
+                    None,
+                )? {
+                    Some(q) if !q.trim().is_empty() => q.trim().to_string(),
+                    _ => continue,
+                };
+
+                let _ = print_in_place_status(
+                    "SEARCHING PLUGINS",
+                    &[format!("Searching Modrinth, Hangar, and Poggit for '{}'...", query)],
+                );
+                let pm = craft_plugins::PluginManager::new();
+                let results = pm.search(&query).await;
+
+                if results.is_empty() {
+                    show_modal_message(
+                        "NO PLUGINS FOUND",
+                        &[format!("No plugins found matching query '{}'.", query)],
+                        false,
+                    )?;
+                } else {
+                    let mut p_entries = Vec::new();
+                    for (i, hit) in results.iter().enumerate() {
+                        let hotkey = if i < 9 {
+                            (i + 1).to_string()
+                        } else if i < 35 {
+                            ((b'a' + (i - 9) as u8) as char).to_string()
+                        } else {
+                            format!("{}", i + 1)
+                        };
+                        let desc = if hit.description.len() > 40 {
+                            format!("{}...", &hit.description[..37])
+                        } else {
+                            hit.description.clone()
+                        };
+                        p_entries.push(MenuEntry::new(
+                            hotkey,
+                            format!("{:<18} [{}] - {}", hit.name, hit.source, desc),
+                        ));
+                    }
+                    p_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+
+                    let p_header = format!(" Search results for '{}' - select to install directly into '{}':", query, server.name);
+                    let mut p_sel = 0;
+                    if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
+                        if p_idx < results.len() {
+                            let chosen = &results[p_idx];
+                            let _ = print_in_place_status(
+                                "DOWNLOADING PLUGIN",
+                                &[format!("Downloading '{}' into '{}'...", chosen.name, plugins_dir.display())],
+                            );
+                            match pm.install_from_modrinth(&server.path, &chosen.id_or_slug).await {
+                                Ok(dest) => {
+                                    show_modal_message(
+                                        "PLUGIN INSTALLED",
+                                        &[
+                                            format!("[OK] Successfully installed '{}'!", chosen.name).green().bold().to_string(),
+                                            format!("File: {}", dest.display()),
+                                        ],
+                                        false,
+                                    )?;
+                                }
+                                Err(e) => {
+                                    show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Some(1) => {
+                // Install by slug
+                let slug = match run_input_prompt(
+                    "PLUGIN SLUG / ID",
+                    "Enter Modrinth plugin slug or ID (e.g. luckperms, spark, floodgate):",
+                    None,
+                )? {
+                    Some(s) if !s.trim().is_empty() => s.trim().to_string(),
+                    _ => continue,
+                };
+
+                let _ = print_in_place_status(
+                    "DOWNLOADING PLUGIN",
+                    &[format!("Downloading '{}' into '{}'...", slug, plugins_dir.display())],
+                );
+                let pm = craft_plugins::PluginManager::new();
+                match pm.install_from_modrinth(&server.path, &slug).await {
+                    Ok(dest) => {
+                        show_modal_message(
+                            "PLUGIN INSTALLED",
+                            &[
+                                format!("[OK] Successfully installed plugin '{}'!", slug).green().bold().to_string(),
+                                format!("File: {}", dest.display()),
+                            ],
+                            false,
+                        )?;
+                    }
+                    Err(e) => {
+                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                    }
+                }
+            }
+            Some(2) => {
+                // Manage installed plugins
+                manage_installed_plugins_menu(&server.name, &plugins_dir).await?;
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+pub(crate) struct InstalledPluginItem {
+    pub filename: String,
+    pub path: std::path::PathBuf,
+    pub is_enabled: bool,
+    pub size_bytes: u64,
+}
+
+pub(crate) fn list_server_plugins(plugins_dir: &std::path::Path) -> Vec<InstalledPluginItem> {
+    let mut list = Vec::new();
+    if plugins_dir.exists() && plugins_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(plugins_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    let fname = entry.file_name().to_string_lossy().to_string();
+                    if fname.ends_with(".jar") {
+                        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                        list.push(InstalledPluginItem {
+                            filename: fname,
+                            path,
+                            is_enabled: true,
+                            size_bytes: size,
+                        });
+                    } else if fname.ends_with(".jar.disabled") {
+                        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                        list.push(InstalledPluginItem {
+                            filename: fname,
+                            path,
+                            is_enabled: false,
+                            size_bytes: size,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    list.sort_by(|a, b| a.filename.cmp(&b.filename));
+    list
+}
+
+async fn manage_installed_plugins_menu(server_name: &str, plugins_dir: &std::path::Path) -> Result<()> {
+    let mut selected = 0;
+
+    loop {
+        let plugins = list_server_plugins(plugins_dir);
+        if plugins.is_empty() {
+            show_modal_message(
+                "NO PLUGINS INSTALLED",
+                &[format!("No plugin jars found in '{}'.", plugins_dir.display())],
+                false,
+            )?;
+            return Ok(());
+        }
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server: '{}'\r\n Select a plugin jar to toggle status or delete:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("MANAGE INSTALLED PLUGINS", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server_name,
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries = Vec::new();
+        for (i, p) in plugins.iter().enumerate() {
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else if i < 35 {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            } else {
+                format!("{}", i + 1)
+            };
+            let status = if p.is_enabled {
+                "[ENABLED]".green().bold().to_string()
+            } else {
+                "[DISABLED]".dimmed().to_string()
+            };
+            let kb = (p.size_bytes as f64) / 1024.0;
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<35} {:>8.1} KB  {}", p.filename, kb, status),
+            ));
+        }
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(idx) if idx < plugins.len() => {
+                let chosen = &plugins[idx];
+                let item_header = format!(" Plugin: {}\r\n Choose action:", chosen.filename);
+                let toggle_label = if chosen.is_enabled { "Disable Plugin (rename to .disabled)" } else { "Enable Plugin (rename to .jar)" };
+                let item_entries = vec![
+                    MenuEntry::new("1", toggle_label),
+                    MenuEntry::new("2", "Delete Plugin File"),
+                    MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                ];
+                let mut item_sel = 0;
+                match run_menu(&item_header, &item_entries, &mut item_sel)? {
+                    Some(0) => {
+                        if chosen.is_enabled {
+                            let new_path = chosen.path.with_extension("jar.disabled");
+                            let _ = std::fs::rename(&chosen.path, new_path);
+                        } else {
+                            let stem = chosen.path.to_string_lossy();
+                            if let Some(orig) = stem.strip_suffix(".disabled") {
+                                let _ = std::fs::rename(&chosen.path, orig);
+                            }
+                        }
+                    }
+                    Some(1) => {
+                        let _ = std::fs::remove_file(&chosen.path);
+                        show_modal_message(
+                            "PLUGIN DELETED",
+                            &[format!("[OK] Removed '{}' from plugins directory.", chosen.filename)],
+                            false,
+                        )?;
+                    }
+                    _ => continue,
+                }
+            }
+            _ => return Ok(()),
         }
     }
 }

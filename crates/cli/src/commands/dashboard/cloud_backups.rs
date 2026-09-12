@@ -11,7 +11,7 @@ use crate::commands::dashboard::screen::{
     AltScreenGuard, MenuEntry,
 };
 
-pub async fn enterprise_backups_menu(paths: &CraftPaths) -> Result<()> {
+pub async fn setup_backup_systems_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
     let mut selected = 0;
 
@@ -32,22 +32,20 @@ pub async fn enterprise_backups_menu(paths: &CraftPaths) -> Result<()> {
         };
 
         let header = format!(
-            "{}\r\n{}\r\n{}\r\n Enterprise Multi-Destination Cloud Backups & Automated Retention\r\n S3 / R2 / MinIO / Wasabi: {}\r\n Google Drive:              {}\r\n Server Specific Policies:  {}\r\n{}",
+            "{}\r\n{}\r\n{}\r\n Configure local disk and cloud storage systems for server backups.\r\n Local Disk:                [ACTIVE: ~/.craft/backups]\r\n S3 / R2 / MinIO / Wasabi: {}\r\n Google Drive:              {}\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("ENTERPRISE CLOUD BACKUPS & AUTO-POLICIES", width, false).cyan().bold(),
+            box_title("BACKUP SYSTEMS CONFIGURATION", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             s3_status,
             gdrive_status,
-            registry.server_policies.len().to_string().cyan().bold(),
             box_divider(width).dimmed(),
         );
 
         let entries = vec![
             MenuEntry::new("1", "Configure S3 / Cloudflare R2 / MinIO / Wasabi"),
             MenuEntry::new("2", "Configure Google Drive Cloud Storage"),
-            MenuEntry::new("3", "Server Automated Backup Policies & Retention"),
-            MenuEntry::new("4", "Trigger Immediate Multi-Destination Cloud Backup"),
-            MenuEntry::new("0", "Back to Backup Manager").with_aliases(&["b", "q"]),
+            MenuEntry::new("3", "Trigger Immediate Multi-Destination Cloud Backup"),
+            MenuEntry::new("0", "Back to Backups Menu").with_aliases(&["b", "q"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -58,9 +56,6 @@ pub async fn enterprise_backups_menu(paths: &CraftPaths) -> Result<()> {
                 configure_gdrive_menu(paths).await?;
             }
             Some(2) => {
-                configure_policies_menu(paths).await?;
-            }
-            Some(3) => {
                 trigger_multi_backup_menu(paths).await?;
             }
             _ => return Ok(()),
@@ -68,7 +63,7 @@ pub async fn enterprise_backups_menu(paths: &CraftPaths) -> Result<()> {
     }
 }
 
-async fn configure_s3_menu(paths: &CraftPaths) -> Result<()> {
+pub(crate) async fn configure_s3_menu(paths: &CraftPaths) -> Result<()> {
     let mut selected = 0;
 
     loop {
@@ -197,7 +192,7 @@ async fn configure_s3_menu(paths: &CraftPaths) -> Result<()> {
     }
 }
 
-async fn configure_gdrive_menu(paths: &CraftPaths) -> Result<()> {
+pub(crate) async fn configure_gdrive_menu(paths: &CraftPaths) -> Result<()> {
     let mut selected = 0;
 
     loop {
@@ -316,7 +311,7 @@ async fn configure_gdrive_menu(paths: &CraftPaths) -> Result<()> {
     }
 }
 
-async fn configure_policies_menu(paths: &CraftPaths) -> Result<()> {
+pub(crate) async fn configure_policies_menu(paths: &CraftPaths) -> Result<()> {
     let mut selected = 0;
 
     loop {
@@ -369,7 +364,7 @@ async fn configure_policies_menu(paths: &CraftPaths) -> Result<()> {
     }
 }
 
-async fn configure_single_policy(paths: &CraftPaths, server_name: &str) -> Result<()> {
+pub(crate) async fn configure_single_policy(paths: &CraftPaths, server_name: &str) -> Result<()> {
     let mut selected = 0;
 
     loop {

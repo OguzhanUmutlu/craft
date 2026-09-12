@@ -130,31 +130,50 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
 
     loop {
         let registry = ServersRegistry::load(paths)?;
-        if registry.servers.is_empty() {
-            show_empty_servers_modal(paths).await?;
-            return Ok(());
-        }
+        let bk_reg = craft_core::GlobalBackupRegistry::load(paths)?;
+        let s3_status = if let Some(ref s3) = bk_reg.s3 {
+            format!("[S3: {}]", s3.bucket).green().bold().to_string()
+        } else {
+            "[S3: OFF]".dimmed().to_string()
+        };
+        let gd_status = if let Some(ref gd) = bk_reg.gdrive {
+            format!("[GDrive: {}]", gd.folder_id).green().bold().to_string()
+        } else {
+            "[GDrive: OFF]".dimmed().to_string()
+        };
 
         let width = get_content_width(80);
         let header = format!(
-            "{}\r\n{}\r\n{}\r\n Create compressed backups, inspect archive history, or restore worlds.\r\n{}",
+            "{}\r\n{}\r\n{}\r\n Centralized backup engine: configure cloud providers, policies, and snapshots.\r\n Active Systems: [Local: ~/.craft/backups] {} {}\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("WORLD SNAPSHOTS & BACKUP MANAGER", width, false).cyan().bold(),
+            box_title("WORLD SNAPSHOTS & BACKUP SYSTEMS", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
+            s3_status,
+            gd_status,
             box_divider(width).dimmed(),
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Create World Snapshot"),
-            MenuEntry::new("2", "List Existing Backups"),
-            MenuEntry::new("3", "Restore Server from Backup"),
-            MenuEntry::new("4", "Enterprise Cloud & Auto-Backup Policies"),
-            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
+            MenuEntry::new("1", "Setup Backup Systems (Local, S3 / R2 / MinIO, Google Drive)").with_aliases(&["s", "c"]),
+            MenuEntry::new("2", "Automated Backup Policies & Retention").with_aliases(&["p", "a"]),
+            MenuEntry::new("3", "Create Server Snapshot").with_aliases(&["n"]),
+            MenuEntry::new("4", "List Existing Backups").with_aliases(&["l"]),
+            MenuEntry::new("5", "Restore Server from Backup").with_aliases(&["r"]),
+            MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
         ];
-
 
         match run_menu(&header, &entries, &mut selected)? {
             Some(0) => {
+                super::cloud_backups::setup_backup_systems_menu(paths).await?;
+            }
+            Some(1) => {
+                super::cloud_backups::configure_policies_menu(paths).await?;
+            }
+            Some(2) => {
+                if registry.servers.is_empty() {
+                    show_empty_servers_modal(paths).await?;
+                    continue;
+                }
                 // Create
                 let mut s_entries = Vec::new();
                 for (i, s) in registry.servers.iter().enumerate() {
@@ -224,8 +243,12 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                     }
                 }
             }
-            Some(1) => {
+            Some(3) => {
                 // List
+                if registry.servers.is_empty() {
+                    show_empty_servers_modal(paths).await?;
+                    continue;
+                }
                 let mut s_entries = Vec::new();
                 for (i, s) in registry.servers.iter().enumerate() {
                     let hotkey = if i < 9 {
@@ -266,8 +289,12 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                     }
                 }
             }
-            Some(2) => {
+            Some(4) => {
                 // Restore
+                if registry.servers.is_empty() {
+                    show_empty_servers_modal(paths).await?;
+                    continue;
+                }
                 let mut s_entries = Vec::new();
                 for (i, s) in registry.servers.iter().enumerate() {
                     let hotkey = if i < 9 {
@@ -374,9 +401,6 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                         }
                     }
                 }
-            }
-            Some(3) => {
-                super::cloud_backups::enterprise_backups_menu(paths).await?;
             }
             _ => return Ok(()),
         }
@@ -1053,7 +1077,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
     loop {
         let width = get_content_width(80);
         let header = format!(
-            "{}\r\n{}\r\n{}\r\n Auxiliary utilities for backups, plugin management, diagnostics, and daemon.\r\n{}",
+            "{}\r\n{}\r\n{}\r\n Auxiliary utilities for diagnostics, background daemon, and cache.\r\n{}",
             box_top(width).cyan().bold(),
             box_title("TOOLS & UTILITIES", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
@@ -1061,28 +1085,20 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         );
 
         let entries = vec![
-            MenuEntry::new("1", "World Snapshots & Backups"),
-            MenuEntry::new("2", "Browse & Install Plugins"),
-            MenuEntry::new("3", "Server Network Ping"),
-            MenuEntry::new("4", "Service Daemon Control"),
-            MenuEntry::new("5", "Cache & Storage Management"),
+            MenuEntry::new("1", "Server Network Ping"),
+            MenuEntry::new("2", "Service Daemon Control"),
+            MenuEntry::new("3", "Cache & Storage Management"),
             MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b", "q"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
             Some(0) => {
-                backups_menu(paths).await?;
-            }
-            Some(1) => {
-                plugins_menu(paths).await?;
-            }
-            Some(2) => {
                 ping_menu().await?;
             }
-            Some(3) => {
+            Some(1) => {
                 daemon_menu(paths).await?;
             }
-            Some(4) => {
+            Some(2) => {
                 cache_menu(paths)?;
             }
             _ => return Ok(()),
