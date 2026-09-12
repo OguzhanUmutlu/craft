@@ -24,7 +24,7 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
 
         let mut action_entries = vec![
             MenuEntry::new("i", "Import Host").with_aliases(&["import", "ssh"]),
-            MenuEntry::new("a", "Add Host").with_aliases(&["add", "n"]),
+            MenuEntry::new("n", "New Host").with_aliases(&["add", "a", "new"]),
         ];
         if !registry.remotes.is_empty() {
             action_entries.push(MenuEntry::new("r", "Remove Host").with_aliases(&["rm", "del"]));
@@ -143,7 +143,7 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
                         }
                     }
                 }
-            PagedMenuAction::Action(act) if act == "a" => {
+            PagedMenuAction::Action(act) if act == "n" || act == "a" => {
                 // Add Host Manually
                 let alias = match run_input_prompt("NEW REMOTE HOST", "Host Alias (e.g. production-vps):", None)? {
                     Some(a) if !a.trim().is_empty() => a.trim().to_string(),

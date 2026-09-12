@@ -194,6 +194,7 @@ pub enum Commands {
     },
 
     /// Manage background service daemon
+    #[command(alias = "daemon")]
     Service {
         #[command(subcommand)]
         action: Option<ServiceCommands>,

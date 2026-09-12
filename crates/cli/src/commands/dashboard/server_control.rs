@@ -641,7 +641,7 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
 
             // Defensive: Only option 1 and 0, aliases "c" / "n", strictly NO "2"
             let entries = vec![
-                MenuEntry::new("1", "Create Server").with_aliases(&["c", "n"]),
+                MenuEntry::new("1", "New Server").with_aliases(&["c", "n", "create", "new"]),
                 MenuEntry::new("0", "Back").with_aliases(&["b"]),
             ];
 
@@ -656,7 +656,7 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
 
         let width = get_content_width(80);
         let action_entries = vec![
-            MenuEntry::new("n", "Create Server").with_aliases(&["c"]),
+            MenuEntry::new("n", "New Server").with_aliases(&["c", "create", "new"]),
         ];
 
         let action = super::screen::run_paged_list_menu(
@@ -1213,7 +1213,7 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Create Backup"),
+            MenuEntry::new("1", "New Backup").with_aliases(&["c", "create", "n", "new"]),
             MenuEntry::new("2", "Browse & Manage Backups"),
             MenuEntry::new("3", "Restore Backup"),
             MenuEntry::new("4", "Auto-Backup Policy"),
@@ -1387,11 +1387,37 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                             let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
                             format!("{:<38} ({:.2} MB, {})", b.filename, mb, b.created_at)
                         },
-                        &[],
+                        &[MenuEntry::new("n", "New Backup").with_aliases(&["c", "create", "new"])],
                         false,
                     )?;
 
                     match action {
+                        PagedMenuAction::Action(act) if act == "n" || act == "c" => {
+                            let scope_header = " Choose backup scope:";
+                            let scope_entries = vec![
+                                MenuEntry::new("1", "Full Backup"),
+                                MenuEntry::new("2", "World Only"),
+                                MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                            ];
+                            let mut scope_sel = 0;
+                            if let Some(s_idx) = run_menu(scope_header, &scope_entries, &mut scope_sel)? {
+                                let world_only = match s_idx {
+                                    0 => false,
+                                    1 => true,
+                                    _ => continue,
+                                };
+                                let _ = print_in_place_status("CREATING BACKUP", &[format!("Creating snapshot for '{}'...", server.name)]);
+                                match engine.create_backup(&server.name, &server.path, None, world_only).await {
+                                    Ok(archive_path) => {
+                                        show_modal_message("BACKUP GENERATED", &[format!("[OK] Generated: {}", archive_path.display()).green().bold().to_string()], false)?;
+                                    }
+                                    Err(e) => {
+                                        show_modal_message("BACKUP FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                    }
+                                }
+                            }
+                            continue;
+                        }
                         PagedMenuAction::Select(global_idx) if global_idx < list.len() => {
                             let backup = &list[global_idx];
                             let mb = (backup.size_bytes as f64) / (1024.0 * 1024.0);

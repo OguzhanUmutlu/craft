@@ -280,9 +280,10 @@ impl RemoteCraftClient {
 
     /// Checks the status of the remote service daemon
     pub fn daemon_status(&self) -> Result<bool> {
-        let cmd = format!("{} daemon status 2>/dev/null", self.craft_bin());
+        let cmd = format!("{} service status 2>/dev/null || {} daemon status 2>/dev/null", self.craft_bin(), self.craft_bin());
         if let Ok((code, stdout, _)) = self.session.exec(&cmd) {
-            Ok(code == 0 && stdout.to_lowercase().contains("online"))
+            let s = stdout.to_lowercase();
+            Ok(code == 0 && (s.contains("running") || s.contains("online") || s.contains("active")))
         } else {
             Ok(false)
         }
@@ -290,7 +291,7 @@ impl RemoteCraftClient {
 
     /// Starts the remote service daemon
     pub fn daemon_start(&self) -> Result<()> {
-        let cmd = format!("{} daemon start", self.craft_bin());
+        let cmd = format!("systemctl --user start craft.service 2>/dev/null || {} service start 2>/dev/null || {} daemon start", self.craft_bin(), self.craft_bin());
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
             let err = if !stderr.trim().is_empty() { stderr } else { stdout };
@@ -299,9 +300,17 @@ impl RemoteCraftClient {
         Ok(())
     }
 
+    /// Ensures the remote service daemon is running, starting it if currently stopped
+    pub fn ensure_daemon_started(&self) -> Result<()> {
+        if !self.daemon_status().unwrap_or(false) {
+            let _ = self.daemon_start();
+        }
+        Ok(())
+    }
+
     /// Stops the remote service daemon
     pub fn daemon_stop(&self) -> Result<()> {
-        let cmd = format!("{} daemon stop", self.craft_bin());
+        let cmd = format!("systemctl --user stop craft.service 2>/dev/null || {} service stop 2>/dev/null || {} daemon stop", self.craft_bin(), self.craft_bin());
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
             let err = if !stderr.trim().is_empty() { stderr } else { stdout };
@@ -312,12 +321,39 @@ impl RemoteCraftClient {
 
     /// Restarts the remote service daemon
     pub fn daemon_restart(&self) -> Result<()> {
-        let cmd = format!("{} daemon restart", self.craft_bin());
+        let cmd = format!("systemctl --user restart craft.service 2>/dev/null || {} service restart 2>/dev/null || {} daemon restart", self.craft_bin(), self.craft_bin());
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
             let err = if !stderr.trim().is_empty() { stderr } else { stdout };
             return Err(CraftError::Other(format!("Failed to restart remote daemon: {}", err.trim())));
         }
+        Ok(())
+    }
+
+    /// Completely uninstalls Craft CLI, daemon, and background services from the remote host
+    pub fn uninstall_craft(&self) -> Result<()> {
+        // Stop & remove systemd user unit
+        let _ = self.session.exec("systemctl --user stop craft.service 2>/dev/null || true");
+        let _ = self.session.exec("systemctl --user disable craft.service 2>/dev/null || true");
+        let _ = self.session.exec("rm -f ~/.config/systemd/user/craft.service 2>/dev/null || true");
+        let _ = self.session.exec("systemctl --user daemon-reload 2>/dev/null || true");
+
+        // Stop daemon directly
+        let _ = self.session.exec(&format!("{} service stop 2>/dev/null || true", self.craft_bin()));
+        let _ = self.session.exec("pkill -f 'craft service' 2>/dev/null || true");
+        let _ = self.session.exec("pkill -f 'craft daemon' 2>/dev/null || true");
+
+        // macOS launchctl cleanup if present
+        let _ = self.session.exec("launchctl unload -w ~/Library/LaunchAgents/com.craft.daemon.plist 2>/dev/null || true");
+        let _ = self.session.exec("rm -f ~/Library/LaunchAgents/com.craft.daemon.plist 2>/dev/null || true");
+
+        // Windows scheduled task cleanup if present
+        let _ = self.session.exec("schtasks /Delete /TN CraftDaemon /F 2>nul || true");
+
+        // Remove installed binaries
+        let _ = self.session.exec("rm -f ~/.local/bin/craft ~/craft 2>/dev/null || true");
+        let _ = self.session.exec("sudo rm -f /usr/local/bin/craft 2>/dev/null || true");
+
         Ok(())
     }
 

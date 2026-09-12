@@ -43,7 +43,7 @@ pub async fn manage_remote_backups(
 
         let width = get_content_width(80);
         let action_entries = vec![
-            MenuEntry::new("c", "Create Backup").with_aliases(&["n"]),
+            MenuEntry::new("n", "New Backup").with_aliases(&["c", "create", "new"]),
         ];
 
         let action = run_paged_list_menu(
@@ -76,12 +76,7 @@ pub async fn manage_remote_backups(
                 )
             },
             |_local_idx, _global_idx, b| {
-                let mb = (b.size_bytes as f64) / (1024.0 * 1024.0);
-                let size_label = if b.size_bytes > 0 {
-                    format!("{:.1} MB", mb)
-                } else {
-                    "archive".to_string()
-                };
+                let size_label = format!("{:.2} MB", (b.size_bytes as f64) / (1024.0 * 1024.0));
                 format!("{:<36} ({}, {})", b.filename, size_label, b.created_at)
             },
             &action_entries,
@@ -89,7 +84,7 @@ pub async fn manage_remote_backups(
         )?;
 
         match action {
-            PagedMenuAction::Action(act) if act == "c" => {
+            PagedMenuAction::Action(act) if act == "n" || act == "c" => {
                 // Create backup
                 let scope_header = " Choose remote backup scope:";
                 let scope_entries = vec![

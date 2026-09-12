@@ -178,6 +178,11 @@ pub async fn manage_host_servers(
         }
     }
 
+    // Ensure remote daemon is running by default if craft is installed
+    if client.is_craft_installed() {
+        let _ = client.ensure_daemon_started();
+    }
+
     let mut current_page = 0;
     let page_size = 6;
 
@@ -196,14 +201,19 @@ pub async fn manage_host_servers(
 
         let width = get_content_width(80);
 
-        let action_entries = vec![
-            MenuEntry::new("n", "Create Server").with_aliases(&["c"]),
+        let mut action_entries = vec![
+            MenuEntry::new("n", "New Server").with_aliases(&["c", "create", "new"]),
             MenuEntry::new("p", "Ping Host / Servers"),
             MenuEntry::new("b", "Remote Backups"),
             MenuEntry::new("d", "Daemon Control"),
             MenuEntry::new("k", "Purge Cache"),
             MenuEntry::new("t", "Trash Bin"),
         ];
+        if !client.is_craft_installed() {
+            action_entries.push(MenuEntry::new("i", "Install Craft").with_aliases(&["bootstrap"]));
+        } else {
+            action_entries.push(MenuEntry::new("u", "Uninstall Craft").with_aliases(&["uninstall"]));
+        }
 
         let action = run_paged_list_menu(
             &servers,
@@ -279,6 +289,33 @@ pub async fn manage_host_servers(
                 "t" => {
                     remote_trash_menu(&client, &host_config.alias, &servers).await?;
                 }
+                "u" => {
+                    if remote_uninstall_craft_wizard(&client, &host_config.alias).await? {
+                        return Ok(());
+                    }
+                }
+                "i" => {
+                    print_in_place_status(
+                        "BOOTSTRAPPING REMOTE HOST",
+                        &[format!("Installing Craft daemon and CLI on '{}'...", host_config.alias)],
+                    )?;
+                    match craft_remote::run_bootstrap(&client.session) {
+                        Ok(_) => {
+                            show_modal_message(
+                                "BOOTSTRAP COMPLETE",
+                                &[format!("[OK] Successfully installed Craft on '{}' at ~/.local/bin/craft!", host_config.alias).green().bold().to_string()],
+                                false,
+                            )?;
+                        }
+                        Err(e) => {
+                            show_modal_message(
+                                "BOOTSTRAP FAILED",
+                                &[format!("[ERROR] {}", e)],
+                                true,
+                            )?;
+                        }
+                    }
+                }
                 _ => {}
             },
             PagedMenuAction::Back => return Ok(()),
@@ -288,7 +325,20 @@ pub async fn manage_host_servers(
 }
 
 async fn remote_create_server_wizard(client: &RemoteCraftClient) -> Result<()> {
-    let _nav = NavGuard::enter("Create Server");
+    let _nav = NavGuard::enter("New Server");
+
+    if !client.is_craft_installed() {
+        show_modal_message(
+            "CRAFT NOT FOUND ON REMOTE",
+            &[
+                "The 'craft' CLI binary is not installed on this remote host.".to_string(),
+                "Please run option [i] 'Install Craft' to bootstrap and deploy Craft to ~/.local/bin/craft.".to_string(),
+            ],
+            true,
+        )?;
+        return Ok(());
+    }
+
     let name = match run_input_prompt("NEW REMOTE SERVER", "Enter server name (e.g. survival):", None)? {
         Some(n) if !n.trim().is_empty() => n.trim().to_string(),
         _ => return Ok(()),
@@ -416,6 +466,7 @@ async fn remote_daemon_control_menu(client: &RemoteCraftClient, host_alias: &str
             MenuEntry::new("2", "Start Daemon"),
             MenuEntry::new("3", "Stop Daemon"),
             MenuEntry::new("4", "Restart Daemon"),
+            MenuEntry::new("5", "Uninstall Craft").with_aliases(&["u", "uninstall"]),
             MenuEntry::new("0", "Back").with_aliases(&["b"]),
         ];
 
@@ -459,6 +510,11 @@ async fn remote_daemon_control_menu(client: &RemoteCraftClient, host_alias: &str
                     Err(e) => {
                         show_modal_message("ERROR", &[format!("[ERROR] {}", e)], true)?;
                     }
+                }
+            }
+            Some(4) => {
+                if remote_uninstall_craft_wizard(client, host_alias).await? {
+                    return Ok(());
                 }
             }
             _ => return Ok(()),
@@ -712,3 +768,70 @@ async fn remote_trash_menu(
         }
     }
 }
+
+async fn remote_uninstall_craft_wizard(client: &RemoteCraftClient, host_alias: &str) -> Result<bool> {
+    let _nav = NavGuard::enter("Uninstall Craft");
+    let width = get_content_width(80);
+
+    // Confirmation Prompt 1 of 2: Warning & intent check
+    let prompt1_header = format!(
+        "{}\r\n{}\r\n{}\r\n Warning: You are about to UNINSTALL Craft from remote host '{}'.\r\n\r\n This will:\r\n  - Stop all running Craft background daemons and services\r\n  - Disable and remove the systemd user service unit\r\n  - Delete the 'craft' CLI binary from ~/.local/bin/craft\r\n\r\n Do you wish to proceed to confirmation? (Prompt 1 of 2)\r\n{}",
+        box_top(width).yellow().bold(),
+        box_title("UNINSTALL CRAFT - PROMPT 1 OF 2", width, false).yellow().bold(),
+        box_divider(width).yellow().bold(),
+        host_alias.white().bold(),
+        box_divider(width).dimmed(),
+    );
+
+    let prompt1_entries = vec![
+        MenuEntry::new("1", "Cancel").with_aliases(&["0", "b", "q"]),
+        MenuEntry::new("2", "Proceed to Final Confirmation"),
+    ];
+
+    let mut sel1 = 0;
+    match run_menu(&prompt1_header, &prompt1_entries, &mut sel1)? {
+        Some(1) => {}
+        _ => return Ok(false),
+    }
+
+    // Confirmation Prompt 2 of 2: Destructive action confirmation
+    let prompt2_header = format!(
+        "{}\r\n{}\r\n{}\r\n FINAL CONFIRMATION: Are you ABSOLUTELY sure?\r\n\r\n Remote host '{}' will no longer have Craft installed.\r\n You will need to re-install / bootstrap Craft before managing servers again.\r\n\r\n (Prompt 2 of 2)\r\n{}",
+        box_top(width).red().bold(),
+        box_title("FINAL CONFIRMATION - PROMPT 2 OF 2", width, false).red().bold(),
+        box_divider(width).red().bold(),
+        host_alias.white().bold(),
+        box_divider(width).dimmed(),
+    );
+
+    let prompt2_entries = vec![
+        MenuEntry::new("1", "Cancel (Keep Craft Installed)").with_aliases(&["0", "b", "q"]),
+        MenuEntry::new("2", format!("Confirm and Uninstall Craft from '{}'", host_alias)),
+    ];
+
+    let mut sel2 = 0;
+    match run_menu(&prompt2_header, &prompt2_entries, &mut sel2)? {
+        Some(1) => {
+            let _ = print_in_place_status("UNINSTALLING CRAFT", &[format!("Uninstalling Craft and daemon from '{}'...", host_alias)]);
+            match client.uninstall_craft() {
+                Ok(_) => {
+                    show_modal_message(
+                        "CRAFT UNINSTALLED",
+                        &[
+                            format!("[OK] Craft has been successfully uninstalled from remote host '{}'.", host_alias).green().bold().to_string(),
+                            "Daemon services stopped and removed from ~/.local/bin/craft.".to_string(),
+                        ],
+                        false,
+                    )?;
+                    Ok(true)
+                }
+                Err(e) => {
+                    show_modal_message("ERROR", &[format!("[ERROR] Failed to uninstall Craft: {}", e)], true)?;
+                    Ok(false)
+                }
+            }
+        }
+        _ => Ok(false),
+    }
+}
+

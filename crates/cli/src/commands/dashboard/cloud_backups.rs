@@ -67,7 +67,7 @@ pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()>
         let registry = GlobalBackupRegistry::load(paths)?;
         let width = get_content_width(80);
         let action_entries = vec![
-            MenuEntry::new("a", "Add Local Storage").with_aliases(&["add", "n"]),
+            MenuEntry::new("n", "New Local Storage").with_aliases(&["add", "a", "new"]),
         ];
 
         let action = run_paged_list_menu(
@@ -100,7 +100,7 @@ pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()>
                 let target_id = registry.local_targets[global_idx].id.clone();
                 manage_single_local_target_menu(paths, &target_id).await?;
             }
-            PagedMenuAction::Action(act) if act == "a" => {
+            PagedMenuAction::Action(act) if act == "n" || act == "a" => {
                 // Add Local Storage
                 let name = match run_input_prompt("TARGET NAME", "Storage Name / Label (e.g. External Drive):", None)? {
                     Some(n) if !n.trim().is_empty() => n.trim().to_string(),
@@ -244,7 +244,7 @@ pub(crate) async fn s3_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
         let registry = GlobalBackupRegistry::load(paths)?;
         let width = get_content_width(80);
         let action_entries = vec![
-            MenuEntry::new("a", "Add S3 Storage").with_aliases(&["add", "n"]),
+            MenuEntry::new("n", "New S3 Storage").with_aliases(&["add", "a", "new"]),
         ];
 
         let action = run_paged_list_menu(
@@ -277,7 +277,7 @@ pub(crate) async fn s3_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
                 let target_id = registry.s3_targets[global_idx].id.clone();
                 manage_single_s3_target_menu(paths, &target_id).await?;
             }
-            PagedMenuAction::Action(act) if act == "a" => {
+            PagedMenuAction::Action(act) if act == "n" || act == "a" => {
                 let _ = add_s3_target_wizard(paths).await?;
             }
             _ => return Ok(()),
@@ -447,7 +447,7 @@ pub(crate) async fn gdrive_storage_targets_menu(paths: &CraftPaths) -> Result<()
         let registry = GlobalBackupRegistry::load(paths)?;
         let width = get_content_width(80);
         let action_entries = vec![
-            MenuEntry::new("a", "Add Google Drive").with_aliases(&["add", "n"]),
+            MenuEntry::new("n", "New Google Drive").with_aliases(&["add", "a", "new"]),
         ];
 
         let action = run_paged_list_menu(
@@ -480,7 +480,7 @@ pub(crate) async fn gdrive_storage_targets_menu(paths: &CraftPaths) -> Result<()
                 let target_id = registry.gdrive_targets[global_idx].id.clone();
                 manage_single_gdrive_target_menu(paths, &target_id).await?;
             }
-            PagedMenuAction::Action(act) if act == "a" => {
+            PagedMenuAction::Action(act) if act == "n" || act == "a" => {
                 let _ = add_gdrive_target_wizard(paths).await?;
             }
             _ => return Ok(()),
@@ -655,7 +655,7 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
                     let hk = (i + 1).to_string();
                     entries.push(MenuEntry::new(hk, format!("{:<20} ({})", t.name, t.path.display())));
                 }
-                entries.push(MenuEntry::new("a", "Add Local Storage"));
+                entries.push(MenuEntry::new("n", "New Local Storage").with_aliases(&["a", "add", "new"]));
                 entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let header = format!(" Select local storage target for '{}':", server_name);
@@ -708,7 +708,7 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
                     let hk = (i + 1).to_string();
                     entries.push(MenuEntry::new(hk, format!("{:<20} (s3://{})", t.name, t.bucket)));
                 }
-                entries.push(MenuEntry::new("a", "Add S3 Storage"));
+                entries.push(MenuEntry::new("n", "New S3 Storage").with_aliases(&["a", "add", "new"]));
                 entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let header = format!(" Select S3 storage provider for '{}':", server_name);
@@ -749,7 +749,7 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
                     let hk = (i + 1).to_string();
                     entries.push(MenuEntry::new(hk, format!("{:<20} (folder: {})", t.name, t.folder_id)));
                 }
-                entries.push(MenuEntry::new("a", "Add Google Drive"));
+                entries.push(MenuEntry::new("n", "New Google Drive").with_aliases(&["a", "add", "new"]));
                 entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let header = format!(" Select Google Drive provider for '{}':", server_name);
