@@ -48,10 +48,10 @@ pub async fn handle_new(
         println!();
         println!("{}", "Select server platform category:".cyan().bold());
         let categories = &[
-            "[1] Java High-Performance (Paper, Purpur, Folia, Spigot, Vanilla Java)",
-            "[2] Modded & Hybrid (Fabric, Quilt, NeoForge)",
-            "[3] Network Proxies (Velocity, Waterfall, BungeeCord, GeyserMC, WaterdogPE)",
-            "[4] Bedrock Dedicated (Vanilla Bedrock BDS, PocketMine-MP, NukkitX)",
+            "[1] Java Edition",
+            "[2] Bedrock Edition",
+            "[3] Network Proxies",
+            "[4] Hybrid & Cross-Play",
             "[5] Browse All 16 Platforms",
         ];
         let cat_idx = Select::with_theme(&theme)
@@ -61,29 +61,49 @@ pub async fn handle_new(
             .interact()?;
 
         let software_choices: Vec<(&'static str, &'static str, &'static str)> = match cat_idx {
-            0 => vec![
-                ("paper", "Paper", "High-performance standard Java server (Rec.)"),
-                ("purpur", "Purpur", "Paper fork with extensive gameplay tweaks"),
-                ("folia", "Folia", "Multi-threaded regional ticking server"),
-                ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
-                ("vanilla_java", "Vanilla Java", "Official Mojang Java dedicated server"),
-            ],
+            0 => {
+                println!();
+                println!("{}", "Select Java server type:".cyan().bold());
+                let java_types = &[
+                    "[1] Plugins & Vanilla (Paper, Purpur, Folia, Spigot, Vanilla)",
+                    "[2] Modded Servers (Fabric, Quilt, NeoForge)",
+                ];
+                let java_choice = Select::with_theme(&theme)
+                    .with_prompt("Java Type")
+                    .items(java_types)
+                    .default(0)
+                    .interact()?;
+
+                if java_choice == 0 {
+                    vec![
+                        ("paper", "Paper", "High-performance standard Java server (Rec.)"),
+                        ("purpur", "Purpur", "Paper fork with extensive gameplay tweaks"),
+                        ("folia", "Folia", "Multi-threaded regional ticking server"),
+                        ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
+                        ("vanilla_java", "Vanilla Java", "Official Mojang Java dedicated server"),
+                    ]
+                } else {
+                    vec![
+                        ("fabric", "Fabric", "Lightweight modular modded server"),
+                        ("quilt", "Quilt", "Community-driven modular modded server"),
+                        ("neoforge", "NeoForge", "Modern Forge-compatible modded server"),
+                    ]
+                }
+            }
             1 => vec![
-                ("fabric", "Fabric", "Lightweight modular modded server"),
-                ("quilt", "Quilt", "Community-driven modular modded server"),
-                ("neoforge", "NeoForge", "Modern Forge-compatible modded server"),
+                ("vanilla_bedrock", "Vanilla Bedrock BDS", "Official Mojang Bedrock Dedicated Server"),
+                ("pocketmine", "PocketMine-MP", "High-performance C++ / PHP Bedrock server"),
+                ("nukkit", "NukkitX", "Java-based multi-threaded Bedrock server"),
             ],
             2 => vec![
                 ("velocity", "Velocity", "Next-generation ultra-fast proxy (Rec.)"),
                 ("waterfall", "Waterfall", "Optimized BungeeCord proxy fork"),
                 ("bungeecord", "BungeeCord", "Classic multi-server network proxy"),
-                ("geyser", "GeyserMC Standalone", "Cross-play bridge for Bedrock clients"),
                 ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
             ],
             3 => vec![
-                ("vanilla_bedrock", "Vanilla Bedrock BDS", "Official Mojang Bedrock Dedicated Server"),
-                ("pocketmine", "PocketMine-MP", "High-performance C++ / PHP Bedrock server"),
-                ("nukkit", "NukkitX", "Java-based multi-threaded Bedrock server"),
+                ("geyser", "GeyserMC Standalone", "Cross-play bridge for Bedrock clients"),
+                ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
             ],
             _ => {
                 get_all_softwares()
