@@ -1561,7 +1561,7 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                                                     show_modal_message(
                                                         "MOVED TO TRASH",
                                                         &[
-                                                            format!("[OK] Backup successfully moved to Trash Bin.").green().bold().to_string(),
+                                                            "[OK] Backup successfully moved to Trash Bin.".green().bold().to_string(),
                                                             format!("Archive: {}", item.original_name),
                                                             format!("SHA-256: {}", item.content_hash).dimmed().to_string(),
                                                         ],

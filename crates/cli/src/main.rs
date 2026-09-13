@@ -109,10 +109,8 @@ async fn main() {
         }) => {
             let server_name = if !name.trim().is_empty() {
                 name
-            } else if let Some(n) = name_opt {
-                n
             } else {
-                String::new()
+                name_opt.unwrap_or_default()
             };
             let sw = software.or(software_opt);
             let ver = version.or(version_opt);

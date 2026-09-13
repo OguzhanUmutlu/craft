@@ -130,7 +130,7 @@ impl TrashManager {
         let trash_path = self.paths.trash_dir.join(&trash_filename);
 
         // Move the file into trash directory
-        if let Err(_) = fs::rename(original_path, &trash_path) {
+        if fs::rename(original_path, &trash_path).is_err() {
             // Fallback for cross-filesystem move
             fs::copy(original_path, &trash_path)?;
             fs::remove_file(original_path)?;
@@ -207,7 +207,7 @@ impl TrashManager {
         }
 
         // Move back from trash to original location
-        if let Err(_) = fs::rename(&trash_path, &item.original_path) {
+        if fs::rename(&trash_path, &item.original_path).is_err() {
             fs::copy(&trash_path, &item.original_path)?;
             fs::remove_file(&trash_path)?;
         }

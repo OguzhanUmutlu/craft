@@ -280,7 +280,7 @@ where
         let total_pages = if total_items == 0 {
             1
         } else {
-            (total_items + page_size - 1) / page_size
+            total_items.div_ceil(page_size)
         };
         if *current_page >= total_pages {
             *current_page = total_pages.saturating_sub(1);
@@ -375,13 +375,13 @@ mod tests {
 
     #[test]
     fn test_pagination_bounds() {
-        let total_items = 15;
-        let page_size = 6;
-        let total_pages = (total_items + page_size - 1) / page_size;
+        let total_items: usize = 15;
+        let page_size: usize = 6;
+        let total_pages = total_items.div_ceil(page_size);
         assert_eq!(total_pages, 3);
 
         // Page 0: items 0..6 (count 6)
-        let page0_start = 0 * page_size;
+        let page0_start = 0;
         let page0_end = total_items.min(page0_start + page_size);
         assert_eq!(page0_end - page0_start, 6);
 
