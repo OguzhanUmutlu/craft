@@ -1,26 +1,29 @@
-use std::sync::Mutex;
+use std::cell::RefCell;
 use colored::Colorize;
 use super::theme::{is_utf8_supported, strip_ansi, BORDER_COLOR, RESET};
 
-static NAV_STACK: Mutex<Vec<String>> = Mutex::new(Vec::new());
-static ROOT_CRUMBS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+thread_local! {
+    static NAV_STACK: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    static ROOT_CRUMBS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
 
 /// Configures root prefix breadcrumbs for remote node presentation mode.
 pub fn set_root_breadcrumbs(crumbs: &[&str]) {
-    if let Ok(mut rc) = ROOT_CRUMBS.lock() {
-        rc.clear();
+    ROOT_CRUMBS.with(|rc| {
+        let mut r = rc.borrow_mut();
+        r.clear();
         for c in crumbs {
-            rc.push(c.to_string());
+            r.push(c.to_string());
         }
-    }
+    });
 }
 
 /// Clears root prefix breadcrumbs.
 #[allow(dead_code)]
 pub fn clear_root_breadcrumbs() {
-    if let Ok(mut rc) = ROOT_CRUMBS.lock() {
-        rc.clear();
-    }
+    ROOT_CRUMBS.with(|rc| {
+        rc.borrow_mut().clear();
+    });
 }
 
 /// RAII Guard that manages navigation breadcrumbs on screen headers.
@@ -28,29 +31,27 @@ pub struct NavGuard;
 
 impl NavGuard {
     pub fn enter(title: impl Into<String>) -> Self {
-        if let Ok(mut stack) = NAV_STACK.lock() {
-            stack.push(title.into());
-        }
+        NAV_STACK.with(|stack| {
+            stack.borrow_mut().push(title.into());
+        });
         NavGuard
     }
 }
 
 impl Drop for NavGuard {
     fn drop(&mut self) {
-        if let Ok(mut stack) = NAV_STACK.lock() {
-            stack.pop();
-        }
+        NAV_STACK.with(|stack| {
+            stack.borrow_mut().pop();
+        });
     }
 }
 
 /// Returns a copy of the current navigation path.
 pub fn get_breadcrumbs() -> Vec<String> {
-    let mut res = ROOT_CRUMBS.lock().map(|r| r.clone()).unwrap_or_default();
-    if let Ok(stack) = NAV_STACK.lock() {
-        for s in stack.iter() {
-            res.push(s.clone());
-        }
-    }
+    let mut res = ROOT_CRUMBS.with(|rc| rc.borrow().clone());
+    NAV_STACK.with(|stack| {
+        res.extend(stack.borrow().iter().cloned());
+    });
     res
 }
 

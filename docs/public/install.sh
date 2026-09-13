@@ -22,7 +22,7 @@ echo " \____|_|  \__,_|_|  \__| |_____(_)___/ "
 echo "  Craft Native Standalone Installer"
 echo -e "${NC}"
 
-BASE_URL="${CRAFT_BASE_URL:-https://craft.oguzhanumutlu.com}"
+GITHUB_REPO="OguzhanUmutlu/craft"
 
 OS="$(uname -s)"
 ARCH="$(uname -m)"
@@ -35,7 +35,7 @@ case "$OS" in
     OS_TYPE="darwin"
     ;;
   *)
-    echo -e "${RED}Error: Unsupported operating system '$OS'. Please download manually from ${BASE_URL}.${NC}"
+    echo -e "${RED}Error: Unsupported operating system '$OS'. Please download manually from https://craft.oguzhanumutlu.com.${NC}"
     exit 1
     ;;
 esac
@@ -54,7 +54,19 @@ case "$ARCH" in
 esac
 
 TARGET_NAME="craft-${OS_TYPE}-${ARCH_TYPE}"
-DOWNLOAD_URL="${BASE_URL}/downloads/${TARGET_NAME}"
+
+if [ -n "${CRAFT_DOWNLOAD_URL:-}" ]; then
+  DOWNLOAD_URL="${CRAFT_DOWNLOAD_URL}"
+elif [ -n "${CRAFT_VERSION:-}" ]; then
+  # Strip leading 'v' if user typed CRAFT_VERSION=v1.0.0
+  CLEAN_VERSION="${CRAFT_VERSION#v}"
+  DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/v${CLEAN_VERSION}/${TARGET_NAME}"
+  echo -e "${BLUE}==> Target version requested:${NC} ${GREEN}v${CLEAN_VERSION}${NC}"
+elif [ -n "${CRAFT_BASE_URL:-}" ]; then
+  DOWNLOAD_URL="${CRAFT_BASE_URL}/downloads/${TARGET_NAME}"
+else
+  DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/${TARGET_NAME}"
+fi
 
 echo -e "${BLUE}==> Detected system:${NC} ${OS_TYPE} (${ARCH_TYPE})"
 echo -e "${BLUE}==> Fetching Craft executable from:${NC} ${DOWNLOAD_URL}"

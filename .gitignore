@@ -101,3 +101,16 @@ desktop.ini
 .fuse_hidden*
 package-lock.json
 dist/
+
+# ==============================================================================
+# Release Binary Distribution Artifacts (stored locally & in GitHub Releases)
+# ==============================================================================
+/releases/**/*.tar.gz
+/releases/**/*.zip
+/releases/**/*.exe
+/releases/**/*.gz
+/releases/**/*-amd64
+/releases/**/*-arm64
+!/releases/**/versions.json
+!/releases/**/*.sha256
+/executables/dist/

@@ -8,14 +8,25 @@ Write-Host "================================================================" -F
 Write-Host "                    Craft Windows Installer                     " -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 
-$BaseUrl = if ($env:CRAFT_BASE_URL) { $env:CRAFT_BASE_URL } else { "https://craft.oguzhanumutlu.com" }
+$GithubRepo = "OguzhanUmutlu/craft"
 $InstallDir = Join-Path $env:LOCALAPPDATA "Programs\craft"
 if (!(Test-Path -Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
 $ExePath = Join-Path $InstallDir "craft.exe"
-$DownloadUrl = "$BaseUrl/downloads/craft-windows-amd64.exe"
+
+if ($env:CRAFT_DOWNLOAD_URL) {
+    $DownloadUrl = $env:CRAFT_DOWNLOAD_URL
+} elseif ($env:CRAFT_VERSION) {
+    $CleanVersion = $env:CRAFT_VERSION.TrimStart('v')
+    $DownloadUrl = "https://github.com/$GithubRepo/releases/download/v$CleanVersion/craft-windows-amd64.exe"
+    Write-Host "==> Target version requested: v$CleanVersion" -ForegroundColor Cyan
+} elseif ($env:CRAFT_BASE_URL) {
+    $DownloadUrl = "$($env:CRAFT_BASE_URL)/downloads/craft-windows-amd64.exe"
+} else {
+    $DownloadUrl = "https://github.com/$GithubRepo/releases/latest/download/craft-windows-amd64.exe"
+}
 
 Write-Host "==> Downloading Craft from $DownloadUrl..." -ForegroundColor Yellow
 Invoke-WebRequest -Uri $DownloadUrl -OutFile $ExePath -UseBasicParsing

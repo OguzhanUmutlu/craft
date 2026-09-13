@@ -20,11 +20,158 @@ import {
 } from 'lucide-react';
 import Documentation from './components/Documentation';
 
+interface ReleaseAsset {
+  name: string;
+  url: string;
+  size?: string;
+}
+
+interface ReleaseVersion {
+  version: string;
+  channel: string;
+  label: string;
+  release_date: string;
+  notes: string;
+  assets: {
+    linux_tar: ReleaseAsset;
+    linux_bin: ReleaseAsset;
+    windows_zip: ReleaseAsset;
+    windows_exe: ReleaseAsset;
+    darwin_arm64_tar: ReleaseAsset;
+    darwin_amd64_tar?: ReleaseAsset;
+  };
+}
+
+interface VersionsManifest {
+  latest: string;
+  lts: string;
+  updated_at: string;
+  versions: ReleaseVersion[];
+}
+
+const DEFAULT_VERSIONS: VersionsManifest = {
+  latest: "1.0.1",
+  lts: "1.0.0",
+  updated_at: "2026-09-13T07:56:34Z",
+  versions: [
+    {
+      version: "1.0.1",
+      channel: "latest",
+      label: "v1.0.1 (Latest)",
+      release_date: "2026-09-13",
+      notes: "Remote TUI streaming, bidirectional version checking, and GitHub Releases CDN distribution.",
+      assets: {
+        linux_tar: {
+          name: "craft-linux-amd64.tar.gz",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-linux-amd64.tar.gz",
+          size: "7.0M",
+        },
+        linux_bin: {
+          name: "craft-linux-amd64",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-linux-amd64",
+          size: "20M",
+        },
+        windows_zip: {
+          name: "craft-windows-amd64.zip",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-windows-amd64.zip",
+          size: "5.9M",
+        },
+        windows_exe: {
+          name: "craft-windows-amd64.exe",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-windows-amd64.exe",
+          size: "17M",
+        },
+        darwin_arm64_tar: {
+          name: "craft-darwin-arm64.tar.gz",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-darwin-arm64.tar.gz",
+          size: "5.5M",
+        },
+        darwin_amd64_tar: {
+          name: "craft-darwin-amd64.tar.gz",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-darwin-amd64.tar.gz",
+          size: "5.4M",
+        },
+      },
+    },
+    {
+      version: "1.0.0",
+      channel: "lts",
+      label: "v1.0.0 (LTS)",
+      release_date: "2026-09-10",
+      notes: "Long Term Support release with backup engines, systemd daemon, and plugins manager.",
+      assets: {
+        linux_tar: {
+          name: "craft-linux-amd64.tar.gz",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64.tar.gz",
+          size: "7.0M",
+        },
+        linux_bin: {
+          name: "craft-linux-amd64",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64",
+          size: "20M",
+        },
+        windows_zip: {
+          name: "craft-windows-amd64.zip",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-windows-amd64.zip",
+          size: "5.9M",
+        },
+        windows_exe: {
+          name: "craft-windows-amd64.exe",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-windows-amd64.exe",
+          size: "17M",
+        },
+        darwin_arm64_tar: {
+          name: "craft-darwin-arm64.tar.gz",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-darwin-arm64.tar.gz",
+          size: "5.5M",
+        },
+        darwin_amd64_tar: {
+          name: "craft-darwin-amd64.tar.gz",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-darwin-amd64.tar.gz",
+          size: "5.4M",
+        },
+      },
+    },
+  ],
+};
+
 export default function App() {
   const [view, setView] = useState<'home' | 'docs'>('home');
   const [docPage, setDocPage] = useState<string>('getting-started');
   const [activeTab, setActiveTab] = useState<'linux' | 'macos' | 'windows' | 'docker'>('linux');
   const [copied, setCopied] = useState(false);
+  const [manifest, setManifest] = useState<VersionsManifest>(DEFAULT_VERSIONS);
+  const [selectedVersion, setSelectedVersion] = useState<string>('1.0.1');
+
+  // Base URL resolves dynamically to current static origin or official production domain
+  const getBaseUrl = () => {
+    if (typeof window !== 'undefined' && window.location && window.location.origin) {
+      return window.location.origin;
+    }
+    return 'https://craft.oguzhanumutlu.com';
+  };
+
+  const baseUrl = getBaseUrl();
+
+  // Load versions.json manifest dynamically from public static path
+  useEffect(() => {
+    fetch(`${baseUrl}/versions.json`)
+      .then((res) => {
+        if (res.ok) return res.json();
+        throw new Error('Failed to fetch versions.json');
+      })
+      .then((data: VersionsManifest) => {
+        if (data && Array.isArray(data.versions) && data.versions.length > 0) {
+          setManifest(data);
+          if (data.latest && !data.versions.some(v => v.version === selectedVersion)) {
+            setSelectedVersion(data.latest);
+          }
+        }
+      })
+      .catch(() => {
+        // Fallback already pre-populated
+      });
+  }, [baseUrl]);
 
   // Sync state with URL hash for zero-refresh client-side routing
   useEffect(() => {
@@ -67,20 +214,22 @@ export default function App() {
     }
   };
 
-  // Base URL resolves dynamically to current static origin or official production domain
-  const getBaseUrl = () => {
-    if (typeof window !== 'undefined' && window.location && window.location.origin) {
-      return window.location.origin;
-    }
-    return 'https://craft.oguzhanumutlu.com';
-  };
-
-  const baseUrl = getBaseUrl();
+  const activeRelease =
+    manifest.versions.find((v) => v.version === selectedVersion) ||
+    manifest.versions[0] ||
+    DEFAULT_VERSIONS.versions[0];
+  const isLatest = activeRelease.channel === 'latest' || activeRelease.version === manifest.latest;
 
   const installCommands = {
-    linux: `curl -fsSL ${baseUrl}/install.sh | bash`,
-    macos: `curl -fsSL ${baseUrl}/install.sh | bash`,
-    windows: `irm ${baseUrl}/install.ps1 | iex`,
+    linux: isLatest
+      ? `curl -fsSL ${baseUrl}/install.sh | bash`
+      : `CRAFT_VERSION=${activeRelease.version} curl -fsSL ${baseUrl}/install.sh | bash`,
+    macos: isLatest
+      ? `curl -fsSL ${baseUrl}/install.sh | bash`
+      : `CRAFT_VERSION=${activeRelease.version} curl -fsSL ${baseUrl}/install.sh | bash`,
+    windows: isLatest
+      ? `irm ${baseUrl}/install.ps1 | iex`
+      : `$env:CRAFT_VERSION="${activeRelease.version}"; irm ${baseUrl}/install.ps1 | iex`,
     docker: `curl -fsSL ${baseUrl}/docker-compose.yml -o docker-compose.yml && docker compose up -d`,
   };
 
@@ -100,7 +249,7 @@ export default function App() {
       <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-emerald-950/80 border-b border-emerald-500/20 py-2 px-4 text-center text-xs font-medium text-emerald-300">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          Craft 1.0 is Live! 100% Standalone native binary &bull; Zero runtime dependencies.
+          Craft v{manifest.latest} is Live! 100% Standalone native binary &bull; Zero runtime dependencies.
         </span>
       </div>
 
@@ -113,10 +262,10 @@ export default function App() {
             </div>
             <div>
               <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-                Craft <span className="text-emerald-400">1.0</span>
+                Craft <span className="text-emerald-400">{manifest.latest}</span>
               </span>
               <span className="ml-2 text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                v1.0.0
+                v{manifest.latest}
               </span>
             </div>
           </div>
@@ -236,7 +385,12 @@ export default function App() {
                   </button>
                 </div>
 
-                <span className="text-[11px] font-mono text-slate-500">1-Line Install</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    {activeRelease.label}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500">1-Line Install</span>
+                </div>
               </div>
 
               {/* Command Display */}
@@ -300,9 +454,45 @@ export default function App() {
 
         {/* Direct Downloads Section */}
         <section id="downloads" className="py-20 px-6 max-w-6xl mx-auto">
-          <div className="text-center mb-14">
+          <div className="text-center mb-10">
             <h2 className="text-3xl font-bold text-white mb-4">Direct Executable Downloads</h2>
             <p className="text-slate-400 text-sm">Standalone single binaries with zero dependencies. Drop into your PATH and run.</p>
+          </div>
+
+          {/* Interactive Version & LTS Switcher */}
+          <div className="flex flex-col items-center justify-center mb-12">
+            <div className="inline-flex p-1.5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
+              {manifest.versions.map((v) => {
+                const isSelected = selectedVersion === v.version;
+                return (
+                  <button
+                    key={v.version}
+                    onClick={() => setSelectedVersion(v.version)}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${
+                      isSelected
+                        ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/25'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>{v.label}</span>
+                    {v.channel === 'lts' && (
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                          isSelected ? 'bg-black/20 text-black' : 'bg-slate-800 text-emerald-400 border border-slate-700'
+                        }`}
+                      >
+                        LTS
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 text-center">
+              <p className="text-xs text-slate-400">
+                {activeRelease.notes} &bull; Released on <span className="text-slate-300 font-mono">{activeRelease.release_date}</span>
+              </p>
+            </div>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -315,23 +505,23 @@ export default function App() {
                 <h3 className="font-bold text-base text-white">Linux x86_64</h3>
                 <p className="text-xs text-slate-400 mt-1">Ubuntu, Debian, Arch, RHEL, Fedora</p>
                 <span className="inline-block mt-3 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-400 border border-slate-800">
-                  craft-linux-amd64
+                  {activeRelease.assets.linux_bin.name}
                 </span>
               </div>
               <div className="mt-6 flex flex-col">
                 <a
-                  href={`${baseUrl}/downloads/craft-linux-amd64.tar.gz`}
-                  download="craft-linux-amd64.tar.gz"
+                  href={activeRelease.assets.linux_tar.url}
+                  download={activeRelease.assets.linux_tar.name}
                   className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all shadow-md"
                 >
-                  <Download className="h-4 w-4" /> Download (.tar.gz, 4.1 MB)
+                  <Download className="h-4 w-4" /> Download (.tar.gz, {activeRelease.assets.linux_tar.size || '7.0M'})
                 </a>
                 <a
-                  href={`${baseUrl}/downloads/craft-linux-amd64`}
-                  download="craft-linux-amd64"
+                  href={activeRelease.assets.linux_bin.url}
+                  download={activeRelease.assets.linux_bin.name}
                   className="mt-2.5 text-center text-[11px] text-slate-400 hover:text-emerald-400 transition-colors"
                 >
-                  or standalone binary (12 MB) &rarr;
+                  or standalone binary ({activeRelease.assets.linux_bin.size || '20M'}) &rarr;
                 </a>
               </div>
             </div>
@@ -345,23 +535,23 @@ export default function App() {
                 <h3 className="font-bold text-base text-white">Windows x64</h3>
                 <p className="text-xs text-slate-400 mt-1">Windows 10, 11, Windows Server</p>
                 <span className="inline-block mt-3 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-400 border border-slate-800">
-                  craft-windows-amd64.exe
+                  {activeRelease.assets.windows_exe.name}
                 </span>
               </div>
               <div className="mt-6 flex flex-col">
                 <a
-                  href={`${baseUrl}/downloads/craft-windows-amd64.exe`}
-                  download="craft-windows-amd64.exe"
+                  href={activeRelease.assets.windows_exe.url}
+                  download={activeRelease.assets.windows_exe.name}
                   className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all shadow-md"
                 >
-                  <Download className="h-4 w-4" /> Download (.exe, 17 MB)
+                  <Download className="h-4 w-4" /> Download (.exe, {activeRelease.assets.windows_exe.size || '17M'})
                 </a>
                 <a
-                  href={`${baseUrl}/downloads/craft-windows-amd64.zip`}
-                  download="craft-windows-amd64.zip"
+                  href={activeRelease.assets.windows_zip.url}
+                  download={activeRelease.assets.windows_zip.name}
                   className="mt-2.5 text-center text-[11px] text-slate-400 hover:text-emerald-400 transition-colors"
                 >
-                  or ZIP archive (5.9 MB) &rarr;
+                  or ZIP archive ({activeRelease.assets.windows_zip.size || '5.9M'}) &rarr;
                 </a>
               </div>
             </div>
@@ -372,7 +562,7 @@ export default function App() {
                 <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-purple-400 mb-4 group-hover:scale-110 transition-transform">
                   <Apple className="h-5 w-5" />
                 </div>
-                <h3 className="font-bold text-base text-white">macOS ARM64</h3>
+                <h3 className="font-bold text-base text-white">macOS Apple Silicon</h3>
                 <p className="text-xs text-slate-400 mt-1">Apple Silicon (M1, M2, M3, M4)</p>
                 <span className="inline-block mt-3 px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900 text-slate-400 border border-slate-800">
                   craft-darwin-arm64
@@ -380,19 +570,23 @@ export default function App() {
               </div>
               <div className="mt-6 flex flex-col">
                 <a
-                  href={`${baseUrl}/downloads/craft-darwin-arm64.tar.gz`}
-                  download="craft-darwin-arm64.tar.gz"
+                  href={activeRelease.assets.darwin_arm64_tar.url}
+                  download={activeRelease.assets.darwin_arm64_tar.name}
                   className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-800 hover:bg-emerald-500 hover:text-black text-xs font-semibold text-white transition-all shadow-md"
                 >
-                  <Download className="h-4 w-4" /> Download (.tar.gz, 5.5 MB)
+                  <Download className="h-4 w-4" /> Download (.tar.gz, {activeRelease.assets.darwin_arm64_tar.size || '5.5M'})
                 </a>
-                <a
-                  href={`${baseUrl}/downloads/craft-darwin-arm64`}
-                  download="craft-darwin-arm64"
-                  className="mt-2.5 text-center text-[11px] text-slate-400 hover:text-emerald-400 transition-colors"
-                >
-                  or standalone binary (14 MB) &rarr;
-                </a>
+                {activeRelease.assets.darwin_amd64_tar ? (
+                  <a
+                    href={activeRelease.assets.darwin_amd64_tar.url}
+                    download={activeRelease.assets.darwin_amd64_tar.name}
+                    className="mt-2.5 text-center text-[11px] text-slate-400 hover:text-emerald-400 transition-colors"
+                  >
+                    or Intel x86_64 (.tar.gz, {activeRelease.assets.darwin_amd64_tar.size || '5.4M'}) &rarr;
+                  </a>
+                ) : (
+                  <span className="mt-2.5 text-center text-[11px] text-slate-500">Universal macOS build</span>
+                )}
               </div>
             </div>
 
