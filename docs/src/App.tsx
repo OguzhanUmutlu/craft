@@ -50,55 +50,16 @@ interface VersionsManifest {
 }
 
 const DEFAULT_VERSIONS: VersionsManifest = {
-  latest: "1.0.1",
+  latest: "1.0.0",
   lts: "1.0.0",
   updated_at: "2026-09-13T07:56:34Z",
   versions: [
     {
-      version: "1.0.1",
-      channel: "latest",
-      label: "v1.0.1 (Latest)",
-      release_date: "2026-09-13",
-      notes: "Remote TUI streaming, bidirectional version checking, and GitHub Releases CDN distribution.",
-      assets: {
-        linux_tar: {
-          name: "craft-linux-amd64.tar.gz",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-linux-amd64.tar.gz",
-          size: "7.0M",
-        },
-        linux_bin: {
-          name: "craft-linux-amd64",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-linux-amd64",
-          size: "20M",
-        },
-        windows_zip: {
-          name: "craft-windows-amd64.zip",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-windows-amd64.zip",
-          size: "5.9M",
-        },
-        windows_exe: {
-          name: "craft-windows-amd64.exe",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-windows-amd64.exe",
-          size: "17M",
-        },
-        darwin_arm64_tar: {
-          name: "craft-darwin-arm64.tar.gz",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-darwin-arm64.tar.gz",
-          size: "5.5M",
-        },
-        darwin_amd64_tar: {
-          name: "craft-darwin-amd64.tar.gz",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.1/craft-darwin-amd64.tar.gz",
-          size: "5.4M",
-        },
-      },
-    },
-    {
       version: "1.0.0",
-      channel: "lts",
-      label: "v1.0.0 (LTS)",
-      release_date: "2026-09-10",
-      notes: "Long Term Support release with backup engines, systemd daemon, and plugins manager.",
+      channel: "latest",
+      label: "v1.0.0",
+      release_date: "2026-09-13",
+      notes: "Official Craft release: native high-performance Minecraft server supervisor, multi-platform runner, remote TUI, and backup engine.",
       assets: {
         linux_tar: {
           name: "craft-linux-amd64.tar.gz",
@@ -141,7 +102,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'linux' | 'macos' | 'windows' | 'docker'>('linux');
   const [copied, setCopied] = useState(false);
   const [manifest, setManifest] = useState<VersionsManifest>(DEFAULT_VERSIONS);
-  const [selectedVersion, setSelectedVersion] = useState<string>('1.0.1');
+  const [selectedVersion, setSelectedVersion] = useState<string>('1.0.0');
 
   // Base URL resolves dynamically to current static origin or official production domain
   const getBaseUrl = () => {
@@ -461,33 +422,40 @@ export default function App() {
 
           {/* Interactive Version & LTS Switcher */}
           <div className="flex flex-col items-center justify-center mb-12">
-            <div className="inline-flex p-1.5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
-              {manifest.versions.map((v) => {
-                const isSelected = selectedVersion === v.version;
-                return (
-                  <button
-                    key={v.version}
-                    onClick={() => setSelectedVersion(v.version)}
-                    className={`px-5 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${
-                      isSelected
-                        ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/25'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <span>{v.label}</span>
-                    {v.channel === 'lts' && (
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
-                          isSelected ? 'bg-black/20 text-black' : 'bg-slate-800 text-emerald-400 border border-slate-700'
-                        }`}
-                      >
-                        LTS
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {manifest.versions.length > 1 ? (
+              <div className="inline-flex p-1.5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
+                {manifest.versions.map((v) => {
+                  const isSelected = selectedVersion === v.version;
+                  return (
+                    <button
+                      key={v.version}
+                      onClick={() => setSelectedVersion(v.version)}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${
+                        isSelected
+                          ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/25'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>{v.label}</span>
+                      {v.channel === 'lts' && (
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                            isSelected ? 'bg-black/20 text-black' : 'bg-slate-800 text-emerald-400 border border-slate-700'
+                          }`}
+                        >
+                          LTS
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 shadow-lg text-xs font-semibold text-emerald-400 font-mono">
+                <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                <span>{manifest.versions[0]?.label || `v${manifest.latest}`}</span>
+              </div>
+            )}
             <div className="mt-3 text-center">
               <p className="text-xs text-slate-400">
                 {activeRelease.notes} &bull; Released on <span className="text-slate-300 font-mono">{activeRelease.release_date}</span>

@@ -153,38 +153,40 @@ if [ -f "${DARWIN_AMD_SRC}" ]; then
     echo -e "${GREEN}[OK] Packaged macOS Intel (x86_64)${NC}"
 fi
 
-# Step 3: Populate LTS directory (if not yet populated)
+# Step 3: Populate LTS directory (if different from target version)
 LTS_DIR="${RELEASES_DIR}/${LTS_VERSION}"
-mkdir -p "${LTS_DIR}"
-if [ ! -f "${LTS_DIR}/craft-linux-amd64.tar.gz" ]; then
-    echo -e "${BLUE}==> Populating LTS archive in ${LTS_DIR}...${NC}"
-    if [ -f "${ROOT_DIR}/target/release/craft" ]; then
-        cp -f "${ROOT_DIR}/target/release/craft" "${LTS_DIR}/craft-linux-amd64"
-        chmod +x "${LTS_DIR}/craft-linux-amd64"
-        tar -czf "${LTS_DIR}/craft-linux-amd64.tar.gz" -C "${LTS_DIR}" craft-linux-amd64
-        gzip -c "${LTS_DIR}/craft-linux-amd64" > "${LTS_DIR}/craft-linux-amd64.gz"
-        (cd "${LTS_DIR}" && sha256sum craft-linux-amd64 > craft-linux-amd64.sha256)
+if [ "$VERSION" != "$LTS_VERSION" ]; then
+    mkdir -p "${LTS_DIR}"
+    if [ ! -f "${LTS_DIR}/craft-linux-amd64.tar.gz" ]; then
+        echo -e "${BLUE}==> Populating LTS archive in ${LTS_DIR}...${NC}"
+        if [ -f "${ROOT_DIR}/target/release/craft" ]; then
+            cp -f "${ROOT_DIR}/target/release/craft" "${LTS_DIR}/craft-linux-amd64"
+            chmod +x "${LTS_DIR}/craft-linux-amd64"
+            tar -czf "${LTS_DIR}/craft-linux-amd64.tar.gz" -C "${LTS_DIR}" craft-linux-amd64
+            gzip -c "${LTS_DIR}/craft-linux-amd64" > "${LTS_DIR}/craft-linux-amd64.gz"
+            (cd "${LTS_DIR}" && sha256sum craft-linux-amd64 > craft-linux-amd64.sha256)
+        fi
+        if [ -f "${WIN_SRC}" ]; then
+            cp -f "${WIN_SRC}" "${LTS_DIR}/craft-windows-amd64.exe"
+            (cd "${LTS_DIR}" && rm -f craft-windows-amd64.zip && zip -q craft-windows-amd64.zip craft-windows-amd64.exe)
+            (cd "${LTS_DIR}" && sha256sum craft-windows-amd64.exe > craft-windows-amd64.sha256)
+        fi
+        if [ -f "${DARWIN_ARM_SRC}" ]; then
+            cp -f "${DARWIN_ARM_SRC}" "${LTS_DIR}/craft-darwin-arm64"
+            chmod +x "${LTS_DIR}/craft-darwin-arm64"
+            tar -czf "${LTS_DIR}/craft-darwin-arm64.tar.gz" -C "${LTS_DIR}" craft-darwin-arm64
+            (cd "${LTS_DIR}" && sha256sum craft-darwin-arm64 > craft-darwin-arm64.sha256)
+            rm -f "${LTS_DIR}/craft-darwin-arm64"
+        fi
+        if [ -f "${DARWIN_AMD_SRC}" ]; then
+            cp -f "${DARWIN_AMD_SRC}" "${LTS_DIR}/craft-darwin-amd64"
+            chmod +x "${LTS_DIR}/craft-darwin-amd64"
+            tar -czf "${LTS_DIR}/craft-darwin-amd64.tar.gz" -C "${LTS_DIR}" craft-darwin-amd64
+            (cd "${LTS_DIR}" && sha256sum craft-darwin-amd64 > craft-darwin-amd64.sha256)
+            rm -f "${LTS_DIR}/craft-darwin-amd64"
+        fi
+        echo -e "${GREEN}[OK] Populated LTS ${LTS_VERSION} archive${NC}"
     fi
-    if [ -f "${WIN_SRC}" ]; then
-        cp -f "${WIN_SRC}" "${LTS_DIR}/craft-windows-amd64.exe"
-        (cd "${LTS_DIR}" && rm -f craft-windows-amd64.zip && zip -q craft-windows-amd64.zip craft-windows-amd64.exe)
-        (cd "${LTS_DIR}" && sha256sum craft-windows-amd64.exe > craft-windows-amd64.sha256)
-    fi
-    if [ -f "${DARWIN_ARM_SRC}" ]; then
-        cp -f "${DARWIN_ARM_SRC}" "${LTS_DIR}/craft-darwin-arm64"
-        chmod +x "${LTS_DIR}/craft-darwin-arm64"
-        tar -czf "${LTS_DIR}/craft-darwin-arm64.tar.gz" -C "${LTS_DIR}" craft-darwin-arm64
-        (cd "${LTS_DIR}" && sha256sum craft-darwin-arm64 > craft-darwin-arm64.sha256)
-        rm -f "${LTS_DIR}/craft-darwin-arm64"
-    fi
-    if [ -f "${DARWIN_AMD_SRC}" ]; then
-        cp -f "${DARWIN_AMD_SRC}" "${LTS_DIR}/craft-darwin-amd64"
-        chmod +x "${LTS_DIR}/craft-darwin-amd64"
-        tar -czf "${LTS_DIR}/craft-darwin-amd64.tar.gz" -C "${LTS_DIR}" craft-darwin-amd64
-        (cd "${LTS_DIR}" && sha256sum craft-darwin-amd64 > craft-darwin-amd64.sha256)
-        rm -f "${LTS_DIR}/craft-darwin-amd64"
-    fi
-    echo -e "${GREEN}[OK] Populated LTS ${LTS_VERSION} archive${NC}"
 fi
 
 # Mirror target version into releases/latest/
@@ -222,6 +224,56 @@ UPDATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 # Step 4: Generate versions.json manifest
 echo -e "${BLUE}==> [3/5] Generating versions.json manifest...${NC}"
 
+if [ "$VERSION" = "$LTS_VERSION" ]; then
+cat <<EOF > "${LATEST_DIR}/versions.json"
+{
+  "latest": "${VERSION}",
+  "lts": "${LTS_VERSION}",
+  "updated_at": "${UPDATED_AT}",
+  "versions": [
+    {
+      "version": "${VERSION}",
+      "channel": "latest",
+      "label": "v${VERSION}",
+      "release_date": "$(date -u +%Y-%m-%d)",
+      "notes": "Craft official release v${VERSION}: native high-performance Minecraft server supervisor, multi-platform runner, remote TUI, and backup engine.",
+      "assets": {
+        "linux_tar": {
+          "name": "craft-linux-amd64.tar.gz",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v${VERSION}/craft-linux-amd64.tar.gz",
+          "size": "${LINUX_TAR_SIZE}"
+        },
+        "linux_bin": {
+          "name": "craft-linux-amd64",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v${VERSION}/craft-linux-amd64",
+          "size": "${LINUX_BIN_SIZE}"
+        },
+        "windows_zip": {
+          "name": "craft-windows-amd64.zip",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v${VERSION}/craft-windows-amd64.zip",
+          "size": "${WIN_ZIP_SIZE}"
+        },
+        "windows_exe": {
+          "name": "craft-windows-amd64.exe",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v${VERSION}/craft-windows-amd64.exe",
+          "size": "${WIN_EXE_SIZE}"
+        },
+        "darwin_arm64_tar": {
+          "name": "craft-darwin-arm64.tar.gz",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v${VERSION}/craft-darwin-arm64.tar.gz",
+          "size": "${DARWIN_ARM_SIZE}"
+        },
+        "darwin_amd64_tar": {
+          "name": "craft-darwin-amd64.tar.gz",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v${VERSION}/craft-darwin-amd64.tar.gz",
+          "size": "${DARWIN_AMD_SIZE}"
+        }
+      }
+    }
+  ]
+}
+EOF
+else
 cat <<EOF > "${LATEST_DIR}/versions.json"
 {
   "latest": "${VERSION}",
@@ -309,10 +361,13 @@ cat <<EOF > "${LATEST_DIR}/versions.json"
   ]
 }
 EOF
+fi
 
 # Copy manifest across targets
 cp -f "${LATEST_DIR}/versions.json" "${TARGET_DIR}/versions.json"
-cp -f "${LATEST_DIR}/versions.json" "${LTS_DIR}/versions.json"
+if [ "$VERSION" != "$LTS_VERSION" ]; then
+    cp -f "${LATEST_DIR}/versions.json" "${LTS_DIR}/versions.json"
+fi
 mkdir -p "${DOCS_PUBLIC_DIR}"
 cp -f "${LATEST_DIR}/versions.json" "${DOCS_PUBLIC_DIR}/versions.json"
 echo -e "${GREEN}[OK] Synchronized versions.json across releases and docs/public${NC}"
@@ -364,28 +419,28 @@ else
     echo -e "${GREEN}[OK] Successfully published GitHub release v${VERSION}${NC}"
 fi
 
-# Also ensure LTS release exists on GitHub so LTS links are live
-if ! gh release view "v${LTS_VERSION}" &>/dev/null; then
-    echo -e "${BLUE}LTS release v${LTS_VERSION} does not exist on GitHub. Creating it now...${NC}"
-    LTS_ASSETS=()
-    for file in "${LTS_DIR}"/*; do
-        if [ -f "$file" ]; then
-            LTS_ASSETS+=("$file")
+# Also ensure LTS release exists on GitHub if different
+if [ "$VERSION" != "$LTS_VERSION" ]; then
+    if ! gh release view "v${LTS_VERSION}" &>/dev/null; then
+        echo -e "${BLUE}LTS release v${LTS_VERSION} does not exist on GitHub. Creating it now...${NC}"
+        LTS_ASSETS=()
+        for file in "${LTS_DIR}"/*; do
+            if [ -f "$file" ]; then
+                LTS_ASSETS+=("$file")
+            fi
+        done
+        if [ ${#LTS_ASSETS[@]} -gt 0 ]; then
+            gh release create "v${LTS_VERSION}" "${LTS_ASSETS[@]}" \
+                --title "v${LTS_VERSION} (LTS)" \
+                --notes "Craft Long Term Support release v${LTS_VERSION}." \
+                $DRAFT_FLAG
+            echo -e "${GREEN}[OK] Successfully published GitHub release v${LTS_VERSION}${NC}"
         fi
-    done
-    if [ ${#LTS_ASSETS[@]} -gt 0 ]; then
-        gh release create "v${LTS_VERSION}" "${LTS_ASSETS[@]}" \
-            --title "v${LTS_VERSION} (LTS)" \
-            --notes "Craft Long Term Support release v${LTS_VERSION}." \
-            $DRAFT_FLAG
-        echo -e "${GREEN}[OK] Successfully published GitHub release v${LTS_VERSION}${NC}"
     fi
 fi
 
-# Ensure latest pointer points to active version if not LTS
-if [ "$VERSION" != "$LTS_VERSION" ]; then
-    gh release edit "v${VERSION}" --latest &>/dev/null || true
-fi
+# Ensure latest pointer points to active version
+gh release edit "v${VERSION}" --latest &>/dev/null || true
 
 echo ""
 echo -e "${GREEN}${BOLD}==================================================================${NC}"
