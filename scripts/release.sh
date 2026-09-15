@@ -372,17 +372,59 @@ mkdir -p "${DOCS_PUBLIC_DIR}"
 cp -f "${LATEST_DIR}/versions.json" "${DOCS_PUBLIC_DIR}/versions.json"
 echo -e "${GREEN}[OK] Synchronized versions.json across releases and docs/public${NC}"
 
+# Helper function to generate formatted release notes with SHA-256 table
+generate_release_notes() {
+    local version="$1"
+    local dir="$2"
+    local notes_file="$3"
+
+    cat <<EOF > "$notes_file"
+Craft official release v${version}: native high-performance Minecraft server supervisor, multi-platform runner, remote TUI, and backup engine.
+
+### SHA-256 Checksums
+
+| Asset | SHA-256 Checksum |
+| :--- | :--- |
+EOF
+
+    for asset in "craft-linux-amd64" "craft-linux-amd64.tar.gz" "craft-linux-amd64.gz" "craft-windows-amd64.exe" "craft-windows-amd64.zip" "craft-darwin-arm64.tar.gz" "craft-darwin-amd64.tar.gz"; do
+        if [ -f "${dir}/${asset}" ]; then
+            local hash
+            hash=$(sha256sum "${dir}/${asset}" | awk '{print $1}')
+            echo "| \`${asset}\` | \`${hash}\` |" >> "$notes_file"
+        fi
+    done
+
+    cat <<EOF >> "$notes_file"
+
+Verify any downloaded binary:
+\`\`\`bash
+# Linux / macOS
+sha256sum -c craft-linux-amd64.sha256
+
+# Windows PowerShell
+Get-FileHash .\\craft-windows-amd64.exe -Algorithm SHA256
+\`\`\`
+EOF
+}
+
 # Step 5: Upload to GitHub Releases
 echo -e "${BLUE}==> [4/5] Preparing GitHub Releases upload...${NC}"
 
+NOTES_FILE="${TARGET_DIR}/RELEASE_NOTES.md"
+generate_release_notes "${VERSION}" "${TARGET_DIR}" "${NOTES_FILE}"
+
 COLLECTED_ASSETS=()
 for file in "${TARGET_DIR}"/*; do
-    if [ -f "$file" ]; then
+    if [ -f "$file" ] && [ "$(basename "$file")" != "RELEASE_NOTES.md" ]; then
         COLLECTED_ASSETS+=("$file")
     fi
 done
 
 if [ "$DRY_RUN" = true ]; then
+    echo -e "${YELLOW}[DRY RUN] Generated release notes for v${VERSION}:${NC}"
+    cat "${NOTES_FILE}"
+    echo ""
     echo -e "${YELLOW}[DRY RUN] Would publish release v${VERSION} to GitHub with ${#COLLECTED_ASSETS[@]} assets:${NC}"
     for asset in "${COLLECTED_ASSETS[@]}"; do
         echo "  - $(basename "$asset")"
@@ -407,14 +449,15 @@ fi
 
 # Check if release exists
 if gh release view "v${VERSION}" &>/dev/null; then
-    echo -e "${YELLOW}Release v${VERSION} already exists. Uploading/updating assets...${NC}"
+    echo -e "${YELLOW}Release v${VERSION} already exists. Updating notes and assets...${NC}"
+    gh release edit "v${VERSION}" --notes-file "${NOTES_FILE}"
     gh release upload "v${VERSION}" "${COLLECTED_ASSETS[@]}" --clobber
-    echo -e "${GREEN}[OK] Uploaded assets to existing release v${VERSION}${NC}"
+    echo -e "${GREEN}[OK] Uploaded assets and updated release notes for v${VERSION}${NC}"
 else
     echo -e "${BLUE}Creating new GitHub release v${VERSION}...${NC}"
     gh release create "v${VERSION}" "${COLLECTED_ASSETS[@]}" \
         --title "v${VERSION}" \
-        --notes "Craft release v${VERSION}: includes remote streaming, version negotiation, and cross-platform pre-compiled binaries." \
+        --notes-file "${NOTES_FILE}" \
         $DRAFT_FLAG
     echo -e "${GREEN}[OK] Successfully published GitHub release v${VERSION}${NC}"
 fi
