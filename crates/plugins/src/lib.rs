@@ -5,6 +5,7 @@ pub mod modrinth;
 pub mod hangar;
 pub mod poggit;
 pub mod world;
+pub mod saves;
 
 pub use modrinth::{ModrinthClient, ModrinthHit, ModrinthFile};
 pub use hangar::{HangarClient, HangarProject};
@@ -16,6 +17,7 @@ pub use world::{
     inspect_world_metadata, list_world_player_data, list_world_advancements,
     list_world_data_storages, resolve_usercache_name,
 };
+pub use saves::{SaveItem, list_saves_for_server};
 
 #[derive(Debug, Clone)]
 pub struct UnifiedPluginHit {

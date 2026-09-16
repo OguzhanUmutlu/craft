@@ -39,9 +39,20 @@ pub async fn developer_tools_menu(server: &ServerConfig, paths: &CraftPaths) -> 
             box_divider(width).dimmed(),
         );
 
+        let is_java = current_server.game == "minecraft"
+            && craft_providers::find_software(&current_server.software)
+                .map(|s| s.edition() == craft_providers::ServerEdition::Java)
+                .unwrap_or(true);
+
+        let jdwp_label = if is_java {
+            "JVM JDWP Remote Debugger Setup"
+        } else {
+            "JVM JDWP Remote Debugger Setup (Java Only)"
+        };
+
         let entries = vec![
             MenuEntry::new("1", "Scaffolding Templates (Paper, Velocity, Datapack)"),
-            MenuEntry::new("2", "JVM JDWP Remote Debugger Setup"),
+            MenuEntry::new("2", jdwp_label),
             MenuEntry::new("3", "Link Local Development Build (.jar)"),
             MenuEntry::new("4", "Instant In-Game Reload (RCON)"),
             MenuEntry::new("5", "Generate Dockerfile & Docker Compose"),
@@ -55,7 +66,18 @@ pub async fn developer_tools_menu(server: &ServerConfig, paths: &CraftPaths) -> 
             }
             Some(1) => {
                 // JDWP Debugger
-                jdwp_setup_menu(&current_server, paths).await?;
+                if !is_java {
+                    show_modal_message(
+                        "JVM DEBUGGER UNAVAILABLE",
+                        &[
+                            "JDWP socket debugging is only supported on Java Virtual Machine game servers.".to_string(),
+                            format!("'{}' is a {} server running on native runtime.", current_server.name, current_server.game_definition().name),
+                        ],
+                        true,
+                    )?;
+                } else {
+                    jdwp_setup_menu(&current_server, paths).await?;
+                }
             }
             Some(2) => {
                 // Link local JAR

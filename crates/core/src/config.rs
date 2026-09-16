@@ -12,14 +12,24 @@ pub struct ServerConfig {
     pub path: PathBuf,
     pub software: String,
     pub version: String,
+    #[serde(default = "default_game_id")]
+    pub game: String,
     #[serde(default)]
     pub auto: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub java_path: Option<PathBuf>,
+    pub port: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_port: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rcon_port: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub port: Option<u16>,
+    pub java_path: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binary_path: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_args: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jvm_args: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -28,6 +38,23 @@ pub struct ServerConfig {
     pub backup_method: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jdwp_debug_port: Option<u16>,
+}
+
+pub fn default_game_id() -> String {
+    "minecraft".to_string()
+}
+
+impl ServerConfig {
+    pub fn game_definition(&self) -> crate::game::GameDefinition {
+        crate::game::find_game(&self.game).unwrap_or_else(|| {
+            crate::game::GameDefinition::custom(
+                &self.game,
+                &self.game,
+                self.port.unwrap_or(25565),
+                crate::game::TransportProtocol::Both,
+            )
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -318,10 +345,15 @@ mod tests {
             path: PathBuf::from("/test/path"),
             software: "paper".to_string(),
             version: "1.21.4".to_string(),
+            game: "minecraft".to_string(),
             auto: false,
-            java_path: None,
-            memory: Some("4G".to_string()),
             port: Some(25565),
+            query_port: Some(25565),
+            rcon_port: None,
+            memory: Some("4G".to_string()),
+            java_path: None,
+            binary_path: None,
+            start_args: None,
             jvm_args: None,
             created_at: Some(Utc::now()),
             backup_method: None,
@@ -355,10 +387,15 @@ mod tests {
             path: PathBuf::from("/servers/survival"),
             software: "purpur".to_string(),
             version: "1.21".to_string(),
+            game: "minecraft".to_string(),
             auto: true,
-            java_path: Some(PathBuf::from("/usr/bin/java")),
-            memory: Some("8G".to_string()),
             port: Some(25565),
+            query_port: Some(25565),
+            rcon_port: Some(25575),
+            memory: Some("8G".to_string()),
+            java_path: Some(PathBuf::from("/usr/bin/java")),
+            binary_path: None,
+            start_args: None,
             jvm_args: Some(vec!["-XX:+UseG1GC".to_string()]),
             created_at: Some(Utc::now()),
             backup_method: None,
@@ -369,7 +406,26 @@ mod tests {
         let deserialized: ServersRegistry = toml::from_str(&serialized).expect("Failed to deserialize");
         assert_eq!(registry.servers.len(), deserialized.servers.len());
         assert_eq!(registry.servers[0].name, deserialized.servers[0].name);
+        assert_eq!(registry.servers[0].game, "minecraft");
         assert_eq!(registry.servers[0].auto, deserialized.servers[0].auto);
+    }
+
+    #[test]
+    fn test_legacy_servers_toml_backward_compatibility() {
+        let legacy_toml = r#"
+[[servers]]
+name = "legacy-mc"
+path = "/servers/legacy-mc"
+software = "paper"
+version = "1.20.4"
+auto = false
+port = 25565
+"#;
+        let reg: ServersRegistry = toml::from_str(legacy_toml).expect("Should parse legacy TOML");
+        assert_eq!(reg.servers.len(), 1);
+        assert_eq!(reg.servers[0].name, "legacy-mc");
+        assert_eq!(reg.servers[0].game, "minecraft");
+        assert_eq!(reg.servers[0].game_definition().name, "Minecraft");
     }
 
     #[test]

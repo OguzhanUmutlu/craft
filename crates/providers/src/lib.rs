@@ -16,6 +16,11 @@ pub mod neoforge;
 pub mod quilt;
 pub mod nukkit;
 pub mod waterdog;
+pub mod palworld;
+pub mod terraria;
+pub mod valheim;
+pub mod factorio;
+pub mod custom;
 
 pub use traits::{AssetDownload, ServerEdition, ServerSoftware};
 pub use cache::CacheManager;
@@ -32,6 +37,11 @@ pub use neoforge::NeoForgeProvider;
 pub use quilt::QuiltProvider;
 pub use nukkit::NukkitProvider;
 pub use waterdog::WaterdogProvider;
+pub use palworld::PalworldProvider;
+pub use terraria::TerrariaProvider;
+pub use valheim::ValheimProvider;
+pub use factorio::FactorioProvider;
+pub use custom::CustomGameProvider;
 
 pub fn get_all_softwares() -> Vec<Arc<dyn ServerSoftware>> {
     vec![
@@ -51,7 +61,19 @@ pub fn get_all_softwares() -> Vec<Arc<dyn ServerSoftware>> {
         Arc::new(PocketmineProvider::new()),
         Arc::new(NukkitProvider::new()),
         Arc::new(WaterdogProvider::new()),
+        Arc::new(PalworldProvider::new()),
+        Arc::new(TerrariaProvider::new()),
+        Arc::new(ValheimProvider::new()),
+        Arc::new(FactorioProvider::new()),
+        Arc::new(CustomGameProvider::new()),
     ]
+}
+
+pub fn get_softwares_for_game(game_id: &str) -> Vec<Arc<dyn ServerSoftware>> {
+    get_all_softwares()
+        .into_iter()
+        .filter(|s| s.game_id().eq_ignore_ascii_case(game_id))
+        .collect()
 }
 
 pub fn find_software(id: &str) -> Option<Arc<dyn ServerSoftware>> {
@@ -62,6 +84,8 @@ pub fn find_software(id: &str) -> Option<Arc<dyn ServerSoftware>> {
             || (lower == "vanilla" && s.id() == "vanilla_java")
             || (lower == "bedrock" && s.id() == "vanilla_bedrock")
             || (lower == "bungee" && s.id() == "bungeecord")
+            || (lower == "palworld" && s.id() == "palserver")
+            || (lower == "terraria" && s.id() == "tshock")
     })
 }
 
@@ -90,6 +114,31 @@ mod tests {
         assert!(find_software("pocketmine").is_some());
         assert!(find_software("nukkit").is_some());
         assert!(find_software("waterdog").is_some());
+        assert!(find_software("palserver").is_some());
+        assert!(find_software("palworld").is_some());
+        assert!(find_software("tshock").is_some());
+        assert!(find_software("terraria").is_some());
+        assert!(find_software("valheim").is_some());
+        assert!(find_software("factorio").is_some());
+        assert!(find_software("custom").is_some());
+    }
+
+    #[test]
+    fn test_get_softwares_for_game() {
+        let mc = get_softwares_for_game("minecraft");
+        assert_eq!(mc.len(), 16);
+        let pal = get_softwares_for_game("palworld");
+        assert_eq!(pal.len(), 1);
+        assert_eq!(pal[0].id(), "palserver");
+        let terraria = get_softwares_for_game("terraria");
+        assert_eq!(terraria.len(), 1);
+        assert_eq!(terraria[0].id(), "tshock");
+        let valheim = get_softwares_for_game("valheim");
+        assert_eq!(valheim.len(), 1);
+        let factorio = get_softwares_for_game("factorio");
+        assert_eq!(factorio.len(), 1);
+        let custom = get_softwares_for_game("custom");
+        assert_eq!(custom.len(), 1);
     }
 
     #[test]
@@ -103,7 +152,7 @@ mod tests {
     #[test]
     fn test_software_descriptions() {
         let softwares = get_all_softwares();
-        assert_eq!(softwares.len(), 16);
+        assert_eq!(softwares.len(), 21);
         for soft in softwares {
             let desc = soft.description();
             assert!(!desc.is_empty(), "Software {} has empty description", soft.name());

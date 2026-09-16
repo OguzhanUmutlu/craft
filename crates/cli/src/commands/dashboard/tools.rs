@@ -7,7 +7,6 @@ use craft_core::{
     Result, ServersRegistry,
 };
 use craft_daemon::DaemonClient;
-use craft_net::{ping_bedrock_server, ping_java_server};
 use craft_plugins::PluginManager;
 use craft_providers::CacheManager;
 
@@ -42,15 +41,19 @@ pub async fn ping_menu() -> Result<()> {
     );
 
     let proto_entries = vec![
-        MenuEntry::new("1", "Java Edition (SLP)"),
-        MenuEntry::new("2", "Bedrock Edition (RakNet)"),
+        MenuEntry::new("1", "Auto-Detect / Universal Probe"),
+        MenuEntry::new("2", "Minecraft Java Edition (SLP)"),
+        MenuEntry::new("3", "Minecraft Bedrock Edition (RakNet)"),
+        MenuEntry::new("4", "Valve / Steam Engine (A2S - Palworld, Valheim, etc.)"),
         MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
     ];
 
     let choice = run_menu(&proto_header, &proto_entries, &mut proto_sel)?;
-    let is_bedrock = match choice {
-        Some(0) => false,
-        Some(1) => true,
+    let (proto_hint, default_port) = match choice {
+        Some(0) => (None, 25565),
+        Some(1) => (Some(craft_core::QueryProtocolKind::MinecraftJavaSlp), 25565),
+        Some(2) => (Some(craft_core::QueryProtocolKind::MinecraftBedrockRakNet), 19132),
+        Some(3) => (Some(craft_core::QueryProtocolKind::ValveA2S), 27015),
         _ => return Ok(()),
     };
 
@@ -58,10 +61,10 @@ pub async fn ping_menu() -> Result<()> {
         let (h, p) = target.split_at(idx);
         let port_num: u16 = p[1..]
             .parse()
-            .unwrap_or(if is_bedrock { 19132 } else { 25565 });
+            .unwrap_or(default_port);
         (h.to_string(), port_num)
     } else {
-        (target.clone(), if is_bedrock { 19132 } else { 25565 })
+        (target.clone(), default_port)
     };
 
     print_in_place_status(
@@ -69,56 +72,70 @@ pub async fn ping_menu() -> Result<()> {
         &[format!("Connecting to {}:{}...", host, port)],
     )?;
 
-    if is_bedrock {
-        match ping_bedrock_server(&host, port).await {
-            Ok(res) => {
-                show_modal_message(
-                    "BEDROCK SERVER ONLINE",
-                    &[
-                        format!("Server Name: {}", res.server_name),
-                        format!(
-                            "Version:     {} (Protocol {})",
-                            res.version, res.protocol_version
-                        ),
-                        format!("Players:     {}/{}", res.online_players, res.max_players),
-                        format!("World:       {}", res.world_name),
-                        format!("Latency:     {} ms", res.latency_ms),
-                    ],
-                    false,
-                )?;
-            }
-            Err(e) => {
-                show_modal_message(
-                    "BEDROCK PING FAILED",
-                    &[format!("[ERROR] Could not reach {}:{}: {}", host, port, e)],
-                    true,
-                )?;
-            }
+    match craft_net::ping_server_auto(&host, port, proto_hint).await {
+        Ok(craft_net::UniversalPingStatus::MinecraftJava(res)) => {
+            show_modal_message(
+                "JAVA SERVER ONLINE",
+                &[
+                    format!("MOTD:     {}", res.motd),
+                    format!(
+                        "Version:  {} (Protocol {})",
+                        res.version_name, res.protocol_version
+                    ),
+                    format!("Players:  {}/{}", res.online_players, res.max_players),
+                    format!("Latency:  {} ms", res.latency_ms),
+                ],
+                false,
+            )?;
         }
-    } else {
-        match ping_java_server(&host, port).await {
-            Ok(res) => {
-                show_modal_message(
-                    "JAVA SERVER ONLINE",
-                    &[
-                        format!("MOTD:     {}", res.motd),
-                        format!(
-                            "Version:  {} (Protocol {})",
-                            res.version_name, res.protocol_version
-                        ),
-                        format!("Players:  {}/{}", res.online_players, res.max_players),
-                        format!("Latency:  {} ms", res.latency_ms),
-                    ],
-                    false,
-                )?;
-            }
-            Err(e) => {
-                show_modal_message(
-                    "JAVA PING FAILED",
-                    &[format!("[ERROR] Could not reach {}:{}: {}", host, port, e)],
-                    true,
-                )?;
-            }
+        Ok(craft_net::UniversalPingStatus::MinecraftBedrock(res)) => {
+            show_modal_message(
+                "BEDROCK SERVER ONLINE",
+                &[
+                    format!("Server Name: {}", res.server_name),
+                    format!(
+                        "Version:     {} (Protocol {})",
+                        res.version, res.protocol_version
+                    ),
+                    format!("Players:     {}/{}", res.online_players, res.max_players),
+                    format!("World:       {}", res.world_name),
+                    format!("Latency:     {} ms", res.latency_ms),
+                ],
+                false,
+            )?;
+        }
+        Ok(craft_net::UniversalPingStatus::ValveA2S(res)) => {
+            show_modal_message(
+                "STEAM / VALVE A2S ONLINE",
+                &[
+                    format!("Server Name: {}", res.server_name),
+                    format!("Game / Map:  {} ({}) / {}", res.game_name, res.game_folder, res.map_name),
+                    format!("Players:     {}/{} (Bots: {})", res.online_players, res.max_players, res.bots),
+                    format!("Server Type: {} [{}]", res.server_type, res.environment),
+                    format!("VAC Secured: {}", if res.vac_secured { "Yes" } else { "No" }),
+                    format!("Latency:     {} ms", res.latency_ms),
+                ],
+                false,
+            )?;
+        }
+        Ok(craft_net::UniversalPingStatus::PortProbe { latency_ms, transport, .. }) => {
+            show_modal_message(
+                "SERVER PORT OPEN",
+                &[
+                    format!("Target:    {}:{}", host, port),
+                    format!("Transport: {}", transport),
+                    "Status:    Port Open / Responsive".to_string(),
+                    format!("Latency:   {} ms", latency_ms),
+                ],
+                false,
+            )?;
+        }
+        Err(e) => {
+            show_modal_message(
+                "PING FAILED",
+                &[format!("[ERROR] Could not reach {}:{}: {}", host, port, e)],
+                true,
+            )?;
         }
     }
 

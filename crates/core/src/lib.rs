@@ -1,6 +1,7 @@
 pub mod error;
 pub mod path;
 pub mod config;
+pub mod game;
 pub mod remote_config;
 pub mod backup_config;
 pub mod java;
@@ -12,9 +13,13 @@ pub mod properties;
 
 pub use error::{CraftError, Result};
 pub use path::CraftPaths;
+pub use game::{
+    find_game, get_supported_games, ConfigFormat, GameDefinition, QueryProtocolKind, RuntimeKind,
+    TransportProtocol,
+};
 pub use config::{
-    ServerConfig, ServersRegistry, GlobalSettings, get_default_world, set_default_world,
-    get_dimension_worlds, set_nether_world, set_end_world,
+    default_game_id, get_default_world, get_dimension_worlds, set_default_world, set_end_world,
+    set_nether_world, GlobalSettings, ServerConfig, ServersRegistry,
 };
 pub use cache::{CacheStore, CacheStats, CacheEntryMeta, parse_size, format_size};
 pub use remote_config::{RemoteHostConfig, RemoteAuthType, RemoteOsType, RemotesRegistry};

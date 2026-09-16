@@ -1,11 +1,11 @@
 use std::time::Instant;
 use bytes::{Buf, BufMut, BytesMut};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use craft_core::{CraftError, Result};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerPingStatus {
     pub latency_ms: u64,
     pub version_name: String,

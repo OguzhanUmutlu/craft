@@ -125,11 +125,15 @@ impl Supervisor {
         };
 
         // Self-healing: ensure server jar / binary is in place
-        let expected_file = ServersRegistry::load(&self.paths).ok().and_then(|r| {
-            r.find_by_path(&canonical).and_then(|s| {
-                craft_providers::find_software(&s.software).map(|sw| sw.default_server_file())
-            })
-        }).unwrap_or("server.jar");
+        let server_entry = ServersRegistry::load(&self.paths).ok().and_then(|r| {
+            r.find_by_path(&canonical).cloned()
+        });
+
+        let expected_file = server_entry
+            .as_ref()
+            .and_then(|s| craft_providers::find_software(&s.software))
+            .map(|sw| sw.default_server_file())
+            .unwrap_or("server.jar");
 
         if let Some(source) = auto_heal_server_file(&canonical, expected_file) {
             info!("Self-healing: Restored {} from '{}' in '{}'", expected_file, source, canonical.display());
@@ -157,26 +161,21 @@ impl Supervisor {
                     let _ = std::fs::set_permissions(&script, perms);
                 }
             }
-            let bedrock_bin = canonical.join("bedrock_server");
-            if bedrock_bin.exists() {
-                if let Ok(meta) = std::fs::metadata(&bedrock_bin) {
-                    let mut perms = meta.permissions();
-                    if perms.mode() & 0o111 == 0 {
-                        perms.set_mode(0o755);
-                        let _ = std::fs::set_permissions(&bedrock_bin, perms);
-                    }
-                }
-            }
         }
 
-        // Check EULA
-        let eula_path = canonical.join("eula.txt");
-        if eula_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&eula_path) {
-                if content.contains("eula=false") {
-                    return Err(CraftError::Other(
-                        "EULA has not been accepted for this server yet. Run 'craft run --here' to view and agree to the EULA.".to_string()
-                    ));
+        // Delegate pre-start checks (EULA, binary permissions, config validation) to software provider
+        if let Some(sw) = server_entry.as_ref().and_then(|s| craft_providers::find_software(&s.software)) {
+            sw.pre_start_check(&canonical)?;
+        } else {
+            // Fallback for custom or unrecognised Minecraft servers
+            let eula_path = canonical.join("eula.txt");
+            if eula_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&eula_path) {
+                    if content.contains("eula=false") {
+                        return Err(CraftError::Other(
+                            "EULA has not been accepted for this server yet. Run 'craft run --here' to view and agree to the EULA.".to_string()
+                        ));
+                    }
                 }
             }
         }

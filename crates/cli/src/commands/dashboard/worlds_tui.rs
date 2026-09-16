@@ -16,6 +16,10 @@ use super::screen::{
 };
 
 pub async fn manage_installed_worlds_menu(server: &ServerConfig) -> Result<()> {
+    if server.game != "minecraft" {
+        return manage_non_minecraft_saves_menu(server).await;
+    }
+
     let _guard = AltScreenGuard::enter();
     let _nav = NavGuard::enter("Manage Worlds");
     let mut selected = 0;
@@ -782,6 +786,68 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
                         }
                     }
                 }
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+async fn manage_non_minecraft_saves_menu(server: &ServerConfig) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Manage Saves");
+    let mut selected = 0;
+
+    loop {
+        let saves = craft_plugins::list_saves_for_server(&server.path, &server.game)?;
+        let width = get_content_width(80);
+        let game_def = server.game_definition();
+
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:   {:<18} | Game: {}\r\n Format:   {}\r\n Select a save item to view details or create backups:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title(&format!("SAVE MANAGER: {}", server.name), width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server.name.white().bold(),
+            game_def.name.magenta().bold(),
+            game_def.save_directory.as_deref().unwrap_or("saves/").cyan(),
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries = Vec::new();
+        for (i, s) in saves.iter().enumerate() {
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            };
+            let mb = (s.size_bytes as f64) / (1024.0 * 1024.0);
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<24} {:>7.2} MB  [{}]", s.name, mb, s.format_desc),
+            ));
+        }
+
+        if saves.is_empty() {
+            entries.push(MenuEntry::new("!", "No saves detected yet (run server to generate initial world)"));
+        }
+
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(idx) if idx < saves.len() => {
+                let chosen = &saves[idx];
+                let mb = (chosen.size_bytes as f64) / (1024.0 * 1024.0);
+                show_modal_message(
+                    "SAVE DETAILS",
+                    &[
+                        format!("Name:        {}", chosen.name),
+                        format!("Game:        {}", chosen.game),
+                        format!("Format:      {}", chosen.format_desc),
+                        format!("Size:        {:.2} MB ({} bytes)", mb, chosen.size_bytes),
+                        format!("Path:        {}", chosen.path.display()),
+                    ],
+                    false,
+                )?;
             }
             _ => return Ok(()),
         }

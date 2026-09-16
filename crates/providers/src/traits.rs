@@ -8,6 +8,7 @@ pub enum ServerEdition {
     Java,
     Bedrock,
     Proxy,
+    Native,
 }
 
 #[derive(Debug, Clone)]
@@ -22,8 +23,58 @@ pub trait ServerSoftware: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn edition(&self) -> ServerEdition;
+    fn game_id(&self) -> &'static str {
+        "minecraft"
+    }
+    fn runtime_kind(&self) -> craft_core::RuntimeKind {
+        match self.edition() {
+            ServerEdition::Java | ServerEdition::Proxy => craft_core::RuntimeKind::Java {
+                default_jar: self.default_server_file().to_string(),
+            },
+            ServerEdition::Bedrock | ServerEdition::Native => craft_core::RuntimeKind::NativeBinary {
+                default_executable: self.default_server_file().to_string(),
+            },
+        }
+    }
+    fn default_ports(&self) -> (u16, Option<u16>) {
+        match self.edition() {
+            ServerEdition::Bedrock => (19132, None),
+            ServerEdition::Proxy => (25577, None),
+            _ => (25565, None),
+        }
+    }
+    fn pre_start_check(&self, server_path: &Path) -> Result<()> {
+        if self.game_id() == "minecraft" && self.edition() == ServerEdition::Java {
+            let eula_path = server_path.join("eula.txt");
+            if eula_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&eula_path) {
+                    if content.contains("eula=false") {
+                        return Err(craft_core::CraftError::Other(
+                            "EULA has not been accepted for this server yet. Run 'craft run --here' to view and agree to the EULA.".to_string()
+                        ));
+                    }
+                }
+            }
+        } else if self.game_id() == "minecraft" && self.edition() == ServerEdition::Bedrock {
+            #[cfg(not(target_os = "windows"))]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let bin = server_path.join("bedrock_server");
+                if bin.exists() {
+                    if let Ok(meta) = std::fs::metadata(&bin) {
+                        let mut perms = meta.permissions();
+                        if perms.mode() & 0o111 == 0 {
+                            perms.set_mode(0o755);
+                            let _ = std::fs::set_permissions(&bin, perms);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
     fn description(&self) -> &'static str {
-        "Minecraft server software"
+        "Dedicated server software"
     }
     fn default_server_file(&self) -> &'static str {
         "server.jar"

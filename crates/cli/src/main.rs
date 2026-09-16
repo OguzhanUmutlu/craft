@@ -278,11 +278,11 @@ async fn main() {
                 Ok(())
             }
         }
-        Some(Commands::Ping { target, bedrock }) => {
+        Some(Commands::Ping { target, bedrock, a2s }) => {
             if target.is_empty() && std::io::stdin().is_terminal() {
                 ping_menu().await
             } else {
-                handle_ping(&target, bedrock).await
+                handle_ping(&target, bedrock, a2s).await
             }
         }
         Some(Commands::Rcon { server, password, command }) => {

@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 #[command(name = "craft")]
 #[command(author = "OguzhanUmutlu")]
 #[command(version)]
-#[command(about = "High-performance Minecraft server management CLI and daemon", long_about = None)]
+#[command(about = "High-performance dedicated game server management CLI and daemon", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -24,7 +24,7 @@ pub enum Commands {
         remote: Option<String>,
     },
 
-    /// Set up a new Minecraft server (interactive wizard if software omitted)
+    /// Set up a new dedicated game server (interactive wizard if software omitted)
     #[command(alias = "create", alias = "init")]
     New {
         /// Server name (or omit to launch the interactive setup wizard)
@@ -238,14 +238,17 @@ pub enum Commands {
         action: Option<PluginCommands>,
     },
 
-    /// Ping a Minecraft Java or Bedrock server
+    /// Ping a server (Minecraft Java/Bedrock, Steam A2S, or auto-detect)
     Ping {
-        /// Target address (e.g. localhost:25565 or server name)
+        /// Target address (e.g. localhost:25565, 127.0.0.1:8211, or server name)
         #[arg(default_value = "")]
         target: String,
         /// Bedrock server ping
         #[arg(long)]
         bedrock: bool,
+        /// Valve / Steam A2S server ping (Palworld, Valheim, etc.)
+        #[arg(long)]
+        a2s: bool,
     },
 
     /// Send an RCON command to a running server
@@ -310,8 +313,8 @@ pub enum Commands {
         action: Option<crate::commands::prop::PropAction>,
     },
 
-    /// Manage, inspect, and switch worlds, dimensions, and player data
-    #[command(alias = "worlds")]
+    /// Manage, inspect, and switch worlds, saves, dimensions, and player data
+    #[command(alias = "worlds", alias = "save", alias = "saves")]
     World {
         /// Server name
         server: String,

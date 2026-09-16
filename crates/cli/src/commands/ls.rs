@@ -28,6 +28,7 @@ pub async fn handle_ls(paths: &CraftPaths) -> Result<()> {
     table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
     table.set_header(vec![
         Cell::new("Name").fg(Color::Cyan),
+        Cell::new("Game").fg(Color::Cyan),
         Cell::new("Software").fg(Color::Cyan),
         Cell::new("Version").fg(Color::Cyan),
         Cell::new("Status").fg(Color::Cyan),
@@ -62,8 +63,11 @@ pub async fn handle_ls(paths: &CraftPaths) -> Result<()> {
             Cell::new("NO").fg(Color::DarkGrey)
         };
 
+        let game_name = server.game_definition().name;
+
         table.add_row(Row::from(vec![
             Cell::new(&server.name),
+            Cell::new(game_name).fg(Color::Magenta),
             Cell::new(&server.software),
             Cell::new(&server.version),
             status_cell,

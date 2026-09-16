@@ -133,11 +133,12 @@ pub async fn quick_start_menu(paths: &CraftPaths) -> Result<()> {
             } else {
                 ((b'a' + (i - 9) as u8) as char).to_string()
             };
+            let game_badge = format!("[{}]", s.game_definition().name.to_uppercase()).magenta().to_string();
             entries.push(MenuEntry::new(
                 hotkey,
                 format!(
-                    "{:<20} {:<10} {:<10} {}",
-                    s.name, s.software, s.version, status_badge
+                    "{:<18} {:<12} {:<10} {:<10} {}",
+                    s.name, game_badge, s.software, s.version, status_badge
                 ),
             ));
         }
@@ -272,11 +273,13 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
             } else {
                 "[RUNNING]".green().bold().to_string()
             };
+            let game_badge = format!("[{}]", s.game_definition().name.to_uppercase()).magenta().to_string();
             entries.push(MenuEntry::new(
                 hotkey,
                 format!(
-                    "{:<20} {:<10} {:<10} {}",
+                    "{:<18} {:<12} {:<10} {:<10} {}",
                     s.name,
+                    game_badge,
                     s.software,
                     s.version,
                     status_str
@@ -375,9 +378,10 @@ pub async fn restart_servers_menu(paths: &CraftPaths) -> Result<()> {
             } else {
                 ((b'a' + (i - 9) as u8) as char).to_string()
             };
+            let game_badge = format!("[{}]", s.game_definition().name.to_uppercase()).magenta().to_string();
             entries.push(MenuEntry::new(
                 hotkey,
-                format!("{:<20} {:<10} {:<10}", s.name, s.software, s.version),
+                format!("{:<18} {:<12} {:<10} {:<10}", s.name, game_badge, s.software, s.version),
             ));
         }
         if registry.servers.len() > 1 {
@@ -720,9 +724,10 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                 } else {
                     "[STOPPED]".dimmed().to_string()
                 };
+                let game_badge = format!("[{}]", s.game_definition().name.to_uppercase()).magenta().to_string();
                 format!(
-                    "{:<20} {:<10} {:<10} {}",
-                    s.name, s.software, s.version, status_str
+                    "{:<18} {:<12} {:<10} {:<10} {}",
+                    s.name, game_badge, s.software, s.version, status_str
                 )
             },
             &action_entries,
@@ -830,14 +835,17 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
             String::new()
         };
         let path_label = if super::screen::is_remote_node() { "Remote Path" } else { "Path" };
+        let game_def = server.game_definition();
+        let port_display = server.port.map(|p| p.to_string()).unwrap_or_else(|| "Default".to_string());
         let mut header = format!(
-            "{}\r\n{}\r\n{}\r\n Platform: {:<12} | Version: {:<10} | Memory: {}\r\n{}{}: {}\r\n",
+            "{}\r\n{}\r\n{}\r\n Game: {:<14} | Software: {:<12} | Version: {:<10} | Port: {}\r\n{}{}: {}\r\n",
             box_top(width).cyan().bold(),
             box_title(&title, width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
+            game_def.name.magenta().bold(),
             server.software.white().bold(),
             server.version.cyan(),
-            server.memory.as_deref().unwrap_or("Default (2G)"),
+            port_display.yellow(),
             remote_line,
             path_label,
             server.path.display(),

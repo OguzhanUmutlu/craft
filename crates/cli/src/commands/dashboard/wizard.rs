@@ -31,7 +31,8 @@ pub async fn gui_create_server_wizard_with_name(
 
     enum WizardStep {
         Name,
-        Category,
+        GameSelect,
+        MinecraftCategory,
         JavaType,
         Software,
         Version,
@@ -60,11 +61,12 @@ pub async fn gui_create_server_wizard_with_name(
             )?;
             return Ok(());
         }
-        WizardStep::Category
+        WizardStep::GameSelect
     } else {
         WizardStep::Name
     };
 
+    let mut game_id: &'static str = "minecraft";
     let mut cat_idx: usize = 0;
     let mut java_type: usize = 0;
     let mut selected_sw_id: &'static str = "paper";
@@ -73,6 +75,7 @@ pub async fn gui_create_server_wizard_with_name(
     let mut memory: String = "4G".to_string();
     let mut start_now: bool = true;
 
+    let mut game_sel = 0;
     let mut cat_sel = 0;
     let mut java_sel = 0;
     let mut sw_sel = 0;
@@ -110,34 +113,107 @@ pub async fn gui_create_server_wizard_with_name(
                             continue;
                         }
                         server_name = name;
-                        step = WizardStep::Category;
+                        step = WizardStep::GameSelect;
                     }
                     _ => return Ok(()),
                 }
             }
 
-            WizardStep::Category => {
+            WizardStep::GameSelect => {
                 let width = get_content_width(80);
-                let cat_header = format!(
-                    "{}\r\n{}\r\n{}\r\n Choose platform category for server '{}':\r\n{}",
+                let game_header = format!(
+                    "{}\r\n{}\r\n{}\r\n Choose dedicated game environment for server '{}':\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 2/6: SELECT PLATFORM CATEGORY", width, false).cyan().bold(),
+                    box_title("STEP 2/6: SELECT GAME ENVIRONMENT", width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
                     server_name,
                     box_divider(width).dimmed(),
                 );
 
-                let cat_entries = vec![
-                    MenuEntry::new("1", "Java Edition"),
-                    MenuEntry::new("2", "Bedrock Edition"),
-                    MenuEntry::new("3", "Network Proxies"),
-                    MenuEntry::new("4", "Hybrid & Cross-Play"),
-                    MenuEntry::new("5", "Browse All 16 Platforms"),
+                let game_entries = vec![
+                    MenuEntry::new("1", "Minecraft (Java, Bedrock, Proxies)"),
+                    MenuEntry::new("2", "Palworld (Dedicated Server)"),
+                    MenuEntry::new("3", "Terraria (TShock Dedicated Server)"),
+                    MenuEntry::new("4", "Valheim (Dedicated Server)"),
+                    MenuEntry::new("5", "Factorio (Headless Dedicated Server)"),
+                    MenuEntry::new("6", "Custom Game Server (Generic binary/script)"),
+                    MenuEntry::new("7", "Browse All 21 Softwares"),
                     MenuEntry::new("0", if has_name_override { "Cancel" } else { "Back" }).with_aliases(&["b"]),
                 ];
 
-                let cat_choice = run_menu(&cat_header, &cat_entries, &mut cat_sel)?;
-                match cat_choice {
+                let game_choice = run_menu(&game_header, &game_entries, &mut game_sel)?;
+                match game_choice {
+                    Some(0) => {
+                        game_id = "minecraft";
+                        step = WizardStep::MinecraftCategory;
+                    }
+                    Some(1) => {
+                        game_id = "palworld";
+                        selected_sw_id = "palserver";
+                        selected_sw_name = "Palworld Dedicated Server";
+                        step = WizardStep::Version;
+                    }
+                    Some(2) => {
+                        game_id = "terraria";
+                        selected_sw_id = "tshock";
+                        selected_sw_name = "TShock (Terraria)";
+                        step = WizardStep::Version;
+                    }
+                    Some(3) => {
+                        game_id = "valheim";
+                        selected_sw_id = "valheim";
+                        selected_sw_name = "Valheim Dedicated Server";
+                        step = WizardStep::Version;
+                    }
+                    Some(4) => {
+                        game_id = "factorio";
+                        selected_sw_id = "factorio";
+                        selected_sw_name = "Factorio Headless Server";
+                        step = WizardStep::Version;
+                    }
+                    Some(5) => {
+                        game_id = "custom";
+                        selected_sw_id = "custom";
+                        selected_sw_name = "Custom Game Server";
+                        step = WizardStep::Version;
+                    }
+                    Some(6) => {
+                        game_id = "all";
+                        cat_idx = 99;
+                        step = WizardStep::Software;
+                    }
+                    _ => {
+                        if has_name_override {
+                            return Ok(());
+                        } else {
+                            step = WizardStep::Name;
+                        }
+                    }
+                }
+            }
+
+            WizardStep::MinecraftCategory => {
+                let width = get_content_width(80);
+                let mc_header = format!(
+                    "{}\r\n{}\r\n{}\r\n Choose Minecraft platform category for '{}':\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title("STEP 2b: SELECT MINECRAFT CATEGORY", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    server_name,
+                    box_divider(width).dimmed(),
+                );
+
+                let mc_entries = vec![
+                    MenuEntry::new("1", "Java Edition (Plugins & Modded)"),
+                    MenuEntry::new("2", "Bedrock Edition"),
+                    MenuEntry::new("3", "Network Proxies & Bridges"),
+                    MenuEntry::new("4", "Hybrid & Cross-Play"),
+                    MenuEntry::new("5", "All Minecraft Softwares"),
+                    MenuEntry::new("0", "Back to Game Selection").with_aliases(&["b"]),
+                ];
+
+                let mc_choice = run_menu(&mc_header, &mc_entries, &mut cat_sel)?;
+                match mc_choice {
                     Some(0) => {
                         cat_idx = 0;
                         step = WizardStep::JavaType;
@@ -159,11 +235,7 @@ pub async fn gui_create_server_wizard_with_name(
                         step = WizardStep::Software;
                     }
                     _ => {
-                        if has_name_override {
-                            return Ok(());
-                        } else {
-                            step = WizardStep::Name;
-                        }
+                        step = WizardStep::GameSelect;
                     }
                 }
             }
@@ -173,7 +245,7 @@ pub async fn gui_create_server_wizard_with_name(
                 let jt_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose server type for Java Edition:\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 2: SELECT JAVA SERVER TYPE", width, false).cyan().bold(),
+                    box_title("STEP 2c: SELECT JAVA SERVER TYPE", width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
                     box_divider(width).dimmed(),
                 );
@@ -181,7 +253,7 @@ pub async fn gui_create_server_wizard_with_name(
                 let jt_entries = vec![
                     MenuEntry::new("1", "Plugins & Vanilla"),
                     MenuEntry::new("2", "Modded Servers"),
-                    MenuEntry::new("0", "Back to Platform Categories").with_aliases(&["b"]),
+                    MenuEntry::new("0", "Back to Minecraft Categories").with_aliases(&["b"]),
                 ];
 
                 let jt_choice = run_menu(&jt_header, &jt_entries, &mut java_sel)?;
@@ -195,7 +267,7 @@ pub async fn gui_create_server_wizard_with_name(
                         step = WizardStep::Software;
                     }
                     _ => {
-                        step = WizardStep::Category;
+                        step = WizardStep::MinecraftCategory;
                     }
                 }
             }
@@ -290,6 +362,12 @@ pub async fn gui_create_server_wizard_with_name(
                         ),
                         ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
                     ],
+                    4 => {
+                        craft_providers::get_softwares_for_game("minecraft")
+                            .into_iter()
+                            .map(|s| (s.id(), s.name(), s.description()))
+                            .collect()
+                    }
                     _ => get_all_softwares()
                         .into_iter()
                         .map(|s| (s.id(), s.name(), s.description()))
@@ -329,8 +407,10 @@ pub async fn gui_create_server_wizard_with_name(
                     _ => {
                         if cat_idx == 0 {
                             step = WizardStep::JavaType;
+                        } else if cat_idx == 99 {
+                            step = WizardStep::GameSelect;
                         } else {
-                            step = WizardStep::Category;
+                            step = WizardStep::MinecraftCategory;
                         }
                     }
                 }
@@ -339,7 +419,7 @@ pub async fn gui_create_server_wizard_with_name(
             WizardStep::Version => {
                 let width = get_content_width(80);
                 let ver_header = format!(
-                    "{}\r\n{}\r\n{}\r\n Select Minecraft release version for {}:\r\n{}",
+                    "{}\r\n{}\r\n{}\r\n Select release version for {}:\r\n{}",
                     box_top(width).cyan().bold(),
                     box_title("STEP 4/6: SELECT SERVER VERSION", width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
@@ -347,68 +427,65 @@ pub async fn gui_create_server_wizard_with_name(
                     box_divider(width).dimmed(),
                 );
 
-                let ver_entries = vec![
-                    MenuEntry::new("1", "latest (Recommended)"),
-                    MenuEntry::new("2", "1.21.4"),
-                    MenuEntry::new("3", "1.21.1"),
-                    MenuEntry::new("4", "1.20.4"),
-                    MenuEntry::new("5", "1.20.1"),
-                    MenuEntry::new("6", "1.19.4"),
-                    MenuEntry::new("7", "1.18.2"),
-                    MenuEntry::new("8", "1.16.5"),
-                    MenuEntry::new("c", "Custom Version"),
-                    MenuEntry::new("0", "Back").with_aliases(&["b"]),
-                ];
+                let sw_obj = craft_providers::find_software(selected_sw_id);
+                let bundled = sw_obj
+                    .as_ref()
+                    .map(|s| s.bundled_versions())
+                    .unwrap_or_else(|| vec!["latest".to_string()]);
+
+                let mut ver_entries: Vec<MenuEntry> = bundled
+                    .iter()
+                    .take(8)
+                    .enumerate()
+                    .map(|(i, v)| {
+                        let label = if i == 0 {
+                            format!("{} (Recommended)", v)
+                        } else {
+                            v.clone()
+                        };
+                        MenuEntry::new((i + 1).to_string(), label)
+                    })
+                    .collect();
+                ver_entries.push(MenuEntry::new("c", "Custom Version"));
+                ver_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
                 let ver_choice = run_menu(&ver_header, &ver_entries, &mut ver_sel)?;
+                let num_bundled = bundled.iter().take(8).count();
                 match ver_choice {
-                    Some(0) => {
-                        version = "latest".to_string();
-                        step = WizardStep::Memory;
+                    Some(idx) if idx < num_bundled => {
+                        version = bundled[idx].clone();
+                        let is_java = sw_obj.as_ref().map(|s| s.edition() == craft_providers::ServerEdition::Java).unwrap_or(true);
+                        if is_java {
+                            step = WizardStep::Memory;
+                        } else {
+                            step = WizardStep::Autostart;
+                        }
                     }
-                    Some(1) => {
-                        version = "1.21.4".to_string();
-                        step = WizardStep::Memory;
-                    }
-                    Some(2) => {
-                        version = "1.21.1".to_string();
-                        step = WizardStep::Memory;
-                    }
-                    Some(3) => {
-                        version = "1.20.4".to_string();
-                        step = WizardStep::Memory;
-                    }
-                    Some(4) => {
-                        version = "1.20.1".to_string();
-                        step = WizardStep::Memory;
-                    }
-                    Some(5) => {
-                        version = "1.19.4".to_string();
-                        step = WizardStep::Memory;
-                    }
-                    Some(6) => {
-                        version = "1.18.2".to_string();
-                        step = WizardStep::Memory;
-                    }
-                    Some(7) => {
-                        version = "1.16.5".to_string();
-                        step = WizardStep::Memory;
-                    }
-                    Some(8) => {
+                    Some(idx) if idx == num_bundled => {
+                        let default_v = bundled.first().map(|s| s.as_str()).unwrap_or("latest");
                         match run_input_prompt(
-                            "CUSTOM MINECRAFT VERSION",
-                            "Enter target version (e.g. 1.21.3, 1.20.2):",
-                            Some("1.21.4"),
+                            "CUSTOM SERVER VERSION",
+                            "Enter target release version string:",
+                            Some(default_v),
                         )? {
                             Some(v) if !v.trim().is_empty() => {
                                 version = v.trim().to_string();
-                                step = WizardStep::Memory;
+                                let is_java = sw_obj.as_ref().map(|s| s.edition() == craft_providers::ServerEdition::Java).unwrap_or(true);
+                                if is_java {
+                                    step = WizardStep::Memory;
+                                } else {
+                                    step = WizardStep::Autostart;
+                                }
                             }
                             _ => {}
                         }
                     }
                     _ => {
-                        step = WizardStep::Software;
+                        if game_id != "minecraft" && cat_idx != 99 {
+                            step = WizardStep::GameSelect;
+                        } else {
+                            step = WizardStep::Software;
+                        }
                     }
                 }
             }
@@ -501,7 +578,13 @@ pub async fn gui_create_server_wizard_with_name(
                         step = WizardStep::Execute;
                     }
                     _ => {
-                        step = WizardStep::Memory;
+                        let sw_obj = craft_providers::find_software(selected_sw_id);
+                        let is_java = sw_obj.as_ref().map(|s| s.edition() == craft_providers::ServerEdition::Java).unwrap_or(true);
+                        if is_java {
+                            step = WizardStep::Memory;
+                        } else {
+                            step = WizardStep::Version;
+                        }
                     }
                 }
             }
@@ -514,13 +597,13 @@ pub async fn gui_create_server_wizard_with_name(
 
     // Execution
     print_in_place_status(
-        "CREATING MINECRAFT SERVER",
+        "CREATING DEDICATED SERVER",
         &[
             format!(
                 "Setting up server '{}' ({} {})...",
                 server_name, selected_sw_name, version
             ),
-            "Downloading server jarfile and configuring runtime environment...".to_string(),
+            "Downloading server assets and configuring runtime environment...".to_string(),
             "Please wait...".to_string(),
         ],
     )?;

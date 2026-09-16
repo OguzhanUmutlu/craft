@@ -53,7 +53,8 @@ pub async fn handle_new(
             "[2] Bedrock Edition",
             "[3] Network Proxies",
             "[4] Hybrid & Cross-Play",
-            "[5] Browse All 16 Platforms",
+            "[5] Other Games (Palworld, Terraria, Valheim, Factorio, Custom)",
+            "[6] Browse All Platforms",
         ];
         let cat_idx = Select::with_theme(&theme)
             .with_prompt("Category")
@@ -105,6 +106,13 @@ pub async fn handle_new(
             3 => vec![
                 ("geyser", "GeyserMC Standalone", "Cross-play bridge for Bedrock clients"),
                 ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
+            ],
+            4 => vec![
+                ("palserver", "Palworld Dedicated", "Palworld Dedicated Server (UE5)"),
+                ("tshock", "TShock (Terraria)", "TShock dedicated server for Terraria"),
+                ("valheim", "Valheim Dedicated", "Valheim Dedicated Server (Unity)"),
+                ("factorio", "Factorio Headless", "Factorio Headless Dedicated Server"),
+                ("custom", "Custom Game Server", "Custom dedicated server binary"),
             ],
             _ => {
                 get_all_softwares()
@@ -259,7 +267,7 @@ pub async fn handle_new(
     }
 
     // 7. EULA Acceptance
-    if !agree_eula {
+    if software.game_id() == "minecraft" && software.edition() == ServerEdition::Java && !agree_eula {
         if is_tty {
             agree_eula = Confirm::with_theme(&theme)
                 .with_prompt("Accept Minecraft EULA? (required to start server)")
@@ -330,21 +338,21 @@ pub async fn handle_new(
             "-XX:SurvivorRatio=32".to_string(),
             "-XX:+PerfDisableSharedMem".to_string(),
             "-XX:MaxTenuringThreshold=1".to_string(),
-            "-Dusing.aikars.flags=https://mcflags.emc.gs".to_string(),
-            "-Daikars.new.flags=true".to_string(),
         ]);
-        println!("{}", "Applied Aikar G1GC JVM flags.".cyan());
+        println!("{}", "Applied Aikar's optimized G1GC flags.".cyan());
     } else if zgc {
         flags.extend(vec![
             "-XX:+UseZGC".to_string(),
+            "-XX:+ZGenerational".to_string(),
             "-XX:+UnlockExperimentalVMOptions".to_string(),
             "-XX:+AlwaysPreTouch".to_string(),
             "-XX:+DisableExplicitGC".to_string(),
         ]);
-        println!("{}", "Applied ZGC low-latency JVM flags.".cyan());
+        println!("{}", "Applied Generational ZGC flags.".cyan());
     } else if shenandoah {
         flags.extend(vec![
             "-XX:+UseShenandoahGC".to_string(),
+            "-XX:ShenandoahGCHeuristics=adaptive".to_string(),
             "-XX:+UnlockExperimentalVMOptions".to_string(),
             "-XX:+AlwaysPreTouch".to_string(),
             "-XX:+DisableExplicitGC".to_string(),
@@ -362,11 +370,14 @@ pub async fn handle_new(
     software.generate_start_script_with_flags(&target_dir, &version, java_path.as_deref(), &memory, final_jvm_flags.as_deref())?;
 
     // Handle EULA
-    if agree_eula {
+    if software.game_id() == "minecraft" && software.edition() == ServerEdition::Java && agree_eula {
         let eula_file = target_dir.join("eula.txt");
         let _ = fs::write(eula_file, "eula=true\n");
         println!("{}", "EULA accepted automatically.".green());
     }
+
+    let (default_game_port, default_query_port) = software.default_ports();
+    let final_port = port_input.or(Some(default_game_port));
 
     // Register server
     let server_config = ServerConfig {
@@ -374,11 +385,16 @@ pub async fn handle_new(
         path: target_dir.clone(),
         software: software.id().to_string(),
         version: version.clone(),
+        game: software.game_id().to_string(),
         auto: false,
         java_path,
         memory: Some(memory.to_string()),
-        port: port_input.or(Some(25565)),
+        port: final_port,
+        query_port: default_query_port,
+        rcon_port: None,
         jvm_args: final_jvm_flags,
+        start_args: None,
+        binary_path: None,
         created_at: Some(chrono::Utc::now()),
         backup_method: None,
         jdwp_debug_port: None,

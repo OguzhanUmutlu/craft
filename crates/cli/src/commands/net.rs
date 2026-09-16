@@ -1,38 +1,67 @@
 use colored::Colorize;
-use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
+use craft_core::{CraftError, CraftPaths, QueryProtocolKind, Result, ServersRegistry};
 use craft_net::{
-    allow_ip_port, enable_bedrock_loopback, is_bedrock_loopback_enabled, ping_bedrock_server,
-    ping_java_server, RconClient,
+    allow_ip_port, enable_bedrock_loopback, is_bedrock_loopback_enabled, ping_server_auto,
+    RconClient, UniversalPingStatus,
 };
 use crate::cli::LoopbackCommands;
 
-pub async fn handle_ping(target: &str, is_bedrock: bool) -> Result<()> {
+pub async fn handle_ping(target: &str, is_bedrock: bool, is_a2s: bool) -> Result<()> {
+    let (default_port, proto_hint) = if is_bedrock {
+        (19132, Some(QueryProtocolKind::MinecraftBedrockRakNet))
+    } else if is_a2s {
+        (27015, Some(QueryProtocolKind::ValveA2S))
+    } else if target.contains(':') {
+        (25565, None)
+    } else {
+        (25565, Some(QueryProtocolKind::MinecraftJavaSlp))
+    };
+
     let (host, port) = if let Some(idx) = target.find(':') {
         let (h, p) = target.split_at(idx);
         let port: u16 = p[1..].parse().map_err(|_| CraftError::Other("Invalid port number".to_string()))?;
         (h, port)
     } else {
-        (target, if is_bedrock { 19132 } else { 25565 })
+        (target, default_port)
     };
 
     println!("{}", format!("Pinging {} on port {}...", host, port).cyan());
 
-    if is_bedrock {
-        let res = ping_bedrock_server(host, port).await?;
-        println!("{}", "=== Bedrock Server Status ===".green().bold());
-        println!("  Server Name:    {}", res.server_name);
-        println!("  Version:        {} (Protocol {})", res.version, res.protocol_version);
-        println!("  Players:        {}/{}", res.online_players, res.max_players);
-        println!("  World:          {}", res.world_name);
-        println!("  Game Mode:      {}", res.game_mode);
-        println!("  Latency:        {} ms", res.latency_ms);
-    } else {
-        let res = ping_java_server(host, port).await?;
-        println!("{}", "=== Java Server Status ===".green().bold());
-        println!("  MOTD:           {}", res.motd);
-        println!("  Version:        {} (Protocol {})", res.version_name, res.protocol_version);
-        println!("  Players:        {}/{}", res.online_players, res.max_players);
-        println!("  Latency:        {} ms", res.latency_ms);
+    let status = ping_server_auto(host, port, proto_hint).await?;
+    match status {
+        UniversalPingStatus::MinecraftJava(res) => {
+            println!("{}", "=== Minecraft Java Status ===".green().bold());
+            println!("  MOTD:           {}", res.motd);
+            println!("  Version:        {} (Protocol {})", res.version_name, res.protocol_version);
+            println!("  Players:        {}/{}", res.online_players, res.max_players);
+            println!("  Latency:        {} ms", res.latency_ms);
+        }
+        UniversalPingStatus::MinecraftBedrock(res) => {
+            println!("{}", "=== Minecraft Bedrock Status ===".green().bold());
+            println!("  Server Name:    {}", res.server_name);
+            println!("  Version:        {} (Protocol {})", res.version, res.protocol_version);
+            println!("  Players:        {}/{}", res.online_players, res.max_players);
+            println!("  World:          {}", res.world_name);
+            println!("  Game Mode:      {}", res.game_mode);
+            println!("  Latency:        {} ms", res.latency_ms);
+        }
+        UniversalPingStatus::ValveA2S(res) => {
+            println!("{}", "=== Steam / Valve A2S Status ===".green().bold());
+            println!("  Server Name:    {}", res.server_name);
+            println!("  Game:           {} ({})", res.game_name, res.game_folder);
+            println!("  Map:            {}", res.map_name);
+            println!("  Players:        {}/{} (Bots: {})", res.online_players, res.max_players, res.bots);
+            println!("  Type:           {} [{}]", res.server_type, res.environment);
+            println!("  VAC Secured:    {}", if res.vac_secured { "Yes" } else { "No" });
+            println!("  Latency:        {} ms", res.latency_ms);
+        }
+        UniversalPingStatus::PortProbe { latency_ms, transport, .. } => {
+            println!("{}", "=== Port Probe Status ===".green().bold());
+            println!("  Target:         {}:{}", host, port);
+            println!("  Transport:      {}", transport);
+            println!("  Status:         ONLINE (Port Open)");
+            println!("  Latency:        {} ms", latency_ms);
+        }
     }
 
     Ok(())

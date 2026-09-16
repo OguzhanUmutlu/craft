@@ -34,16 +34,22 @@ pub async fn handle_load(
             .unwrap_or_else(|| "server".to_string())
     };
 
+    let (default_port, query_port) = software.default_ports();
     let server_config = ServerConfig {
         name: name.clone(),
         path: canonical.clone(),
         software: software.id().to_string(),
         version: version.to_string(),
+        game: software.game_id().to_string(),
         auto: false,
         java_path: None,
         memory: Some("2G".to_string()),
-        port: None,
+        port: Some(default_port),
+        query_port,
+        rcon_port: None,
         jvm_args: None,
+        start_args: None,
+        binary_path: None,
         created_at: Some(chrono::Utc::now()),
         backup_method: None,
         jdwp_debug_port: None,
