@@ -1,17 +1,7 @@
-use std::io::{self, Write};
-use crossterm::{
-    cursor::{Hide, MoveTo, Show},
-    event::{self, Event, KeyCode, KeyEventKind},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
-};
-
 use craft_core::Result;
-use super::terminal::{get_content_width, get_terminal_size};
-use super::theme::{box_divider, DIM, RESET};
-use super::clean_exit;
 
 /// Represents an item in a menu with a primary hotkey and optional mnemonic aliases.
+#[derive(Debug, Clone)]
 pub struct MenuEntry {
     pub hotkey: String,
     pub label: String,
@@ -108,167 +98,15 @@ pub fn run_menu_impl(
     allow_space: bool,
     is_main: bool,
 ) -> Result<MenuAction> {
-    let mut stdout = io::stdout();
-    enable_raw_mode()?;
-    let _ = execute!(stdout, Hide);
+    let modal = super::modals::SelectModal::from_legacy(header, entries)
+        .with_allow_toggle(allow_space)
+        .with_allow_quit_on_q(is_main || super::NavGuard::depth() <= 1);
 
-    if *selected_idx >= entries.len() {
-        *selected_idx = 0;
+    match modal.run(selected_idx)? {
+        super::modals::SelectOutcome::Selected(idx) => Ok(MenuAction::Select(idx)),
+        super::modals::SelectOutcome::Toggled(idx) => Ok(MenuAction::Space(idx)),
+        super::modals::SelectOutcome::Cancelled => Ok(MenuAction::Back),
     }
-
-    let mut scroll_offset: usize = 0;
-
-    let result = (|| -> Result<MenuAction> {
-        loop {
-            let (term_w, term_h) = get_terminal_size();
-            let width = get_content_width(80);
-
-            // Compute available viewport lines for entries
-            let header_line_count = header.lines().count();
-            let footer_reserve = if is_main { 3 } else { 1 };
-            let viewport_size = (term_h as usize)
-                .saturating_sub(header_line_count + footer_reserve)
-                .max(4);
-
-            // Keep selected index in scroll view
-            if *selected_idx < scroll_offset {
-                scroll_offset = *selected_idx;
-            } else if *selected_idx >= scroll_offset + viewport_size {
-                scroll_offset = *selected_idx - viewport_size + 1;
-            }
-            if scroll_offset + viewport_size > entries.len() {
-                scroll_offset = entries.len().saturating_sub(viewport_size);
-            }
-
-            execute!(stdout, MoveTo(0, 0))?;
-
-            for line in header.lines() {
-                print!("{}\x1B[K\r\n", line);
-            }
-            print!("\x1B[K\r\n");
-
-            // Scroll indicator above
-            if scroll_offset > 0 {
-                print!("    {}[▲ {} more items above]{}\x1B[K\r\n", DIM, scroll_offset, RESET);
-            }
-
-            let end_idx = entries.len().min(scroll_offset + viewport_size);
-            let visible_entries = &entries[scroll_offset..end_idx];
-
-            for (local_i, entry) in visible_entries.iter().enumerate() {
-                let abs_i = scroll_offset + local_i;
-                let badge = format!("[{}]", entry.hotkey);
-                if abs_i == *selected_idx {
-                    print!(
-                        "  \x1B[1;36m>\x1B[0m \x1B[1;36m{:<5}\x1B[0m \x1B[1;37m{}\x1B[0m\x1B[K\r\n",
-                        badge,
-                        entry.label
-                    );
-                } else {
-                    print!(
-                        "    \x1B[36m{:<5}\x1B[0m {}\x1B[K\r\n",
-                        badge,
-                        entry.label
-                    );
-                }
-            }
-
-            // Scroll indicator below
-            if end_idx < entries.len() {
-                print!("    {}[▼ {} more items below]{}\x1B[K\r\n", DIM, entries.len() - end_idx, RESET);
-            }
-
-            if is_main {
-                print!("\x1B[K\r\n{}\x1B[K\r\n", box_divider(width));
-                if term_w < 70 {
-                    print!(" [↑/↓] Move | [Enter] Select | [Esc] Back | [q] Exit\x1B[0m\x1B[K\r\n");
-                } else {
-                    print!(" [↑/↓/j/k] Move  |  [Enter/→] Select  |  [Esc/←] Back  |  [q] Exit\x1B[0m\x1B[K\r\n");
-                }
-            } else {
-                print!("\x1B[K\r\n");
-            }
-
-            execute!(stdout, Clear(ClearType::FromCursorDown))?;
-            stdout.flush()?;
-
-            if let Event::Key(key) = event::read()? {
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-
-                // Global abort: Ctrl+C
-                if (key.modifiers.contains(event::KeyModifiers::CONTROL)
-                    && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('C')))
-                    || key.code == KeyCode::Char('\x03')
-                {
-                    clean_exit();
-                }
-
-                // Global quit: 'q' or 'Q'
-                if key.code == KeyCode::Char('q') || key.code == KeyCode::Char('Q') {
-                    clean_exit();
-                }
-
-                match key.code {
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        if *selected_idx > 0 {
-                            *selected_idx -= 1;
-                        } else {
-                            *selected_idx = entries.len().saturating_sub(1);
-                        }
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        if *selected_idx + 1 < entries.len() {
-                            *selected_idx += 1;
-                        } else {
-                            *selected_idx = 0;
-                        }
-                    }
-                    KeyCode::PageUp => {
-                        *selected_idx = selected_idx.saturating_sub(viewport_size);
-                    }
-                    KeyCode::PageDown => {
-                        *selected_idx = (*selected_idx + viewport_size).min(entries.len().saturating_sub(1));
-                    }
-                    KeyCode::Home => {
-                        *selected_idx = 0;
-                    }
-                    KeyCode::End => {
-                        *selected_idx = entries.len().saturating_sub(1);
-                    }
-                    KeyCode::Char(' ') if allow_space => {
-                        return Ok(MenuAction::Space(*selected_idx));
-                    }
-                    KeyCode::Enter | KeyCode::Right => {
-                        return Ok(MenuAction::Select(*selected_idx));
-                    }
-                    KeyCode::Esc | KeyCode::Left => {
-                        return Ok(MenuAction::Back);
-                    }
-                    KeyCode::Char(c) => {
-                        let c_str = c.to_ascii_lowercase().to_string();
-                        if let Some(pos) = entries.iter().position(|e| {
-                            e.hotkey.eq_ignore_ascii_case(&c_str)
-                                || e.aliases.iter().any(|a| a.eq_ignore_ascii_case(&c_str))
-                        }) {
-                            *selected_idx = pos;
-                            return Ok(MenuAction::Select(pos));
-                        } else if c == '<' || c == ',' || c == '[' {
-                            *selected_idx = selected_idx.saturating_sub(viewport_size);
-                        } else if c == '>' || c == '.' || c == ']' {
-                            *selected_idx = (*selected_idx + viewport_size).min(entries.len().saturating_sub(1));
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-    })();
-
-    let _ = disable_raw_mode();
-    let _ = execute!(io::stdout(), Show);
-    result
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

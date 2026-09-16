@@ -36,6 +36,10 @@ impl NavGuard {
         });
         NavGuard
     }
+
+    pub fn depth() -> usize {
+        NAV_STACK.with(|stack| stack.borrow().len())
+    }
 }
 
 impl Drop for NavGuard {

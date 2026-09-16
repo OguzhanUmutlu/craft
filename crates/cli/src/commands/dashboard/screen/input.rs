@@ -1,16 +1,4 @@
-use std::io::{self, Write};
-use colored::Colorize;
-use crossterm::{
-    cursor::{Hide, MoveTo, Show},
-    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
-};
-
 use craft_core::Result;
-use super::terminal::{get_content_width, get_terminal_size};
-use super::theme::{box_bottom, box_divider, box_title_simple, box_top, DIM, RESET};
-use super::clean_exit;
 
 /// Displays an in-place single-line input prompt with full readline editing support.
 pub fn run_input_prompt(
@@ -18,7 +6,14 @@ pub fn run_input_prompt(
     prompt_label: &str,
     default_val: Option<&str>,
 ) -> Result<Option<String>> {
-    prompt_internal(header_title, prompt_label, default_val, false)
+    let mut modal = super::modals::InputModal::new(header_title, prompt_label);
+    if let Some(def) = default_val {
+        modal = modal.with_default(def);
+    }
+    match modal.run()? {
+        super::modals::InputOutcome::Submitted(val) => Ok(Some(val)),
+        super::modals::InputOutcome::Cancelled => Ok(None),
+    }
 }
 
 /// Displays an in-place single-line password input prompt where characters are masked as `*`.
@@ -27,187 +22,11 @@ pub fn run_password_prompt(
     header_title: &str,
     prompt_label: &str,
 ) -> Result<Option<String>> {
-    prompt_internal(header_title, prompt_label, None, true)
-}
-
-fn prompt_internal(
-    header_title: &str,
-    prompt_label: &str,
-    default_val: Option<&str>,
-    is_password: bool,
-) -> Result<Option<String>> {
-    let mut stdout = io::stdout();
-    enable_raw_mode()?;
-
-    let mut input_buffer = if is_password {
-        String::new()
-    } else {
-        default_val.unwrap_or("").to_string()
-    };
-    let mut cursor_pos = input_buffer.len();
-
-    let result = (|| -> Result<Option<String>> {
-        loop {
-            let (_term_w, _) = get_terminal_size();
-            let width = get_content_width(80);
-
-            execute!(stdout, MoveTo(0, 0))?;
-            let mut current_y = 0u16;
-
-            print!("{}\x1B[K\r\n", box_top(width));
-            current_y += 1;
-            print!("{}\x1B[K\r\n", box_title_simple(header_title, width, false));
-            current_y += 1;
-            print!("{}\x1B[K\r\n", box_divider(width));
-            current_y += 1;
-            print!("\x1B[K\r\n");
-            current_y += 1;
-
-            for line in prompt_label.lines() {
-                print!("  {}\x1B[K\r\n", line.white().bold());
-                current_y += 1;
-            }
-            print!("\x1B[K\r\n");
-            current_y += 1;
-
-            let cursor_y = current_y;
-            let prefix = "  > ";
-            let prefix_len = prefix.len();
-            let max_display_len = width.saturating_sub(prefix_len + 4);
-
-            let raw_display = if is_password {
-                "*".repeat(input_buffer.chars().count())
-            } else if input_buffer.is_empty() {
-                default_val.map(|d| format!("{}{}{}", DIM, d, RESET)).unwrap_or_default()
-            } else {
-                input_buffer.clone()
-            };
-
-            let char_count = input_buffer.chars().count();
-            let char_cursor = input_buffer[..cursor_pos].chars().count();
-
-            // Calculate horizontal scrolling slice if input exceeds box width
-            let (display_str, visual_cursor_offset) = if char_count > max_display_len && !input_buffer.is_empty() {
-                let start = char_cursor.saturating_sub(max_display_len.saturating_sub(4));
-                let chars: Vec<char> = input_buffer.chars().collect();
-                let end = (start + max_display_len).min(chars.len());
-                let disp = if is_password {
-                    "*".repeat(end - start)
-                } else {
-                    chars[start..end].iter().collect()
-                };
-                (disp, char_cursor.saturating_sub(start))
-            } else {
-                (raw_display, char_cursor)
-            };
-
-            print!("{}{}\x1B[K\r\n", prefix.cyan().bold(), display_str);
-
-            print!("\x1B[K\r\n{}\x1B[K\r\n", box_bottom(width));
-            print!("  \x1B[2m[Enter] Confirm  |  [Esc] Cancel\x1B[0m\x1B[K\r\n");
-
-            execute!(stdout, Clear(ClearType::FromCursorDown))?;
-
-            let cursor_x = (prefix_len + visual_cursor_offset) as u16;
-
-            execute!(stdout, MoveTo(cursor_x, cursor_y), Show)?;
-            stdout.flush()?;
-
-            if let Event::Key(key) = event::read()? {
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-
-                // Global abort: Ctrl+C
-                if (key.modifiers.contains(KeyModifiers::CONTROL)
-                    && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('C')))
-                    || key.code == KeyCode::Char('\x03')
-                {
-                    clean_exit();
-                }
-
-                match key.code {
-                    KeyCode::Enter => {
-                        let trimmed = input_buffer.trim();
-                        if trimmed.is_empty() {
-                            if let Some(def) = default_val {
-                                return Ok(Some(def.to_string()));
-                            }
-                        }
-                        return Ok(Some(trimmed.to_string()));
-                    }
-                    KeyCode::Esc => {
-                        return Ok(None);
-                    }
-                    KeyCode::Backspace => {
-                        if cursor_pos > 0 && !input_buffer.is_empty() {
-                            if let Some((prev_idx, _)) = input_buffer[..cursor_pos].char_indices().last() {
-                                input_buffer.remove(prev_idx);
-                                cursor_pos = prev_idx;
-                            }
-                        }
-                    }
-                    KeyCode::Delete => {
-                        if cursor_pos < input_buffer.len() {
-                            input_buffer.remove(cursor_pos);
-                        }
-                    }
-                    KeyCode::Left => {
-                        cursor_pos = input_buffer[..cursor_pos]
-                            .char_indices()
-                            .last()
-                            .map(|(idx, _)| idx)
-                            .unwrap_or(0);
-                    }
-                    KeyCode::Right => {
-                        cursor_pos = input_buffer[cursor_pos..]
-                            .chars()
-                            .next()
-                            .map(|ch| cursor_pos + ch.len_utf8())
-                            .unwrap_or(input_buffer.len());
-                    }
-                    KeyCode::Home => {
-                        cursor_pos = 0;
-                    }
-                    KeyCode::End => {
-                        cursor_pos = input_buffer.len();
-                    }
-                    // Readline keybindings:
-                    KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        cursor_pos = 0;
-                    }
-                    KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        cursor_pos = input_buffer.len();
-                    }
-                    KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        input_buffer.clear();
-                        cursor_pos = 0;
-                    }
-                    KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        input_buffer.truncate(cursor_pos);
-                    }
-                    KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        // Delete word backward
-                        let before = &input_buffer[..cursor_pos];
-                        let trimmed = before.trim_end();
-                        let word_start = trimmed.rfind(' ').map(|idx| idx + 1).unwrap_or(0);
-                        let after = input_buffer[cursor_pos..].to_string();
-                        input_buffer = format!("{}{}", &input_buffer[..word_start], after);
-                        cursor_pos = word_start;
-                    }
-                    KeyCode::Char(c) if !c.is_control() => {
-                        input_buffer.insert(cursor_pos, c);
-                        cursor_pos += c.len_utf8();
-                    }
-                    _ => {}
-                }
-            }
-        }
-    })();
-
-    let _ = disable_raw_mode();
-    let _ = execute!(io::stdout(), Hide);
-    result
+    let modal = super::modals::InputModal::new(header_title, prompt_label).with_password(true);
+    match modal.run()? {
+        super::modals::InputOutcome::Submitted(val) => Ok(Some(val)),
+        super::modals::InputOutcome::Cancelled => Ok(None),
+    }
 }
 
 #[cfg(test)]

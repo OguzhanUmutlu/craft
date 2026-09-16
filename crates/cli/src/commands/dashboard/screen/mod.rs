@@ -1,17 +1,33 @@
 pub mod terminal;
 pub mod theme;
+pub mod frame;
+pub mod keys;
+pub mod modals;
 pub mod menu;
 pub mod input;
 pub mod modal;
 pub mod console;
 pub mod nav;
 
+#[allow(unused_imports)]
 pub use terminal::*;
+#[allow(unused_imports)]
 pub use theme::*;
+#[allow(unused_imports)]
+pub use frame::*;
+#[allow(unused_imports)]
+pub use keys::*;
+#[allow(unused_imports)]
+pub use modals::*;
+#[allow(unused_imports)]
 pub use menu::*;
+#[allow(unused_imports)]
 pub use input::*;
+#[allow(unused_imports)]
 pub use modal::*;
+#[allow(unused_imports)]
 pub use console::*;
+#[allow(unused_imports)]
 pub use nav::*;
 
 use std::io;
