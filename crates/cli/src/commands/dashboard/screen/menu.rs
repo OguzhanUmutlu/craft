@@ -58,13 +58,26 @@ pub enum MenuAction {
     Back,
 }
 
+/// Runs the main dashboard menu with the standard navigation footer bar.
+pub fn run_main_menu(
+    header: &str,
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+) -> Result<Option<usize>> {
+    match run_menu_impl(header, entries, selected_idx, false, true)? {
+        MenuAction::Select(idx) => Ok(Some(idx)),
+        MenuAction::Space(idx) => Ok(Some(idx)),
+        MenuAction::Back => Ok(None),
+    }
+}
+
 /// Runs an in-place alternate screen menu loop with responsive virtual scrolling, arrow keys, and hotkeys.
 pub fn run_menu(
     header: &str,
     entries: &[MenuEntry],
     selected_idx: &mut usize,
 ) -> Result<Option<usize>> {
-    match run_menu_ext(header, entries, selected_idx, false)? {
+    match run_menu_impl(header, entries, selected_idx, false, false)? {
         MenuAction::Select(idx) => Ok(Some(idx)),
         MenuAction::Space(idx) => Ok(Some(idx)),
         MenuAction::Back => Ok(None),
@@ -76,7 +89,7 @@ pub fn run_menu_with_space(
     entries: &[MenuEntry],
     selected_idx: &mut usize,
 ) -> Result<MenuAction> {
-    run_menu_ext(header, entries, selected_idx, true)
+    run_menu_impl(header, entries, selected_idx, true, false)
 }
 
 pub fn run_menu_ext(
@@ -84,6 +97,16 @@ pub fn run_menu_ext(
     entries: &[MenuEntry],
     selected_idx: &mut usize,
     allow_space: bool,
+) -> Result<MenuAction> {
+    run_menu_impl(header, entries, selected_idx, allow_space, false)
+}
+
+pub fn run_menu_impl(
+    header: &str,
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+    allow_space: bool,
+    is_main: bool,
 ) -> Result<MenuAction> {
     let mut stdout = io::stdout();
     enable_raw_mode()?;
@@ -102,7 +125,7 @@ pub fn run_menu_ext(
 
             // Compute available viewport lines for entries
             let header_line_count = header.lines().count();
-            let footer_reserve = 4; // divider + hotkeys + margins
+            let footer_reserve = if is_main { 3 } else { 1 };
             let viewport_size = (term_h as usize)
                 .saturating_sub(header_line_count + footer_reserve)
                 .max(4);
@@ -155,17 +178,15 @@ pub fn run_menu_ext(
                 print!("    {}[▼ {} more items below]{}\x1B[K\r\n", DIM, entries.len() - end_idx, RESET);
             }
 
-            print!("\x1B[K\r\n{}\x1B[K\r\n", box_divider(width));
-            if allow_space {
+            if is_main {
+                print!("\x1B[K\r\n{}\x1B[K\r\n", box_divider(width));
                 if term_w < 70 {
-                    print!(" [HOTKEYS] (0-9) | [Space] Toggle | [Enter] Select | [Esc] Back | [q] Exit\x1B[0m\x1B[K\r\n");
+                    print!(" [↑/↓] Move | [Enter] Select | [Esc] Back | [q] Exit\x1B[0m\x1B[K\r\n");
                 } else {
-                    print!(" [HOTKEYS] (0-9)  |  [↑/↓/j/k] Move  |  [PgUp/PgDn] Page  |  [Space] Toggle  |  [Enter/→] Select  |  [Esc/←] Back  |  [q] Exit\x1B[0m\x1B[K\r\n");
+                    print!(" [↑/↓/j/k] Move  |  [Enter/→] Select  |  [Esc/←] Back  |  [q] Exit\x1B[0m\x1B[K\r\n");
                 }
-            } else if term_w < 70 {
-                print!(" [HOTKEYS] (0-9) | [↑/↓] Move | [Enter] Select | [Esc] Back | [q] Exit\x1B[0m\x1B[K\r\n");
             } else {
-                print!(" [HOTKEYS] (0-9)  |  [↑/↓/j/k] Move  |  [PgUp/PgDn] Page  |  [Enter/→] Select  |  [Esc/←] Back  |  [q] Exit\x1B[0m\x1B[K\r\n");
+                print!("\x1B[K\r\n");
             }
 
             execute!(stdout, Clear(ClearType::FromCursorDown))?;

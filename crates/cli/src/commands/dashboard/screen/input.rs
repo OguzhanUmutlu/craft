@@ -48,7 +48,7 @@ fn prompt_internal(
 
     let result = (|| -> Result<Option<String>> {
         loop {
-            let (term_w, _) = get_terminal_size();
+            let (_term_w, _) = get_terminal_size();
             let width = get_content_width(80);
 
             execute!(stdout, MoveTo(0, 0))?;
@@ -104,11 +104,7 @@ fn prompt_internal(
             print!("{}{}\x1B[K\r\n", prefix.cyan().bold(), display_str);
 
             print!("\x1B[K\r\n{}\x1B[K\r\n", box_bottom(width));
-            if term_w < 70 {
-                print!("  \x1B[2m[Enter] Confirm  |  [Esc] Cancel  |  [Ctrl+C] Quit\x1B[0m\x1B[K\r\n");
-            } else {
-                print!("  \x1B[2m[Enter] Confirm  |  [Esc] Cancel  |  [Ctrl+A/E] Home/End  |  [Ctrl+U/W] Clear  |  [Ctrl+C] Quit\x1B[0m\x1B[K\r\n");
-            }
+            print!("  \x1B[2m[Enter] Confirm  |  [Esc] Cancel\x1B[0m\x1B[K\r\n");
 
             execute!(stdout, Clear(ClearType::FromCursorDown))?;
 

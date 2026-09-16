@@ -178,7 +178,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
             ]
         };
 
-        let selection = run_menu(&header, &entries, &mut selected_main)?;
+        let selection = run_main_menu(&header, &entries, &mut selected_main)?;
 
         if is_remote_node() {
             match selection {

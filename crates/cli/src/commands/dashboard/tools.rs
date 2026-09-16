@@ -424,11 +424,11 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Search Plugins Online"),
-            MenuEntry::new("2", "Install Plugin by ID / Slug"),
-            MenuEntry::new("3", "Search Mods Online"),
-            MenuEntry::new("4", "Search Datapacks Online"),
-            MenuEntry::new("5", "Curated Maps / World Downloads"),
+            MenuEntry::new("1", "Search Plugins"),
+            MenuEntry::new("2", "Install Plugin"),
+            MenuEntry::new("3", "Search Mods"),
+            MenuEntry::new("4", "Search Datapacks"),
+            MenuEntry::new("5", "Curated Maps"),
             MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
         ];
 
@@ -949,8 +949,8 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                                             installed_name, server.name, cur_default, installed_name
                                         );
                                         let p_opts = vec![
-                                            MenuEntry::new("1", "No (keep current default)").with_aliases(&["n", "no"]),
-                                            MenuEntry::new("2", "Yes (set as active default)").with_aliases(&["y", "yes"]),
+                                            MenuEntry::new("1", "No (Keep current)").with_aliases(&["n", "no"]),
+                                            MenuEntry::new("2", "Yes (Set as default)").with_aliases(&["y", "yes"]),
                                         ];
                                         let mut p_choice = 0;
                                         if let Some(c) = run_menu(&p_header, &p_opts, &mut p_choice)? {

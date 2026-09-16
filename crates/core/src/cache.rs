@@ -193,7 +193,7 @@ impl CacheStore {
         fs::rename(&tmp_path, &full_path)?;
 
         let size = data.len() as u64;
-        let now = Utc::now().timestamp();
+        let now = Utc::now().timestamp_millis();
         let key = format!("artifacts/{}", rel_subpath);
         let meta = CacheEntryMeta {
             key: key.clone(),
@@ -247,7 +247,7 @@ impl CacheStore {
         fs::rename(&tmp_path, &full_path)?;
 
         let size = fs::metadata(&full_path).map(|m| m.len()).unwrap_or(0);
-        let now = Utc::now().timestamp();
+        let now = Utc::now().timestamp_millis();
         let key = format!("artifacts/{}", rel_subpath);
         let meta = CacheEntryMeta {
             key: key.clone(),
@@ -279,7 +279,7 @@ impl CacheStore {
             if let Ok(_lock) = self.lock() {
                 let mut idx = self.load_index();
                 if let Some(entry) = idx.entries.get_mut(&key) {
-                    entry.last_accessed_at = Utc::now().timestamp();
+                    entry.last_accessed_at = Utc::now().timestamp_millis();
                     entry.access_count += 1;
                     let _ = self.save_index(&idx);
                 }
@@ -326,8 +326,8 @@ impl CacheStore {
         fs::write(&tmp_path, &compressed)?;
         fs::rename(&tmp_path, &full_path)?;
 
-        let now = Utc::now().timestamp();
-        let expires_at = ttl.map(|t| now + t.as_secs() as i64);
+        let now = Utc::now().timestamp_millis();
+        let expires_at = ttl.map(|t| now + t.as_millis() as i64);
         let meta_key = format!("meta/{}", key);
 
         let meta = CacheEntryMeta {
@@ -360,7 +360,7 @@ impl CacheStore {
 
         let (rel_path, is_expired) = match idx.entries.get(&meta_key) {
             Some(entry) => {
-                let now = Utc::now().timestamp();
+                let now = Utc::now().timestamp_millis();
                 let expired = entry.expires_at.map(|exp| now >= exp).unwrap_or(false);
                 (entry.rel_path.clone(), expired)
             }
@@ -395,7 +395,7 @@ impl CacheStore {
         };
 
         if let Some(entry) = idx.entries.get_mut(&meta_key) {
-            entry.last_accessed_at = Utc::now().timestamp();
+            entry.last_accessed_at = Utc::now().timestamp_millis();
             entry.access_count += 1;
             let _ = self.save_index(&idx);
         }
@@ -419,7 +419,7 @@ impl CacheStore {
     }
 
     fn prune_to_watermark_locked(&self, idx: &mut CacheIndex) -> Result<u64> {
-        let now = Utc::now().timestamp();
+        let now = Utc::now().timestamp_millis();
         let mut freed: u64 = 0;
 
         // Phase 1: Clean expired metadata entries
@@ -469,7 +469,7 @@ impl CacheStore {
     pub fn clean_expired(&self) -> Result<u64> {
         let _lock = self.lock()?;
         let mut idx = self.load_index();
-        let now = Utc::now().timestamp();
+        let now = Utc::now().timestamp_millis();
         let mut freed: u64 = 0;
 
         let expired_keys: Vec<String> = idx

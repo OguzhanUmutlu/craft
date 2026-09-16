@@ -896,7 +896,7 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
         actions.push(ControlAction::Datapacks);
 
         let wrd_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(wrd_hotkey, "Worlds / Maps"));
+        entries.push(MenuEntry::new(wrd_hotkey, "Worlds"));
         actions.push(ControlAction::Worlds);
 
         let ren_hotkey = (actions.len() + 1).to_string();
@@ -2663,8 +2663,8 @@ fn prompt_set_as_default_world(server_path: &std::path::Path, world_name: &str) 
         world_name, current_default, world_name
     );
     let entries = vec![
-        MenuEntry::new("1", "No (keep current default)").with_aliases(&["n", "no"]),
-        MenuEntry::new("2", "Yes (set as active default)").with_aliases(&["y", "yes"]),
+        MenuEntry::new("1", "No (Keep current)").with_aliases(&["n", "no"]),
+        MenuEntry::new("2", "Yes (Set as default)").with_aliases(&["y", "yes"]),
     ];
     let mut selected = 0;
     if let Some(choice) = run_menu(&prompt_header, &entries, &mut selected)? {
@@ -2721,10 +2721,10 @@ pub(crate) async fn server_worlds_panel(server_name: &str, paths: &CraftPaths) -
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Search & Curated Maps"),
-            MenuEntry::new("2", "Download World from URL"),
-            MenuEntry::new("3", "Import World from Local File / Folder"),
-            MenuEntry::new("4", "Manage Installed Worlds / Set Active"),
+            MenuEntry::new("1", "Curated Maps"),
+            MenuEntry::new("2", "Download from URL"),
+            MenuEntry::new("3", "Import File / Folder"),
+            MenuEntry::new("4", "Manage Worlds"),
             MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
 
@@ -2862,7 +2862,7 @@ async fn curated_maps_menu(server_path: &std::path::Path) -> Result<()> {
                 format!("{:<20} [{}] - {}", m.name, m.category, desc),
             ));
         }
-        entries.push(MenuEntry::new("s", "Search Maps by Keyword").with_aliases(&["search"]));
+        entries.push(MenuEntry::new("s", "Search Maps").with_aliases(&["search"]));
         entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -3019,8 +3019,8 @@ async fn manage_installed_worlds_menu(server: &craft_core::ServerConfig) -> Resu
                 } else {
                     let item_header = format!(" World: {}\r\n Choose action:", chosen.name);
                     let item_entries = vec![
-                        MenuEntry::new("1", "Set as Active Default World (level-name)"),
-                        MenuEntry::new("2", "Delete World Folder"),
+                        MenuEntry::new("1", "Set as Default"),
+                        MenuEntry::new("2", "Delete World"),
                         MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                     ];
                     let mut item_sel = 0;
@@ -3040,8 +3040,8 @@ async fn manage_installed_worlds_menu(server: &craft_core::ServerConfig) -> Resu
                             let confirm = run_menu(
                                 &format!(" CONFIRM WORLD DELETION\r\n Are you sure you want to permanently delete world '{}'?", chosen.name),
                                 &[
-                                    MenuEntry::new("1", "Cancel (Keep World)").with_aliases(&["n", "no"]),
-                                    MenuEntry::new("2", "Yes, Delete World Permanently").with_aliases(&["y", "yes"]),
+                                    MenuEntry::new("1", "Cancel").with_aliases(&["n", "no"]),
+                                    MenuEntry::new("2", "Delete World").with_aliases(&["y", "yes"]),
                                 ],
                                 &mut 0,
                             )?;
