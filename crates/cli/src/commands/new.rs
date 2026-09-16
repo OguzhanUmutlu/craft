@@ -381,6 +381,7 @@ pub async fn handle_new(
         jvm_args: final_jvm_flags,
         created_at: Some(chrono::Utc::now()),
         backup_method: None,
+        jdwp_debug_port: None,
     };
 
     // Configure port in server.properties if specified

@@ -300,6 +300,39 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<DeployCommands>,
     },
+
+    /// View, edit, or search server.properties configuration keys
+    #[command(alias = "config", alias = "properties")]
+    Prop {
+        /// Server name
+        server: String,
+        #[command(subcommand)]
+        action: Option<crate::commands::prop::PropAction>,
+    },
+
+    /// Manage, inspect, and switch worlds, dimensions, and player data
+    #[command(alias = "worlds")]
+    World {
+        /// Server name
+        server: String,
+        #[command(subcommand)]
+        action: Option<crate::commands::world::WorldAction>,
+    },
+
+    /// Developer utilities for linking development JARs, JDWP debugging, and hot reloading
+    #[command(alias = "developer")]
+    Dev {
+        /// Server name
+        server: String,
+        #[command(subcommand)]
+        action: crate::commands::dev::DevAction,
+    },
+
+    /// Manage recoverable deleted servers and files in the trash bin
+    Trash {
+        #[command(subcommand)]
+        action: Option<crate::commands::trash::TrashAction>,
+    },
 }
 
 #[derive(Subcommand)]

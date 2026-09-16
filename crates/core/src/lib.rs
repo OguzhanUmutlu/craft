@@ -7,10 +7,15 @@ pub mod java;
 pub mod process;
 pub mod trash;
 pub mod cache;
+pub mod nbt;
+pub mod properties;
 
 pub use error::{CraftError, Result};
 pub use path::CraftPaths;
-pub use config::{ServerConfig, ServersRegistry, GlobalSettings, get_default_world, set_default_world};
+pub use config::{
+    ServerConfig, ServersRegistry, GlobalSettings, get_default_world, set_default_world,
+    get_dimension_worlds, set_nether_world, set_end_world,
+};
 pub use cache::{CacheStore, CacheStats, CacheEntryMeta, parse_size, format_size};
 pub use remote_config::{RemoteHostConfig, RemoteAuthType, RemoteOsType, RemotesRegistry};
 pub use backup_config::{
@@ -23,6 +28,8 @@ pub use process::{
     is_process_running, kill_process, read_pid_file, write_pid_file, remove_pid_file,
     auto_heal_server_jar, auto_heal_server_file, ServerLockGuard, get_server_running_pid, is_server_locked,
 };
+pub use nbt::{NbtFile, NbtTag};
+pub use properties::{PropertyCategory, PropertyLine, ServerProperties};
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");
 

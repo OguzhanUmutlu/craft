@@ -26,6 +26,7 @@ use commands::{
     net::{handle_firewall, handle_loopback, handle_ping, handle_rcon},
     new::handle_new,
     plugin::handle_plugin,
+    prop::handle_prop,
     remote::{execute_remote, handle_remote},
     restart::handle_restart,
     rm::handle_rm,
@@ -33,9 +34,12 @@ use commands::{
     service::handle_service,
     stop::handle_stop,
     template::handle_template,
+    trash::handle_trash,
     update::handle_update,
     ver::handle_ver,
     view::handle_view,
+    world::handle_world,
+    dev::handle_dev,
 };
 
 #[tokio::main]
@@ -322,6 +326,18 @@ async fn main() {
         Some(Commands::Deploy { action }) => {
             handle_deploy(action, &paths)
         }
+        Some(Commands::Prop { server, action }) => {
+            handle_prop(&server, action, &paths).await
+        }
+        Some(Commands::World { server, action }) => {
+            handle_world(&server, action, &paths).await
+        }
+        Some(Commands::Dev { server, action }) => {
+            handle_dev(&server, action, &paths).await
+        }
+        Some(Commands::Trash { action }) => {
+            handle_trash(action, &paths).await
+        }
     };
 
     if let Err(e) = result {
@@ -355,6 +371,10 @@ fn print_banner() {
     println!("  backup create <server>            Create compressed world snapshot");
     println!("  template plugin <name>            Scaffold plugin/datapack project");
     println!("  dockerize <server>                Generate Dockerfile & compose file");
+    println!("  prop <server> [ls|get|set]        View/edit server.properties keys");
+    println!("  world <server> [ls|info|players]  Manage worlds, inspect players & NBT");
+    println!("  dev <server> [link|debug|reload]  Developer tools (JDWP debug, hot link)");
+    println!("  trash [ls|restore|empty]          Manage recoverable trash bin items");
     println!("  remote <add|ls|rm|test|setup>     Manage remote hosts over SSH");
     println!("  deploy <up|down|status|logs|exec> Deploy containerized stack with Docker");
     println!("\nGlobal Flags:");

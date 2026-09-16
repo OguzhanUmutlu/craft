@@ -10,8 +10,11 @@ pub use modrinth::{ModrinthClient, ModrinthHit, ModrinthFile};
 pub use hangar::{HangarClient, HangarProject};
 pub use poggit::{PoggitClient, PoggitPlugin};
 pub use world::{
-    CuratedMap, InstalledWorldItem, get_curated_maps, search_curated_maps,
+    CuratedMap, InstalledWorldItem, WorldMetadataSummary, PlayerDataSummary,
+    AdvancementEntry, DataStorageEntry, get_curated_maps, search_curated_maps,
     list_installed_worlds, install_world_from_url, install_world_from_zip,
+    inspect_world_metadata, list_world_player_data, list_world_advancements,
+    list_world_data_storages, resolve_usercache_name,
 };
 
 #[derive(Debug, Clone)]

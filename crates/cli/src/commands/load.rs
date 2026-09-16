@@ -46,6 +46,7 @@ pub async fn handle_load(
         jvm_args: None,
         created_at: Some(chrono::Utc::now()),
         backup_method: None,
+        jdwp_debug_port: None,
     };
 
     registry.add(server_config)?;

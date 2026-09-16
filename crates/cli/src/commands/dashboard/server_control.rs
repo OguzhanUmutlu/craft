@@ -853,13 +853,12 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
             ToggleStartStop,
             Restart,
             AttachConsole,
+            ServerProperties,
+            ManageWorlds,
+            ContentManagement,
+            DeveloperTools,
             Backups,
-            Plugins,
-            Mods,
-            Datapacks,
-            Worlds,
-            RenameServer,
-            DeleteServer,
+            Maintenance,
         }
 
         let mut entries = Vec::new();
@@ -879,35 +878,31 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
             actions.push(ControlAction::ToggleStartStop);
         }
 
-        let bkp_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(bkp_hotkey, "Backups"));
-        actions.push(ControlAction::Backups);
-
-        let plg_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(plg_hotkey, "Plugins"));
-        actions.push(ControlAction::Plugins);
-
-        let mod_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(mod_hotkey, "Mods"));
-        actions.push(ControlAction::Mods);
-
-        let dp_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(dp_hotkey, "Datapacks"));
-        actions.push(ControlAction::Datapacks);
+        let prop_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(prop_hotkey, "Server Properties (Config Editor)").with_aliases(&["prop", "props", "cfg"]));
+        actions.push(ControlAction::ServerProperties);
 
         let wrd_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(wrd_hotkey, "Worlds"));
-        actions.push(ControlAction::Worlds);
+        entries.push(MenuEntry::new(wrd_hotkey, "Manage Worlds & Level Data").with_aliases(&["w", "worlds", "world"]));
+        actions.push(ControlAction::ManageWorlds);
 
-        let ren_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(ren_hotkey, "Rename Server").with_aliases(&["r", "rename"]));
-        actions.push(ControlAction::RenameServer);
+        let cnt_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(cnt_hotkey, "Content (Plugins, Mods, Datapacks)").with_aliases(&["c", "content"]));
+        actions.push(ControlAction::ContentManagement);
 
-        let del_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(del_hotkey, "Delete Server"));
-        actions.push(ControlAction::DeleteServer);
+        let dev_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(dev_hotkey, "Developer Tools").with_aliases(&["dev", "develop"]));
+        actions.push(ControlAction::DeveloperTools);
 
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
+        let bkp_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(bkp_hotkey, "Backup Systems").with_aliases(&["bkp", "backup"]));
+        actions.push(ControlAction::Backups);
+
+        let mnt_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(mnt_hotkey, "Server Maintenance (Fix, Rename, Delete)").with_aliases(&["m", "maintenance"]));
+        actions.push(ControlAction::Maintenance);
+
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
 
         let sel = run_menu(&header, &entries, &mut selected)?;
 
@@ -1023,22 +1018,140 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
                     }
                 }
             }
+            ControlAction::ServerProperties => {
+                super::properties_tui::server_properties_editor(&server.path, &server.name).await?;
+            }
+            ControlAction::ManageWorlds => {
+                super::worlds_tui::manage_installed_worlds_menu(&server).await?;
+            }
+            ControlAction::ContentManagement => {
+                server_content_menu(&server, paths).await?;
+            }
+            ControlAction::DeveloperTools => {
+                super::developer_tui::developer_tools_menu(&server, paths).await?;
+            }
             ControlAction::Backups => {
                 server_backups_panel(&server.name, paths).await?;
             }
-            ControlAction::Plugins => {
+            ControlAction::Maintenance => {
+                match server_maintenance_menu(&server, paths, is_running).await? {
+                    MaintenanceOutcome::Renamed(new_name) => {
+                        flash_status = Some(
+                            format!("[OK] Server renamed from '{}' to '{}'.", current_server_name, new_name)
+                                .green()
+                                .bold()
+                                .to_string(),
+                        );
+                        current_server_name = new_name;
+                    }
+                    MaintenanceOutcome::Deleted => {
+                        return Ok(());
+                    }
+                    MaintenanceOutcome::None => {}
+                }
+            }
+        }
+    }
+}
+
+pub(crate) async fn server_content_menu(
+    server: &craft_core::ServerConfig,
+    paths: &CraftPaths,
+) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Content");
+    let mut selected = 0;
+
+    loop {
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:   {}\r\n Software: {} {}\r\n Select content manager:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title(&format!("SERVER CONTENT: {}", server.name), width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server.name.white().bold(),
+            server.software.cyan(),
+            server.version,
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Plugins (Paper, Spigot, Purpur, Velocity, BungeeCord)").with_aliases(&["p", "plugin", "plugins"]),
+            MenuEntry::new("2", "Mods (Fabric, Forge, NeoForge, Quilt)").with_aliases(&["m", "mod", "mods"]),
+            MenuEntry::new("3", "Datapacks (World Datapacks)").with_aliases(&["d", "datapack", "datapacks"]),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
                 server_plugins_panel(&server.name, paths).await?;
             }
-            ControlAction::Mods => {
+            Some(1) => {
                 server_mods_panel(&server.name, paths).await?;
             }
-            ControlAction::Datapacks => {
+            Some(2) => {
                 server_datapacks_panel(&server.name, paths).await?;
             }
-            ControlAction::Worlds => {
-                server_worlds_panel(&server.name, paths).await?;
+            _ => return Ok(()),
+        }
+    }
+}
+
+pub(crate) enum MaintenanceOutcome {
+    None,
+    Renamed(String),
+    Deleted,
+}
+
+pub(crate) async fn server_maintenance_menu(
+    server: &craft_core::ServerConfig,
+    paths: &CraftPaths,
+    is_running: bool,
+) -> Result<MaintenanceOutcome> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Maintenance");
+    let mut selected = 0;
+
+    loop {
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:   {}\r\n Path:     {}\r\n Choose maintenance operation:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title(&format!("SERVER MAINTENANCE: {}", server.name), width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server.name.white().bold(),
+            server.path.display(),
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Auto-Heal / Fix Server (Repair Jars, Java Version, EULA)").with_aliases(&["f", "fix"]),
+            MenuEntry::new("2", "Rename Server").with_aliases(&["r", "rename"]),
+            MenuEntry::new("3", "Delete or Unregister Server (Safe Trash / Permanent)").with_aliases(&["del", "rm", "delete"]),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                let _ = print_in_place_status("RUNNING AUTO-HEAL", &[format!("Analyzing server '{}'...", server.name)]);
+                match crate::commands::fix::handle_fix(&server.name, None, paths).await {
+                    Ok(_) => {
+                        show_modal_message(
+                            "FIX COMPLETE",
+                            &[format!("[OK] Server '{}' checked and repaired successfully.", server.name).green().bold().to_string()],
+                            false,
+                        )?;
+                    }
+                    Err(e) => {
+                        show_modal_message(
+                            "FIX ERROR",
+                            &[format!("[ERROR] Auto-heal encountered an error: {}", e)],
+                            true,
+                        )?;
+                    }
+                }
             }
-            ControlAction::RenameServer => {
+            Some(1) => {
                 if is_running {
                     show_modal_message(
                         "RENAME BLOCKED",
@@ -1085,7 +1198,6 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
                 let old_name = server.name.clone();
                 let old_path = server.path.clone();
 
-                // If server path is inside standard ~/.craft/servers, rename the directory
                 let new_path = if old_path.starts_with(&paths.servers_dir)
                     && old_path.file_name().and_then(|f| f.to_str()) == Some(&old_name)
                 {
@@ -1111,14 +1223,12 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
                     old_path
                 };
 
-                // Update ServersRegistry
                 if let Some(s) = reg.servers.iter_mut().find(|s| s.name == old_name) {
                     s.name = new_name.clone();
                     s.path = new_path;
                     let _ = reg.save(paths);
                 }
 
-                // Update auto-backup policies in GlobalBackupRegistry
                 if let Ok(mut bkp_reg) = GlobalBackupRegistry::load(paths) {
                     if let Some(policy) = bkp_reg.server_policies.remove(&old_name) {
                         bkp_reg.server_policies.insert(new_name.clone(), policy);
@@ -1126,25 +1236,18 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
                     }
                 }
 
-                // Rename local backups directory if it exists
                 let old_bkp_dir = paths.backups_dir.join(&old_name);
                 let new_bkp_dir = paths.backups_dir.join(&new_name);
                 if old_bkp_dir.exists() && !new_bkp_dir.exists() {
                     let _ = std::fs::rename(old_bkp_dir, new_bkp_dir);
                 }
 
-                current_server_name = new_name.clone();
-                flash_status = Some(
-                    format!("[OK] Server successfully renamed from '{}' to '{}'.", old_name, new_name)
-                        .green()
-                        .bold()
-                        .to_string(),
-                );
+                return Ok(MaintenanceOutcome::Renamed(new_name));
             }
-            ControlAction::DeleteServer => {
+            Some(2) => {
                 let width = get_content_width(80);
                 let confirm_header = format!(
-                    "{}\r\n{}\r\n{}\r\n Are you sure you want to remove server '{}'?\r\n{}",
+                    "{}\r\n{}\r\n{}\r\n Choose removal method for server '{}':\r\n{}",
                     box_top(width).cyan().bold(),
                     box_title(&format!("DELETE SERVER: {}", server.name), width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
@@ -1152,8 +1255,9 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
                     box_divider(width).dimmed(),
                 );
                 let confirm_entries = vec![
-                    MenuEntry::new("1", "Unregister (Keep Files)"),
-                    MenuEntry::new("2", "Delete Server & Files"),
+                    MenuEntry::new("1", "Move to Trash Bin (Safe, Restorable)").with_aliases(&["t", "trash"]),
+                    MenuEntry::new("2", "Unregister Only (Keep Files on Disk)").with_aliases(&["u"]),
+                    MenuEntry::new("3", "Permanently Delete Files (Irreversible)").with_aliases(&["p"]),
                     MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
                 let mut c_sel = 0;
@@ -1162,18 +1266,33 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
                         let mut reg = ServersRegistry::load(paths)?;
                         reg.remove(&server.path);
                         reg.save(paths)?;
+
+                        let trash = TrashManager::new(paths);
+                        if server.path.exists() {
+                            let _ = trash.trash_file(&server.path, Some(&server.name));
+                        }
                         show_modal_message(
-                            "SERVER UNREGISTERED",
-                            &[format!(
-                                "[OK] Server '{}' unregistered. Files kept on disk.",
-                                server.name
-                            )],
+                            "MOVED TO TRASH",
+                            &[
+                                format!("[OK] Server '{}' was safely moved to the Trash Bin.", server.name).green().bold().to_string(),
+                                "You can restore it anytime from the main dashboard Trash Bin.".to_string(),
+                            ],
                             false,
                         )?;
-                        return Ok(());
+                        return Ok(MaintenanceOutcome::Deleted);
                     }
                     Some(1) => {
-                        // SECOND CONFIRMATION
+                        let mut reg = ServersRegistry::load(paths)?;
+                        reg.remove(&server.path);
+                        reg.save(paths)?;
+                        show_modal_message(
+                            "SERVER UNREGISTERED",
+                            &[format!("[OK] Server '{}' unregistered. Files kept on disk.", server.name)],
+                            false,
+                        )?;
+                        return Ok(MaintenanceOutcome::Deleted);
+                    }
+                    Some(2) => {
                         let second_header = format!(
                             "{}\r\n{}\r\n{}\r\n WARNING: This will permanently erase server '{}' and ALL world data!\r\n Directory: {}\r\n This action is IRREVERSIBLE and CANNOT be undone.\r\n{}\r\n Are you ABSOLUTELY sure you want to proceed?\r\n{}",
                             box_top(width).red().bold(),
@@ -1186,7 +1305,7 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
                         );
                         let second_entries = vec![
                             MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
-                            MenuEntry::new("2", format!("Confirm Delete '{}'", server.name)),
+                            MenuEntry::new("2", format!("Confirm Permanent Delete '{}'", server.name)),
                         ];
                         let mut second_sel = 0;
                         if let Some(1) = run_menu(&second_header, &second_entries, &mut second_sel)? {
@@ -1198,18 +1317,16 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
                             }
                             show_modal_message(
                                 "SERVER DELETED",
-                                &[format!(
-                                    "[OK] Server '{}' and directory permanently removed.",
-                                    server.name
-                                )],
+                                &[format!("[OK] Server '{}' and directory permanently removed.", server.name)],
                                 false,
                             )?;
-                            return Ok(());
+                            return Ok(MaintenanceOutcome::Deleted);
                         }
                     }
                     _ => {}
                 }
             }
+            _ => return Ok(MaintenanceOutcome::None),
         }
     }
 }
@@ -2653,413 +2770,23 @@ async fn manage_installed_datapacks_menu(server_name: &str, datapacks_dir: &std:
 }
 
 // ==========================================
-// WORLDS / MAPS MANAGEMENT
+// WORLDS / MAPS MANAGEMENT (DELEGATED TO WORLDS_TUI)
 // ==========================================
 
-fn prompt_set_as_default_world(server_path: &std::path::Path, world_name: &str) -> Result<()> {
-    let current_default = craft_core::get_default_world(server_path);
-    let prompt_header = format!(
-        " World '{}' has been successfully installed.\r\n Current default world (level-name): '{}'\r\n\r\n Set '{}' as the default world in server.properties?",
-        world_name, current_default, world_name
-    );
-    let entries = vec![
-        MenuEntry::new("1", "No (Keep current)").with_aliases(&["n", "no"]),
-        MenuEntry::new("2", "Yes (Set as default)").with_aliases(&["y", "yes"]),
-    ];
-    let mut selected = 0;
-    if let Some(choice) = run_menu(&prompt_header, &entries, &mut selected)? {
-        if choice == 1 {
-            craft_core::set_default_world(server_path, world_name)?;
-            show_modal_message(
-                "DEFAULT WORLD UPDATED",
-                &[
-                    format!("[OK] Set '{}' as active default world (level-name).", world_name).green().bold().to_string(),
-                    "Restart the server for changes to take effect if currently running.".dimmed().to_string(),
-                ],
-                false,
-            )?;
-        }
-    }
-    Ok(())
-}
-
+#[allow(dead_code)]
 pub(crate) async fn server_worlds_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
-    let _guard = AltScreenGuard::enter();
-    let _nav = NavGuard::enter("Worlds");
-    let mut selected = 0;
-
-    loop {
-        let registry = ServersRegistry::load(paths)?;
-        let server = match registry.find_by_name(server_name) {
-            Some(s) => s.clone(),
-            None => {
-                show_modal_message(
-                    "SERVER NOT FOUND",
-                    &[format!("Server '{}' is no longer registered.", server_name)],
-                    true,
-                )?;
-                return Ok(());
-            }
-        };
-
-        let default_world = craft_core::get_default_world(&server.path);
-        let installed_worlds = craft_plugins::world::list_installed_worlds(&server.path);
-
-        let width = get_content_width(80);
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Server:       {} ({:<10} {})\r\n Active World: {}\r\n Directory:    {}\r\n Installed:    {} world(s)\r\n{}",
-            box_top(width).cyan().bold(),
-            box_title(&format!("WORLDS & MAPS: {}", server.name), width, false).cyan().bold(),
-            box_divider(width).cyan().bold(),
-            server.name.white().bold(),
-            server.software.cyan(),
-            server.version,
-            default_world.cyan().bold(),
-            server.path.display(),
-            installed_worlds.len().to_string().cyan().bold(),
-            box_divider(width).dimmed(),
-        );
-
-        let entries = vec![
-            MenuEntry::new("1", "Curated Maps"),
-            MenuEntry::new("2", "Download from URL"),
-            MenuEntry::new("3", "Import File / Folder"),
-            MenuEntry::new("4", "Manage Worlds"),
-            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
-        ];
-
-        match run_menu(&header, &entries, &mut selected)? {
-            Some(0) => {
-                // Curated maps & search
-                curated_maps_menu(&server.path).await?;
-            }
-            Some(1) => {
-                // Download world from URL
-                let url = match run_input_prompt(
-                    "WORLD DOWNLOAD URL",
-                    "Enter direct URL to world zip archive (e.g. https://.../map.zip):",
-                    None,
-                )? {
-                    Some(u) if !u.trim().is_empty() => u.trim().to_string(),
-                    _ => continue,
-                };
-
-                let name_opt = run_input_prompt(
-                    "WORLD FOLDER NAME",
-                    "Enter folder name for this world (or leave blank to auto-detect):",
-                    None,
-                )?;
-                let name = name_opt.as_deref().map(str::trim).filter(|s| !s.is_empty());
-
-                let _ = print_in_place_status(
-                    "DOWNLOADING WORLD",
-                    &[format!("Downloading and extracting world from '{}'...", url)],
-                );
-
-                match craft_plugins::world::install_world_from_url(&server.path, &url, name).await {
-                    Ok((dest, installed_name)) => {
-                        show_modal_message(
-                            "WORLD INSTALLED",
-                            &[
-                                format!("[OK] Successfully installed world '{}'!", installed_name).green().bold().to_string(),
-                                format!("Path: {}", dest.display()),
-                            ],
-                            false,
-                        )?;
-                        prompt_set_as_default_world(&server.path, &installed_name)?;
-                    }
-                    Err(e) => {
-                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
-                    }
-                }
-            }
-            Some(2) => {
-                // Import from local file or folder
-                let local_path_str = match run_input_prompt(
-                    "LOCAL WORLD PATH",
-                    "Enter absolute or relative path to .zip file or world folder containing level.dat:",
-                    None,
-                )? {
-                    Some(p) if !p.trim().is_empty() => p.trim().to_string(),
-                    _ => continue,
-                };
-
-                let path = std::path::PathBuf::from(&local_path_str);
-                if !path.exists() {
-                    show_modal_message(
-                        "FILE NOT FOUND",
-                        &[format!("Path '{}' does not exist.", local_path_str)],
-                        true,
-                    )?;
-                    continue;
-                }
-
-                let name_opt = run_input_prompt(
-                    "WORLD FOLDER NAME",
-                    "Enter folder name for this world (or leave blank to auto-detect):",
-                    None,
-                )?;
-                let name = name_opt.as_deref().map(str::trim).filter(|s| !s.is_empty());
-
-                let _ = print_in_place_status(
-                    "IMPORTING WORLD",
-                    &[format!("Importing world from '{}'...", path.display())],
-                );
-
-                let install_res = if path.is_file() && path.extension().map(|e| e == "zip").unwrap_or(false) {
-                    craft_plugins::world::install_world_from_zip(&server.path, &path, name)
-                } else if path.is_dir() {
-                    craft_plugins::world::install_world_from_folder(&server.path, &path, name)
-                } else {
-                    Err(CraftError::Other("Specified path must be a .zip file or a folder containing level.dat.".to_string()))
-                };
-
-                match install_res {
-                    Ok((dest, installed_name)) => {
-                        show_modal_message(
-                            "WORLD IMPORTED",
-                            &[
-                                format!("[OK] Successfully imported world '{}'!", installed_name).green().bold().to_string(),
-                                format!("Path: {}", dest.display()),
-                            ],
-                            false,
-                        )?;
-                        prompt_set_as_default_world(&server.path, &installed_name)?;
-                    }
-                    Err(e) => {
-                        show_modal_message("IMPORT FAILED", &[format!("[ERROR] {}", e)], true)?;
-                    }
-                }
-            }
-            Some(3) => {
-                manage_installed_worlds_menu(&server).await?;
-            }
-            _ => return Ok(()),
-        }
-    }
-}
-
-async fn curated_maps_menu(server_path: &std::path::Path) -> Result<()> {
-    let mut selected = 0;
-
-    loop {
-        let maps = craft_plugins::world::get_curated_maps();
-        let width = get_content_width(80);
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Select a popular community map to install or search by keyword:\r\n{}",
-            box_top(width).cyan().bold(),
-            box_title("CURATED COMMUNITY MAPS", width, false).cyan().bold(),
-            box_divider(width).cyan().bold(),
-            box_divider(width).dimmed(),
-        );
-
-        let mut entries = Vec::new();
-        for (i, m) in maps.iter().enumerate() {
-            let hotkey = (i + 1).to_string();
-            let desc = craft_core::truncate_ellipsis(m.description, 40);
-            entries.push(MenuEntry::new(
-                hotkey,
-                format!("{:<20} [{}] - {}", m.name, m.category, desc),
-            ));
-        }
-        entries.push(MenuEntry::new("s", "Search Maps").with_aliases(&["search"]));
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
-
-        match run_menu(&header, &entries, &mut selected)? {
-            Some(idx) if idx < maps.len() => {
-                let chosen = &maps[idx];
-                let _ = print_in_place_status(
-                    "DOWNLOADING MAP",
-                    &[
-                        format!("Downloading '{}'...", chosen.name),
-                        format!("Source URL: {}", chosen.download_url),
-                    ],
-                );
-                match craft_plugins::world::install_world_from_url(server_path, chosen.download_url, Some(chosen.default_folder)).await {
-                    Ok((dest, installed_name)) => {
-                        show_modal_message(
-                            "MAP INSTALLED",
-                            &[
-                                format!("[OK] Successfully installed map '{}'!", chosen.name).green().bold().to_string(),
-                                format!("Path: {}", dest.display()),
-                            ],
-                            false,
-                        )?;
-                        prompt_set_as_default_world(server_path, &installed_name)?;
-                        return Ok(());
-                    }
-                    Err(e) => {
-                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
-                    }
-                }
-            }
-            Some(idx) if idx == maps.len() => {
-                // Search by keyword
-                let query = match run_input_prompt(
-                    "SEARCH MAPS",
-                    "Enter map search keyword (e.g. skyblock, parkour, dropper, dropper, adventure):",
-                    None,
-                )? {
-                    Some(q) if !q.trim().is_empty() => q.trim().to_string(),
-                    _ => continue,
-                };
-
-                let results = craft_plugins::world::search_curated_maps(&query);
-                if results.is_empty() {
-                    show_modal_message(
-                        "NO MAPS FOUND",
-                        &[format!("No maps found matching query '{}'.", query)],
-                        false,
-                    )?;
-                } else {
-                    let mut s_entries = Vec::new();
-                    for (i, m) in results.iter().enumerate() {
-                        let hotkey = (i + 1).to_string();
-                        let desc = craft_core::truncate_ellipsis(m.description, 40);
-                        s_entries.push(MenuEntry::new(
-                            hotkey,
-                            format!("{:<20} [{}] - {}", m.name, m.category, desc),
-                        ));
-                    }
-                    s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
-                    let s_header = format!(" Search results for '{}':", query);
-                    let mut s_sel = 0;
-                    if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
-                        if s_idx < results.len() {
-                            let chosen = &results[s_idx];
-                            let _ = print_in_place_status(
-                                "DOWNLOADING MAP",
-                                &[format!("Downloading '{}'...", chosen.name)],
-                            );
-                            match craft_plugins::world::install_world_from_url(server_path, chosen.download_url, Some(chosen.default_folder)).await {
-                                Ok((dest, installed_name)) => {
-                                    show_modal_message(
-                                        "MAP INSTALLED",
-                                        &[
-                                            format!("[OK] Successfully installed map '{}'!", chosen.name).green().bold().to_string(),
-                                            format!("Path: {}", dest.display()),
-                                        ],
-                                        false,
-                                    )?;
-                                    prompt_set_as_default_world(server_path, &installed_name)?;
-                                    return Ok(());
-                                }
-                                Err(e) => {
-                                    show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            _ => return Ok(()),
-        }
-    }
-}
-
-async fn manage_installed_worlds_menu(server: &craft_core::ServerConfig) -> Result<()> {
-    let mut selected = 0;
-
-    loop {
-        let worlds = craft_plugins::world::list_installed_worlds(&server.path);
-        if worlds.is_empty() {
+    let registry = ServersRegistry::load(paths)?;
+    let server = match registry.find_by_name(server_name) {
+        Some(s) => s.clone(),
+        None => {
             show_modal_message(
-                "NO WORLDS FOUND",
-                &[format!("No Minecraft worlds with level.dat found in '{}'.", server.path.display())],
-                false,
+                "SERVER NOT FOUND",
+                &[format!("Server '{}' is no longer registered.", server_name)],
+                true,
             )?;
             return Ok(());
         }
-
-        let default_world = craft_core::get_default_world(&server.path);
-        let width = get_content_width(80);
-        let header = format!(
-            "{}\r\n{}\r\n{}\r\n Server:        '{}'\r\n Active Default: {}\r\n Select a world to set as default or delete:\r\n{}",
-            box_top(width).cyan().bold(),
-            box_title("INSTALLED WORLDS", width, false).cyan().bold(),
-            box_divider(width).cyan().bold(),
-            server.name,
-            default_world.cyan().bold(),
-            box_divider(width).dimmed(),
-        );
-
-        let mut entries = Vec::new();
-        for (i, w) in worlds.iter().enumerate() {
-            let hotkey = if i < 9 {
-                (i + 1).to_string()
-            } else if i < 35 {
-                ((b'a' + (i - 9) as u8) as char).to_string()
-            } else {
-                format!("{}", i + 1)
-            };
-            let status = if w.is_default {
-                "[ACTIVE DEFAULT]".green().bold().to_string()
-            } else {
-                "[AVAILABLE]".dimmed().to_string()
-            };
-            let mb = (w.size_bytes as f64) / (1024.0 * 1024.0);
-            entries.push(MenuEntry::new(
-                hotkey,
-                format!("{:<25} {:>7.1} MB  {}", w.name, mb, status),
-            ));
-        }
-        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
-
-        match run_menu(&header, &entries, &mut selected)? {
-            Some(idx) if idx < worlds.len() => {
-                let chosen = &worlds[idx];
-                if chosen.is_default {
-                    let item_header = format!(" World: {} [ACTIVE DEFAULT]\r\n Choose action:", chosen.name);
-                    let item_entries = vec![
-                        MenuEntry::new("1", "Keep as active default"),
-                        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
-                    ];
-                    let mut item_sel = 0;
-                    let _ = run_menu(&item_header, &item_entries, &mut item_sel)?;
-                } else {
-                    let item_header = format!(" World: {}\r\n Choose action:", chosen.name);
-                    let item_entries = vec![
-                        MenuEntry::new("1", "Set as Default"),
-                        MenuEntry::new("2", "Delete World"),
-                        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
-                    ];
-                    let mut item_sel = 0;
-                    match run_menu(&item_header, &item_entries, &mut item_sel)? {
-                        Some(0) => {
-                            craft_core::set_default_world(&server.path, &chosen.name)?;
-                            show_modal_message(
-                                "DEFAULT WORLD UPDATED",
-                                &[
-                                    format!("[OK] Set '{}' as the active default world in server.properties!", chosen.name).green().bold().to_string(),
-                                    "Restart the server for changes to take effect if currently running.".dimmed().to_string(),
-                                ],
-                                false,
-                            )?;
-                        }
-                        Some(1) => {
-                            let confirm = run_menu(
-                                &format!(" CONFIRM WORLD DELETION\r\n Are you sure you want to permanently delete world '{}'?", chosen.name),
-                                &[
-                                    MenuEntry::new("1", "Cancel").with_aliases(&["n", "no"]),
-                                    MenuEntry::new("2", "Delete World").with_aliases(&["y", "yes"]),
-                                ],
-                                &mut 0,
-                            )?;
-                            if confirm == Some(1) {
-                                let _ = std::fs::remove_dir_all(&chosen.path);
-                                show_modal_message(
-                                    "WORLD DELETED",
-                                    &[format!("[OK] Permanently removed world '{}'.", chosen.name)],
-                                    false,
-                                )?;
-                            }
-                        }
-                        _ => continue,
-                    }
-                }
-            }
-            _ => return Ok(()),
-        }
-    }
+    };
+    super::worlds_tui::manage_installed_worlds_menu(&server).await
 }
 

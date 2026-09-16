@@ -5,6 +5,9 @@ pub mod wizard;
 pub mod remote_tui;
 pub mod cloud_backups;
 pub mod trash_tui;
+pub mod properties_tui;
+pub mod worlds_tui;
+pub mod developer_tui;
 
 use std::io::{self, IsTerminal};
 use colored::Colorize;
@@ -159,7 +162,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                     .with_aliases(&["s", "servers", "m"]),
                 MenuEntry::new("2", "New Server").with_aliases(&["n", "c", "create", "new"]),
                 MenuEntry::new("3", "Backup Systems").with_aliases(&["b"]),
-                MenuEntry::new("4", "Server Network Ping").with_aliases(&["p"]),
+                MenuEntry::new("4", "Diagnostic & System Tools").with_aliases(&["p", "t", "tools"]),
                 MenuEntry::new("5", "Daemon Control").with_aliases(&["d"]),
                 MenuEntry::new("6", purge_label).with_aliases(&["k", "c"]),
                 MenuEntry::new("7", trash_label).with_aliases(&["t"]),
@@ -170,7 +173,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                 MenuEntry::new("1", "Local Servers"),
                 MenuEntry::new("2", "Remote Servers"),
                 MenuEntry::new("3", "Backup Systems").with_aliases(&["b"]),
-                MenuEntry::new("4", "Server Network Ping").with_aliases(&["p"]),
+                MenuEntry::new("4", "Diagnostic & System Tools").with_aliases(&["p", "t", "tools"]),
                 MenuEntry::new("5", "Daemon Control").with_aliases(&["d"]),
                 MenuEntry::new("6", purge_label).with_aliases(&["c"]),
                 MenuEntry::new("7", trash_label).with_aliases(&["t"]),
@@ -192,7 +195,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                     cloud_backups::setup_backup_systems_menu(paths).await?;
                 }
                 Some(3) => {
-                    ping_menu().await?;
+                    tools_menu(paths).await?;
                 }
                 Some(4) => {
                     daemon_menu(paths).await?;
@@ -246,7 +249,7 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                     cloud_backups::setup_backup_systems_menu(paths).await?;
                 }
                 Some(3) => {
-                    ping_menu().await?;
+                    tools_menu(paths).await?;
                 }
                 Some(4) => {
                     daemon_menu(paths).await?;

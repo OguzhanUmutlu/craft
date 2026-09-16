@@ -1433,7 +1433,147 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
     }
 }
 
-#[allow(dead_code)]
+pub async fn firewall_menu(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Firewall");
+    let mut selected = 0;
+
+    loop {
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Manage incoming host firewall rules for Minecraft servers.\r\n Supports ufw (Linux), pfctl (macOS), and netsh (Windows).\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("FIREWALL RULES", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Allow IP & Port for Registered Server"),
+            MenuEntry::new("2", "Allow Custom IP & Port"),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                let reg = ServersRegistry::load(paths)?;
+                if reg.servers.is_empty() {
+                    show_modal_message("NO SERVERS", &["No registered servers found to configure.".to_string()], true)?;
+                    continue;
+                }
+                let mut s_entries = Vec::new();
+                for (i, s) in reg.servers.iter().enumerate() {
+                    let hotkey = (i + 1).to_string();
+                    let port = s.port.unwrap_or(25565);
+                    s_entries.push(MenuEntry::new(hotkey, format!("{:<20} Port: {:<6} Software: {}", s.name, port, s.software)));
+                }
+                s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+                let mut s_sel = 0;
+                if let Some(idx) = run_menu(" Select Server for Firewall Rule:", &s_entries, &mut s_sel)? {
+                    if idx < reg.servers.len() {
+                        let s = &reg.servers[idx];
+                        let is_bedrock = s.software.contains("bedrock") || s.software.contains("pocketmine");
+                        let port = s.port.unwrap_or(if is_bedrock { 19132 } else { 25565 });
+                        let ip_prompt = run_input_prompt(
+                            "ALLOWED IP ADDRESS",
+                            "Enter remote IP allowed to connect (e.g. 192.168.1.50 or 0.0.0.0/0 for any):",
+                            Some("0.0.0.0/0"),
+                        )?;
+                        if let Some(ip) = ip_prompt {
+                            let ip = ip.trim();
+                            if !ip.is_empty() {
+                                let _ = print_in_place_status("APPLYING FIREWALL RULE", &[format!("Adding rule for port {} ({})...", port, if is_bedrock { "UDP" } else { "TCP" })]);
+                                match craft_net::allow_ip_port(ip, port, is_bedrock) {
+                                    Ok(_) => {
+                                        show_modal_message("FIREWALL RULE ADDED", &[format!("[OK] Allowed incoming connections from '{}' on port {}.", ip, port).green().bold().to_string()], false)?;
+                                    }
+                                    Err(e) => {
+                                        show_modal_message("FIREWALL ERROR", &[format!("[ERROR] {}", e)], true)?;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Some(1) => {
+                let ip_str = match run_input_prompt("ALLOWED IP", "Enter IP to allow (or 0.0.0.0/0 for any):", Some("0.0.0.0/0"))? {
+                    Some(i) if !i.trim().is_empty() => i.trim().to_string(),
+                    _ => continue,
+                };
+                let port_str = match run_input_prompt("PORT", "Enter port number to allow (e.g. 25565):", Some("25565"))? {
+                    Some(p) if !p.trim().is_empty() => p.trim().to_string(),
+                    _ => continue,
+                };
+                let port: u16 = match port_str.parse() {
+                    Ok(p) => p,
+                    Err(_) => {
+                        show_modal_message("INVALID PORT", &["Port must be a number between 1 and 65535.".to_string()], true)?;
+                        continue;
+                    }
+                };
+                let proto_sel = run_menu(" Select Protocol:", &[MenuEntry::new("1", "TCP (Java)"), MenuEntry::new("2", "UDP (Bedrock)")], &mut 0)?;
+                let is_udp = proto_sel == Some(1);
+                let _ = print_in_place_status("APPLYING FIREWALL RULE", &[format!("Adding rule for {}:{}...", ip_str, port)]);
+                match craft_net::allow_ip_port(&ip_str, port, is_udp) {
+                    Ok(_) => {
+                        show_modal_message("FIREWALL RULE ADDED", &[format!("[OK] Successfully allowed {}:{} ({})!", ip_str, port, if is_udp { "UDP" } else { "TCP" }).green().bold().to_string()], false)?;
+                    }
+                    Err(e) => {
+                        show_modal_message("FIREWALL ERROR", &[format!("[ERROR] {}", e)], true)?;
+                    }
+                }
+            }
+            _ => break,
+        }
+    }
+    Ok(())
+}
+
+pub async fn loopback_menu() -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Loopback");
+    let mut selected = 0;
+
+    loop {
+        let status = craft_net::is_bedrock_loopback_enabled().unwrap_or(false);
+        let status_badge = if status {
+            "[ENABLED]".green().bold().to_string()
+        } else {
+            "[DISABLED]".yellow().bold().to_string()
+        };
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Windows UWP Bedrock Loopback Status: {}\r\n Enables connecting to a local Bedrock server running on the same PC.\r\n (Requires Windows CheckNetIsolation.exe)\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("BEDROCK LOOPBACK EXEMPTION", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            status_badge,
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", if status { "Re-enable / Refresh Loopback Exemption" } else { "Enable Loopback Exemption" }),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                match craft_net::enable_bedrock_loopback() {
+                    Ok(_) => {
+                        show_modal_message("LOOPBACK EXEMPTION APPLIED", &["[OK] Windows UWP Loopback exemption enabled successfully!".green().bold().to_string()], false)?;
+                    }
+                    Err(e) => {
+                        show_modal_message("LOOPBACK ERROR", &[format!("[ERROR] Failed to enable loopback: {}", e)], true)?;
+                    }
+                }
+            }
+            _ => break,
+        }
+    }
+    Ok(())
+}
+
 pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
     let _nav = NavGuard::enter("Tools");
@@ -1446,18 +1586,20 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
 
         let width = get_content_width(80);
         let header = format!(
-            "{}\r\n{}\r\n{}\r\n Auxiliary utilities for diagnostics, daemon, and cache.\r\n{}",
+            "{}\r\n{}\r\n{}\r\n Network diagnostics, host firewall, daemon, and system utilities.\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("TOOLS", width, false).cyan().bold(),
+            box_title("DIAGNOSTIC & SYSTEM TOOLS", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
             box_divider(width).dimmed(),
         );
 
-        let purge_label = format!("Purge Cache ({:.2} MB)", mb);
+        let purge_label = format!("Purge Download Cache ({:.2} MB)", mb);
         let entries = vec![
-            MenuEntry::new("1", "Server Ping"),
-            MenuEntry::new("2", "Daemon Control"),
-            MenuEntry::new("3", purge_label),
+            MenuEntry::new("1", "Server Network Ping").with_aliases(&["p", "ping"]),
+            MenuEntry::new("2", "Daemon Control").with_aliases(&["d", "daemon"]),
+            MenuEntry::new("3", "Firewall Manager (Port/IP Rules)").with_aliases(&["f", "firewall"]),
+            MenuEntry::new("4", "Windows Bedrock Loopback Exemption").with_aliases(&["l", "loopback"]),
+            MenuEntry::new("5", purge_label).with_aliases(&["c", "cache"]),
             MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
 
@@ -1469,6 +1611,12 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 daemon_menu(paths).await?;
             }
             Some(2) => {
+                firewall_menu(paths).await?;
+            }
+            Some(3) => {
+                loopback_menu().await?;
+            }
+            Some(4) => {
                 let width = get_content_width(80);
                 let conf_header = format!(
                     "{}\r\n{}\r\n{}\r\n Delete all cached jarfiles and archives ({:.2} MB)?\r\n{}",

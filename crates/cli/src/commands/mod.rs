@@ -20,4 +20,8 @@ pub mod remote;
 pub mod deploy;
 pub mod restart;
 pub mod dashboard;
+pub mod prop;
+pub mod world;
+pub mod dev;
+pub mod trash;
 

@@ -26,6 +26,8 @@ pub struct ServerConfig {
     pub created_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backup_method: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jdwp_debug_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -213,6 +215,97 @@ pub fn set_default_world(server_path: &Path, world_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Discovers the (Overworld, Nether, The End) active world directory names.
+pub fn get_dimension_worlds(server_path: &Path) -> (String, Option<String>, Option<String>) {
+    let overworld = get_default_world(server_path);
+    let mut nether = None;
+    let mut end = None;
+
+    let props_path = server_path.join("server.properties");
+    if let Ok(content) = fs::read_to_string(&props_path) {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if let Some(val) = trimmed.strip_prefix("craft-nether-world=") {
+                let v = val.trim();
+                if !v.is_empty() {
+                    nether = Some(v.to_string());
+                }
+            } else if let Some(val) = trimmed.strip_prefix("craft-end-world=") {
+                let v = val.trim();
+                if !v.is_empty() {
+                    end = Some(v.to_string());
+                }
+            }
+        }
+    }
+
+    if nether.is_none() {
+        let candidate = format!("{}_nether", overworld);
+        if server_path.join(&candidate).exists() {
+            nether = Some(candidate);
+        }
+    }
+
+    if end.is_none() {
+        let candidate = format!("{}_the_end", overworld);
+        if server_path.join(&candidate).exists() {
+            end = Some(candidate);
+        }
+    }
+
+    (overworld, nether, end)
+}
+
+/// Sets the active Nether world role in server.properties and Bukkit/Paper setup.
+pub fn set_nether_world(server_path: &Path, world_name: &str) -> Result<()> {
+    let props_path = server_path.join("server.properties");
+    let content = if props_path.exists() {
+        fs::read_to_string(&props_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let mut new_lines = Vec::new();
+    let mut found = false;
+    for line in content.lines() {
+        if line.trim().starts_with("craft-nether-world=") {
+            new_lines.push(format!("craft-nether-world={}", world_name));
+            found = true;
+        } else {
+            new_lines.push(line.to_string());
+        }
+    }
+    if !found {
+        new_lines.push(format!("craft-nether-world={}", world_name));
+    }
+    fs::write(&props_path, new_lines.join("\n") + "\n")?;
+    Ok(())
+}
+
+/// Sets the active The End world role in server.properties and Bukkit/Paper setup.
+pub fn set_end_world(server_path: &Path, world_name: &str) -> Result<()> {
+    let props_path = server_path.join("server.properties");
+    let content = if props_path.exists() {
+        fs::read_to_string(&props_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let mut new_lines = Vec::new();
+    let mut found = false;
+    for line in content.lines() {
+        if line.trim().starts_with("craft-end-world=") {
+            new_lines.push(format!("craft-end-world={}", world_name));
+            found = true;
+        } else {
+            new_lines.push(line.to_string());
+        }
+    }
+    if !found {
+        new_lines.push(format!("craft-end-world={}", world_name));
+    }
+    fs::write(&props_path, new_lines.join("\n") + "\n")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,6 +325,7 @@ mod tests {
             jvm_args: None,
             created_at: Some(Utc::now()),
             backup_method: None,
+            jdwp_debug_port: None,
         };
 
         assert!(registry.add(server.clone()).is_ok());
@@ -268,6 +362,7 @@ mod tests {
             jvm_args: Some(vec!["-XX:+UseG1GC".to_string()]),
             created_at: Some(Utc::now()),
             backup_method: None,
+            jdwp_debug_port: None,
         });
 
         let serialized = toml::to_string(&registry).expect("Failed to serialize");

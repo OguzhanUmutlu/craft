@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use craft_core::{get_default_world, CraftError, Result};
+use craft_core::{get_dimension_worlds, CraftError, NbtFile, NbtTag, Result};
 use zip::ZipArchive;
 
 #[derive(Debug, Clone)]
@@ -70,12 +70,56 @@ pub struct InstalledWorldItem {
     pub name: String,
     pub path: PathBuf,
     pub is_default: bool,
+    pub is_nether: bool,
+    pub is_end: bool,
     pub size_bytes: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorldMetadataSummary {
+    pub level_name: String,
+    pub game_type: String,
+    pub difficulty: String,
+    pub hardcore: bool,
+    pub spawn_x: i32,
+    pub spawn_y: i32,
+    pub spawn_z: i32,
+    pub time: i64,
+    pub day_time: i64,
+    pub version_name: Option<String>,
+    pub seed: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlayerDataSummary {
+    pub uuid: String,
+    pub name: String,
+    pub pos: (f64, f64, f64),
+    pub dimension: String,
+    pub health: f32,
+    pub food_level: i32,
+    pub xp_level: i32,
+    pub gamemode: String,
+    pub inventory_count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct AdvancementEntry {
+    pub id: String,
+    pub criteria_count: usize,
+    pub completed: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct DataStorageEntry {
+    pub filename: String,
+    pub size_bytes: u64,
+    pub description: &'static str,
 }
 
 pub fn list_installed_worlds(server_path: &Path) -> Vec<InstalledWorldItem> {
     let mut worlds = Vec::new();
-    let default_world = get_default_world(server_path);
+    let (default_world, nether_world, end_world) = get_dimension_worlds(server_path);
 
     if let Ok(entries) = fs::read_dir(server_path) {
         for entry in entries.flatten() {
@@ -83,11 +127,15 @@ pub fn list_installed_worlds(server_path: &Path) -> Vec<InstalledWorldItem> {
             if path.is_dir() && path.join("level.dat").exists() {
                 let name = entry.file_name().to_string_lossy().to_string();
                 let is_default = name.eq_ignore_ascii_case(&default_world);
+                let is_nether = nether_world.as_deref().map(|n| n.eq_ignore_ascii_case(&name)).unwrap_or(false);
+                let is_end = end_world.as_deref().map(|e| e.eq_ignore_ascii_case(&name)).unwrap_or(false);
                 let size_bytes = dir_size(&path).unwrap_or(0);
                 worlds.push(InstalledWorldItem {
                     name,
                     path,
                     is_default,
+                    is_nether,
+                    is_end,
                     size_bytes,
                 });
             }
@@ -95,10 +143,267 @@ pub fn list_installed_worlds(server_path: &Path) -> Vec<InstalledWorldItem> {
     }
 
     worlds.sort_by(|a, b| {
-        // Active default world first, then alphabetically
-        b.is_default.cmp(&a.is_default).then_with(|| a.name.cmp(&b.name))
+        // Active default world first, then nether, then end, then alphabetically
+        b.is_default.cmp(&a.is_default)
+            .then_with(|| b.is_nether.cmp(&a.is_nether))
+            .then_with(|| b.is_end.cmp(&a.is_end))
+            .then_with(|| a.name.cmp(&b.name))
     });
     worlds
+}
+
+/// Inspects `level.dat` inside a world directory and returns human-readable summary
+pub fn inspect_world_metadata(world_path: &Path) -> Result<WorldMetadataSummary> {
+    let level_dat = world_path.join("level.dat");
+    if !level_dat.exists() {
+        return Err(CraftError::Other(format!("level.dat not found in '{}'", world_path.display())));
+    }
+
+    let nbt_file = NbtFile::read(&level_dat)?;
+    let data = nbt_file.root.get("Data").ok_or_else(|| {
+        CraftError::Other("Invalid level.dat: missing 'Data' root compound".to_string())
+    })?;
+
+    let level_name = data.get_str("LevelName").unwrap_or("Unknown").to_string();
+    let gamemode_num = data.get_i32("GameType").unwrap_or(0);
+    let game_type = match gamemode_num {
+        0 => "Survival",
+        1 => "Creative",
+        2 => "Adventure",
+        3 => "Spectator",
+        _ => "Custom",
+    }.to_string();
+
+    let diff_num = data.get_i8("Difficulty").unwrap_or(1);
+    let difficulty = match diff_num {
+        0 => "Peaceful",
+        1 => "Easy",
+        2 => "Normal",
+        3 => "Hard",
+        _ => "Normal",
+    }.to_string();
+
+    let hardcore = data.get_i8("hardcore").map(|b| b != 0).unwrap_or(false);
+    let spawn_x = data.get_i32("SpawnX").unwrap_or(0);
+    let spawn_y = data.get_i32("SpawnY").unwrap_or(64);
+    let spawn_z = data.get_i32("SpawnZ").unwrap_or(0);
+    let time = data.get_i64("Time").unwrap_or(0);
+    let day_time = data.get_i64("DayTime").unwrap_or(0);
+
+    let seed = data.get_i64("RandomSeed");
+
+    let version_name = data.get("Version")
+        .and_then(|v| v.get_str("Name"))
+        .map(|s| s.to_string());
+
+    Ok(WorldMetadataSummary {
+        level_name,
+        game_type,
+        difficulty,
+        hardcore,
+        spawn_x,
+        spawn_y,
+        spawn_z,
+        time,
+        day_time,
+        version_name,
+        seed,
+    })
+}
+
+/// Resolves player UUID to username by reading usercache.json in the server root directory
+pub fn resolve_usercache_name(server_root: &Path, uuid_str: &str) -> Option<String> {
+    let cache_path = server_root.join("usercache.json");
+    if !cache_path.exists() {
+        return None;
+    }
+    let content = fs::read_to_string(&cache_path).ok()?;
+    let parsed: serde_json::Value = serde_json::from_str(&content).ok()?;
+    if let Some(arr) = parsed.as_array() {
+        let clean_target = uuid_str.replace('-', "").to_lowercase();
+        for item in arr {
+            if let Some(u) = item.get("uuid").and_then(|v| v.as_str()) {
+                if u.replace('-', "").to_lowercase() == clean_target {
+                    if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                        return Some(name.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Lists playerdata files inside world_path/playerdata/*.dat
+pub fn list_world_player_data(world_path: &Path, server_root: &Path) -> Result<Vec<PlayerDataSummary>> {
+    let playerdata_dir = world_path.join("playerdata");
+    let mut list = Vec::new();
+
+    if !playerdata_dir.exists() {
+        return Ok(list);
+    }
+
+    if let Ok(entries) = fs::read_dir(&playerdata_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() && path.extension().map(|e| e == "dat").unwrap_or(false) {
+                let filename = entry.file_name().to_string_lossy().to_string();
+                let uuid = filename.trim_end_matches(".dat").to_string();
+                let name = resolve_usercache_name(server_root, &uuid)
+                    .unwrap_or_else(|| uuid.clone());
+
+                // Attempt to read NBT player info
+                if let Ok(nbt) = NbtFile::read(&path) {
+                    let health = nbt.root.get_f32("Health").unwrap_or(20.0);
+                    let food_level = nbt.root.get_i32("foodLevel").unwrap_or(20);
+                    let xp_level = nbt.root.get_i32("XpLevel").unwrap_or(0);
+                    let gm_num = nbt.root.get_i32("playerGameType").unwrap_or(0);
+                    let gamemode = match gm_num {
+                        0 => "Survival",
+                        1 => "Creative",
+                        2 => "Adventure",
+                        3 => "Spectator",
+                        _ => "Survival",
+                    }.to_string();
+
+                    let dimension = nbt.root.get_str("Dimension")
+                        .unwrap_or("minecraft:overworld")
+                        .to_string();
+
+                    let pos = if let Some(coords) = nbt.root.get_list("Pos") {
+                        if coords.len() >= 3 {
+                            let x = match coords[0] { NbtTag::Double(v) => v, _ => 0.0 };
+                            let y = match coords[1] { NbtTag::Double(v) => v, _ => 0.0 };
+                            let z = match coords[2] { NbtTag::Double(v) => v, _ => 0.0 };
+                            (x, y, z)
+                        } else {
+                            (0.0, 0.0, 0.0)
+                        }
+                    } else {
+                        (0.0, 0.0, 0.0)
+                    };
+
+                    let inventory_count = nbt.root.get_list("Inventory")
+                        .map(|l| l.len())
+                        .unwrap_or(0);
+
+                    list.push(PlayerDataSummary {
+                        uuid,
+                        name,
+                        pos,
+                        dimension,
+                        health,
+                        food_level,
+                        xp_level,
+                        gamemode,
+                        inventory_count,
+                    });
+                } else {
+                    list.push(PlayerDataSummary {
+                        uuid: uuid.clone(),
+                        name,
+                        pos: (0.0, 0.0, 0.0),
+                        dimension: "Unknown".to_string(),
+                        health: 20.0,
+                        food_level: 20,
+                        xp_level: 0,
+                        gamemode: "Survival".to_string(),
+                        inventory_count: 0,
+                    });
+                }
+            }
+        }
+    }
+
+    list.sort_by_key(|a| a.name.to_lowercase());
+    Ok(list)
+}
+
+/// Lists completed advancements from advancements/<uuid>.json
+pub fn list_world_advancements(world_path: &Path, uuid: &str) -> Result<Vec<AdvancementEntry>> {
+    let clean_uuid = uuid.trim().replace('-', "");
+    let adv_dir = world_path.join("advancements");
+    if !adv_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    // Try both with hyphens and without
+    let mut target_file = None;
+    if let Ok(entries) = fs::read_dir(&adv_dir) {
+        for entry in entries.flatten() {
+            let fname = entry.file_name().to_string_lossy().to_string();
+            if fname.replace('-', "").starts_with(&clean_uuid) && fname.ends_with(".json") {
+                target_file = Some(entry.path());
+                break;
+            }
+        }
+    }
+
+    let file_path = match target_file {
+        Some(p) => p,
+        None => return Ok(Vec::new()),
+    };
+
+    let content = fs::read_to_string(file_path)?;
+    let parsed: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| CraftError::Other(format!("Failed to parse advancements JSON: {}", e)))?;
+
+    let mut result = Vec::new();
+    if let Some(map) = parsed.as_object() {
+        for (key, val) in map {
+            if key == "DataVersion" {
+                continue;
+            }
+            let completed = val.get("done").and_then(|d| d.as_bool()).unwrap_or(false);
+            let criteria_count = val.get("criteria")
+                .and_then(|c| c.as_object())
+                .map(|m| m.len())
+                .unwrap_or(0);
+            result.push(AdvancementEntry {
+                id: key.clone(),
+                criteria_count,
+                completed,
+            });
+        }
+    }
+
+    result.sort_by(|a, b| b.completed.cmp(&a.completed).then_with(|| a.id.cmp(&b.id)));
+    Ok(result)
+}
+
+/// Lists all known persistent data storages in world_path/data/*.dat
+pub fn list_world_data_storages(world_path: &Path) -> Vec<DataStorageEntry> {
+    let data_dir = world_path.join("data");
+    let mut list = Vec::new();
+    if !data_dir.exists() {
+        return list;
+    }
+
+    if let Ok(entries) = fs::read_dir(&data_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() && path.extension().map(|e| e == "dat").unwrap_or(false) {
+                let filename = entry.file_name().to_string_lossy().to_string();
+                let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                let description = match filename.as_str() {
+                    "raids.dat" => "Village Raid encounters and statuses",
+                    "scoreboard.dat" => "Scoreboard objectives, teams, and player scores",
+                    "idcounts.dat" => "Item ID sequential allocation counters",
+                    "villages.dat" | "village.dat" => "Legacy village and iron golem records",
+                    s if s.starts_with("map_") => "In-game exploratory map data",
+                    _ => "Game rule or persistent world data storage",
+                };
+                list.push(DataStorageEntry {
+                    filename,
+                    size_bytes,
+                    description,
+                });
+            }
+        }
+    }
+
+    list.sort_by(|a, b| a.filename.cmp(&b.filename));
+    list
 }
 
 pub fn dir_size(path: &Path) -> io::Result<u64> {
@@ -388,5 +693,77 @@ mod tests {
         let (installed_path, world_name) = install_world_from_folder(&server_dir, &src_world, Some("Lobby World")).unwrap();
         assert_eq!(world_name, "Lobby_World");
         assert!(installed_path.join("level.dat").exists());
+    }
+
+    #[test]
+    fn test_inspect_world_and_players() {
+        use std::collections::BTreeMap;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let server_dir = tmp.path().join("server");
+        let world_dir = server_dir.join("world");
+        fs::create_dir_all(&world_dir).unwrap();
+
+        // Create mock level.dat
+        let mut data = BTreeMap::new();
+        data.insert("LevelName".to_string(), NbtTag::String("AlphaWorld".to_string()));
+        data.insert("GameType".to_string(), NbtTag::Int(1)); // Creative
+        data.insert("Difficulty".to_string(), NbtTag::Byte(3)); // Hard
+        data.insert("hardcore".to_string(), NbtTag::Byte(0));
+        data.insert("SpawnX".to_string(), NbtTag::Int(42));
+        data.insert("SpawnY".to_string(), NbtTag::Int(64));
+        data.insert("SpawnZ".to_string(), NbtTag::Int(108));
+        data.insert("RandomSeed".to_string(), NbtTag::Long(999888777));
+
+        let mut root = BTreeMap::new();
+        root.insert("Data".to_string(), NbtTag::Compound(data));
+
+        let nbt_file = NbtFile {
+            root_name: "".to_string(),
+            root: NbtTag::Compound(root),
+            is_compressed: true,
+        };
+        nbt_file.write(world_dir.join("level.dat")).unwrap();
+
+        // Create mock playerdata
+        let pdata_dir = world_dir.join("playerdata");
+        fs::create_dir_all(&pdata_dir).unwrap();
+
+        let mut p_root = BTreeMap::new();
+        p_root.insert("Health".to_string(), NbtTag::Float(18.5));
+        p_root.insert("foodLevel".to_string(), NbtTag::Int(19));
+        p_root.insert("XpLevel".to_string(), NbtTag::Int(30));
+        p_root.insert("playerGameType".to_string(), NbtTag::Int(0));
+        p_root.insert("Pos".to_string(), NbtTag::List(vec![
+            NbtTag::Double(100.0),
+            NbtTag::Double(70.0),
+            NbtTag::Double(-200.0),
+        ]));
+
+        let p_nbt = NbtFile {
+            root_name: "".to_string(),
+            root: NbtTag::Compound(p_root),
+            is_compressed: true,
+        };
+        p_nbt.write(pdata_dir.join("069a79f4-44e9-4726-a5be-fca90e38aaf5.dat")).unwrap();
+
+        // Create mock usercache.json
+        fs::write(server_dir.join("usercache.json"), r#"[{"name":"Notch","uuid":"069a79f4-44e9-4726-a5be-fca90e38aaf5","expiresOn":"2030-01-01"}]"#).unwrap();
+
+        // Test inspection
+        let meta = inspect_world_metadata(&world_dir).unwrap();
+        assert_eq!(meta.level_name, "AlphaWorld");
+        assert_eq!(meta.game_type, "Creative");
+        assert_eq!(meta.difficulty, "Hard");
+        assert_eq!(meta.spawn_x, 42);
+        assert_eq!(meta.seed, Some(999888777));
+
+        // Test player listing
+        let players = list_world_player_data(&world_dir, &server_dir).unwrap();
+        assert_eq!(players.len(), 1);
+        assert_eq!(players[0].name, "Notch");
+        assert_eq!(players[0].health, 18.5);
+        assert_eq!(players[0].xp_level, 30);
+        assert_eq!(players[0].pos, (100.0, 70.0, -200.0));
     }
 }
