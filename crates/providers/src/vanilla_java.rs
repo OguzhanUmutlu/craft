@@ -57,8 +57,18 @@ impl VanillaJavaProvider {
     }
 
     async fn fetch_mojang_manifest(&self) -> Result<MojangManifest> {
+        let url = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
+        if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
+            if let Ok(manifest) = cache.get_cached_json::<MojangManifest>(
+                "mojang_version_manifest_v2",
+                url,
+                std::time::Duration::from_secs(6 * 3600),
+            ).await {
+                return Ok(manifest);
+            }
+        }
         let client = reqwest::Client::new();
-        let resp = client.get("https://launchermeta.mojang.com/mc/game/version_manifest_v2.json")
+        let resp = client.get(url)
             .send().await
             .map_err(|e| CraftError::Download(format!("Mojang manifest fetch error: {}", e)))?;
         resp.json().await

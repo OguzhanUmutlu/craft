@@ -426,6 +426,9 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
         let entries = vec![
             MenuEntry::new("1", "Search Plugins Online"),
             MenuEntry::new("2", "Install Plugin by ID / Slug"),
+            MenuEntry::new("3", "Search Mods Online"),
+            MenuEntry::new("4", "Search Datapacks Online"),
+            MenuEntry::new("5", "Curated Maps / World Downloads"),
             MenuEntry::new("0", "Back to Main Menu").with_aliases(&["b"]),
         ];
 
@@ -463,11 +466,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                         } else {
                             format!("{}", i + 1)
                         };
-                        let desc = if hit.description.len() > 40 {
-                            format!("{}...", &hit.description[..37])
-                        } else {
-                            hit.description.clone()
-                        };
+                        let desc = craft_core::truncate_ellipsis(&hit.description, 40);
                         p_entries.push(MenuEntry::new(
                             hotkey,
                             format!("{:<18} [{}] - {}", hit.name, hit.source, desc),
@@ -616,6 +615,368 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                                     &[format!("[ERROR] {}", e)],
                                     true,
                                 )?;
+                            }
+                        }
+                    }
+                }
+            }
+            Some(2) => {
+                let query = match run_input_prompt(
+                    "SEARCH MODS ONLINE",
+                    "Search keyword (e.g. fabric-api, sodium, lithium, appleskin, jei):",
+                    None,
+                )? {
+                    Some(q) if !q.trim().is_empty() => q.trim().to_string(),
+                    _ => continue,
+                };
+
+                print_in_place_status(
+                    "SEARCHING MODS",
+                    &[format!("Querying Modrinth repository for '{}'...", query)],
+                )?;
+                let pm = PluginManager::new();
+                let results = pm.search_mods(&query).await;
+
+                if results.is_empty() {
+                    show_modal_message(
+                        "NO MODS FOUND",
+                        &[format!("No mods found matching query '{}'.", query)],
+                        false,
+                    )?;
+                } else {
+                    let mut p_entries = Vec::new();
+                    for (i, hit) in results.iter().enumerate() {
+                        let hotkey = if i < 9 {
+                            (i + 1).to_string()
+                        } else if i < 35 {
+                            ((b'a' + (i - 9) as u8) as char).to_string()
+                        } else {
+                            format!("{}", i + 1)
+                        };
+                        let desc = craft_core::truncate_ellipsis(&hit.description, 40);
+                        p_entries.push(MenuEntry::new(
+                            hotkey,
+                            format!("{:<18} [{}] - {}", hit.name, hit.source, desc),
+                        ));
+                    }
+                    p_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
+
+                    let p_header =
+                        format!(" Search results for '{}' - select to install:", query);
+                    let mut p_sel = 0;
+                    if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
+                        if p_idx < results.len() {
+                            let chosen = &results[p_idx];
+
+                            let registry = ServersRegistry::load(paths)?;
+                            if registry.servers.is_empty() {
+                                show_empty_servers_modal(paths).await?;
+                                continue;
+                            }
+
+                            let mut s_entries = Vec::new();
+                            for (si, s) in registry.servers.iter().enumerate() {
+                                let hotkey = if si < 9 {
+                                    (si + 1).to_string()
+                                } else {
+                                    ((b'a' + (si - 9) as u8) as char).to_string()
+                                };
+                                s_entries.push(MenuEntry::new(hotkey, s.name.clone()));
+                            }
+                            s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+
+                            let s_header = format!(
+                                " Select server to install mod '{}':",
+                                chosen.name
+                            );
+                            let mut s_sel = 0;
+                            if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
+                                if s_idx < registry.servers.len() {
+                                    let server = &registry.servers[s_idx];
+                                    print_in_place_status(
+                                        "INSTALLING MOD",
+                                        &[format!(
+                                            "Downloading and installing '{}' to server '{}'...",
+                                            chosen.name, server.name
+                                        )],
+                                    )?;
+
+                                    match pm
+                                        .install_mod_from_modrinth(
+                                            &server.path,
+                                            &chosen.id_or_slug,
+                                        )
+                                        .await
+                                    {
+                                        Ok(dest) => {
+                                            show_modal_message(
+                                                "MOD INSTALLED",
+                                                &[
+                                                    format!(
+                                                        "[OK] Installed mod '{}' successfully!",
+                                                        chosen.name
+                                                    )
+                                                    .green()
+                                                    .bold()
+                                                    .to_string(),
+                                                    format!("Server: {}", server.name),
+                                                    format!("File:   {}", dest.display()),
+                                                ],
+                                                false,
+                                            )?;
+                                        }
+                                        Err(e) => {
+                                            show_modal_message(
+                                                "INSTALLATION FAILED",
+                                                &[format!("[ERROR] {}", e)],
+                                                true,
+                                            )?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Some(3) => {
+                let query = match run_input_prompt(
+                    "SEARCH DATAPACKS ONLINE",
+                    "Search keyword (e.g. terralith, incendium, nullscape, timber):",
+                    None,
+                )? {
+                    Some(q) if !q.trim().is_empty() => q.trim().to_string(),
+                    _ => continue,
+                };
+
+                print_in_place_status(
+                    "SEARCHING DATAPACKS",
+                    &[format!("Querying Modrinth repository for '{}'...", query)],
+                )?;
+                let pm = PluginManager::new();
+                let results = pm.search_datapacks(&query).await;
+
+                if results.is_empty() {
+                    show_modal_message(
+                        "NO DATAPACKS FOUND",
+                        &[format!("No datapacks found matching query '{}'.", query)],
+                        false,
+                    )?;
+                } else {
+                    let mut p_entries = Vec::new();
+                    for (i, hit) in results.iter().enumerate() {
+                        let hotkey = if i < 9 {
+                            (i + 1).to_string()
+                        } else if i < 35 {
+                            ((b'a' + (i - 9) as u8) as char).to_string()
+                        } else {
+                            format!("{}", i + 1)
+                        };
+                        let desc = craft_core::truncate_ellipsis(&hit.description, 40);
+                        p_entries.push(MenuEntry::new(
+                            hotkey,
+                            format!("{:<18} [{}] - {}", hit.name, hit.source, desc),
+                        ));
+                    }
+                    p_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
+
+                    let p_header =
+                        format!(" Search results for '{}' - select to install:", query);
+                    let mut p_sel = 0;
+                    if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
+                        if p_idx < results.len() {
+                            let chosen = &results[p_idx];
+
+                            let registry = ServersRegistry::load(paths)?;
+                            if registry.servers.is_empty() {
+                                show_empty_servers_modal(paths).await?;
+                                continue;
+                            }
+
+                            let mut s_entries = Vec::new();
+                            for (si, s) in registry.servers.iter().enumerate() {
+                                let hotkey = if si < 9 {
+                                    (si + 1).to_string()
+                                } else {
+                                    ((b'a' + (si - 9) as u8) as char).to_string()
+                                };
+                                s_entries.push(MenuEntry::new(hotkey, s.name.clone()));
+                            }
+                            s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+
+                            let s_header = format!(
+                                " Select server to install datapack '{}':",
+                                chosen.name
+                            );
+                            let mut s_sel = 0;
+                            if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
+                                if s_idx < registry.servers.len() {
+                                    let server = &registry.servers[s_idx];
+                                    let default_world = craft_core::get_default_world(&server.path);
+                                    print_in_place_status(
+                                        "INSTALLING DATAPACK",
+                                        &[format!(
+                                            "Downloading and installing '{}' to server '{}' (world: {})...",
+                                            chosen.name, server.name, default_world
+                                        )],
+                                    )?;
+
+                                    match pm
+                                        .install_datapack_from_modrinth(
+                                            &server.path,
+                                            &chosen.id_or_slug,
+                                            &default_world,
+                                        )
+                                        .await
+                                    {
+                                        Ok(dest) => {
+                                            show_modal_message(
+                                                "DATAPACK INSTALLED",
+                                                &[
+                                                    format!(
+                                                        "[OK] Installed datapack '{}' successfully!",
+                                                        chosen.name
+                                                    )
+                                                    .green()
+                                                    .bold()
+                                                    .to_string(),
+                                                    format!("Server: {}", server.name),
+                                                    format!("File:   {}", dest.display()),
+                                                ],
+                                                false,
+                                            )?;
+                                        }
+                                        Err(e) => {
+                                            show_modal_message(
+                                                "INSTALLATION FAILED",
+                                                &[format!("[ERROR] {}", e)],
+                                                true,
+                                            )?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Some(4) => {
+                let maps = craft_plugins::world::get_curated_maps();
+                let width = get_content_width(80);
+                let map_header = format!(
+                    "{}\r\n{}\r\n{}\r\n Select a popular community map to install:\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title("CURATED MAPS", width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    box_divider(width).dimmed(),
+                );
+
+                let mut m_entries = Vec::new();
+                for (i, m) in maps.iter().enumerate() {
+                    let hotkey = (i + 1).to_string();
+                    let desc = craft_core::truncate_ellipsis(m.description, 40);
+                    m_entries.push(MenuEntry::new(
+                        hotkey,
+                        format!("{:<20} [{}] - {}", m.name, m.category, desc),
+                    ));
+                }
+                m_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+                let mut m_sel = 0;
+                if let Some(m_idx) = run_menu(&map_header, &m_entries, &mut m_sel)? {
+                    if m_idx < maps.len() {
+                        let chosen = &maps[m_idx];
+
+                        let registry = ServersRegistry::load(paths)?;
+                        if registry.servers.is_empty() {
+                            show_empty_servers_modal(paths).await?;
+                            continue;
+                        }
+
+                        let mut s_entries = Vec::new();
+                        for (si, s) in registry.servers.iter().enumerate() {
+                            let hotkey = if si < 9 {
+                                (si + 1).to_string()
+                            } else {
+                                ((b'a' + (si - 9) as u8) as char).to_string()
+                            };
+                            s_entries.push(MenuEntry::new(hotkey, s.name.clone()));
+                        }
+                        s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+
+                        let s_header = format!(
+                            " Select server to install map '{}':",
+                            chosen.name
+                        );
+                        let mut s_sel = 0;
+                        if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
+                            if s_idx < registry.servers.len() {
+                                let server = &registry.servers[s_idx];
+                                print_in_place_status(
+                                    "DOWNLOADING MAP",
+                                    &[
+                                        format!("Downloading '{}'...", chosen.name),
+                                        format!("Target Server: {}", server.name),
+                                    ],
+                                )?;
+                                match craft_plugins::world::install_world_from_url(
+                                    &server.path,
+                                    chosen.download_url,
+                                    Some(chosen.default_folder),
+                                )
+                                .await
+                                {
+                                    Ok((dest, installed_name)) => {
+                                        show_modal_message(
+                                            "MAP INSTALLED",
+                                            &[
+                                                format!(
+                                                    "[OK] Successfully installed map '{}'!",
+                                                    chosen.name
+                                                )
+                                                .green()
+                                                .bold()
+                                                .to_string(),
+                                                format!("Server: {}", server.name),
+                                                format!("Path:   {}", dest.display()),
+                                            ],
+                                            false,
+                                        )?;
+
+                                        // Prompt whether to set as default world - No by default
+                                        let cur_default = craft_core::get_default_world(&server.path);
+                                        let p_header = format!(
+                                            " World '{}' has been installed into '{}'.\r\n Current default world (level-name): '{}'\r\n\r\n Set '{}' as the default world in server.properties?",
+                                            installed_name, server.name, cur_default, installed_name
+                                        );
+                                        let p_opts = vec![
+                                            MenuEntry::new("1", "No (keep current default)").with_aliases(&["n", "no"]),
+                                            MenuEntry::new("2", "Yes (set as active default)").with_aliases(&["y", "yes"]),
+                                        ];
+                                        let mut p_choice = 0;
+                                        if let Some(c) = run_menu(&p_header, &p_opts, &mut p_choice)? {
+                                            if c == 1 {
+                                                craft_core::set_default_world(&server.path, &installed_name)?;
+                                                show_modal_message(
+                                                    "DEFAULT WORLD UPDATED",
+                                                    &[
+                                                        format!("[OK] Set '{}' as active default world (level-name).", installed_name)
+                                                            .green()
+                                                            .bold()
+                                                            .to_string(),
+                                                    ],
+                                                    false,
+                                                )?;
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        show_modal_message(
+                                            "INSTALLATION FAILED",
+                                            &[format!("[ERROR] {}", e)],
+                                            true,
+                                        )?;
+                                    }
+                                }
                             }
                         }
                     }

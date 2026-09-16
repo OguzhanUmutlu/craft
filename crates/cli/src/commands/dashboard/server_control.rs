@@ -855,6 +855,9 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
             AttachConsole,
             Backups,
             Plugins,
+            Mods,
+            Datapacks,
+            Worlds,
             RenameServer,
             DeleteServer,
         }
@@ -883,6 +886,18 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
         let plg_hotkey = (actions.len() + 1).to_string();
         entries.push(MenuEntry::new(plg_hotkey, "Plugins"));
         actions.push(ControlAction::Plugins);
+
+        let mod_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(mod_hotkey, "Mods"));
+        actions.push(ControlAction::Mods);
+
+        let dp_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(dp_hotkey, "Datapacks"));
+        actions.push(ControlAction::Datapacks);
+
+        let wrd_hotkey = (actions.len() + 1).to_string();
+        entries.push(MenuEntry::new(wrd_hotkey, "Worlds / Maps"));
+        actions.push(ControlAction::Worlds);
 
         let ren_hotkey = (actions.len() + 1).to_string();
         entries.push(MenuEntry::new(ren_hotkey, "Rename Server").with_aliases(&["r", "rename"]));
@@ -1013,6 +1028,15 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
             }
             ControlAction::Plugins => {
                 server_plugins_panel(&server.name, paths).await?;
+            }
+            ControlAction::Mods => {
+                server_mods_panel(&server.name, paths).await?;
+            }
+            ControlAction::Datapacks => {
+                server_datapacks_panel(&server.name, paths).await?;
+            }
+            ControlAction::Worlds => {
+                server_worlds_panel(&server.name, paths).await?;
             }
             ControlAction::RenameServer => {
                 if is_running {
@@ -1810,11 +1834,7 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
                         } else {
                             format!("{}", i + 1)
                         };
-                        let desc = if hit.description.len() > 40 {
-                            format!("{}...", &hit.description[..37])
-                        } else {
-                            hit.description.clone()
-                        };
+                        let desc = craft_core::truncate_ellipsis(&hit.description, 40);
                         p_entries.push(MenuEntry::new(
                             hotkey,
                             format!("{:<18} [{}] - {}", hit.name, hit.source, desc),
@@ -2027,3 +2047,1019 @@ async fn manage_installed_plugins_menu(server_name: &str, plugins_dir: &std::pat
         }
     }
 }
+
+// ==========================================
+// MODS MANAGEMENT
+// ==========================================
+
+pub(crate) async fn server_mods_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Mods");
+    let mut selected = 0;
+
+    loop {
+        let registry = ServersRegistry::load(paths)?;
+        let server = match registry.find_by_name(server_name) {
+            Some(s) => s.clone(),
+            None => {
+                show_modal_message(
+                    "SERVER NOT FOUND",
+                    &[format!("Server '{}' is no longer registered.", server_name)],
+                    true,
+                )?;
+                return Ok(());
+            }
+        };
+
+        let mods_dir = server.path.join("mods");
+        let _ = std::fs::create_dir_all(&mods_dir);
+        let installed_mods = list_server_mods(&mods_dir);
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:    {} ({:<10} {})\r\n Directory: {}\r\n Installed: {} mod jar(s)\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title(&format!("MODS: {}", server.name), width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server.name.white().bold(),
+            server.software.cyan(),
+            server.version,
+            mods_dir.display(),
+            installed_mods.len().to_string().cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Search Online"),
+            MenuEntry::new("2", "Install by Slug / ID"),
+            MenuEntry::new("3", "Manage Installed"),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                // Search online
+                let query = match run_input_prompt(
+                    "SEARCH MODS",
+                    "Enter mod keyword (e.g. fabric-api, sodium, lithium, appleskin, jei):",
+                    None,
+                )? {
+                    Some(q) if !q.trim().is_empty() => q.trim().to_string(),
+                    _ => continue,
+                };
+
+                let _ = print_in_place_status(
+                    "SEARCHING MODS",
+                    &[format!("Searching Modrinth for '{}'...", query)],
+                );
+                let pm = craft_plugins::PluginManager::new();
+                let results = pm.search_mods(&query).await;
+
+                if results.is_empty() {
+                    show_modal_message(
+                        "NO MODS FOUND",
+                        &[format!("No mods found matching query '{}'.", query)],
+                        false,
+                    )?;
+                } else {
+                    let mut p_entries = Vec::new();
+                    for (i, hit) in results.iter().enumerate() {
+                        let hotkey = if i < 9 {
+                            (i + 1).to_string()
+                        } else if i < 35 {
+                            ((b'a' + (i - 9) as u8) as char).to_string()
+                        } else {
+                            format!("{}", i + 1)
+                        };
+                        let desc = craft_core::truncate_ellipsis(&hit.description, 40);
+                        p_entries.push(MenuEntry::new(
+                            hotkey,
+                            format!("{:<18} [{}] - {}", hit.name, hit.source, desc),
+                        ));
+                    }
+                    p_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+
+                    let p_header = format!(" Search results for '{}' - select to install directly into '{}':", query, server.name);
+                    let mut p_sel = 0;
+                    if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
+                        if p_idx < results.len() {
+                            let chosen = &results[p_idx];
+                            let _ = print_in_place_status(
+                                "DOWNLOADING MOD",
+                                &[format!("Downloading '{}' into '{}'...", chosen.name, mods_dir.display())],
+                            );
+                            match pm.install_mod_from_modrinth(&server.path, &chosen.id_or_slug).await {
+                                Ok(dest) => {
+                                    show_modal_message(
+                                        "MOD INSTALLED",
+                                        &[
+                                            format!("[OK] Successfully installed '{}'!", chosen.name).green().bold().to_string(),
+                                            format!("File: {}", dest.display()),
+                                        ],
+                                        false,
+                                    )?;
+                                }
+                                Err(e) => {
+                                    show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Some(1) => {
+                // Install by slug
+                let slug = match run_input_prompt(
+                    "MOD SLUG / ID",
+                    "Enter Modrinth mod slug or ID (e.g. fabric-api, sodium, lithium):",
+                    None,
+                )? {
+                    Some(s) if !s.trim().is_empty() => s.trim().to_string(),
+                    _ => continue,
+                };
+
+                let _ = print_in_place_status(
+                    "DOWNLOADING MOD",
+                    &[format!("Downloading '{}' into '{}'...", slug, mods_dir.display())],
+                );
+                let pm = craft_plugins::PluginManager::new();
+                match pm.install_mod_from_modrinth(&server.path, &slug).await {
+                    Ok(dest) => {
+                        show_modal_message(
+                            "MOD INSTALLED",
+                            &[
+                                format!("[OK] Successfully installed mod '{}'!", slug).green().bold().to_string(),
+                                format!("File: {}", dest.display()),
+                            ],
+                            false,
+                        )?;
+                    }
+                    Err(e) => {
+                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                    }
+                }
+            }
+            Some(2) => {
+                manage_installed_mods_menu(&server.name, &mods_dir).await?;
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+pub(crate) fn list_server_mods(mods_dir: &std::path::Path) -> Vec<InstalledPluginItem> {
+    let mut list = Vec::new();
+    if mods_dir.exists() && mods_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(mods_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    let fname = entry.file_name().to_string_lossy().to_string();
+                    if fname.ends_with(".jar") {
+                        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                        list.push(InstalledPluginItem {
+                            filename: fname,
+                            path,
+                            is_enabled: true,
+                            size_bytes: size,
+                        });
+                    } else if fname.ends_with(".jar.disabled") {
+                        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                        list.push(InstalledPluginItem {
+                            filename: fname,
+                            path,
+                            is_enabled: false,
+                            size_bytes: size,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    list.sort_by(|a, b| a.filename.cmp(&b.filename));
+    list
+}
+
+async fn manage_installed_mods_menu(server_name: &str, mods_dir: &std::path::Path) -> Result<()> {
+    let mut selected = 0;
+
+    loop {
+        let mods = list_server_mods(mods_dir);
+        if mods.is_empty() {
+            show_modal_message(
+                "NO MODS INSTALLED",
+                &[format!("No mod jars found in '{}'.", mods_dir.display())],
+                false,
+            )?;
+            return Ok(());
+        }
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server: '{}'\r\n Select a mod jar to toggle status or delete:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("INSTALLED MODS", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server_name,
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries = Vec::new();
+        for (i, p) in mods.iter().enumerate() {
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else if i < 35 {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            } else {
+                format!("{}", i + 1)
+            };
+            let status = if p.is_enabled {
+                "[ENABLED]".green().bold().to_string()
+            } else {
+                "[DISABLED]".dimmed().to_string()
+            };
+            let kb = (p.size_bytes as f64) / 1024.0;
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<35} {:>8.1} KB  {}", p.filename, kb, status),
+            ));
+        }
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+
+        match super::screen::run_menu_with_space(&header, &entries, &mut selected)? {
+            super::screen::MenuAction::Space(idx) if idx < mods.len() => {
+                let chosen = &mods[idx];
+                if chosen.is_enabled {
+                    let new_path = chosen.path.with_extension("jar.disabled");
+                    let _ = std::fs::rename(&chosen.path, new_path);
+                } else {
+                    let stem = chosen.path.to_string_lossy();
+                    if let Some(orig) = stem.strip_suffix(".disabled") {
+                        let _ = std::fs::rename(&chosen.path, orig);
+                    }
+                }
+            }
+            super::screen::MenuAction::Select(idx) if idx < mods.len() => {
+                let chosen = &mods[idx];
+                let item_header = format!(" Mod: {}\r\n Choose action:", chosen.filename);
+                let toggle_label = if chosen.is_enabled { "Disable Mod" } else { "Enable Mod" };
+                let item_entries = vec![
+                    MenuEntry::new("1", toggle_label),
+                    MenuEntry::new("2", "Delete Mod"),
+                    MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                ];
+                let mut item_sel = 0;
+                match run_menu(&item_header, &item_entries, &mut item_sel)? {
+                    Some(0) => {
+                        if chosen.is_enabled {
+                            let new_path = chosen.path.with_extension("jar.disabled");
+                            let _ = std::fs::rename(&chosen.path, new_path);
+                        } else {
+                            let stem = chosen.path.to_string_lossy();
+                            if let Some(orig) = stem.strip_suffix(".disabled") {
+                                let _ = std::fs::rename(&chosen.path, orig);
+                            }
+                        }
+                    }
+                    Some(1) => {
+                        let _ = std::fs::remove_file(&chosen.path);
+                        show_modal_message(
+                            "MOD DELETED",
+                            &[format!("[OK] Removed '{}' from mods directory.", chosen.filename)],
+                            false,
+                        )?;
+                    }
+                    _ => continue,
+                }
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+// ==========================================
+// DATAPACKS MANAGEMENT
+// ==========================================
+
+pub(crate) struct InstalledDatapackItem {
+    pub filename: String,
+    pub path: std::path::PathBuf,
+    pub is_enabled: bool,
+    pub size_bytes: u64,
+}
+
+pub(crate) fn list_server_datapacks(datapacks_dir: &std::path::Path) -> Vec<InstalledDatapackItem> {
+    let mut list = Vec::new();
+    if datapacks_dir.exists() && datapacks_dir.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(datapacks_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if path.is_file() {
+                    if fname.ends_with(".zip") {
+                        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                        list.push(InstalledDatapackItem {
+                            filename: fname,
+                            path,
+                            is_enabled: true,
+                            size_bytes: size,
+                        });
+                    } else if fname.ends_with(".zip.disabled") {
+                        let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                        list.push(InstalledDatapackItem {
+                            filename: fname,
+                            path,
+                            is_enabled: false,
+                            size_bytes: size,
+                        });
+                    }
+                } else if path.is_dir() {
+                    let is_disabled = fname.ends_with(".disabled");
+                    let size = craft_plugins::world::dir_size(&path).unwrap_or(0);
+                    list.push(InstalledDatapackItem {
+                        filename: fname,
+                        path,
+                        is_enabled: !is_disabled,
+                        size_bytes: size,
+                    });
+                }
+            }
+        }
+    }
+    list.sort_by(|a, b| a.filename.cmp(&b.filename));
+    list
+}
+
+pub(crate) async fn server_datapacks_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Datapacks");
+    let mut selected = 0;
+
+    loop {
+        let registry = ServersRegistry::load(paths)?;
+        let server = match registry.find_by_name(server_name) {
+            Some(s) => s.clone(),
+            None => {
+                show_modal_message(
+                    "SERVER NOT FOUND",
+                    &[format!("Server '{}' is no longer registered.", server_name)],
+                    true,
+                )?;
+                return Ok(());
+            }
+        };
+
+        let default_world = craft_core::get_default_world(&server.path);
+        let datapacks_dir = server.path.join(&default_world).join("datapacks");
+        let _ = std::fs::create_dir_all(&datapacks_dir);
+        let installed_datapacks = list_server_datapacks(&datapacks_dir);
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:       {} ({:<10} {})\r\n Active World: {}\r\n Directory:    {}\r\n Installed:    {} datapack(s)\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title(&format!("DATAPACKS: {}", server.name), width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server.name.white().bold(),
+            server.software.cyan(),
+            server.version,
+            default_world.cyan().bold(),
+            datapacks_dir.display(),
+            installed_datapacks.len().to_string().cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Search Online"),
+            MenuEntry::new("2", "Install by Slug / ID"),
+            MenuEntry::new("3", "Manage Installed"),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                // Search online
+                let query = match run_input_prompt(
+                    "SEARCH DATAPACKS",
+                    "Enter datapack keyword (e.g. terralith, incendium, nullscape, timber):",
+                    None,
+                )? {
+                    Some(q) if !q.trim().is_empty() => q.trim().to_string(),
+                    _ => continue,
+                };
+
+                let _ = print_in_place_status(
+                    "SEARCHING DATAPACKS",
+                    &[format!("Searching Modrinth for '{}'...", query)],
+                );
+                let pm = craft_plugins::PluginManager::new();
+                let results = pm.search_datapacks(&query).await;
+
+                if results.is_empty() {
+                    show_modal_message(
+                        "NO DATAPACKS FOUND",
+                        &[format!("No datapacks found matching query '{}'.", query)],
+                        false,
+                    )?;
+                } else {
+                    let mut p_entries = Vec::new();
+                    for (i, hit) in results.iter().enumerate() {
+                        let hotkey = if i < 9 {
+                            (i + 1).to_string()
+                        } else if i < 35 {
+                            ((b'a' + (i - 9) as u8) as char).to_string()
+                        } else {
+                            format!("{}", i + 1)
+                        };
+                        let desc = craft_core::truncate_ellipsis(&hit.description, 40);
+                        p_entries.push(MenuEntry::new(
+                            hotkey,
+                            format!("{:<18} [{}] - {}", hit.name, hit.source, desc),
+                        ));
+                    }
+                    p_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+
+                    let p_header = format!(" Search results for '{}' - select to install directly into '{}/datapacks':", query, default_world);
+                    let mut p_sel = 0;
+                    if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
+                        if p_idx < results.len() {
+                            let chosen = &results[p_idx];
+                            let _ = print_in_place_status(
+                                "DOWNLOADING DATAPACK",
+                                &[format!("Downloading '{}' into '{}'...", chosen.name, datapacks_dir.display())],
+                            );
+                            match pm.install_datapack_from_modrinth(&server.path, &chosen.id_or_slug, &default_world).await {
+                                Ok(dest) => {
+                                    show_modal_message(
+                                        "DATAPACK INSTALLED",
+                                        &[
+                                            format!("[OK] Successfully installed '{}'!", chosen.name).green().bold().to_string(),
+                                            format!("File: {}", dest.display()),
+                                        ],
+                                        false,
+                                    )?;
+                                }
+                                Err(e) => {
+                                    show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Some(1) => {
+                // Install by slug
+                let slug = match run_input_prompt(
+                    "DATAPACK SLUG / ID",
+                    "Enter Modrinth datapack slug or ID (e.g. terralith, incendium, nullscape):",
+                    None,
+                )? {
+                    Some(s) if !s.trim().is_empty() => s.trim().to_string(),
+                    _ => continue,
+                };
+
+                let _ = print_in_place_status(
+                    "DOWNLOADING DATAPACK",
+                    &[format!("Downloading '{}' into '{}'...", slug, datapacks_dir.display())],
+                );
+                let pm = craft_plugins::PluginManager::new();
+                match pm.install_datapack_from_modrinth(&server.path, &slug, &default_world).await {
+                    Ok(dest) => {
+                        show_modal_message(
+                            "DATAPACK INSTALLED",
+                            &[
+                                format!("[OK] Successfully installed datapack '{}'!", slug).green().bold().to_string(),
+                                format!("File: {}", dest.display()),
+                            ],
+                            false,
+                        )?;
+                    }
+                    Err(e) => {
+                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                    }
+                }
+            }
+            Some(2) => {
+                manage_installed_datapacks_menu(&server.name, &datapacks_dir).await?;
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+async fn manage_installed_datapacks_menu(server_name: &str, datapacks_dir: &std::path::Path) -> Result<()> {
+    let mut selected = 0;
+
+    loop {
+        let datapacks = list_server_datapacks(datapacks_dir);
+        if datapacks.is_empty() {
+            show_modal_message(
+                "NO DATAPACKS INSTALLED",
+                &[format!("No datapacks found in '{}'.", datapacks_dir.display())],
+                false,
+            )?;
+            return Ok(());
+        }
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server: '{}'\r\n Select a datapack to toggle status or delete:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("INSTALLED DATAPACKS", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server_name,
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries = Vec::new();
+        for (i, p) in datapacks.iter().enumerate() {
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else if i < 35 {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            } else {
+                format!("{}", i + 1)
+            };
+            let status = if p.is_enabled {
+                "[ENABLED]".green().bold().to_string()
+            } else {
+                "[DISABLED]".dimmed().to_string()
+            };
+            let kb = (p.size_bytes as f64) / 1024.0;
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<35} {:>8.1} KB  {}", p.filename, kb, status),
+            ));
+        }
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+
+        match super::screen::run_menu_with_space(&header, &entries, &mut selected)? {
+            super::screen::MenuAction::Space(idx) if idx < datapacks.len() => {
+                let chosen = &datapacks[idx];
+                if chosen.is_enabled {
+                    let new_name = format!("{}.disabled", chosen.path.file_name().unwrap().to_string_lossy());
+                    let new_path = chosen.path.with_file_name(new_name);
+                    let _ = std::fs::rename(&chosen.path, new_path);
+                } else {
+                    let stem = chosen.path.file_name().unwrap().to_string_lossy();
+                    if let Some(orig) = stem.strip_suffix(".disabled") {
+                        let new_path = chosen.path.with_file_name(orig);
+                        let _ = std::fs::rename(&chosen.path, new_path);
+                    }
+                }
+            }
+            super::screen::MenuAction::Select(idx) if idx < datapacks.len() => {
+                let chosen = &datapacks[idx];
+                let item_header = format!(" Datapack: {}\r\n Choose action:", chosen.filename);
+                let toggle_label = if chosen.is_enabled { "Disable Datapack" } else { "Enable Datapack" };
+                let item_entries = vec![
+                    MenuEntry::new("1", toggle_label),
+                    MenuEntry::new("2", "Delete Datapack"),
+                    MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                ];
+                let mut item_sel = 0;
+                match run_menu(&item_header, &item_entries, &mut item_sel)? {
+                    Some(0) => {
+                        if chosen.is_enabled {
+                            let new_name = format!("{}.disabled", chosen.path.file_name().unwrap().to_string_lossy());
+                            let new_path = chosen.path.with_file_name(new_name);
+                            let _ = std::fs::rename(&chosen.path, new_path);
+                        } else {
+                            let stem = chosen.path.file_name().unwrap().to_string_lossy();
+                            if let Some(orig) = stem.strip_suffix(".disabled") {
+                                let new_path = chosen.path.with_file_name(orig);
+                                let _ = std::fs::rename(&chosen.path, new_path);
+                            }
+                        }
+                    }
+                    Some(1) => {
+                        if chosen.path.is_dir() {
+                            let _ = std::fs::remove_dir_all(&chosen.path);
+                        } else {
+                            let _ = std::fs::remove_file(&chosen.path);
+                        }
+                        show_modal_message(
+                            "DATAPACK DELETED",
+                            &[format!("[OK] Removed '{}' from datapacks directory.", chosen.filename)],
+                            false,
+                        )?;
+                    }
+                    _ => continue,
+                }
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+// ==========================================
+// WORLDS / MAPS MANAGEMENT
+// ==========================================
+
+fn prompt_set_as_default_world(server_path: &std::path::Path, world_name: &str) -> Result<()> {
+    let current_default = craft_core::get_default_world(server_path);
+    let prompt_header = format!(
+        " World '{}' has been successfully installed.\r\n Current default world (level-name): '{}'\r\n\r\n Set '{}' as the default world in server.properties?",
+        world_name, current_default, world_name
+    );
+    let entries = vec![
+        MenuEntry::new("1", "No (keep current default)").with_aliases(&["n", "no"]),
+        MenuEntry::new("2", "Yes (set as active default)").with_aliases(&["y", "yes"]),
+    ];
+    let mut selected = 0;
+    if let Some(choice) = run_menu(&prompt_header, &entries, &mut selected)? {
+        if choice == 1 {
+            craft_core::set_default_world(server_path, world_name)?;
+            show_modal_message(
+                "DEFAULT WORLD UPDATED",
+                &[
+                    format!("[OK] Set '{}' as active default world (level-name).", world_name).green().bold().to_string(),
+                    "Restart the server for changes to take effect if currently running.".dimmed().to_string(),
+                ],
+                false,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) async fn server_worlds_panel(server_name: &str, paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Worlds");
+    let mut selected = 0;
+
+    loop {
+        let registry = ServersRegistry::load(paths)?;
+        let server = match registry.find_by_name(server_name) {
+            Some(s) => s.clone(),
+            None => {
+                show_modal_message(
+                    "SERVER NOT FOUND",
+                    &[format!("Server '{}' is no longer registered.", server_name)],
+                    true,
+                )?;
+                return Ok(());
+            }
+        };
+
+        let default_world = craft_core::get_default_world(&server.path);
+        let installed_worlds = craft_plugins::world::list_installed_worlds(&server.path);
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:       {} ({:<10} {})\r\n Active World: {}\r\n Directory:    {}\r\n Installed:    {} world(s)\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title(&format!("WORLDS & MAPS: {}", server.name), width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server.name.white().bold(),
+            server.software.cyan(),
+            server.version,
+            default_world.cyan().bold(),
+            server.path.display(),
+            installed_worlds.len().to_string().cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let entries = vec![
+            MenuEntry::new("1", "Search & Curated Maps"),
+            MenuEntry::new("2", "Download World from URL"),
+            MenuEntry::new("3", "Import World from Local File / Folder"),
+            MenuEntry::new("4", "Manage Installed Worlds / Set Active"),
+            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
+        ];
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                // Curated maps & search
+                curated_maps_menu(&server.path).await?;
+            }
+            Some(1) => {
+                // Download world from URL
+                let url = match run_input_prompt(
+                    "WORLD DOWNLOAD URL",
+                    "Enter direct URL to world zip archive (e.g. https://.../map.zip):",
+                    None,
+                )? {
+                    Some(u) if !u.trim().is_empty() => u.trim().to_string(),
+                    _ => continue,
+                };
+
+                let name_opt = run_input_prompt(
+                    "WORLD FOLDER NAME",
+                    "Enter folder name for this world (or leave blank to auto-detect):",
+                    None,
+                )?;
+                let name = name_opt.as_deref().map(str::trim).filter(|s| !s.is_empty());
+
+                let _ = print_in_place_status(
+                    "DOWNLOADING WORLD",
+                    &[format!("Downloading and extracting world from '{}'...", url)],
+                );
+
+                match craft_plugins::world::install_world_from_url(&server.path, &url, name).await {
+                    Ok((dest, installed_name)) => {
+                        show_modal_message(
+                            "WORLD INSTALLED",
+                            &[
+                                format!("[OK] Successfully installed world '{}'!", installed_name).green().bold().to_string(),
+                                format!("Path: {}", dest.display()),
+                            ],
+                            false,
+                        )?;
+                        prompt_set_as_default_world(&server.path, &installed_name)?;
+                    }
+                    Err(e) => {
+                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                    }
+                }
+            }
+            Some(2) => {
+                // Import from local file or folder
+                let local_path_str = match run_input_prompt(
+                    "LOCAL WORLD PATH",
+                    "Enter absolute or relative path to .zip file or world folder containing level.dat:",
+                    None,
+                )? {
+                    Some(p) if !p.trim().is_empty() => p.trim().to_string(),
+                    _ => continue,
+                };
+
+                let path = std::path::PathBuf::from(&local_path_str);
+                if !path.exists() {
+                    show_modal_message(
+                        "FILE NOT FOUND",
+                        &[format!("Path '{}' does not exist.", local_path_str)],
+                        true,
+                    )?;
+                    continue;
+                }
+
+                let name_opt = run_input_prompt(
+                    "WORLD FOLDER NAME",
+                    "Enter folder name for this world (or leave blank to auto-detect):",
+                    None,
+                )?;
+                let name = name_opt.as_deref().map(str::trim).filter(|s| !s.is_empty());
+
+                let _ = print_in_place_status(
+                    "IMPORTING WORLD",
+                    &[format!("Importing world from '{}'...", path.display())],
+                );
+
+                let install_res = if path.is_file() && path.extension().map(|e| e == "zip").unwrap_or(false) {
+                    craft_plugins::world::install_world_from_zip(&server.path, &path, name)
+                } else if path.is_dir() {
+                    craft_plugins::world::install_world_from_folder(&server.path, &path, name)
+                } else {
+                    Err(CraftError::Other("Specified path must be a .zip file or a folder containing level.dat.".to_string()))
+                };
+
+                match install_res {
+                    Ok((dest, installed_name)) => {
+                        show_modal_message(
+                            "WORLD IMPORTED",
+                            &[
+                                format!("[OK] Successfully imported world '{}'!", installed_name).green().bold().to_string(),
+                                format!("Path: {}", dest.display()),
+                            ],
+                            false,
+                        )?;
+                        prompt_set_as_default_world(&server.path, &installed_name)?;
+                    }
+                    Err(e) => {
+                        show_modal_message("IMPORT FAILED", &[format!("[ERROR] {}", e)], true)?;
+                    }
+                }
+            }
+            Some(3) => {
+                manage_installed_worlds_menu(&server).await?;
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+async fn curated_maps_menu(server_path: &std::path::Path) -> Result<()> {
+    let mut selected = 0;
+
+    loop {
+        let maps = craft_plugins::world::get_curated_maps();
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Select a popular community map to install or search by keyword:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("CURATED COMMUNITY MAPS", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries = Vec::new();
+        for (i, m) in maps.iter().enumerate() {
+            let hotkey = (i + 1).to_string();
+            let desc = craft_core::truncate_ellipsis(m.description, 40);
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<20} [{}] - {}", m.name, m.category, desc),
+            ));
+        }
+        entries.push(MenuEntry::new("s", "Search Maps by Keyword").with_aliases(&["search"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(idx) if idx < maps.len() => {
+                let chosen = &maps[idx];
+                let _ = print_in_place_status(
+                    "DOWNLOADING MAP",
+                    &[
+                        format!("Downloading '{}'...", chosen.name),
+                        format!("Source URL: {}", chosen.download_url),
+                    ],
+                );
+                match craft_plugins::world::install_world_from_url(server_path, chosen.download_url, Some(chosen.default_folder)).await {
+                    Ok((dest, installed_name)) => {
+                        show_modal_message(
+                            "MAP INSTALLED",
+                            &[
+                                format!("[OK] Successfully installed map '{}'!", chosen.name).green().bold().to_string(),
+                                format!("Path: {}", dest.display()),
+                            ],
+                            false,
+                        )?;
+                        prompt_set_as_default_world(server_path, &installed_name)?;
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                    }
+                }
+            }
+            Some(idx) if idx == maps.len() => {
+                // Search by keyword
+                let query = match run_input_prompt(
+                    "SEARCH MAPS",
+                    "Enter map search keyword (e.g. skyblock, parkour, dropper, dropper, adventure):",
+                    None,
+                )? {
+                    Some(q) if !q.trim().is_empty() => q.trim().to_string(),
+                    _ => continue,
+                };
+
+                let results = craft_plugins::world::search_curated_maps(&query);
+                if results.is_empty() {
+                    show_modal_message(
+                        "NO MAPS FOUND",
+                        &[format!("No maps found matching query '{}'.", query)],
+                        false,
+                    )?;
+                } else {
+                    let mut s_entries = Vec::new();
+                    for (i, m) in results.iter().enumerate() {
+                        let hotkey = (i + 1).to_string();
+                        let desc = craft_core::truncate_ellipsis(m.description, 40);
+                        s_entries.push(MenuEntry::new(
+                            hotkey,
+                            format!("{:<20} [{}] - {}", m.name, m.category, desc),
+                        ));
+                    }
+                    s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+                    let s_header = format!(" Search results for '{}':", query);
+                    let mut s_sel = 0;
+                    if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
+                        if s_idx < results.len() {
+                            let chosen = &results[s_idx];
+                            let _ = print_in_place_status(
+                                "DOWNLOADING MAP",
+                                &[format!("Downloading '{}'...", chosen.name)],
+                            );
+                            match craft_plugins::world::install_world_from_url(server_path, chosen.download_url, Some(chosen.default_folder)).await {
+                                Ok((dest, installed_name)) => {
+                                    show_modal_message(
+                                        "MAP INSTALLED",
+                                        &[
+                                            format!("[OK] Successfully installed map '{}'!", chosen.name).green().bold().to_string(),
+                                            format!("Path: {}", dest.display()),
+                                        ],
+                                        false,
+                                    )?;
+                                    prompt_set_as_default_world(server_path, &installed_name)?;
+                                    return Ok(());
+                                }
+                                Err(e) => {
+                                    show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+async fn manage_installed_worlds_menu(server: &craft_core::ServerConfig) -> Result<()> {
+    let mut selected = 0;
+
+    loop {
+        let worlds = craft_plugins::world::list_installed_worlds(&server.path);
+        if worlds.is_empty() {
+            show_modal_message(
+                "NO WORLDS FOUND",
+                &[format!("No Minecraft worlds with level.dat found in '{}'.", server.path.display())],
+                false,
+            )?;
+            return Ok(());
+        }
+
+        let default_world = craft_core::get_default_world(&server.path);
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:        '{}'\r\n Active Default: {}\r\n Select a world to set as default or delete:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("INSTALLED WORLDS", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server.name,
+            default_world.cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries = Vec::new();
+        for (i, w) in worlds.iter().enumerate() {
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else if i < 35 {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            } else {
+                format!("{}", i + 1)
+            };
+            let status = if w.is_default {
+                "[ACTIVE DEFAULT]".green().bold().to_string()
+            } else {
+                "[AVAILABLE]".dimmed().to_string()
+            };
+            let mb = (w.size_bytes as f64) / (1024.0 * 1024.0);
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<25} {:>7.1} MB  {}", w.name, mb, status),
+            ));
+        }
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(idx) if idx < worlds.len() => {
+                let chosen = &worlds[idx];
+                if chosen.is_default {
+                    let item_header = format!(" World: {} [ACTIVE DEFAULT]\r\n Choose action:", chosen.name);
+                    let item_entries = vec![
+                        MenuEntry::new("1", "Keep as active default"),
+                        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                    ];
+                    let mut item_sel = 0;
+                    let _ = run_menu(&item_header, &item_entries, &mut item_sel)?;
+                } else {
+                    let item_header = format!(" World: {}\r\n Choose action:", chosen.name);
+                    let item_entries = vec![
+                        MenuEntry::new("1", "Set as Active Default World (level-name)"),
+                        MenuEntry::new("2", "Delete World Folder"),
+                        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
+                    ];
+                    let mut item_sel = 0;
+                    match run_menu(&item_header, &item_entries, &mut item_sel)? {
+                        Some(0) => {
+                            craft_core::set_default_world(&server.path, &chosen.name)?;
+                            show_modal_message(
+                                "DEFAULT WORLD UPDATED",
+                                &[
+                                    format!("[OK] Set '{}' as the active default world in server.properties!", chosen.name).green().bold().to_string(),
+                                    "Restart the server for changes to take effect if currently running.".dimmed().to_string(),
+                                ],
+                                false,
+                            )?;
+                        }
+                        Some(1) => {
+                            let confirm = run_menu(
+                                &format!(" CONFIRM WORLD DELETION\r\n Are you sure you want to permanently delete world '{}'?", chosen.name),
+                                &[
+                                    MenuEntry::new("1", "Cancel (Keep World)").with_aliases(&["n", "no"]),
+                                    MenuEntry::new("2", "Yes, Delete World Permanently").with_aliases(&["y", "yes"]),
+                                ],
+                                &mut 0,
+                            )?;
+                            if confirm == Some(1) {
+                                let _ = std::fs::remove_dir_all(&chosen.path);
+                                show_modal_message(
+                                    "WORLD DELETED",
+                                    &[format!("[OK] Permanently removed world '{}'.", chosen.name)],
+                                    false,
+                                )?;
+                            }
+                        }
+                        _ => continue,
+                    }
+                }
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+

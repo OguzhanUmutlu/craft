@@ -44,6 +44,8 @@ pub struct GlobalSettings {
     pub auto_agree_eula: bool,
     #[serde(default = "default_download_concurrency")]
     pub download_concurrency: usize,
+    #[serde(default = "default_cache_max_bytes")]
+    pub cache_max_bytes: u64,
 }
 
 fn default_daemon_port() -> u16 {
@@ -58,6 +60,9 @@ fn default_auto_agree_eula() -> bool {
 fn default_download_concurrency() -> usize {
     4
 }
+fn default_cache_max_bytes() -> u64 {
+    2 * 1024 * 1024 * 1024
+}
 
 impl Default for GlobalSettings {
     fn default() -> Self {
@@ -66,7 +71,29 @@ impl Default for GlobalSettings {
             max_log_lines: default_max_log_lines(),
             auto_agree_eula: default_auto_agree_eula(),
             download_concurrency: default_download_concurrency(),
+            cache_max_bytes: default_cache_max_bytes(),
         }
+    }
+}
+
+impl GlobalSettings {
+    pub fn load(paths: &CraftPaths) -> Result<Self> {
+        if paths.config_file.exists() {
+            let content = fs::read_to_string(&paths.config_file)?;
+            let settings: GlobalSettings = toml::from_str(&content)
+                .map_err(|e| CraftError::Config(format!("Failed to parse config.toml: {}", e)))?;
+            return Ok(settings);
+        }
+        Ok(Self::default())
+    }
+
+    pub fn save(&self, paths: &CraftPaths) -> Result<()> {
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| CraftError::Config(format!("Failed to serialize config.toml: {}", e)))?;
+        let temp_path = paths.config_file.with_extension("tmp");
+        fs::write(&temp_path, content)?;
+        fs::rename(&temp_path, &paths.config_file)?;
+        Ok(())
     }
 }
 
@@ -144,6 +171,48 @@ impl ServersRegistry {
     }
 }
 
+/// Reads `level-name` from server.properties in `server_path`, defaulting to `"world"`.
+pub fn get_default_world(server_path: &Path) -> String {
+    let props_path = server_path.join("server.properties");
+    if let Ok(content) = fs::read_to_string(&props_path) {
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if let Some(val) = trimmed.strip_prefix("level-name=") {
+                let v = val.trim();
+                if !v.is_empty() {
+                    return v.to_string();
+                }
+            }
+        }
+    }
+    "world".to_string()
+}
+
+/// Sets `level-name` in server.properties in `server_path`.
+pub fn set_default_world(server_path: &Path, world_name: &str) -> Result<()> {
+    let props_path = server_path.join("server.properties");
+    let content = if props_path.exists() {
+        fs::read_to_string(&props_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let mut new_lines = Vec::new();
+    let mut found = false;
+    for line in content.lines() {
+        if line.trim().starts_with("level-name=") {
+            new_lines.push(format!("level-name={}", world_name));
+            found = true;
+        } else {
+            new_lines.push(line.to_string());
+        }
+    }
+    if !found {
+        new_lines.push(format!("level-name={}", world_name));
+    }
+    fs::write(&props_path, new_lines.join("\n") + "\n")?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,5 +275,22 @@ mod tests {
         assert_eq!(registry.servers.len(), deserialized.servers.len());
         assert_eq!(registry.servers[0].name, deserialized.servers[0].name);
         assert_eq!(registry.servers[0].auto, deserialized.servers[0].auto);
+    }
+
+    #[test]
+    fn test_default_world_helpers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path();
+
+        // Default when no server.properties exists
+        assert_eq!(get_default_world(path), "world");
+
+        // Set default world
+        assert!(set_default_world(path, "adventure_map").is_ok());
+        assert_eq!(get_default_world(path), "adventure_map");
+
+        // Update default world
+        assert!(set_default_world(path, "skyblock").is_ok());
+        assert_eq!(get_default_world(path), "skyblock");
     }
 }

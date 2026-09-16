@@ -68,8 +68,20 @@ impl ServerSoftware for FabricProvider {
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
         Box::pin(async move {
+            let url = "https://meta.fabricmc.net/v2/versions/game";
+            if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
+                if let Ok(list) = cache.get_cached_json::<Vec<FabricGameVersion>>("fabric_game_versions", url, std::time::Duration::from_secs(6 * 3600)).await {
+                    let versions: Vec<String> = list.into_iter()
+                        .filter(|g| g.stable)
+                        .map(|g| g.version)
+                        .collect();
+                    if !versions.is_empty() {
+                        return Ok(versions);
+                    }
+                }
+            }
             let client = reqwest::Client::new();
-            if let Ok(resp) = client.get("https://meta.fabricmc.net/v2/versions/game").send().await {
+            if let Ok(resp) = client.get(url).send().await {
                 if let Ok(list) = resp.json::<Vec<FabricGameVersion>>().await {
                     let versions: Vec<String> = list.into_iter()
                         .filter(|g| g.stable)

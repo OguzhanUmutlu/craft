@@ -150,8 +150,10 @@ pub async fn run_virtual_console(
 
                                 KeyCode::Backspace => {
                                     if cursor_pos > 0 && !input_buffer.is_empty() {
-                                        input_buffer.remove(cursor_pos - 1);
-                                        cursor_pos -= 1;
+                                        if let Some((prev_idx, _)) = input_buffer[..cursor_pos].char_indices().last() {
+                                            input_buffer.remove(prev_idx);
+                                            cursor_pos = prev_idx;
+                                        }
                                     }
                                 }
 
@@ -162,13 +164,19 @@ pub async fn run_virtual_console(
                                 }
 
                                 KeyCode::Left => {
-                                    cursor_pos = cursor_pos.saturating_sub(1);
+                                    cursor_pos = input_buffer[..cursor_pos]
+                                        .char_indices()
+                                        .last()
+                                        .map(|(idx, _)| idx)
+                                        .unwrap_or(0);
                                 }
 
                                 KeyCode::Right => {
-                                    if cursor_pos < input_buffer.len() {
-                                        cursor_pos += 1;
-                                    }
+                                    cursor_pos = input_buffer[cursor_pos..]
+                                        .chars()
+                                        .next()
+                                        .map(|ch| cursor_pos + ch.len_utf8())
+                                        .unwrap_or(input_buffer.len());
                                 }
 
                                 KeyCode::Home => {
@@ -248,7 +256,7 @@ pub async fn run_virtual_console(
 
                                 KeyCode::Char(c) if !c.is_control() => {
                                     input_buffer.insert(cursor_pos, c);
-                                    cursor_pos += 1;
+                                    cursor_pos += c.len_utf8();
                                 }
 
                                 _ => {}
@@ -312,7 +320,7 @@ pub async fn run_virtual_console(
                         for c in text.chars() {
                             if !c.is_control() {
                                 input_buffer.insert(cursor_pos, c);
-                                cursor_pos += 1;
+                                cursor_pos += c.len_utf8();
                             }
                         }
                         render(
@@ -393,13 +401,13 @@ fn render<W: Write>(
     for i in 0..log_area_height {
         if let Some(log_line) = visible_lines.get(i) {
             let stripped = strip_ansi(log_line);
-            let vis_len = stripped.len();
+            let vis_len = stripped.chars().count();
             let truncated = if vis_len > inner_width {
-                stripped[..inner_width].to_string()
+                craft_core::truncate_str(&stripped, inner_width).to_string()
             } else {
                 log_line.clone()
             };
-            let pad = inner_width.saturating_sub(strip_ansi(&truncated).len());
+            let pad = inner_width.saturating_sub(strip_ansi(&truncated).chars().count());
             let row = format!("│ {}{} │\x1B[K\r\n", truncated, " ".repeat(pad.saturating_sub(2)));
             out.write_all(row.as_bytes())?;
         } else {
@@ -411,7 +419,7 @@ fn render<W: Write>(
     // Row term_h - 2: Bottom border / scroll indicator
     let bottom_line = if scroll_offset > 0 {
         let badge = format!(" [▲ SCROLLED +{} LINES | PRESS END TO RETURN] ", scroll_offset);
-        let badge_len = strip_ansi(&badge).len();
+        let badge_len = strip_ansi(&badge).chars().count();
         let b_pad = inner_width.saturating_sub(badge_len);
         format!("├{}{}{}┤\x1B[K\r\n", "─".repeat(2), badge.yellow().bold(), "─".repeat(b_pad.saturating_sub(2)))
     } else {
@@ -424,12 +432,16 @@ fn render<W: Write>(
     let prefix_len = prefix.len();
     let max_display_len = width.saturating_sub(prefix_len + 4);
 
-    let (display_str, visual_cursor_offset) = if input_buffer.len() > max_display_len {
-        let start = cursor_pos.saturating_sub(max_display_len.saturating_sub(4));
-        let end = (start + max_display_len).min(input_buffer.len());
-        (input_buffer[start..end].to_string(), cursor_pos.saturating_sub(start))
+    let (display_str, visual_cursor_offset) = if input_buffer.chars().count() > max_display_len {
+        let chars: Vec<char> = input_buffer.chars().collect();
+        let char_cursor = input_buffer[..cursor_pos].chars().count();
+        let start = char_cursor.saturating_sub(max_display_len.saturating_sub(4));
+        let end = (start + max_display_len).min(chars.len());
+        let disp: String = chars[start..end].iter().collect();
+        let offset = char_cursor.saturating_sub(start);
+        (disp, offset)
     } else {
-        (input_buffer.to_string(), cursor_pos)
+        (input_buffer.to_string(), input_buffer[..cursor_pos].chars().count())
     };
 
     let prompt_row = format!("{}{}\x1B[K", prefix.cyan().bold(), display_str);

@@ -1,15 +1,17 @@
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
-use sha2::{Digest, Sha256};
+use serde::de::DeserializeOwned;
 use futures_util::StreamExt;
-use craft_core::{CraftError, CraftPaths, Result};
+use craft_core::{CraftError, CraftPaths, Result, CacheStore, CacheStats, GlobalSettings};
 
 pub struct CacheManager {
     client: Client,
     cache_dir: PathBuf,
+    store: CacheStore,
 }
 
 impl CacheManager {
@@ -19,18 +21,40 @@ impl CacheManager {
             .build()
             .unwrap_or_default();
 
+        let settings = GlobalSettings::load(paths).unwrap_or_default();
+        let store = CacheStore::new(paths.cache_dir.clone(), settings.cache_max_bytes)
+            .unwrap_or_else(|_| CacheStore::new(paths.cache_dir.clone(), 2 * 1024 * 1024 * 1024).expect("cache store init"));
+
         Self {
             client,
             cache_dir: paths.cache_dir.clone(),
+            store,
         }
+    }
+
+    pub fn from_default_paths() -> Result<Self> {
+        let paths = CraftPaths::new()?;
+        Ok(Self::new(&paths))
+    }
+
+    pub fn store(&self) -> &CacheStore {
+        &self.store
+    }
+
+    pub fn store_mut(&mut self) -> &mut CacheStore {
+        &mut self.store
+    }
+
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
     }
 
     pub fn cache_path(&self, software_id: &str, version: &str, filename: &str) -> PathBuf {
         let safe_filename = format!("{}-{}-{}", software_id, version.replace('/', "_"), filename);
-        self.cache_dir.join(safe_filename)
+        self.store.artifacts_dir().join(safe_filename)
     }
 
-    /// Downloads the asset if not already cached, and copies it to destination
+    /// Downloads the asset if not already cached, and hardlinks/copies it to destination
     pub async fn fetch_and_install(
         &self,
         software_id: &str,
@@ -40,40 +64,63 @@ impl CacheManager {
         destination: &Path,
         expected_sha256: Option<&str>,
     ) -> Result<PathBuf> {
-        let cached = self.cache_path(software_id, version, filename);
+        let rel_subpath = format!("{}-{}-{}", software_id, version.replace('/', "_"), filename);
 
-        if !cached.exists() {
-            self.download_file(url, &cached, filename).await?;
+        let cached_file = match self.store.get_artifact(&rel_subpath) {
+            Some(path) => path,
+            None => {
+                let temp_dir = tempfile::tempdir()?;
+                let temp_file = temp_dir.path().join(filename);
+                self.download_file(url, &temp_file, filename).await?;
 
-            // Verify checksum if supplied
-            if let Some(expected) = expected_sha256 {
-                let actual = compute_sha256(&cached)?;
-                if !actual.eq_ignore_ascii_case(expected) {
-                    let _ = fs::remove_file(&cached);
-                    return Err(CraftError::ChecksumMismatch {
-                        file: filename.to_string(),
-                        expected: expected.to_string(),
-                        actual,
-                    });
-                }
+                let (path, _) = self.store.put_artifact_file(&rel_subpath, &temp_file, expected_sha256)?;
+                path
+            }
+        };
+
+        let target_file = destination.join(filename);
+        self.store.link_or_copy(&cached_file, &target_file)?;
+
+        Ok(target_file)
+    }
+
+    /// Fetches a JSON endpoint with zstd-compressed caching on disk and specified TTL
+    pub async fn get_cached_json<T: DeserializeOwned>(
+        &self,
+        key: &str,
+        url: &str,
+        ttl: Duration,
+    ) -> Result<T> {
+        // 1. Check metadata cache
+        if let Ok(Some(cached_bytes)) = self.store.get_metadata(key) {
+            if let Ok(data) = serde_json::from_slice::<T>(&cached_bytes) {
+                return Ok(data);
             }
         }
 
-        let target_file = destination.join(filename);
-        if let Some(parent) = target_file.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        if target_file.exists() {
-            let _ = fs::remove_file(&target_file);
+        // 2. Fetch from network
+        let resp = self.client.get(url).send().await
+            .map_err(|e| CraftError::Download(format!("HTTP request failed for {}: {}", url, e)))?;
+
+        if !resp.status().is_success() {
+            return Err(CraftError::Download(format!(
+                "HTTP {} while downloading from {}",
+                resp.status(),
+                url
+            )));
         }
 
-        // Try hardlink first to share disk blocks and save storage across servers
-        if fs::hard_link(&cached, &target_file).is_err() {
-            // Fallback to copy if cross-filesystem (EXDEV) or unsupported
-            fs::copy(&cached, &target_file)?;
-        }
+        let bytes = resp.bytes().await
+            .map_err(|e| CraftError::Download(format!("Failed to read response body: {}", e)))?;
 
-        Ok(target_file)
+        // 3. Deserialize JSON
+        let parsed: T = serde_json::from_slice(&bytes)
+            .map_err(|e| CraftError::Download(format!("Failed to parse JSON from {}: {}", url, e)))?;
+
+        // 4. Cache compressed with Zstandard level 3
+        let _ = self.store.put_metadata(key, &bytes, Some(ttl));
+
+        Ok(parsed)
     }
 
     async fn download_file(&self, url: &str, target_path: &Path, display_name: &str) -> Result<()> {
@@ -126,27 +173,23 @@ impl CacheManager {
     }
 
     pub fn get_cache_size(&self) -> u64 {
-        let mut total = 0;
-        if let Ok(entries) = fs::read_dir(&self.cache_dir) {
-            for entry in entries.flatten() {
-                if let Ok(meta) = entry.metadata() {
-                    if meta.is_file() {
-                        total += meta.len();
-                    }
-                }
-            }
-        }
-        total
+        self.store.get_stats().total_bytes
+    }
+
+    pub fn get_stats(&self) -> CacheStats {
+        self.store.get_stats()
+    }
+
+    pub fn prune(&self) -> Result<u64> {
+        self.store.prune_to_watermark()
+    }
+
+    pub fn clean_expired(&self) -> Result<u64> {
+        self.store.clean_expired()
     }
 
     pub fn clean_cache(&self) -> Result<u64> {
-        let total = self.get_cache_size();
-        if let Ok(entries) = fs::read_dir(&self.cache_dir) {
-            for entry in entries.flatten() {
-                let _ = fs::remove_file(entry.path());
-            }
-        }
-        Ok(total)
+        self.store.clean_all()
     }
 
     /// Utility: Extracts a ZIP archive into a destination folder
@@ -189,20 +232,6 @@ impl CacheManager {
     }
 }
 
-fn compute_sha256(path: &Path) -> Result<String> {
-    let mut file = File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 8192];
-    loop {
-        let count = file.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        hasher.update(&buffer[..count]);
-    }
-    Ok(hex::encode(hasher.finalize()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,6 +271,28 @@ mod tests {
         }
 
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_cache_manager_integration() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let paths = CraftPaths::from_base(temp_dir.path().to_path_buf());
+        let cache = CacheManager::new(&paths);
+
+        assert_eq!(cache.get_cache_size(), 0);
+        let stats = cache.get_stats();
+        assert_eq!(stats.artifacts_count, 0);
+        assert_eq!(stats.metadata_count, 0);
+
+        // Put an artifact directly through store
+        let (_, meta) = cache.store().put_artifact("test-server.jar", b"jar content", None).unwrap();
+        assert_eq!(meta.size_bytes, 11);
+        assert_eq!(cache.get_cache_size(), 11);
+
+        // Clean cache
+        let cleaned = cache.clean_cache().unwrap();
+        assert_eq!(cleaned, 11);
+        assert_eq!(cache.get_cache_size(), 0);
     }
 }
 

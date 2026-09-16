@@ -29,11 +29,7 @@ pub async fn handle_plugin(action: PluginCommands, paths: &CraftPaths) -> Result
             ]);
 
             for hit in results {
-                let desc = if hit.description.len() > 60 {
-                    format!("{}...", &hit.description[..57])
-                } else {
-                    hit.description
-                };
+                let desc = craft_core::truncate_ellipsis(&hit.description, 60);
 
                 table.add_row(Row::from(vec![
                     Cell::new(hit.name).fg(Color::Green),

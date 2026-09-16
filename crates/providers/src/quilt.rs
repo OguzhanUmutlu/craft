@@ -65,12 +65,25 @@ impl ServerSoftware for QuiltProvider {
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
         Box::pin(async move {
+            let url = "https://meta.quiltmc.org/v3/versions/game";
+            if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
+                if let Ok(list) = cache.get_cached_json::<Vec<QuiltGameVersion>>("quilt_game_versions", url, std::time::Duration::from_secs(6 * 3600)).await {
+                    let versions: Vec<String> = list.into_iter()
+                        .filter(|g| g.stable)
+                        .map(|g| g.version)
+                        .collect();
+                    if !versions.is_empty() {
+                        return Ok(versions);
+                    }
+                }
+            }
+
             let client = reqwest::Client::builder()
                 .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
                 .build()
                 .map_err(|e| CraftError::Download(format!("Failed to build HTTP client: {}", e)))?;
 
-            if let Ok(resp) = client.get("https://meta.quiltmc.org/v3/versions/game").send().await {
+            if let Ok(resp) = client.get(url).send().await {
                 if let Ok(list) = resp.json::<Vec<QuiltGameVersion>>().await {
                     let versions: Vec<String> = list.into_iter()
                         .filter(|g| g.stable)

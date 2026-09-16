@@ -76,24 +76,29 @@ fn prompt_internal(
             let max_display_len = width.saturating_sub(prefix_len + 4);
 
             let raw_display = if is_password {
-                "*".repeat(input_buffer.len())
+                "*".repeat(input_buffer.chars().count())
             } else if input_buffer.is_empty() {
                 default_val.map(|d| format!("{}{}{}", DIM, d, RESET)).unwrap_or_default()
             } else {
                 input_buffer.clone()
             };
 
+            let char_count = input_buffer.chars().count();
+            let char_cursor = input_buffer[..cursor_pos].chars().count();
+
             // Calculate horizontal scrolling slice if input exceeds box width
-            let display_str = if input_buffer.len() > max_display_len && !input_buffer.is_empty() {
-                let start = cursor_pos.saturating_sub(max_display_len.saturating_sub(4));
-                let end = (start + max_display_len).min(input_buffer.len());
-                if is_password {
+            let (display_str, visual_cursor_offset) = if char_count > max_display_len && !input_buffer.is_empty() {
+                let start = char_cursor.saturating_sub(max_display_len.saturating_sub(4));
+                let chars: Vec<char> = input_buffer.chars().collect();
+                let end = (start + max_display_len).min(chars.len());
+                let disp = if is_password {
                     "*".repeat(end - start)
                 } else {
-                    input_buffer[start..end].to_string()
-                }
+                    chars[start..end].iter().collect()
+                };
+                (disp, char_cursor.saturating_sub(start))
             } else {
-                raw_display
+                (raw_display, char_cursor)
             };
 
             print!("{}{}\x1B[K\r\n", prefix.cyan().bold(), display_str);
@@ -107,13 +112,6 @@ fn prompt_internal(
 
             execute!(stdout, Clear(ClearType::FromCursorDown))?;
 
-            // Compute visual cursor_x
-            let visual_cursor_offset = if input_buffer.len() > max_display_len {
-                let start = cursor_pos.saturating_sub(max_display_len.saturating_sub(4));
-                cursor_pos.saturating_sub(start)
-            } else {
-                cursor_pos
-            };
             let cursor_x = (prefix_len + visual_cursor_offset) as u16;
 
             execute!(stdout, MoveTo(cursor_x, cursor_y), Show)?;
@@ -147,8 +145,10 @@ fn prompt_internal(
                     }
                     KeyCode::Backspace => {
                         if cursor_pos > 0 && !input_buffer.is_empty() {
-                            input_buffer.remove(cursor_pos - 1);
-                            cursor_pos -= 1;
+                            if let Some((prev_idx, _)) = input_buffer[..cursor_pos].char_indices().last() {
+                                input_buffer.remove(prev_idx);
+                                cursor_pos = prev_idx;
+                            }
                         }
                     }
                     KeyCode::Delete => {
@@ -157,12 +157,18 @@ fn prompt_internal(
                         }
                     }
                     KeyCode::Left => {
-                        cursor_pos = cursor_pos.saturating_sub(1);
+                        cursor_pos = input_buffer[..cursor_pos]
+                            .char_indices()
+                            .last()
+                            .map(|(idx, _)| idx)
+                            .unwrap_or(0);
                     }
                     KeyCode::Right => {
-                        if cursor_pos < input_buffer.len() {
-                            cursor_pos += 1;
-                        }
+                        cursor_pos = input_buffer[cursor_pos..]
+                            .chars()
+                            .next()
+                            .map(|ch| cursor_pos + ch.len_utf8())
+                            .unwrap_or(input_buffer.len());
                     }
                     KeyCode::Home => {
                         cursor_pos = 0;
@@ -195,7 +201,7 @@ fn prompt_internal(
                     }
                     KeyCode::Char(c) if !c.is_control() => {
                         input_buffer.insert(cursor_pos, c);
-                        cursor_pos += 1;
+                        cursor_pos += c.len_utf8();
                     }
                     _ => {}
                 }

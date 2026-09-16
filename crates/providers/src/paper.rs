@@ -74,16 +74,33 @@ impl PaperProvider {
     }
 
     async fn fetch_live_versions(&self) -> Result<Vec<String>> {
-        let client = reqwest::Client::builder()
-            .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
-            .build()
-            .map_err(|e| CraftError::Download(format!("Failed to build HTTP client: {}", e)))?;
-
         let url = format!("https://fill.papermc.io/v3/projects/{}", self.project);
-        let resp = client.get(&url).send().await
-            .map_err(|e| CraftError::Download(format!("Failed to fetch PaperMC project info: {}", e)))?;
-        let data: PaperV3ProjectResponse = resp.json().await
-            .map_err(|e| CraftError::Download(format!("Invalid PaperMC API response: {}", e)))?;
+        let cache_key = format!("papermc_project_{}", self.project);
+
+        let data: PaperV3ProjectResponse = if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
+            match cache.get_cached_json(&cache_key, &url, std::time::Duration::from_secs(6 * 3600)).await {
+                Ok(data) => data,
+                Err(_) => {
+                    let client = reqwest::Client::builder()
+                        .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
+                        .build()
+                        .map_err(|e| CraftError::Download(format!("Failed to build HTTP client: {}", e)))?;
+                    let resp = client.get(&url).send().await
+                        .map_err(|e| CraftError::Download(format!("Failed to fetch PaperMC project info: {}", e)))?;
+                    resp.json().await
+                        .map_err(|e| CraftError::Download(format!("Invalid PaperMC API response: {}", e)))?
+                }
+            }
+        } else {
+            let client = reqwest::Client::builder()
+                .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
+                .build()
+                .map_err(|e| CraftError::Download(format!("Failed to build HTTP client: {}", e)))?;
+            let resp = client.get(&url).send().await
+                .map_err(|e| CraftError::Download(format!("Failed to fetch PaperMC project info: {}", e)))?;
+            resp.json().await
+                .map_err(|e| CraftError::Download(format!("Invalid PaperMC API response: {}", e)))?
+        };
 
         let mut all_versions = Vec::new();
         for (_, vers) in data.versions {
@@ -103,12 +120,27 @@ impl PaperProvider {
 
         tokio::task::block_in_place(|| {
             handle.block_on(async move {
-                let client = reqwest::Client::builder()
-                    .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
-                    .build().ok()?;
                 let url = format!("https://fill.papermc.io/v3/projects/{}/versions/{}/builds", project, version_str);
-                let resp = client.get(&url).send().await.ok()?;
-                let builds: Vec<serde_json::Value> = resp.json().await.ok()?;
+                let cache_key = format!("papermc_builds_{}_{}", project, version_str);
+
+                let builds: Vec<serde_json::Value> = if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
+                    match cache.get_cached_json(&cache_key, &url, std::time::Duration::from_secs(3600)).await {
+                        Ok(b) => b,
+                        Err(_) => {
+                            let client = reqwest::Client::builder()
+                                .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
+                                .build().ok()?;
+                            let resp = client.get(&url).send().await.ok()?;
+                            resp.json().await.ok()?
+                        }
+                    }
+                } else {
+                    let client = reqwest::Client::builder()
+                        .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
+                        .build().ok()?;
+                    let resp = client.get(&url).send().await.ok()?;
+                    resp.json().await.ok()?
+                };
 
                 let chosen = builds
                     .iter()

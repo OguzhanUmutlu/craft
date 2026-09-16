@@ -304,10 +304,22 @@ pub enum Commands {
 
 #[derive(Subcommand)]
 pub enum CacheCommands {
-    /// Clean all cached assets
+    /// Show detailed cache usage statistics
+    Info,
+    /// Clean cached assets (use --force to clear all, or --expired for expired entries)
     Clean {
         #[arg(long)]
         force: bool,
+        /// Only clean expired metadata entries
+        #[arg(long)]
+        expired: bool,
+    },
+    /// Prune cache down to low watermark (75% of limit) using LRU eviction
+    Prune,
+    /// Set maximum cache storage limit (e.g. 500MB, 2GB, 5GB)
+    SetLimit {
+        /// New cache limit with unit (e.g. 500MB, 2GB, 10GB)
+        limit: String,
     },
 }
 

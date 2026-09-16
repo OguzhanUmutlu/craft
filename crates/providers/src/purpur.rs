@@ -57,8 +57,16 @@ impl ServerSoftware for PurpurProvider {
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
         Box::pin(async move {
+            let url = "https://api.purpurmc.org/v2/purpur";
+            if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
+                if let Ok(data) = cache.get_cached_json::<PurpurResponse>("purpur_versions", url, std::time::Duration::from_secs(6 * 3600)).await {
+                    let mut versions = data.versions;
+                    versions.reverse();
+                    return Ok(versions);
+                }
+            }
             let client = reqwest::Client::new();
-            if let Ok(resp) = client.get("https://api.purpurmc.org/v2/purpur").send().await {
+            if let Ok(resp) = client.get(url).send().await {
                 if let Ok(data) = resp.json::<PurpurResponse>().await {
                     let mut versions = data.versions;
                     versions.reverse();
