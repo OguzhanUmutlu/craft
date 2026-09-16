@@ -14,7 +14,7 @@ pub mod properties;
 pub use error::{CraftError, Result};
 pub use path::CraftPaths;
 pub use game::{
-    find_game, get_supported_games, ConfigFormat, GameDefinition, QueryProtocolKind, RuntimeKind,
+    find_game, get_supported_games, ConfigFormat, ContentCapabilities, GameDefinition, QueryProtocolKind, RuntimeKind,
     TransportProtocol,
 };
 pub use config::{

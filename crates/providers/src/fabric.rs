@@ -52,6 +52,18 @@ impl ServerSoftware for FabricProvider {
         ServerEdition::Java
     }
 
+    fn supports_plugins(&self) -> bool {
+        false
+    }
+
+    fn supports_mods(&self) -> bool {
+        true
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        true
+    }
+
     fn description(&self) -> &'static str {
         "Lightweight modular modded server"
     }

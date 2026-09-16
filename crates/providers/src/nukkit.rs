@@ -63,6 +63,18 @@ impl ServerSoftware for NukkitProvider {
         ServerEdition::Bedrock
     }
 
+    fn supports_plugins(&self) -> bool {
+        true
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+
     fn description(&self) -> &'static str {
         "Java-based multi-threaded Bedrock server"
     }

@@ -42,6 +42,18 @@ impl ServerSoftware for VanillaBedrockProvider {
         ServerEdition::Bedrock
     }
 
+    fn supports_plugins(&self) -> bool {
+        false
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+
     fn description(&self) -> &'static str {
         "Official Mojang Bedrock Dedicated Server"
     }

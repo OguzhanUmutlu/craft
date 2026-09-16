@@ -80,6 +80,67 @@ impl ConfigFormat {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ContentCapabilities {
+    pub plugins: bool,
+    pub mods: bool,
+    pub datapacks: bool,
+}
+
+impl ContentCapabilities {
+    pub fn none() -> Self {
+        Self {
+            plugins: false,
+            mods: false,
+            datapacks: false,
+        }
+    }
+
+    pub fn plugins_and_datapacks() -> Self {
+        Self {
+            plugins: true,
+            mods: false,
+            datapacks: true,
+        }
+    }
+
+    pub fn mods_and_datapacks() -> Self {
+        Self {
+            plugins: false,
+            mods: true,
+            datapacks: true,
+        }
+    }
+
+    pub fn plugins_only() -> Self {
+        Self {
+            plugins: true,
+            mods: false,
+            datapacks: false,
+        }
+    }
+
+    pub fn datapacks_only() -> Self {
+        Self {
+            plugins: false,
+            mods: false,
+            datapacks: true,
+        }
+    }
+
+    pub fn mods_only() -> Self {
+        Self {
+            plugins: false,
+            mods: true,
+            datapacks: false,
+        }
+    }
+
+    pub fn has_any(&self) -> bool {
+        self.plugins || self.mods || self.datapacks
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GameDefinition {
     pub id: String,

@@ -106,6 +106,18 @@ impl ServerSoftware for PocketmineProvider {
         ServerEdition::Bedrock
     }
 
+    fn supports_plugins(&self) -> bool {
+        true
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+
     fn description(&self) -> &'static str {
         "High-performance C++ / PHP Bedrock server"
     }

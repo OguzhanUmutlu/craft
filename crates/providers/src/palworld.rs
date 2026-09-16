@@ -35,6 +35,18 @@ impl ServerSoftware for PalworldProvider {
         "palworld"
     }
 
+    fn supports_plugins(&self) -> bool {
+        false
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+
     fn default_ports(&self) -> (u16, Option<u16>) {
         (8211, Some(27015))
     }

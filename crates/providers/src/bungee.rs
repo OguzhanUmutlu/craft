@@ -31,6 +31,18 @@ impl ServerSoftware for BungeeProvider {
         ServerEdition::Proxy
     }
 
+    fn supports_plugins(&self) -> bool {
+        true
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+
     fn description(&self) -> &'static str {
         "Classic multi-server network proxy"
     }

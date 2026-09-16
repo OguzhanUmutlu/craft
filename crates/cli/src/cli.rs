@@ -232,10 +232,25 @@ pub enum Commands {
         path: Option<PathBuf>,
     },
 
-    /// Search and install plugins, mods, and datapacks
+    /// Search and install plugins (non-vanilla servers)
+    #[command(alias = "plugins")]
     Plugin {
         #[command(subcommand)]
         action: Option<PluginCommands>,
+    },
+
+    /// Search and install mods (modded servers e.g. Fabric, Quilt, NeoForge)
+    #[command(alias = "mods")]
+    Mod {
+        #[command(subcommand)]
+        action: Option<ModCommands>,
+    },
+
+    /// Search and install datapacks (Minecraft Java worlds)
+    #[command(alias = "datapacks")]
+    Datapack {
+        #[command(subcommand)]
+        action: Option<DatapackCommands>,
     },
 
     /// Ping a server (Minecraft Java/Bedrock, Steam A2S, or auto-detect)
@@ -398,17 +413,90 @@ pub enum AutoCommands {
     Start,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum PluginCommands {
     /// Search for plugins across Modrinth, Hangar, and Poggit
     Search {
         query: String,
     },
-    /// Install a plugin from Modrinth by project ID
+    /// Install a plugin from Modrinth by project ID or slug
     Install {
         project_id: String,
         /// Server name or path
         server: String,
+    },
+    /// List installed plugins on a server
+    List {
+        /// Server name or path
+        server: String,
+    },
+    /// Remove an installed plugin from a server
+    Remove {
+        /// Server name or path
+        server: String,
+        /// Plugin jar filename
+        filename: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ModCommands {
+    /// Search for mods on Modrinth
+    Search {
+        query: String,
+    },
+    /// Install a mod from Modrinth to a modded server
+    Install {
+        project_id: String,
+        /// Server name or path
+        server: String,
+    },
+    /// List installed mods on a server
+    List {
+        /// Server name or path
+        server: String,
+    },
+    /// Remove an installed mod from a server
+    Remove {
+        /// Server name or path
+        server: String,
+        /// Mod jar filename
+        filename: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum DatapackCommands {
+    /// Search for datapacks on Modrinth
+    Search {
+        query: String,
+    },
+    /// Install a datapack from Modrinth to a Minecraft Java server world
+    Install {
+        project_id: String,
+        /// Server name or path
+        server: String,
+        /// Optional target world (defaults to server active level-name)
+        #[arg(long)]
+        world: Option<String>,
+    },
+    /// List installed datapacks on a server
+    List {
+        /// Server name or path
+        server: String,
+        /// Optional target world (defaults to server active level-name)
+        #[arg(long)]
+        world: Option<String>,
+    },
+    /// Remove an installed datapack from a server
+    Remove {
+        /// Server name or path
+        server: String,
+        /// Datapack filename (zip or directory)
+        filename: String,
+        /// Optional target world (defaults to server active level-name)
+        #[arg(long)]
+        world: Option<String>,
     },
 }
 
@@ -566,6 +654,40 @@ mod tests {
                 assert_eq!(remote.as_deref(), Some("saga"));
             }
             _ => panic!("Expected Manage command"),
+        }
+    }
+
+    #[test]
+    fn test_content_commands_parsing() {
+        // Plugin install
+        let cli_p = Cli::try_parse_from(["craft", "plugin", "install", "luckperms", "myserver"]).unwrap();
+        match cli_p.command {
+            Some(Commands::Plugin { action: Some(PluginCommands::Install { project_id, server }) }) => {
+                assert_eq!(project_id, "luckperms");
+                assert_eq!(server, "myserver");
+            }
+            _ => panic!("Expected Plugin Install command"),
+        }
+
+        // Mod install
+        let cli_m = Cli::try_parse_from(["craft", "mod", "install", "fabric-api", "mymodded"]).unwrap();
+        match cli_m.command {
+            Some(Commands::Mod { action: Some(ModCommands::Install { project_id, server }) }) => {
+                assert_eq!(project_id, "fabric-api");
+                assert_eq!(server, "mymodded");
+            }
+            _ => panic!("Expected Mod Install command"),
+        }
+
+        // Datapack install
+        let cli_d = Cli::try_parse_from(["craft", "datapack", "install", "terralith", "myserver", "--world", "custom_world"]).unwrap();
+        match cli_d.command {
+            Some(Commands::Datapack { action: Some(DatapackCommands::Install { project_id, server, world }) }) => {
+                assert_eq!(project_id, "terralith");
+                assert_eq!(server, "myserver");
+                assert_eq!(world.as_deref(), Some("custom_world"));
+            }
+            _ => panic!("Expected Datapack Install command"),
         }
     }
 }

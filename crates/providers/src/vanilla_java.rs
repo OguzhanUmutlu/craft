@@ -89,6 +89,18 @@ impl ServerSoftware for VanillaJavaProvider {
         ServerEdition::Java
     }
 
+    fn supports_plugins(&self) -> bool {
+        false
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        true
+    }
+
     fn description(&self) -> &'static str {
         "Official Mojang Java dedicated server"
     }

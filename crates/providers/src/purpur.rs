@@ -42,6 +42,18 @@ impl ServerSoftware for PurpurProvider {
         ServerEdition::Java
     }
 
+    fn supports_plugins(&self) -> bool {
+        true
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        true
+    }
+
     fn description(&self) -> &'static str {
         "Paper fork with extensive gameplay tweaks"
     }

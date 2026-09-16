@@ -35,6 +35,18 @@ impl ServerSoftware for TerrariaProvider {
         "terraria"
     }
 
+    fn supports_plugins(&self) -> bool {
+        true
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+
     fn default_ports(&self) -> (u16, Option<u16>) {
         (7777, None)
     }

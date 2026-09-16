@@ -31,6 +31,18 @@ impl ServerSoftware for WaterdogProvider {
         ServerEdition::Proxy
     }
 
+    fn supports_plugins(&self) -> bool {
+        true
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+
     fn description(&self) -> &'static str {
         "Native Bedrock network proxy"
     }

@@ -35,6 +35,18 @@ impl ServerSoftware for ValheimProvider {
         "valheim"
     }
 
+    fn supports_plugins(&self) -> bool {
+        false
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+
     fn default_ports(&self) -> (u16, Option<u16>) {
         (2456, Some(2457))
     }

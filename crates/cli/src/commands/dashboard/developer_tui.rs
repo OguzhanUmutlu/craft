@@ -264,6 +264,20 @@ async fn jdwp_setup_menu(server: &ServerConfig, paths: &CraftPaths) -> Result<()
 }
 
 async fn link_local_jar_menu(server: &ServerConfig) -> Result<()> {
+    let caps = craft_providers::get_content_capabilities(&server.software);
+    if !caps.plugins && !caps.mods {
+        show_modal_message(
+            "NOT SUPPORTED",
+            &[
+                format!("Server '{}' (software: {}) does not support plugins or mods.", server.name, server.software),
+                "".to_string(),
+                "Local JAR linking is only available for plugin or mod server platforms.".yellow().to_string(),
+            ],
+            true,
+        )?;
+        return Ok(());
+    }
+
     if let Some(path_str) = run_input_prompt(
         "LINK DEVELOPMENT JAR",
         "Enter path to your compiled plugin or mod JAR file:",
@@ -275,18 +289,24 @@ async fn link_local_jar_menu(server: &ServerConfig) -> Result<()> {
             return Ok(());
         }
 
-        let folder = match run_menu(
-            "Select Destination Folder in Server:",
-            &[
-                MenuEntry::new("1", "plugins/ (Standard for Paper, Spigot, Velocity)"),
-                MenuEntry::new("2", "mods/ (Fabric, Quilt, NeoForge)"),
-                MenuEntry::new("0", "Cancel"),
-            ],
-            &mut 0,
-        )? {
-            Some(0) => "plugins",
-            Some(1) => "mods",
-            _ => return Ok(()),
+        let folder = if caps.plugins && !caps.mods {
+            "plugins"
+        } else if caps.mods && !caps.plugins {
+            "mods"
+        } else {
+            match run_menu(
+                "Select Destination Folder in Server:",
+                &[
+                    MenuEntry::new("1", "plugins/ (Standard for Paper, Spigot, Velocity)"),
+                    MenuEntry::new("2", "mods/ (Fabric, Quilt, NeoForge)"),
+                    MenuEntry::new("0", "Cancel"),
+                ],
+                &mut 0,
+            )? {
+                Some(0) => "plugins",
+                Some(1) => "mods",
+                _ => return Ok(()),
+            }
         };
 
         let dest_dir = server.path.join(folder);

@@ -36,6 +36,18 @@ impl ServerSoftware for SpigotProvider {
         ServerEdition::Java
     }
 
+    fn supports_plugins(&self) -> bool {
+        true
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        true
+    }
+
     fn description(&self) -> &'static str {
         "Classic Bukkit / Spigot plugin server"
     }

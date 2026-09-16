@@ -26,6 +26,22 @@ pub trait ServerSoftware: Send + Sync {
     fn game_id(&self) -> &'static str {
         "minecraft"
     }
+    fn supports_plugins(&self) -> bool {
+        false
+    }
+    fn supports_mods(&self) -> bool {
+        false
+    }
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+    fn content_capabilities(&self) -> craft_core::ContentCapabilities {
+        craft_core::ContentCapabilities {
+            plugins: self.supports_plugins(),
+            mods: self.supports_mods(),
+            datapacks: self.supports_datapacks(),
+        }
+    }
     fn runtime_kind(&self) -> craft_core::RuntimeKind {
         match self.edition() {
             ServerEdition::Java | ServerEdition::Proxy => craft_core::RuntimeKind::Java {

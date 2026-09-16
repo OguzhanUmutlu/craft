@@ -35,6 +35,18 @@ impl ServerSoftware for FactorioProvider {
         "factorio"
     }
 
+    fn supports_plugins(&self) -> bool {
+        false
+    }
+
+    fn supports_mods(&self) -> bool {
+        true
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        false
+    }
+
     fn default_ports(&self) -> (u16, Option<u16>) {
         (34197, None)
     }

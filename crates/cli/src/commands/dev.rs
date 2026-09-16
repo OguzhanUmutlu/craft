@@ -50,7 +50,52 @@ pub async fn handle_dev(
                 }
             };
 
-            let folder_name = folder.as_deref().unwrap_or("plugins");
+            let target_server = registry
+                .servers
+                .iter()
+                .find(|s| s.path == server_path || s.name.eq_ignore_ascii_case(server_name))
+                .cloned();
+
+            let caps = target_server
+                .as_ref()
+                .map(|s| craft_providers::get_content_capabilities(&s.software))
+                .unwrap_or_default();
+
+            if !caps.plugins && !caps.mods {
+                return Err(CraftError::Other(format!(
+                    "Server '{}' does not support plugins or mods.",
+                    server_name
+                )));
+            }
+
+            let folder_name = match folder.as_deref() {
+                Some("mods") => {
+                    if !caps.mods {
+                        return Err(CraftError::Other(format!(
+                            "Server '{}' does not support mods. Mods only exist in modded server softwares.",
+                            server_name
+                        )));
+                    }
+                    "mods"
+                }
+                Some("plugins") => {
+                    if !caps.plugins {
+                        return Err(CraftError::Other(format!(
+                            "Server '{}' does not support plugins. Plugins only exist in non-vanilla server softwares.",
+                            server_name
+                        )));
+                    }
+                    "plugins"
+                }
+                Some(other) => other,
+                None => {
+                    if caps.mods && !caps.plugins {
+                        "mods"
+                    } else {
+                        "plugins"
+                    }
+                }
+            };
             let target_dir = server_path.join(folder_name);
             std::fs::create_dir_all(&target_dir)?;
 

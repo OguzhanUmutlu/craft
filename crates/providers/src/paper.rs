@@ -182,6 +182,18 @@ impl ServerSoftware for PaperProvider {
         self.edition
     }
 
+    fn supports_plugins(&self) -> bool {
+        true
+    }
+
+    fn supports_mods(&self) -> bool {
+        false
+    }
+
+    fn supports_datapacks(&self) -> bool {
+        self.edition == ServerEdition::Java
+    }
+
     fn description(&self) -> &'static str {
         match self.project {
             "paper" => "High-performance standard Java server (Rec.)",

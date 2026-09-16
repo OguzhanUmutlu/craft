@@ -894,9 +894,27 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
         entries.push(MenuEntry::new(wrd_hotkey, "Manage Worlds & Level Data").with_aliases(&["w", "worlds", "world"]));
         actions.push(ControlAction::ManageWorlds);
 
-        let cnt_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(cnt_hotkey, "Content (Plugins, Mods, Datapacks)").with_aliases(&["c", "content"]));
-        actions.push(ControlAction::ContentManagement);
+        let caps = craft_providers::get_content_capabilities(&server.software);
+        if caps.has_any() {
+            let cnt_label = if caps.plugins && caps.mods && caps.datapacks {
+                "Content (Plugins, Mods, Datapacks)"
+            } else if caps.plugins && caps.datapacks {
+                "Content (Plugins, Datapacks)"
+            } else if caps.mods && caps.datapacks {
+                "Content (Mods, Datapacks)"
+            } else if caps.plugins && !caps.datapacks {
+                "Content (Plugins)"
+            } else if caps.datapacks && !caps.plugins && !caps.mods {
+                "Content (Datapacks)"
+            } else if caps.mods && !caps.datapacks {
+                "Content (Mods)"
+            } else {
+                "Content Management"
+            };
+            let cnt_hotkey = (actions.len() + 1).to_string();
+            entries.push(MenuEntry::new(cnt_hotkey, cnt_label).with_aliases(&["c", "content"]));
+            actions.push(ControlAction::ContentManagement);
+        }
 
         let dev_hotkey = (actions.len() + 1).to_string();
         entries.push(MenuEntry::new(dev_hotkey, "Developer Tools").with_aliases(&["dev", "develop"]));
@@ -1070,6 +1088,27 @@ pub(crate) async fn server_content_menu(
     let _nav = NavGuard::enter("Content");
     let mut selected = 0;
 
+    let caps = craft_providers::get_content_capabilities(&server.software);
+    if !caps.has_any() {
+        show_modal_message(
+            "CONTENT MANAGEMENT NOT SUPPORTED",
+            &[
+                format!("Server '{}' (software: {}) does not support plugins, mods, or datapacks.", server.name, server.software),
+                "".to_string(),
+                "Dedicated server content packages are only available for compatible software engines.".yellow().to_string(),
+            ],
+            false,
+        )?;
+        return Ok(());
+    }
+
+    #[derive(Clone, Copy)]
+    enum ContentPanelKind {
+        Plugins,
+        Mods,
+        Datapacks,
+    }
+
     loop {
         let width = get_content_width(80);
         let header = format!(
@@ -1083,23 +1122,48 @@ pub(crate) async fn server_content_menu(
             box_divider(width).dimmed(),
         );
 
-        let entries = vec![
-            MenuEntry::new("1", "Plugins (Paper, Spigot, Purpur, Velocity, BungeeCord)").with_aliases(&["p", "plugin", "plugins"]),
-            MenuEntry::new("2", "Mods (Fabric, Forge, NeoForge, Quilt)").with_aliases(&["m", "mod", "mods"]),
-            MenuEntry::new("3", "Datapacks (World Datapacks)").with_aliases(&["d", "datapack", "datapacks"]),
-            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
-        ];
+        let mut entries = Vec::new();
+        let mut kinds = Vec::new();
+
+        if caps.plugins {
+            let plugins_dir = server.path.join("plugins");
+            let count = list_server_plugins(&plugins_dir).len();
+            let key = (entries.len() + 1).to_string();
+            entries.push(MenuEntry::new(key, format!("Plugins (Installed: {})", count)).with_aliases(&["p", "plugin", "plugins"]));
+            kinds.push(ContentPanelKind::Plugins);
+        }
+
+        if caps.mods {
+            let mods_dir = server.path.join("mods");
+            let count = list_server_mods(&mods_dir).len();
+            let key = (entries.len() + 1).to_string();
+            entries.push(MenuEntry::new(key, format!("Mods (Installed: {})", count)).with_aliases(&["m", "mod", "mods"]));
+            kinds.push(ContentPanelKind::Mods);
+        }
+
+        if caps.datapacks {
+            let default_world = craft_core::get_default_world(&server.path);
+            let datapacks_dir = server.path.join(&default_world).join("datapacks");
+            let count = list_server_datapacks(&datapacks_dir).len();
+            let key = (entries.len() + 1).to_string();
+            entries.push(MenuEntry::new(key, format!("Datapacks (Installed: {})", count)).with_aliases(&["d", "datapack", "datapacks"]));
+            kinds.push(ContentPanelKind::Datapacks);
+        }
+
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
 
         match run_menu(&header, &entries, &mut selected)? {
-            Some(0) => {
-                server_plugins_panel(&server.name, paths).await?;
-            }
-            Some(1) => {
-                server_mods_panel(&server.name, paths).await?;
-            }
-            Some(2) => {
-                server_datapacks_panel(&server.name, paths).await?;
-            }
+            Some(idx) if idx < kinds.len() => match kinds[idx] {
+                ContentPanelKind::Plugins => {
+                    server_plugins_panel(&server.name, paths).await?;
+                }
+                ContentPanelKind::Mods => {
+                    server_mods_panel(&server.name, paths).await?;
+                }
+                ContentPanelKind::Datapacks => {
+                    server_datapacks_panel(&server.name, paths).await?;
+                }
+            },
             _ => return Ok(()),
         }
     }
@@ -1900,6 +1964,24 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
             }
         };
 
+        let caps = craft_providers::get_content_capabilities(&server.software);
+        if !caps.plugins {
+            show_modal_message(
+                "PLUGINS NOT SUPPORTED",
+                &[
+                    format!("Server '{}' (software: {}) does not support plugins.", server.name, server.software),
+                    "".to_string(),
+                    if caps.mods {
+                        "This server is a modded server; use Mods instead.".yellow().to_string()
+                    } else {
+                        "Plugins only exist in non-vanilla server softwares (e.g. Paper, Purpur, Spigot).".yellow().to_string()
+                    },
+                ],
+                true,
+            )?;
+            return Ok(());
+        }
+
         let plugins_dir = server.path.join("plugins");
         let installed_plugins = list_server_plugins(&plugins_dir);
 
@@ -2195,6 +2277,20 @@ pub(crate) async fn server_mods_panel(server_name: &str, paths: &CraftPaths) -> 
                 return Ok(());
             }
         };
+
+        let caps = craft_providers::get_content_capabilities(&server.software);
+        if !caps.mods {
+            show_modal_message(
+                "MODS NOT SUPPORTED",
+                &[
+                    format!("Server '{}' (software: {}) does not support mods.", server.name, server.software),
+                    "".to_string(),
+                    "Mods only exist in modded server softwares (e.g. Fabric, Quilt, NeoForge).".yellow().to_string(),
+                ],
+                true,
+            )?;
+            return Ok(());
+        }
 
         let mods_dir = server.path.join("mods");
         let _ = std::fs::create_dir_all(&mods_dir);
@@ -2533,6 +2629,20 @@ pub(crate) async fn server_datapacks_panel(server_name: &str, paths: &CraftPaths
                 return Ok(());
             }
         };
+
+        let caps = craft_providers::get_content_capabilities(&server.software);
+        if !caps.datapacks {
+            show_modal_message(
+                "DATAPACKS NOT SUPPORTED",
+                &[
+                    format!("Server '{}' (software: {}) does not support datapacks.", server.name, server.software),
+                    "".to_string(),
+                    "Datapacks are only supported on Minecraft Java world servers.".yellow().to_string(),
+                ],
+                true,
+            )?;
+            return Ok(());
+        }
 
         let default_world = craft_core::get_default_world(&server.path);
         let datapacks_dir = server.path.join(&default_world).join("datapacks");

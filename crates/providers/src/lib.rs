@@ -89,6 +89,36 @@ pub fn find_software(id: &str) -> Option<Arc<dyn ServerSoftware>> {
     })
 }
 
+pub fn get_content_capabilities(software: &str) -> craft_core::ContentCapabilities {
+    if let Some(soft) = find_software(software) {
+        soft.content_capabilities()
+    } else {
+        let lower = software.to_lowercase();
+        if lower.contains("paper")
+            || lower.contains("purpur")
+            || lower.contains("spigot")
+            || lower.contains("folia")
+            || lower.contains("bukkit")
+        {
+            craft_core::ContentCapabilities::plugins_and_datapacks()
+        } else if lower.contains("fabric") || lower.contains("forge") || lower.contains("quilt") {
+            craft_core::ContentCapabilities::mods_and_datapacks()
+        } else if lower.contains("velocity")
+            || lower.contains("bungee")
+            || lower.contains("waterfall")
+            || lower.contains("pocketmine")
+            || lower.contains("nukkit")
+            || lower.contains("waterdog")
+        {
+            craft_core::ContentCapabilities::plugins_only()
+        } else if lower.contains("vanilla") {
+            craft_core::ContentCapabilities::datapacks_only()
+        } else {
+            craft_core::ContentCapabilities::none()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +188,72 @@ mod tests {
             assert!(!desc.is_empty(), "Software {} has empty description", soft.name());
             assert_ne!(desc, "Supported Minecraft Server Platform", "Software {} has generic placeholder", soft.name());
             assert!(desc.len() <= 48, "Software {} description is too long ({} chars): {}", soft.name(), desc.len(), desc);
+        }
+    }
+
+    #[test]
+    fn test_content_capabilities() {
+        // Paper, Purpur, Spigot, Folia: plugins=true, mods=false, datapacks=true
+        for id in &["paper", "purpur", "spigot", "folia"] {
+            let caps = get_content_capabilities(id);
+            assert!(caps.plugins, "{} should support plugins", id);
+            assert!(!caps.mods, "{} should NOT support mods", id);
+            assert!(caps.datapacks, "{} should support datapacks", id);
+        }
+
+        // Fabric, Quilt, NeoForge: plugins=false, mods=true, datapacks=true
+        for id in &["fabric", "quilt", "neoforge"] {
+            let caps = get_content_capabilities(id);
+            assert!(!caps.plugins, "{} should NOT support plugins", id);
+            assert!(caps.mods, "{} should support mods", id);
+            assert!(caps.datapacks, "{} should support datapacks", id);
+        }
+
+        // Vanilla Java: plugins=false, mods=false, datapacks=true
+        let v_java = get_content_capabilities("vanilla_java");
+        assert!(!v_java.plugins);
+        assert!(!v_java.mods);
+        assert!(v_java.datapacks);
+
+        // Vanilla Bedrock: plugins=false, mods=false, datapacks=false
+        let v_bedrock = get_content_capabilities("vanilla_bedrock");
+        assert!(!v_bedrock.plugins);
+        assert!(!v_bedrock.mods);
+        assert!(!v_bedrock.datapacks);
+
+        // Proxies (Velocity, BungeeCord, Waterfall): plugins=true, mods=false, datapacks=false
+        for id in &["velocity", "bungeecord", "waterfall"] {
+            let caps = get_content_capabilities(id);
+            assert!(caps.plugins, "{} should support plugins", id);
+            assert!(!caps.mods, "{} should NOT support mods", id);
+            assert!(!caps.datapacks, "{} should NOT support datapacks", id);
+        }
+
+        // Bedrock servers (PocketMine, Nukkit, Waterdog): plugins=true, mods=false, datapacks=false
+        for id in &["pocketmine", "nukkit", "waterdog"] {
+            let caps = get_content_capabilities(id);
+            assert!(caps.plugins, "{} should support plugins", id);
+            assert!(!caps.mods, "{} should NOT support mods", id);
+            assert!(!caps.datapacks, "{} should NOT support datapacks", id);
+        }
+
+        // Non-Minecraft games:
+        // Terraria (tshock): plugins=true, mods=false, datapacks=false
+        let terraria = get_content_capabilities("tshock");
+        assert!(terraria.plugins);
+        assert!(!terraria.mods);
+        assert!(!terraria.datapacks);
+
+        // Factorio: plugins=false, mods=true, datapacks=false
+        let factorio = get_content_capabilities("factorio");
+        assert!(!factorio.plugins);
+        assert!(factorio.mods);
+        assert!(!factorio.datapacks);
+
+        // Palworld, Valheim, Custom: none
+        for id in &["palserver", "valheim", "custom"] {
+            let caps = get_content_capabilities(id);
+            assert!(!caps.has_any(), "{} should have no content capabilities", id);
         }
     }
 }

@@ -498,13 +498,26 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                         if p_idx < results.len() {
                             let chosen_plugin = &results[p_idx];
                             let registry = ServersRegistry::load(paths)?;
-                            if registry.servers.is_empty() {
-                                show_empty_servers_modal(paths).await?;
+                            let compatible: Vec<_> = registry
+                                .servers
+                                .iter()
+                                .filter(|s| craft_providers::get_content_capabilities(&s.software).plugins)
+                                .collect();
+                            if compatible.is_empty() {
+                                show_modal_message(
+                                    "NO COMPATIBLE SERVERS",
+                                    &[
+                                        "No registered servers support plugins.".to_string(),
+                                        "".to_string(),
+                                        "Plugins only exist in non-vanilla server softwares (e.g. Paper, Purpur, Spigot).".yellow().to_string(),
+                                    ],
+                                    false,
+                                )?;
                                 continue;
                             }
 
                             let mut s_entries = Vec::new();
-                            for (si, s) in registry.servers.iter().enumerate() {
+                            for (si, s) in compatible.iter().enumerate() {
                                 let hotkey = if si < 9 {
                                     (si + 1).to_string()
                                 } else {
@@ -520,8 +533,8 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             );
                             let mut s_sel = 0;
                             if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
-                                if s_idx < registry.servers.len() {
-                                    let server = &registry.servers[s_idx];
+                                if s_idx < compatible.len() {
+                                    let server = compatible[s_idx];
                                     print_in_place_status(
                                         "INSTALLING PLUGIN",
                                         &[format!(
@@ -570,13 +583,26 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
             }
             Some(1) => {
                 let registry = ServersRegistry::load(paths)?;
-                if registry.servers.is_empty() {
-                    show_empty_servers_modal(paths).await?;
+                let compatible: Vec<_> = registry
+                    .servers
+                    .iter()
+                    .filter(|s| craft_providers::get_content_capabilities(&s.software).plugins)
+                    .collect();
+                if compatible.is_empty() {
+                    show_modal_message(
+                        "NO COMPATIBLE SERVERS",
+                        &[
+                            "No registered servers support plugins.".to_string(),
+                            "".to_string(),
+                            "Plugins only exist in non-vanilla server softwares (e.g. Paper, Purpur, Spigot).".yellow().to_string(),
+                        ],
+                        false,
+                    )?;
                     continue;
                 }
 
                 let mut s_entries = Vec::new();
-                for (si, s) in registry.servers.iter().enumerate() {
+                for (si, s) in compatible.iter().enumerate() {
                     let hotkey = if si < 9 {
                         (si + 1).to_string()
                     } else {
@@ -589,8 +615,8 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                 let s_header = " Select server to install plugin:";
                 let mut s_sel = 0;
                 if let Some(s_idx) = run_menu(s_header, &s_entries, &mut s_sel)? {
-                    if s_idx < registry.servers.len() {
-                        let server = &registry.servers[s_idx];
+                    if s_idx < compatible.len() {
+                        let server = compatible[s_idx];
                         let project_id = match run_input_prompt(
                             "PLUGIN ID",
                             "Enter Modrinth plugin slug or ID (e.g. luckperms, spark):",
@@ -686,13 +712,26 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             let chosen = &results[p_idx];
 
                             let registry = ServersRegistry::load(paths)?;
-                            if registry.servers.is_empty() {
-                                show_empty_servers_modal(paths).await?;
+                            let compatible: Vec<_> = registry
+                                .servers
+                                .iter()
+                                .filter(|s| craft_providers::get_content_capabilities(&s.software).mods)
+                                .collect();
+                            if compatible.is_empty() {
+                                show_modal_message(
+                                    "NO COMPATIBLE SERVERS",
+                                    &[
+                                        "No registered servers support mods.".to_string(),
+                                        "".to_string(),
+                                        "Mods only exist in modded server softwares (e.g. Fabric, Quilt, NeoForge).".yellow().to_string(),
+                                    ],
+                                    false,
+                                )?;
                                 continue;
                             }
 
                             let mut s_entries = Vec::new();
-                            for (si, s) in registry.servers.iter().enumerate() {
+                            for (si, s) in compatible.iter().enumerate() {
                                 let hotkey = if si < 9 {
                                     (si + 1).to_string()
                                 } else {
@@ -708,8 +747,8 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             );
                             let mut s_sel = 0;
                             if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
-                                if s_idx < registry.servers.len() {
-                                    let server = &registry.servers[s_idx];
+                                if s_idx < compatible.len() {
+                                    let server = compatible[s_idx];
                                     print_in_place_status(
                                         "INSTALLING MOD",
                                         &[format!(
@@ -805,13 +844,26 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             let chosen = &results[p_idx];
 
                             let registry = ServersRegistry::load(paths)?;
-                            if registry.servers.is_empty() {
-                                show_empty_servers_modal(paths).await?;
+                            let compatible: Vec<_> = registry
+                                .servers
+                                .iter()
+                                .filter(|s| craft_providers::get_content_capabilities(&s.software).datapacks)
+                                .collect();
+                            if compatible.is_empty() {
+                                show_modal_message(
+                                    "NO COMPATIBLE SERVERS",
+                                    &[
+                                        "No registered servers support datapacks.".to_string(),
+                                        "".to_string(),
+                                        "Datapacks are only supported on Minecraft Java world servers.".yellow().to_string(),
+                                    ],
+                                    false,
+                                )?;
                                 continue;
                             }
 
                             let mut s_entries = Vec::new();
-                            for (si, s) in registry.servers.iter().enumerate() {
+                            for (si, s) in compatible.iter().enumerate() {
                                 let hotkey = if si < 9 {
                                     (si + 1).to_string()
                                 } else {
@@ -827,8 +879,8 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             );
                             let mut s_sel = 0;
                             if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
-                                if s_idx < registry.servers.len() {
-                                    let server = &registry.servers[s_idx];
+                                if s_idx < compatible.len() {
+                                    let server = compatible[s_idx];
                                     let default_world = craft_core::get_default_world(&server.path);
                                     print_in_place_status(
                                         "INSTALLING DATAPACK",

@@ -26,6 +26,8 @@ use commands::{
     net::{handle_firewall, handle_loopback, handle_ping, handle_rcon},
     new::handle_new,
     plugin::handle_plugin,
+    mod_cmd::handle_mod,
+    datapack::handle_datapack,
     prop::handle_prop,
     remote::{execute_remote, handle_remote},
     restart::handle_restart,
@@ -275,6 +277,26 @@ async fn main() {
                 plugins_menu(&paths).await
             } else {
                 eprintln!("{}: Specify a plugin action or run interactively in a TTY.", "Error".red().bold());
+                Ok(())
+            }
+        }
+        Some(Commands::Mod { action }) => {
+            if let Some(act) = action {
+                handle_mod(act, &paths).await
+            } else if std::io::stdin().is_terminal() {
+                plugins_menu(&paths).await
+            } else {
+                eprintln!("{}: Specify a mod action or run interactively in a TTY.", "Error".red().bold());
+                Ok(())
+            }
+        }
+        Some(Commands::Datapack { action }) => {
+            if let Some(act) = action {
+                handle_datapack(act, &paths).await
+            } else if std::io::stdin().is_terminal() {
+                plugins_menu(&paths).await
+            } else {
+                eprintln!("{}: Specify a datapack action or run interactively in a TTY.", "Error".red().bold());
                 Ok(())
             }
         }

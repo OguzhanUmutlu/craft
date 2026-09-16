@@ -24,4 +24,6 @@ pub mod prop;
 pub mod world;
 pub mod dev;
 pub mod trash;
+pub mod mod_cmd;
+pub mod datapack;
 
