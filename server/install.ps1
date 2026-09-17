@@ -16,8 +16,24 @@ if (!(Test-Path -Path $InstallDir)) {
 $ExePath = Join-Path $InstallDir "craft.exe"
 $DownloadUrl = "$BaseUrl/api/v1/download/craft-windows-amd64.exe"
 
-Write-Host "==> Downloading Craft to $ExePath..." -ForegroundColor Yellow
-Invoke-WebRequest -Uri $DownloadUrl -OutFile $ExePath -UseBasicParsing
+$ZipPath = Join-Path $InstallDir "craft.zip"
+$ZipUrl = "$DownloadUrl.zip"
+$Installed = $false
+
+try {
+    Write-Host "==> Fetching compressed package (saves ~60% bandwidth)..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -UseBasicParsing
+    Expand-Archive -Path $ZipPath -DestinationPath $InstallDir -Force
+    Remove-Item $ZipPath -Force
+    $Installed = $true
+} catch {
+    # Fallback to direct exe download
+}
+
+if (-not $Installed) {
+    Write-Host "==> Downloading Craft to $ExePath..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $ExePath -UseBasicParsing
+}
 
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$InstallDir*") {

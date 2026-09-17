@@ -28,8 +28,24 @@ if ($env:CRAFT_DOWNLOAD_URL) {
     $DownloadUrl = "https://github.com/$GithubRepo/releases/latest/download/craft-windows-amd64.exe"
 }
 
-Write-Host "==> Downloading Craft from $DownloadUrl..." -ForegroundColor Yellow
-Invoke-WebRequest -Uri $DownloadUrl -OutFile $ExePath -UseBasicParsing
+$ZipPath = Join-Path $InstallDir "craft.zip"
+$ZipUrl = "$DownloadUrl.zip"
+$Installed = $false
+
+try {
+    Write-Host "==> Fetching compressed package (saves ~60% bandwidth)..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath -UseBasicParsing
+    Expand-Archive -Path $ZipPath -DestinationPath $InstallDir -Force
+    Remove-Item $ZipPath -Force
+    $Installed = $true
+} catch {
+    # Fallback to uncompressed binary if .zip unavailable
+}
+
+if (-not $Installed) {
+    Write-Host "==> Downloading Craft executable from $DownloadUrl..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $ExePath -UseBasicParsing
+}
 
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$InstallDir*") {

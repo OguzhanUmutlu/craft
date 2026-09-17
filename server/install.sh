@@ -55,20 +55,60 @@ esac
 TARGET_NAME="craft-${OS_TYPE}-${ARCH_TYPE}"
 DOWNLOAD_URL="${BASE_URL}/api/v1/download/${TARGET_NAME}"
 
+# Determine best compression format based on local utilities
+COMPRESSION="raw"
+if command -v zstd &> /dev/null; then
+  COMPRESSION="zst"
+elif command -v gzip &> /dev/null; then
+  COMPRESSION="gz"
+fi
+
 echo -e "${BLUE}==> Detected system:${NC} ${OS_TYPE} (${ARCH_TYPE})"
-echo -e "${BLUE}==> Fetching Craft executable...${NC}"
 
 TMP_DIR="$(mktemp -d)"
 TMP_FILE="${TMP_DIR}/craft"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-if command -v curl &>/dev/null; then
-  curl -fsSL --progress-bar "$DOWNLOAD_URL" -o "$TMP_FILE"
-elif command -v wget &>/dev/null; then
-  wget -q --show-progress "$DOWNLOAD_URL" -O "$TMP_FILE"
-else
-  echo -e "${RED}Error: neither 'curl' nor 'wget' is available.${NC}"
-  exit 1
+fetch_file() {
+  local url="$1"
+  local dest="$2"
+  if command -v curl &>/dev/null; then
+    curl -fsSL "$url" -o "$dest"
+  elif command -v wget &>/dev/null; then
+    wget -qO "$dest" "$url"
+  else
+    echo -e "${RED}Error: neither 'curl' nor 'wget' is available.${NC}"
+    exit 1
+  fi
+}
+
+INSTALLED=false
+
+if [ "$COMPRESSION" = "zst" ]; then
+  echo -e "${BLUE}==> Fetching compressed package (${CYAN}zstd${BLUE}, ~4.9 MB, saves 68% bandwidth)...${NC}"
+  TMP_ZST="${TMP_DIR}/craft.zst"
+  if fetch_file "${DOWNLOAD_URL}.zst" "${TMP_ZST}"; then
+    if zstd -d -q -f "${TMP_ZST}" -o "${TMP_FILE}" 2>/dev/null; then
+      INSTALLED=true
+    fi
+  fi
+fi
+
+if [ "$INSTALLED" = false ] && { [ "$COMPRESSION" = "gz" ] || [ "$COMPRESSION" = "zst" ]; }; then
+  if command -v gzip &> /dev/null; then
+    echo -e "${BLUE}==> Fetching compressed package (${CYAN}gzip${BLUE}, ~6.0 MB, saves 60% bandwidth)...${NC}"
+    TMP_GZ="${TMP_DIR}/craft.gz"
+    if fetch_file "${DOWNLOAD_URL}.gz" "${TMP_GZ}"; then
+      if gzip -d -c "${TMP_GZ}" > "${TMP_FILE}" 2>/dev/null; then
+        INSTALLED=true
+      fi
+    fi
+  fi
+fi
+
+if [ "$INSTALLED" = false ]; then
+  echo -e "${BLUE}==> Fetching Craft executable...${NC}"
+  fetch_file "$DOWNLOAD_URL" "$TMP_FILE"
 fi
 
 chmod +x "$TMP_FILE"

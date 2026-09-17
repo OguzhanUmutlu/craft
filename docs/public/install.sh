@@ -55,8 +55,17 @@ esac
 
 TARGET_NAME="craft-${OS_TYPE}-${ARCH_TYPE}"
 
+# Determine best compression format based on local utilities
+COMPRESSION="raw"
+if command -v zstd &> /dev/null; then
+  COMPRESSION="zst"
+elif command -v gzip &> /dev/null; then
+  COMPRESSION="gz"
+fi
+
 if [ -n "${CRAFT_DOWNLOAD_URL:-}" ]; then
   DOWNLOAD_URL="${CRAFT_DOWNLOAD_URL}"
+  COMPRESSION="raw"
 elif [ -n "${CRAFT_VERSION:-}" ]; then
   # Strip leading 'v' if user typed CRAFT_VERSION=v0.1.0
   CLEAN_VERSION="${CRAFT_VERSION#v}"
@@ -69,7 +78,6 @@ else
 fi
 
 echo -e "${BLUE}==> Detected system:${NC} ${OS_TYPE} (${ARCH_TYPE})"
-echo -e "${BLUE}==> Fetching Craft executable from:${NC} ${DOWNLOAD_URL}"
 
 # Determine installation directory
 if [ -w "/usr/local/bin" ] && [ "${EUID:-$(id -u)}" -eq 0 ]; then
@@ -82,13 +90,50 @@ fi
 DEST_FILE="${INSTALL_DIR}/craft"
 TMP_FILE="$(mktemp "${TMPDIR:-/tmp}/craft.XXXXXX")"
 
-if command -v curl &> /dev/null; then
-  curl -fsSL "${DOWNLOAD_URL}" -o "${TMP_FILE}"
-elif command -v wget &> /dev/null; then
-  wget -qO "${TMP_FILE}" "${DOWNLOAD_URL}"
-else
-  echo -e "${RED}Error: Neither curl nor wget was found on your system.${NC}"
-  exit 1
+fetch_file() {
+  local url="$1"
+  local dest="$2"
+  if command -v curl &> /dev/null; then
+    curl -fsSL "$url" -o "$dest"
+  elif command -v wget &> /dev/null; then
+    wget -qO "$dest" "$url"
+  else
+    echo -e "${RED}Error: Neither curl nor wget was found on your system.${NC}"
+    exit 1
+  fi
+}
+
+INSTALLED=false
+
+if [ "$COMPRESSION" = "zst" ]; then
+  echo -e "${BLUE}==> Downloading compressed package (${CYAN}zstd${BLUE}, ~4.9 MB, saves 68% bandwidth)...${NC}"
+  TMP_ZST="${TMP_FILE}.zst"
+  if fetch_file "${DOWNLOAD_URL}.zst" "${TMP_ZST}"; then
+    if zstd -d -q -f "${TMP_ZST}" -o "${TMP_FILE}" 2>/dev/null; then
+      rm -f "${TMP_ZST}"
+      INSTALLED=true
+    fi
+  fi
+  rm -f "${TMP_ZST}" 2>/dev/null || true
+fi
+
+if [ "$INSTALLED" = false ] && { [ "$COMPRESSION" = "gz" ] || [ "$COMPRESSION" = "zst" ]; }; then
+  if command -v gzip &> /dev/null; then
+    echo -e "${BLUE}==> Downloading compressed package (${CYAN}gzip${BLUE}, ~6.0 MB, saves 60% bandwidth)...${NC}"
+    TMP_GZ="${TMP_FILE}.gz"
+    if fetch_file "${DOWNLOAD_URL}.gz" "${TMP_GZ}"; then
+      if gzip -d -c "${TMP_GZ}" > "${TMP_FILE}" 2>/dev/null; then
+        rm -f "${TMP_GZ}"
+        INSTALLED=true
+      fi
+    fi
+    rm -f "${TMP_GZ}" 2>/dev/null || true
+  fi
+fi
+
+if [ "$INSTALLED" = false ]; then
+  echo -e "${BLUE}==> Fetching Craft executable from:${NC} ${DOWNLOAD_URL}"
+  fetch_file "${DOWNLOAD_URL}" "${TMP_FILE}"
 fi
 
 chmod +x "${TMP_FILE}"

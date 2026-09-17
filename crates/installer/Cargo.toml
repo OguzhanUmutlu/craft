@@ -1,0 +1,19 @@
+[package]
+name = "craft-installer"
+version = "0.1.0"
+edition = "2021"
+authors = ["OguzhanUmutlu"]
+license = "MIT"
+description = "Lightweight, beautifully designed native installer for Craft with tucked-in zstd decompression."
+
+[[bin]]
+name = "craft-installer"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true }
+colored = { workspace = true }
+zstd = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+directories = { workspace = true }

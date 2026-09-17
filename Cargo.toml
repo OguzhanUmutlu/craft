@@ -10,6 +10,7 @@ members = [
     "crates/scripting",
     "tools/modalx",
     "crates/cli",
+    "crates/installer",
 ]
 default-members = ["crates/cli"]
 resolver = "2"
