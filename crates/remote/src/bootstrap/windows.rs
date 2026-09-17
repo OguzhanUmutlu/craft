@@ -1,18 +1,17 @@
-use colored::Colorize;
 use craft_core::Result;
 use crate::session::RemoteSession;
 
-pub fn bootstrap_windows(session: &RemoteSession) -> Result<()> {
-    println!("{}", "=== Bootstrapping Windows Remote Host ===".cyan().bold());
+pub fn bootstrap_windows(session: &RemoteSession, progress: &mut dyn FnMut(&str)) -> Result<()> {
+    progress("Bootstrapping Windows Remote Host...");
 
     // 1. Probe Windows Version
     let os_check = session.exec("powershell -Command \"[System.Environment]::OSVersion.VersionString\"");
     if let Ok((0, stdout, _)) = os_check {
-        println!("Remote Windows Version: {}", stdout.trim());
+        progress(&format!("Remote Windows Version: {}", stdout.trim()));
     }
 
     // 2. Check Java 21+
-    println!("{}", "Checking remote Java installation...".cyan());
+    progress("Checking remote Java installation...");
     let java_check = session.exec("java -version");
     let needs_java = match java_check {
         Ok((0, stdout, stderr)) => {
@@ -23,29 +22,30 @@ pub fn bootstrap_windows(session: &RemoteSession) -> Result<()> {
     };
 
     if needs_java {
-        println!("{}", "Installing Microsoft OpenJDK 21 via winget...".yellow());
+        progress("Installing Microsoft OpenJDK 21 via winget...");
         let winget_cmd = "powershell -Command \"winget install Microsoft.OpenJDK.21 --silent --accept-package-agreements --accept-source-agreements\"";
         let _ = session.exec(winget_cmd);
     } else {
-        println!("{}", "[OK] Compatible Java 21+ already present on remote Windows host.".green());
+        progress("[OK] Compatible Java 21+ already present on remote Windows host.");
     }
 
     // 3. Create Craft directories
+    progress("Creating Craft remote directories...");
     let mkdir_cmd = "powershell -Command \"New-Item -ItemType Directory -Force -Path $env:USERPROFILE\\craft\\servers, $env:USERPROFILE\\craft\\download_cache, $env:USERPROFILE\\craft\\backups\"";
     let _ = session.exec(mkdir_cmd);
 
     // 4. Enable Bedrock loopback exemption
-    println!("{}", "Enabling Windows Bedrock UWP loopback exemption...".cyan());
+    progress("Enabling Windows Bedrock UWP loopback exemption...");
     let loopback_cmd = "powershell -Command \"CheckNetIsolation LoopbackExempt -a -n='Microsoft.MinecraftUWP_8wekyb3d8bbwe'\"";
     let _ = session.exec(loopback_cmd);
 
     // 5. Configure Windows Defender Firewall rules for Minecraft
-    println!("{}", "Configuring Windows Defender Firewall for Minecraft ports...".cyan());
+    progress("Configuring Windows Defender Firewall for Minecraft ports...");
     let firewall_tcp = "netsh advfirewall firewall add rule name=\"Craft_Minecraft_Java\" dir=in action=allow protocol=TCP localport=25565";
     let firewall_udp = "netsh advfirewall firewall add rule name=\"Craft_Minecraft_Bedrock\" dir=in action=allow protocol=UDP localport=19132";
     let _ = session.exec(firewall_tcp);
     let _ = session.exec(firewall_udp);
 
-    println!("{}", "[OK] Windows host bootstrapped successfully!".green().bold());
+    progress("[OK] Windows host bootstrapped successfully!");
     Ok(())
 }

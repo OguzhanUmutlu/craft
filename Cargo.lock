@@ -1241,6 +1241,7 @@ dependencies = [
  "colored",
  "crossterm",
  "thiserror 2.0.20",
+ "unicode-width",
 ]
 
 [[package]]

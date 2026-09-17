@@ -197,7 +197,7 @@ async fn category_properties_menu(
                 format!("[{}]", v).yellow().to_string()
             };
 
-            let desc = craft_core::truncate_ellipsis(ServerProperties::property_description(k), 38);
+            let desc = ServerProperties::property_description(k);
             entries.push(MenuEntry::new(
                 hotkey,
                 format!("{:<28} {:<10} - {}", k, val_display, desc.dimmed()),
@@ -284,7 +284,7 @@ async fn category_properties_menu(
                     let desc = ServerProperties::property_description(&key_str);
                     if let Some(new_val) = run_input_prompt(
                         &format!("EDIT {}", key_str.to_uppercase()),
-                        &format!("{}:", desc),
+                        desc,
                         Some(&val_str),
                     )? {
                         props.set(&key_str, new_val.trim());
@@ -357,7 +357,11 @@ async fn search_properties_menu(props_path: &Path, server_name: &str, query: &st
             } else {
                 format!("[{}]", v).yellow().to_string()
             };
-            entries.push(MenuEntry::new(hotkey, format!("{:<25} {}", k, val_display)));
+            let desc = ServerProperties::property_description(k);
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<25} {:<10} - {}", k, val_display, desc.dimmed()),
+            ));
         }
         entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
 
@@ -375,7 +379,7 @@ async fn search_properties_menu(props_path: &Path, server_name: &str, query: &st
                     let desc = ServerProperties::property_description(&key_str);
                     if let Some(new_val) = run_input_prompt(
                         &format!("EDIT {}", key_str.to_uppercase()),
-                        &format!("{}:", desc),
+                        desc,
                         Some(&val_str),
                     )? {
                         props.set(&key_str, new_val.trim());

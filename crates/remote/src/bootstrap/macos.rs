@@ -1,15 +1,15 @@
-use colored::Colorize;
 use craft_core::Result;
 use crate::session::RemoteSession;
 
-pub fn bootstrap_macos(session: &RemoteSession) -> Result<()> {
-    println!("{}", "=== Bootstrapping macOS Remote Host ===".cyan().bold());
+pub fn bootstrap_macos(session: &RemoteSession, progress: &mut dyn FnMut(&str)) -> Result<()> {
+    progress("Bootstrapping macOS Remote Host...");
 
     let sw_vers = session.exec_checked("sw_vers")?;
-    println!("Remote macOS info:\n{}", sw_vers.dimmed());
+    let sw_first = sw_vers.lines().next().unwrap_or("macOS");
+    progress(&format!("Remote macOS: {}", sw_first));
 
     // 1. Check Java 21+
-    println!("{}", "Checking remote Java installation...".cyan());
+    progress("Checking remote Java installation...");
     let java_check = session.exec("java -version");
     let needs_java = match java_check {
         Ok((0, stdout, stderr)) => {
@@ -20,22 +20,24 @@ pub fn bootstrap_macos(session: &RemoteSession) -> Result<()> {
     };
 
     if needs_java {
-        println!("{}", "Installing OpenJDK 21 on remote macOS host...".yellow());
+        progress("Installing OpenJDK 21 on remote macOS host...");
         if session.exec("which brew").map(|(c, ..)| c == 0).unwrap_or(false) {
+            progress("Installing OpenJDK 21 via Homebrew...");
             let _ = session.exec("brew install openjdk@21");
             let _ = session.exec("sudo ln -sfn /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-21.jdk 2>/dev/null || true");
         } else {
-            println!("{}", "Homebrew not found. Please install Java 21+ on the remote macOS machine.".yellow());
+            progress("Warning: Homebrew not found. Please install Java 21+ on remote macOS.");
         }
     } else {
-        println!("{}", "[OK] Compatible Java 21+ already present on remote host.".green());
+        progress("[OK] Compatible Java 21+ already present on remote host.");
     }
 
     // 2. Create Craft directories
+    progress("Creating Craft remote directories...");
     session.exec_checked("mkdir -p ~/Library/craft/servers ~/Library/craft/download_cache ~/Library/craft/backups ~/bin ~/Library/LaunchAgents")?;
 
     // 3. Configure LaunchAgent plist for background daemon
-    println!("{}", "Configuring LaunchAgent for Craft daemon...".cyan());
+    progress("Configuring LaunchAgent for Craft daemon...");
     let plist_content = r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -60,6 +62,6 @@ pub fn bootstrap_macos(session: &RemoteSession) -> Result<()> {
     );
     session.exec_checked(&write_cmd)?;
 
-    println!("{}", "[OK] macOS host bootstrapped successfully!".green().bold());
+    progress("[OK] macOS host bootstrapped successfully!");
     Ok(())
 }

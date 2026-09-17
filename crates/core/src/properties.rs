@@ -28,13 +28,13 @@ impl PropertyCategory {
 
     pub fn icon(&self) -> &'static str {
         match self {
-            PropertyCategory::Network => "🌐",
-            PropertyCategory::Gameplay => "⚔️",
-            PropertyCategory::World => "🌍",
-            PropertyCategory::Security => "🛡️",
-            PropertyCategory::Performance => "🚀",
-            PropertyCategory::Rcon => "📡",
-            PropertyCategory::General => "⚙️",
+            PropertyCategory::Network => "[NET]",
+            PropertyCategory::Gameplay => "[GAME]",
+            PropertyCategory::World => "[WORLD]",
+            PropertyCategory::Security => "[SEC]",
+            PropertyCategory::Performance => "[PERF]",
+            PropertyCategory::Rcon => "[RCON]",
+            PropertyCategory::General => "[GEN]",
         }
     }
 
@@ -216,24 +216,29 @@ impl ServerProperties {
         match lower.as_str() {
             "server-port" | "server-portv6" | "server-ip" | "online-mode" | "prevent-proxy-connections"
             | "use-native-transport" | "network-compression-threshold" | "compression-threshold"
-            | "rate-limit" => PropertyCategory::Network,
+            | "rate-limit" | "enable-status" | "accepts-transfers" => PropertyCategory::Network,
 
             "gamemode" | "force-gamemode" | "difficulty" | "hardcore" | "pvp" | "allow-flight"
             | "allow-cheats" | "spawn-monsters" | "spawn-animals" | "spawn-npcs" | "allow-nether"
             | "spawn-protection" | "player-idle-timeout" | "default-player-permission-level"
-            | "server-authoritative-movement" | "player-movement-score-threshold" => {
-                PropertyCategory::Gameplay
-            }
+            | "function-permission-level" | "op-permission-level" | "enable-command-block"
+            | "announce-player-achievements" | "server-authoritative-movement"
+            | "player-movement-score-threshold" => PropertyCategory::Gameplay,
 
             "level-name" | "level-seed" | "level-type" | "generate-structures" | "generator-settings"
-            | "max-world-size" | "texturepack-required" | "resource-pack" | "resource-pack-sha1"
-            | "require-resource-pack" | "resource-pack-prompt" => PropertyCategory::World,
+            | "max-world-size" | "max-build-height" | "texturepack-required" | "resource-pack"
+            | "resource-pack-sha1" | "resource-pack-id" | "require-resource-pack"
+            | "resource-pack-prompt" | "initial-enabled-packs" | "initial-disabled-packs" => {
+                PropertyCategory::World
+            }
 
-            "white-list" | "enforce-whitelist" | "enforce-secure-profile" | "hide-online-players"
-            | "max-players" | "motd" | "server-name" => PropertyCategory::Security,
+            "white-list" | "enforce-whitelist" | "enforce-secure-profile" | "previews-chat"
+            | "hide-online-players" | "max-players" | "motd" | "server-name" | "log-ips"
+            | "text-filtering-config" => PropertyCategory::Security,
 
             "view-distance" | "simulation-distance" | "tick-distance" | "max-tick-time"
             | "entity-broadcast-range-percentage" | "sync-chunk-writes" | "max-threads"
+            | "enable-jmx-monitoring" | "pause-when-empty-seconds" | "region-file-compression"
             | "content-log-console-output-enabled" => PropertyCategory::Performance,
 
             "enable-rcon" | "rcon.port" | "rcon.password" | "enable-query" | "query.port"
@@ -245,28 +250,97 @@ impl ServerProperties {
 
     pub fn property_description(key: &str) -> &'static str {
         match key.to_lowercase().as_str() {
+            // Network & Ports
             "server-port" => "Port the server listens on for player traffic (default 25565)",
-            "server-ip" => "IP address the server binds to (leave blank to bind all)",
-            "online-mode" => "Verifies player accounts against Mojang/Xbox auth servers",
-            "gamemode" => "Default game mode (survival, creative, adventure, spectator)",
-            "difficulty" => "Game difficulty (peaceful, easy, normal, hard)",
-            "hardcore" => "Permanent death mode (players are banned/spectators on death)",
-            "pvp" => "Enables or disables player versus player combat",
-            "allow-flight" => "Permits survival players to fly without getting kicked",
+            "server-portv6" => "IPv6 port the server listens on for player traffic (default 19133)",
+            "server-ip" => "IP address the server binds to (leave blank to bind all network interfaces)",
+            "online-mode" => "Verifies player accounts against Mojang/Xbox auth servers (prevents cracked clients)",
+            "prevent-proxy-connections" => "Rejects connections from players using VPNs or proxy services",
+            "use-native-transport" => "Optimizes Linux packet handling using native epoll transport",
+            "network-compression-threshold" => "Minimum packet payload size in bytes before compression kicks in",
+            "compression-threshold" => "Minimum packet size threshold before compression is applied",
+            "rate-limit" => "Maximum packet count per second allowed from a client before disconnect (0 disables)",
+            "enable-status" => "Enables server appearing as online in multiplayer server list",
+            "accepts-transfers" => "Allows connecting clients to be transferred to other servers via packet",
+
+            // Gameplay & Difficulty
+            "gamemode" => "Default game mode for newly joined players (survival, creative, adventure, spectator)",
+            "force-gamemode" => "Forces players to rejoin in default game mode instead of saved mode",
+            "difficulty" => "World difficulty level (peaceful, easy, normal, hard)",
+            "hardcore" => "Permanent death mode (players become spectators upon dying)",
+            "pvp" => "Enables or disables player versus player combat and damage",
+            "allow-flight" => "Permits survival players to fly without getting kicked by anti-cheat",
+            "allow-cheats" => "Enables cheat commands like /gamemode, /give, and /tp for players",
+            "spawn-monsters" => "Controls natural spawning of hostile monsters (zombies, skeletons, creepers)",
+            "spawn-animals" => "Controls natural spawning of passive animals (cows, pigs, sheep, chickens)",
+            "spawn-npcs" => "Controls natural spawning of non-player characters like villagers",
             "allow-nether" => "Enables Nether dimension portal transitions",
+            "spawn-protection" => "Radius in blocks around world spawn protected from non-operator editing",
+            "player-idle-timeout" => "Minutes of inactivity before an idle player is kicked (0 disables)",
+            "default-player-permission-level" => "Default permission tier assigned to newly joined players",
+            "op-permission-level" => "Default operator tier (1-4: bypass spawn, commands, op commands, server stop)",
+            "function-permission-level" => "Default permission level required to execute server functions",
+            "enable-command-block" => "Allows execution of commands via in-game command blocks",
+            "announce-player-achievements" => "Broadcasts player achievement and advancement notifications in chat",
+            "server-authoritative-movement" => "Server-side authority mode for player movement and anti-cheat validation",
+            "player-movement-score-threshold" => "Sensitivity threshold before flagging suspicious player movement",
+
+            // World & Generation
+            "level-name" => "Directory name on disk containing the active world save data",
+            "level-seed" => "World generation RNG seed string or integer",
+            "level-type" => "World preset type (default, flat, largebiomes, amplified, single_biome_surface)",
+            "generate-structures" => "Generates natural structures such as villages, temples, and dungeons",
+            "generator-settings" => "JSON or string parameters customizing world generation presets",
+            "max-world-size" => "Maximum radius of the world border measured in blocks from spawn",
+            "max-build-height" => "Maximum vertical height building limit in blocks (default 256)",
+            "texturepack-required" => "Forces connecting players to accept the server resource pack",
+            "resource-pack" => "Direct HTTP/HTTPS URL to download server-mandated resource pack",
+            "resource-pack-sha1" => "SHA-1 cryptographic hash verifying resource pack integrity",
+            "resource-pack-id" => "Unique UUID identifying the required server resource pack",
+            "require-resource-pack" => "Disconnects clients that decline downloading the resource pack",
+            "resource-pack-prompt" => "Custom prompt message displayed when offering resource pack",
+            "initial-enabled-packs" => "Comma-separated list of datapacks enabled on initial world creation",
+            "initial-disabled-packs" => "Comma-separated list of datapacks disabled on initial world creation",
+
+            // Security & Access
             "white-list" => "Enforces whitelist restriction for joining players",
             "enforce-whitelist" => "Kicks connected players immediately when removed from whitelist",
-            "max-players" => "Maximum concurrent player capacity",
-            "view-distance" => "Radius of chunks sent to players around their position",
-            "simulation-distance" => "Radius of chunks actively ticked around players",
-            "level-name" => "Name of active world directory on disk",
-            "level-seed" => "World generation RNG seed string or integer",
-            "motd" => "Message of the Day shown on multiplayer server list",
-            "enable-rcon" => "Enables Minecraft Remote Console protocol access",
-            "rcon.port" => "Network port for remote RCON admin console",
-            "rcon.password" => "Authentication password required for RCON connections",
-            "spawn-protection" => "Radius in blocks around spawn protected from non-ops",
-            _ => "Server configuration property",
+            "enforce-secure-profile" => "Requires player chat messages to have cryptographically signed keys",
+            "previews-chat" => "Previews chat message signing and styling in real-time while typing",
+            "hide-online-players" => "Hides the list of connected player usernames from status ping queries",
+            "max-players" => "Maximum concurrent player capacity allowed on the server",
+            "motd" => "Message of the Day displayed on multiplayer server list ping",
+            "server-name" => "Display name of the server in Bedrock server list",
+            "log-ips" => "Includes player IP addresses in server console log messages",
+            "text-filtering-config" => "Configuration endpoint or path for automated chat text filtering",
+
+            // Performance & Distances
+            "view-distance" => "Radius of chunks sent to players around their position (in chunks)",
+            "simulation-distance" => "Radius of chunks actively ticked around players (entities, crops, fluids)",
+            "tick-distance" => "Number of chunks surrounding players actively ticked in Bedrock edition",
+            "max-tick-time" => "Maximum milliseconds a single tick may take before watchdog halts server (-1 disables)",
+            "entity-broadcast-range-percentage" => "Percentage scaling distance for sending entity tracking packets",
+            "sync-chunk-writes" => "Forces synchronous disk writes when saving modified world chunks",
+            "max-threads" => "Maximum worker thread pool count allocated for asynchronous tasks",
+            "enable-jmx-monitoring" => "Exposes Java Management Extensions (JMX) MBeans for external monitoring",
+            "pause-when-empty-seconds" => "Seconds to wait before pausing game ticks when no players are online (-1 disables)",
+            "region-file-compression" => "Compression algorithm used for region MCA files (deflate, lz4, none)",
+            "content-log-console-output-enabled" => "Prints Bedrock scripting and content error logs to console",
+
+            // RCON & Console
+            "enable-rcon" => "Enables Minecraft Remote Console protocol access for remote admin commands",
+            "rcon.port" => "Network port for remote RCON admin console (default 25575)",
+            "rcon.password" => "Authentication password required for RCON administrative connections",
+            "broadcast-rcon-to-ops" => "Broadcasts console outputs from RCON commands to online operators",
+            "broadcast-console-to-ops" => "Broadcasts server console command outputs to online operators",
+            "enable-query" => "Enables GameSpy4 protocol server query listener for status pinging",
+            "query.port" => "Network port used by GameSpy4 server query listener (default 25565)",
+
+            // General & Other
+            "snooper-enabled" => "Sends anonymous server metrics and telemetry data to Mojang",
+            "bug-report-link" => "Custom URL provided to players in pause menu for submitting server bug reports",
+
+            _ => "Server configuration setting",
         }
     }
 }

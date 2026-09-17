@@ -11,15 +11,101 @@ use colored::Colorize;
 use craft_core::{CraftPaths, RemoteHostConfig, Result};
 use craft_remote::{RemoteCraftClient, RemoteServerInfo};
 use crossterm::{
-    cursor::Hide,
+    cursor::{Hide, Show},
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
-    terminal::enable_raw_mode,
+    terminal::{disable_raw_mode, enable_raw_mode},
 };
 use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+
+struct BootstrapProgressState {
+    current: String,
+    steps: Vec<(String, bool)>,
+    title: String,
+    spinner_idx: usize,
+}
+
+fn run_boxed_bootstrap(
+    session: &craft_remote::RemoteSession,
+    host_alias: &str,
+    title: &str,
+) -> Result<()> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    let initial_msg = format!("Connecting and preparing environment on '{}'...", host_alias);
+    let state = Arc::new(Mutex::new(BootstrapProgressState {
+        current: initial_msg,
+        steps: Vec::new(),
+        title: title.to_string(),
+        spinner_idx: 0,
+    }));
+
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let state_clone = Arc::clone(&state);
+    let stop_clone = Arc::clone(&stop_flag);
+
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    let _ = execute!(stdout, Hide);
+
+    let render_handle = thread::spawn(move || {
+        let mut out = io::stdout();
+        while !stop_clone.load(Ordering::Relaxed) {
+            {
+                if let Ok(mut s) = state_clone.lock() {
+                    s.spinner_idx = s.spinner_idx.wrapping_add(1);
+                    let mut modal = modalx::modals::WaitingModal::new(&s.title, &s.current)
+                        .with_max_width(84);
+                    for (step_label, completed) in &s.steps {
+                        modal = modal.with_step(step_label.clone(), *completed);
+                    }
+                    let _ = modal.render_spinner(s.spinner_idx, &mut out);
+                }
+            }
+            thread::sleep(Duration::from_millis(80));
+        }
+    });
+
+    let res = craft_remote::run_bootstrap_with_progress(session, |msg| {
+        if let Ok(mut s) = state.lock() {
+            if let Some(last) = s.steps.last_mut() {
+                last.1 = true;
+            }
+            s.steps.push((msg.to_string(), false));
+            s.current = msg.to_string();
+        }
+    });
+
+    stop_flag.store(true, Ordering::Relaxed);
+    let _ = render_handle.join();
+
+    if res.is_ok() {
+        if let Ok(mut s) = state.lock() {
+            if let Some(last) = s.steps.last_mut() {
+                last.1 = true;
+            }
+            s.spinner_idx = s.spinner_idx.wrapping_add(1);
+            let mut modal = modalx::modals::WaitingModal::new(&s.title, "Host bootstrap completed successfully!")
+                .with_max_width(84);
+            for (step_label, completed) in &s.steps {
+                modal = modal.with_step(step_label.clone(), *completed);
+            }
+            let _ = modal.render_spinner(s.spinner_idx, &mut stdout);
+        }
+        thread::sleep(Duration::from_millis(300));
+    }
+
+    if !modalx::terminal::is_alt_screen_active() {
+        let _ = disable_raw_mode();
+    }
+    let _ = execute!(stdout, Show);
+
+    res
+}
 
 pub async fn connect_with_cancellation(
     host_config: &RemoteHostConfig,
@@ -162,15 +248,11 @@ pub async fn manage_host_servers(
         let mut w_sel = 0;
         match run_menu(&warn_header, &warn_entries, &mut w_sel)? {
             Some(0) => {
-                print_in_place_status(
+                match run_boxed_bootstrap(
+                    &client.session,
+                    &host_config.alias,
                     "BOOTSTRAPPING REMOTE HOST",
-                    &[format!(
-                        "Installing Craft daemon and CLI on '{}'...",
-                        host_config.alias
-                    )],
-                )?;
-
-                match craft_remote::run_bootstrap(&client.session) {
+                ) {
                     Ok(_) => {
                         // Immediately transition into the remote host menu without blocking modal
                     }
@@ -246,15 +328,11 @@ pub async fn manage_host_servers(
             let mut u_sel = 0;
             match run_menu(&update_header, &update_entries, &mut u_sel)? {
                 Some(0) => {
-                    print_in_place_status(
+                    match run_boxed_bootstrap(
+                        &client.session,
+                        &host_config.alias,
                         "UPDATING REMOTE CRAFT",
-                        &[format!(
-                            "Updating Craft binary on '{}' to v{}...",
-                            host_config.alias, local_version
-                        )],
-                    )?;
-
-                    match craft_remote::run_bootstrap(&client.session) {
+                    ) {
                         Ok(_) => {
                             let _ = client.ensure_daemon_started();
                             show_modal_message(

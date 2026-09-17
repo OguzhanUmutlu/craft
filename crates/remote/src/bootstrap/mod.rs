@@ -2,17 +2,23 @@ pub mod linux;
 pub mod macos;
 pub mod windows;
 
-use colored::Colorize;
 use craft_core::{RemoteOsType, Result};
 use crate::session::RemoteSession;
 
 pub fn run_bootstrap(session: &RemoteSession) -> Result<()> {
+    run_bootstrap_with_progress(session, |msg| println!("{}", msg))
+}
+
+pub fn run_bootstrap_with_progress(
+    session: &RemoteSession,
+    mut on_progress: impl FnMut(&str),
+) -> Result<()> {
     let os = session.probe_os()?;
-    println!("{}", format!("Detected remote OS: {}", os).green().bold());
+    on_progress(&format!("Detected remote OS: {}", os));
 
     match os {
-        RemoteOsType::Linux => linux::bootstrap_linux(session),
-        RemoteOsType::MacOS => macos::bootstrap_macos(session),
-        RemoteOsType::Windows => windows::bootstrap_windows(session),
+        RemoteOsType::Linux => linux::bootstrap_linux(session, &mut on_progress),
+        RemoteOsType::MacOS => macos::bootstrap_macos(session, &mut on_progress),
+        RemoteOsType::Windows => windows::bootstrap_windows(session, &mut on_progress),
     }
 }
