@@ -77,7 +77,7 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
             false,
             &['e'],
             Some(
-                &modal_tui::Shortcuts::new()
+                &modalx::Shortcuts::new()
                     .move_selection()
                     .add("Enter/→", "Connect")
                     .add("e", "Edit Offline")
@@ -348,7 +348,7 @@ async fn offline_host_actions_menu(paths: &CraftPaths, host_alias: &str) -> Resu
         ];
 
         let mut sel = 0;
-        let shortcuts = modal_tui::Shortcuts::new()
+        let shortcuts = modalx::Shortcuts::new()
             .move_selection()
             .select()
             .back()

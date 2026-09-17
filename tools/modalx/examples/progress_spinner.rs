@@ -1,8 +1,8 @@
-use modal_tui::prelude::*;
+use modalx::prelude::*;
 use std::thread;
 use std::time::Duration;
 
-fn main() -> modal_tui::Result<()> {
+fn main() -> modalx::Result<()> {
     let _alt = AltScreenGuard::enter();
     let mut stdout = std::io::stdout();
 

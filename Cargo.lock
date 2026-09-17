@@ -317,7 +317,7 @@ dependencies = [
  "dialoguer",
  "directories",
  "indicatif",
- "modal-tui",
+ "modalx",
  "serde",
  "serde_json",
  "sysinfo",
@@ -358,7 +358,7 @@ dependencies = [
  "fs2",
  "hex",
  "libc",
- "modal-tui",
+ "modalx",
  "serde",
  "serde_json",
  "sha2",
@@ -1235,8 +1235,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "modal-tui"
-version = "1.0.0"
+name = "modalx"
+version = "0.1.0"
 dependencies = [
  "colored",
  "crossterm",

@@ -1,1 +1,1 @@
-pub use modal_tui::modals::table::*;
+pub use modalx::modals::table::*;

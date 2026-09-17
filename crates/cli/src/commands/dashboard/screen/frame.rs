@@ -1,2 +1,2 @@
 #[allow(unused_imports)]
-pub use modal_tui::frame::*;
+pub use modalx::frame::*;

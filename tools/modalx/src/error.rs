@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Error type for modal-tui operations.
+/// Error type for modalx operations.
 #[derive(Error, Debug)]
 pub enum TuiError {
     /// Standard I/O or terminal stream error.
@@ -24,5 +24,5 @@ pub enum TuiError {
     Other(String),
 }
 
-/// Convenience Result alias for modal-tui operations.
+/// Convenience Result alias for modalx operations.
 pub type Result<T> = std::result::Result<T, TuiError>;

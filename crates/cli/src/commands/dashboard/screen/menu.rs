@@ -1,6 +1,6 @@
 use craft_core::Result;
 
-pub use modal_tui::MenuEntry;
+pub use modalx::MenuEntry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
@@ -40,7 +40,7 @@ pub fn run_titled_menu_with_shortcuts(
     header_rows: &[impl AsRef<str>],
     entries: &[MenuEntry],
     selected_idx: &mut usize,
-    shortcuts: impl Into<modal_tui::Shortcuts>,
+    shortcuts: impl Into<modalx::Shortcuts>,
 ) -> Result<Option<usize>> {
     let mut modal = super::modals::SelectModal::menu(title)
         .with_allow_quit_on_q(super::NavGuard::depth() <= 1)

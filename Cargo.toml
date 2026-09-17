@@ -7,7 +7,7 @@ members = [
     "crates/daemon",
     "crates/backup",
     "crates/remote",
-    "crates/modal-tui",
+    "tools/modalx",
     "crates/cli",
 ]
 default-members = ["crates/cli"]
@@ -30,7 +30,7 @@ craft-plugins = { path = "crates/plugins" }
 craft-daemon = { path = "crates/daemon" }
 craft-backup = { path = "crates/backup" }
 craft-remote = { path = "crates/remote" }
-modal-tui = { path = "crates/modal-tui" }
+modalx = { path = "tools/modalx" }
 
 # Serialization & data
 serde = { version = "1.0", features = ["derive"] }

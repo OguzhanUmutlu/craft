@@ -17,7 +17,7 @@ pub const MIN_TERM_HEIGHT: u16 = 14;
 
 static ALT_SCREEN_DEPTH: AtomicUsize = AtomicUsize::new(0);
 
-/// Terminal sizing constraints for modal-tui operations.
+/// Terminal sizing constraints for modalx operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TerminalConstraints {
     pub min_width: u16,

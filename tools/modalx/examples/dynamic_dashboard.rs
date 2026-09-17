@@ -1,6 +1,6 @@
-use modal_tui::prelude::*;
+use modalx::prelude::*;
 
-fn main() -> modal_tui::Result<()> {
+fn main() -> modalx::Result<()> {
     let mut selected = 0;
 
     let fields = FieldSection::new()

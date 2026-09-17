@@ -1,1 +1,1 @@
-pub use modal_tui::modals::waiting::*;
+pub use modalx::modals::waiting::*;

@@ -12,7 +12,7 @@ pub mod text_flow;
 pub mod theme;
 
 #[allow(unused_imports)]
-pub use modal_tui::*;
+pub use modalx::*;
 
 #[allow(unused_imports)]
 pub use console::*;

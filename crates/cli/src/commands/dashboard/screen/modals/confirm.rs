@@ -1,1 +1,1 @@
-pub use modal_tui::modals::confirm::*;
+pub use modalx::modals::confirm::*;

@@ -1,4 +1,4 @@
-//! # modal-tui
+//! # modalx
 //!
 //! A responsive, declarative, box-encapsulated Terminal User Interface (TUI) and modal dialog engine for Rust.
 //!
@@ -19,9 +19,9 @@
 //! ## Quickstart
 //!
 //! ```no_run
-//! use modal_tui::prelude::*;
+//! use modalx::prelude::*;
 //!
-//! fn main() -> modal_tui::Result<()> {
+//! fn main() -> modalx::Result<()> {
 //!     let mut selected = 0;
 //!     let modal = SelectModal::new()
 //!         .with_title("MAIN MENU", false)

@@ -1,6 +1,6 @@
-use modal_tui::prelude::*;
+use modalx::prelude::*;
 
-fn main() -> modal_tui::Result<()> {
+fn main() -> modalx::Result<()> {
     let mut selected_row = 0;
 
     let columns = vec![

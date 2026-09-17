@@ -1,7 +1,7 @@
-# modal-tui
+# modalx
 
-[![Crates.io](https://img.shields.io/crates/v/modal-tui.svg)](https://crates.io/crates/modal-tui)
-[![Documentation](https://docs.rs/modal-tui/badge.svg)](https://docs.rs/modal-tui)
+[![Crates.io](https://img.shields.io/crates/v/modalx.svg)](https://crates.io/crates/modalx)
+[![Documentation](https://docs.rs/modalx/badge.svg)](https://docs.rs/modalx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A responsive, declarative, box-encapsulated Terminal User Interface (TUI) and modal dialog engine for Rust built on top of [crossterm](https://crates.io/crates/crossterm).
@@ -46,17 +46,17 @@ A responsive, declarative, box-encapsulated Terminal User Interface (TUI) and mo
 
 ## Installation
 
-Add `modal-tui` to your `Cargo.toml`:
+Add `modalx` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-modal-tui = "1.0"
+modalx = "1.0"
 ```
 
 Or install via `cargo add`:
 
 ```bash
-cargo add modal-tui
+cargo add modalx
 ```
 
 ---
@@ -66,9 +66,9 @@ cargo add modal-tui
 ### 1. Minimal Menu Selection
 
 ```rust
-use modal_tui::prelude::*;
+use modalx::prelude::*;
 
-fn main() -> modal_tui::Result<()> {
+fn main() -> modalx::Result<()> {
     let mut selected = 0;
 
     let modal = SelectModal::new()
@@ -92,9 +92,9 @@ fn main() -> modal_tui::Result<()> {
 ### 2. Interactive Input with Validation
 
 ```rust
-use modal_tui::prelude::*;
+use modalx::prelude::*;
 
-fn main() -> modal_tui::Result<()> {
+fn main() -> modalx::Result<()> {
     let outcome = InputModal::new("USER REGISTRATION", "Enter your username:")
         .with_placeholder("john_doe")
         .with_validator(|val| {
@@ -119,9 +119,9 @@ fn main() -> modal_tui::Result<()> {
 ### 3. Destructive Confirmation Dialog
 
 ```rust
-use modal_tui::prelude::*;
+use modalx::prelude::*;
 
-fn main() -> modal_tui::Result<()> {
+fn main() -> modalx::Result<()> {
     let outcome = ConfirmModal::new("DROP DATABASE", "Are you sure you want to drop 'production_db'?")
         .danger(true)
         .with_detail("This action is irreversible and all data will be permanently deleted.")
@@ -145,7 +145,7 @@ fn main() -> modal_tui::Result<()> {
 Build complex dashboards by composing sections. Delimited metadata reflows automatically across lines to fit narrow terminal windows:
 
 ```rust
-use modal_tui::prelude::*;
+use modalx::prelude::*;
 
 let fields = FieldSection::new()
     .with_separator(" | ")
@@ -164,7 +164,7 @@ let modal = SelectModal::new()
 
 ## Examples
 
-Run any of the included examples to see `modal-tui` in action:
+Run any of the included examples to see `modalx` in action:
 
 ```bash
 # Minimal menu

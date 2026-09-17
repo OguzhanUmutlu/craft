@@ -1,6 +1,6 @@
-use modal_tui::prelude::*;
+use modalx::prelude::*;
 
-fn main() -> modal_tui::Result<()> {
+fn main() -> modalx::Result<()> {
     let _alt = AltScreenGuard::enter();
 
     // Step 1: Input Modal

@@ -1,1 +1,1 @@
-pub use modal_tui::modals::input::*;
+pub use modalx::modals::input::*;

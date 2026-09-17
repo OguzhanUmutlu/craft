@@ -1,1 +1,1 @@
-pub use modal_tui::modals::select::*;
+pub use modalx::modals::select::*;

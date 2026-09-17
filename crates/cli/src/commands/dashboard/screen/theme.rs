@@ -1,2 +1,2 @@
 #[allow(unused_imports)]
-pub use modal_tui::theme::*;
+pub use modalx::theme::*;

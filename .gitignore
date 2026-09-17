@@ -13,7 +13,8 @@ cargo-timing.html
 /cache/
 /backups/
 /craft-data/
-/tools/
+/tools/*
+!/tools/modalx/
 *.log
 *.sock
 *.pid

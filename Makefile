@@ -11,11 +11,11 @@ help:
 	@echo "  make clippy           - Run cargo clippy across workspace (-D warnings)"
 	@echo "  make clippy-fix       - Apply automatic clippy fixes"
 	@echo "  make test             - Run all unit and doc tests across workspace"
-	@echo "  make fmt              - Format modal-tui and craft crates"
+	@echo "  make fmt              - Format modalx and craft crates"
 	@echo "  make fmt-check        - Check formatting without modifying files"
 	@echo "  make build-bin        - Build optimized release binary into bin/craft"
-	@echo "  make publish-tui-dry  - Run pre-flight checks and modal-tui publish dry-run"
-	@echo "  make publish-tui      - Publish modal-tui live to crates.io"
+	@echo "  make publish-tui-dry  - Run pre-flight checks and modalx publish dry-run"
+	@echo "  make publish-tui      - Publish modalx live to crates.io"
 	@echo "------------------------------------------------------------------"
 	@echo "  make up               - Build and start Craft container stack in background"
 	@echo "  make down             - Stop and remove Craft containers"
@@ -46,13 +46,13 @@ test:
 	@echo "✓ All tests passed successfully!"
 
 fmt:
-	@echo "==> Formatting modal-tui and craft crates..."
-	cargo fmt -p modal-tui -p craft
+	@echo "==> Formatting modalx and craft crates..."
+	cargo fmt -p modalx -p craft
 	@echo "✓ Formatting applied."
 
 fmt-check:
-	@echo "==> Checking formatting for modal-tui..."
-	cargo fmt -p modal-tui --check
+	@echo "==> Checking formatting for modalx..."
+	cargo fmt -p modalx --check
 	@echo "✓ Formatting check passed."
 
 fmt-all:
@@ -74,22 +74,22 @@ check: fmt-check clippy test build-bin
 	@echo "=================================================================="
 
 publish-tui-dry: fmt-check clippy test
-	@echo "==> Verifying modal-tui documentation & examples..."
-	cargo doc -p modal-tui --no-deps
-	cargo check --examples -p modal-tui
-	@echo "==> Running modal-tui publication dry-run..."
-	cargo publish -p modal-tui --dry-run --allow-dirty
+	@echo "==> Verifying modalx documentation & examples..."
+	cargo doc -p modalx --no-deps
+	cargo check --examples -p modalx
+	@echo "==> Running modalx publication dry-run..."
+	cargo publish -p modalx --dry-run --allow-dirty
 	@echo "=================================================================="
-	@echo "✓ modal-tui is 100% publication-ready!"
+	@echo "✓ modalx is 100% publication-ready!"
 	@echo "=================================================================="
 
 publish-tui: fmt-check clippy test
-	@echo "==> Verifying modal-tui documentation & examples..."
-	cargo doc -p modal-tui --no-deps
-	cargo check --examples -p modal-tui
-	@echo "==> Publishing modal-tui to crates.io..."
-	cargo publish -p modal-tui
-	@echo "✓ Successfully published modal-tui to crates.io!"
+	@echo "==> Verifying modalx documentation & examples..."
+	cargo doc -p modalx --no-deps
+	cargo check --examples -p modalx
+	@echo "==> Publishing modalx to crates.io..."
+	cargo publish -p modalx
+	@echo "✓ Successfully published modalx to crates.io!"
 
 # --- Docker & Stack Management Targets ---
 

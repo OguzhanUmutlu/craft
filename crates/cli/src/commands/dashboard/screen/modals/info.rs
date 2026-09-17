@@ -1,1 +1,1 @@
-pub use modal_tui::modals::info::*;
+pub use modalx::modals::info::*;

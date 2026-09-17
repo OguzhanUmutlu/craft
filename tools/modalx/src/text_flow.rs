@@ -143,7 +143,7 @@ pub fn wrap_button_items<T: AsRef<str>>(
 ///
 /// # Example
 /// ```rust
-/// use modal_tui::text_flow::wrap_fields;
+/// use modalx::text_flow::wrap_fields;
 ///
 /// let fields = vec![
 ///     "Host: Ubuntu".to_string(),
