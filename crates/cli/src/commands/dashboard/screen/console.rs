@@ -52,10 +52,7 @@ pub async fn run_virtual_console(
         }
     }
 
-    let mut input_buffer = String::new();
-    let mut cursor_pos = 0usize;
-    let mut history: Vec<String> = Vec::new();
-    let mut history_idx: Option<usize> = None;
+    let mut text_input = modalx::TextInput::new();
     let mut scroll_offset = 0usize;
     let mut partial_chunk = String::new();
 
@@ -77,8 +74,7 @@ pub async fn run_virtual_console(
         server_path,
         &lines,
         scroll_offset,
-        &input_buffer,
-        cursor_pos,
+        &text_input,
     )?;
 
     loop {
@@ -101,8 +97,7 @@ pub async fn run_virtual_console(
                     server_path,
                     &lines,
                     scroll_offset,
-                    &input_buffer,
-                    cursor_pos,
+                    &text_input,
                 )?;
             }
 
@@ -122,160 +117,46 @@ pub async fn run_virtual_console(
                             break;
                         }
 
-                        let (term_w, term_h) = get_terminal_size();
-                        let _ = term_w;
-                        let log_area_height = (term_h.saturating_sub(5)).max(1) as usize;
+                        let (_, term_h) = get_terminal_size();
+                        let log_area_height = (term_h.saturating_sub(6)).max(1) as usize;
 
-                        // Check for Ctrl+Backspace / Ctrl+W / Backspace variants
-                        let is_ctrl_backspace = (key.modifiers.contains(KeyModifiers::CONTROL)
-                            && (key.code == KeyCode::Backspace
-                                || key.code == KeyCode::Char('h')
-                                || key.code == KeyCode::Char('w')
-                                || key.code == KeyCode::Char('W')))
-                            || key.code == KeyCode::Char('\x08')
-                            || key.code == KeyCode::Char('\x17')
-                            || (key.code == KeyCode::Char('\x7f') && key.modifiers.contains(KeyModifiers::CONTROL));
+                        let is_nav_mod = key.modifiers.contains(KeyModifiers::SHIFT)
+                            || key.modifiers.contains(KeyModifiers::CONTROL)
+                            || key.modifiers.contains(KeyModifiers::ALT);
 
-                        if is_ctrl_backspace {
-                            // Delete word backward
-                            delete_word_backward(&mut input_buffer, &mut cursor_pos);
-                        } else {
-                            match key.code {
-                                KeyCode::Enter => {
-                                    let trimmed = input_buffer.trim().to_string();
+                        match key.code {
+                            KeyCode::PageUp => {
+                                let step = (log_area_height / 2).max(1);
+                                scroll_offset = scroll_offset.saturating_add(step);
+                            }
+                            KeyCode::PageDown => {
+                                let step = (log_area_height / 2).max(1);
+                                scroll_offset = scroll_offset.saturating_sub(step);
+                            }
+                            KeyCode::Home if text_input.buffer().is_empty() => {
+                                scroll_offset = scroll_offset.saturating_add(200);
+                            }
+                            KeyCode::End if scroll_offset > 0 => {
+                                scroll_offset = 0;
+                            }
+                            KeyCode::Up if is_nav_mod || scroll_offset > 0 || (text_input.buffer().is_empty() && text_input.history().is_empty()) => {
+                                scroll_offset = scroll_offset.saturating_add(1);
+                            }
+                            KeyCode::Down if is_nav_mod || scroll_offset > 0 => {
+                                scroll_offset = scroll_offset.saturating_sub(1);
+                            }
+                            _ => {
+                                if let modalx::TextInputAction::Submit(cmd) = text_input.handle_key(&key) {
+                                    let trimmed = cmd.trim();
                                     if !trimmed.is_empty() {
                                         let _ = tx_to_daemon.send(format!("{}\n", trimmed)).await;
-                                        history.push(trimmed.clone());
                                         lines.push(format!("> {}", trimmed));
                                         if lines.len() > 200 {
                                             lines.remove(0);
                                         }
-                                        input_buffer.clear();
-                                        cursor_pos = 0;
-                                        history_idx = None;
                                         scroll_offset = 0;
                                     }
                                 }
-
-                                KeyCode::Backspace => {
-                                    if cursor_pos > 0 && !input_buffer.is_empty() {
-                                        if let Some((prev_idx, _)) = input_buffer[..cursor_pos].char_indices().last() {
-                                            input_buffer.remove(prev_idx);
-                                            cursor_pos = prev_idx;
-                                        }
-                                    }
-                                }
-
-                                KeyCode::Delete => {
-                                    if cursor_pos < input_buffer.len() {
-                                        input_buffer.remove(cursor_pos);
-                                    }
-                                }
-
-                                KeyCode::Left => {
-                                    cursor_pos = input_buffer[..cursor_pos]
-                                        .char_indices()
-                                        .last()
-                                        .map(|(idx, _)| idx)
-                                        .unwrap_or(0);
-                                }
-
-                                KeyCode::Right => {
-                                    cursor_pos = input_buffer[cursor_pos..]
-                                        .chars()
-                                        .next()
-                                        .map(|ch| cursor_pos + ch.len_utf8())
-                                        .unwrap_or(input_buffer.len());
-                                }
-
-                                KeyCode::Home => {
-                                    if input_buffer.is_empty() {
-                                        // Scroll backward into history
-                                        scroll_offset = scroll_offset.saturating_add(200);
-                                    } else {
-                                        cursor_pos = 0;
-                                    }
-                                }
-
-                                KeyCode::End => {
-                                    if scroll_offset > 0 {
-                                        // Return to live output
-                                        scroll_offset = 0;
-                                    } else {
-                                        cursor_pos = input_buffer.len();
-                                    }
-                                }
-
-                                KeyCode::PageUp => {
-                                    let step = (log_area_height / 2).max(1);
-                                    scroll_offset = scroll_offset.saturating_add(step);
-                                }
-
-                                KeyCode::PageDown => {
-                                    let step = (log_area_height / 2).max(1);
-                                    scroll_offset = scroll_offset.saturating_sub(step);
-                                }
-
-                                KeyCode::Up => {
-                                    let is_nav_mod = key.modifiers.contains(KeyModifiers::SHIFT)
-                                        || key.modifiers.contains(KeyModifiers::CONTROL)
-                                        || key.modifiers.contains(KeyModifiers::ALT);
-                                    if is_nav_mod || scroll_offset > 0 || (input_buffer.is_empty() && history.is_empty()) {
-                                        scroll_offset = scroll_offset.saturating_add(1);
-                                    } else if !history.is_empty() {
-                                        let next_idx = match history_idx {
-                                            None => history.len() - 1,
-                                            Some(idx) => idx.saturating_sub(1),
-                                        };
-                                        history_idx = Some(next_idx);
-                                        input_buffer = history[next_idx].clone();
-                                        cursor_pos = input_buffer.len();
-                                    }
-                                }
-
-                                KeyCode::Down => {
-                                    let is_nav_mod = key.modifiers.contains(KeyModifiers::SHIFT)
-                                        || key.modifiers.contains(KeyModifiers::CONTROL)
-                                        || key.modifiers.contains(KeyModifiers::ALT);
-                                    if is_nav_mod || scroll_offset > 0 {
-                                        scroll_offset = scroll_offset.saturating_sub(1);
-                                    } else if let Some(idx) = history_idx {
-                                        if idx + 1 < history.len() {
-                                            let next_idx = idx + 1;
-                                            history_idx = Some(next_idx);
-                                            input_buffer = history[next_idx].clone();
-                                            cursor_pos = input_buffer.len();
-                                        } else {
-                                            history_idx = None;
-                                            input_buffer.clear();
-                                            cursor_pos = 0;
-                                        }
-                                    }
-                                }
-
-                                KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                                    cursor_pos = 0;
-                                }
-
-                                KeyCode::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                                    cursor_pos = input_buffer.len();
-                                }
-
-                                KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                                    input_buffer.clear();
-                                    cursor_pos = 0;
-                                }
-
-                                KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                                    input_buffer.truncate(cursor_pos);
-                                }
-
-                                KeyCode::Char(c) if !c.is_control() => {
-                                    input_buffer.insert(cursor_pos, c);
-                                    cursor_pos += c.len_utf8();
-                                }
-
-                                _ => {}
                             }
                         }
 
@@ -285,8 +166,7 @@ pub async fn run_virtual_console(
                             server_path,
                             &lines,
                             scroll_offset,
-                            &input_buffer,
-                            cursor_pos,
+                            &text_input,
                         )?;
                     }
 
@@ -300,8 +180,7 @@ pub async fn run_virtual_console(
                                     server_path,
                                     &lines,
                                     scroll_offset,
-                                    &input_buffer,
-                                    cursor_pos,
+                                    &text_input,
                                 )?;
                             }
                             MouseEventKind::ScrollDown => {
@@ -312,12 +191,23 @@ pub async fn run_virtual_console(
                                     server_path,
                                     &lines,
                                     scroll_offset,
-                                    &input_buffer,
-                                    cursor_pos,
+                                    &text_input,
                                 )?;
                             }
                             _ => {}
                         }
+                    }
+
+                    Event::Paste(text) => {
+                        text_input.insert_str(&text);
+                        render(
+                            &mut stdout,
+                            server_name,
+                            server_path,
+                            &lines,
+                            scroll_offset,
+                            &text_input,
+                        )?;
                     }
 
                     Event::Resize(_, _) => {
@@ -327,26 +217,7 @@ pub async fn run_virtual_console(
                             server_path,
                             &lines,
                             scroll_offset,
-                            &input_buffer,
-                            cursor_pos,
-                        )?;
-                    }
-
-                    Event::Paste(text) => {
-                        for c in text.chars() {
-                            if !c.is_control() {
-                                input_buffer.insert(cursor_pos, c);
-                                cursor_pos += c.len_utf8();
-                            }
-                        }
-                        render(
-                            &mut stdout,
-                            server_name,
-                            server_path,
-                            &lines,
-                            scroll_offset,
-                            &input_buffer,
-                            cursor_pos,
+                            &text_input,
                         )?;
                     }
 
@@ -359,18 +230,6 @@ pub async fn run_virtual_console(
     let _ = disable_raw_mode();
     let _ = execute!(stdout, Hide);
     Ok(())
-}
-
-fn delete_word_backward(buffer: &mut String, cursor_pos: &mut usize) {
-    if *cursor_pos == 0 || buffer.is_empty() {
-        return;
-    }
-    let before = &buffer[..*cursor_pos];
-    let trimmed = before.trim_end();
-    let word_start = trimmed.rfind(' ').map(|idx| idx + 1).unwrap_or(0);
-    let after = buffer[*cursor_pos..].to_string();
-    *buffer = format!("{}{}", &buffer[..word_start], after);
-    *cursor_pos = word_start;
 }
 
 fn find_log_file(server_path: &Path) -> Option<PathBuf> {
@@ -439,13 +298,12 @@ fn render<W: Write>(
     server_path: &Path,
     lines: &[String],
     scroll_offset: usize,
-    input_buffer: &str,
-    cursor_pos: usize,
+    text_input: &modalx::TextInput,
 ) -> Result<()> {
     let (term_w, term_h) = get_terminal_size();
     let width = (term_w as usize).max(40);
     let inner_width = width.saturating_sub(2);
-    let log_area_height = (term_h.saturating_sub(5)).max(1) as usize;
+    let log_area_height = (term_h.saturating_sub(6)).max(1) as usize;
 
     execute!(out, MoveTo(0, 0))?;
 
@@ -461,7 +319,7 @@ fn render<W: Write>(
     out.write_all(top_border.as_bytes())?;
 
     // Row 1: Subtitle
-    let sub = " [↑/↓/PgUp/PgDn] Scroll  |  [Ctrl+Backspace] Delete Word  |  [Ctrl+C/Esc] Detach ";
+    let sub = " [↑/↓/PgUp/PgDn] Scroll  |  [Ctrl+C/Esc] Detach ";
     let sub_len = strip_ansi(sub).len();
     let sub_pad = inner_width.saturating_sub(sub_len);
     let sub_line = format!("│{}{}{}│\x1B[K\r\n", sub.dimmed(), " ".repeat(sub_pad), "");
@@ -471,7 +329,7 @@ fn render<W: Write>(
     let div_line = format!("├{}┤\x1B[K\r\n", "─".repeat(inner_width));
     out.write_all(div_line.as_bytes())?;
 
-    // Rows 3 .. (term_h - 2): Log viewport
+    // Rows 3 .. (term_h - 4): Log viewport
     let visible_lines: Vec<String> = if scroll_offset == 0 {
         let total = lines.len();
         let start = total.saturating_sub(log_area_height);
@@ -522,8 +380,8 @@ fn render<W: Write>(
         }
     }
 
-    // Row term_h - 2: Bottom border / scroll indicator
-    let bottom_line = if scroll_offset > 0 {
+    // Row term_h - 3: Divider or scroll indicator
+    let divider_or_scroll = if scroll_offset > 0 {
         let badge = format!(
             " [▲ SCROLLED +{} LINES | PRESS END TO RETURN] ",
             scroll_offset
@@ -537,36 +395,20 @@ fn render<W: Write>(
             "─".repeat(b_pad.saturating_sub(2))
         )
     } else {
-        format!("╰{}╯\x1B[K\r\n", "─".repeat(inner_width))
+        format!("├{}┤\x1B[K\r\n", "─".repeat(inner_width))
     };
+    out.write_all(divider_or_scroll.as_bytes())?;
+
+    // Row term_h - 2: Inside-the-box Command Prompt row
+    let (input_row, cursor_x) = text_input.render_box_row(inner_width, "> ");
+    out.write_all(input_row.as_bytes())?;
+
+    // Row term_h - 1: Box bottom border
+    let bottom_line = format!("╰{}╯\x1B[K", "─".repeat(inner_width));
     out.write_all(bottom_line.as_bytes())?;
 
-    // Row term_h - 1: Persistent Command Prompt
-    let prefix = "> ";
-    let prefix_len = prefix.len();
-    let max_display_len = width.saturating_sub(prefix_len + 4);
-
-    let (display_str, visual_cursor_offset) = if input_buffer.chars().count() > max_display_len {
-        let chars: Vec<char> = input_buffer.chars().collect();
-        let char_cursor = input_buffer[..cursor_pos].chars().count();
-        let start = char_cursor.saturating_sub(max_display_len.saturating_sub(4));
-        let end = (start + max_display_len).min(chars.len());
-        let disp: String = chars[start..end].iter().collect();
-        let offset = char_cursor.saturating_sub(start);
-        (disp, offset)
-    } else {
-        (
-            input_buffer.to_string(),
-            input_buffer[..cursor_pos].chars().count(),
-        )
-    };
-
-    let prompt_row = format!("{}{}\x1B[K", prefix.cyan().bold(), display_str);
-    out.write_all(prompt_row.as_bytes())?;
-
-    // Position hardware cursor directly on active edit character
-    let cursor_x = (prefix_len + visual_cursor_offset) as u16;
-    let cursor_y = term_h.saturating_sub(1);
+    // Position hardware cursor directly on active edit character inside row term_h - 2
+    let cursor_y = term_h.saturating_sub(2);
     execute!(out, MoveTo(cursor_x, cursor_y), Show)?;
     out.flush()?;
 
@@ -579,15 +421,14 @@ mod tests {
 
     #[test]
     fn test_console_word_deletion() {
-        let mut buf = "stop confirm now".to_string();
-        let mut pos = buf.len();
-        delete_word_backward(&mut buf, &mut pos);
-        assert_eq!(buf, "stop confirm ");
-        assert_eq!(pos, 13);
+        let mut input = modalx::TextInput::with_value("stop confirm now");
+        input.delete_word();
+        assert_eq!(input.buffer(), "stop confirm ");
+        assert_eq!(input.cursor(), 13);
 
-        delete_word_backward(&mut buf, &mut pos);
-        assert_eq!(buf, "stop ");
-        assert_eq!(pos, 5);
+        input.delete_word();
+        assert_eq!(input.buffer(), "stop ");
+        assert_eq!(input.cursor(), 5);
     }
 
     #[test]

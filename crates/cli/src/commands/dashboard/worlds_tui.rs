@@ -962,6 +962,10 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
             entries.push(MenuEntry::new(hotkey, format!("{}{}", prefix, desc)));
         }
         entries.push(
+            MenuEntry::new("c", "Install Map from Cache")
+                .with_aliases(&["cache"]),
+        );
+        entries.push(
             MenuEntry::new("u", "Install Map from Direct Link or Website URL")
                 .with_aliases(&["url", "link"]),
         );
@@ -1010,6 +1014,10 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
                 }
             }
             Some(idx) if idx == maps.len() => {
+                // Install Map from Cache
+                install_map_from_cache_menu(server_path).await?;
+            }
+            Some(idx) if idx == maps.len() + 1 => {
                 if let Some(url_input) = run_input_prompt(
                     "INSTALL MAP FROM URL",
                     "Enter map direct link or website URL (Zip, MediaFire, Drive, Dropbox, GitHub):",
@@ -1062,7 +1070,7 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
                     }
                 }
             }
-            Some(idx) if idx == maps.len() + 1 => {
+            Some(idx) if idx == maps.len() + 2 => {
                 if let Some(query) = run_input_prompt(
                     "SEARCH MAPS",
                     "Enter map search keyword (e.g. skyblock, parkour, dropper, adventure):",
@@ -1120,6 +1128,121 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
                                 }
                             }
                         }
+                    }
+                }
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+async fn install_map_from_cache_menu(server_path: &Path) -> Result<()> {
+    let mut selected = 0;
+
+    loop {
+        let cached = craft_plugins::list_cached_maps();
+        if cached.is_empty() {
+            show_modal_message(
+                "CACHE EMPTY",
+                &[
+                    "No cached maps found in local storage.".to_string(),
+                    "Maps downloaded from URLs or the curated catalog are automatically compressed with Zstandard and saved to .craft/cache/ for offline installation.".dimmed().to_string(),
+                ],
+                false,
+            )?;
+            return Ok(());
+        }
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Select a cached world map to install into the server:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("INSTALL MAP FROM CACHE", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries = Vec::new();
+        for (i, entry) in cached.iter().enumerate() {
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else if i < 35 {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            } else {
+                format!("{}", i + 1)
+            };
+
+            let size_str = if entry.is_compressed && entry.uncompressed_size > entry.size_bytes {
+                let saved_pct = ((entry.uncompressed_size - entry.size_bytes) as f64
+                    / entry.uncompressed_size as f64)
+                    * 100.0;
+                format!(
+                    "{} (zstd -{:.0}%)",
+                    craft_core::format_size(entry.uncompressed_size),
+                    saved_pct
+                )
+            } else {
+                craft_core::format_size(entry.size_bytes)
+            };
+
+            let title = entry.display_title();
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<28} [{}]", title, size_str),
+            ));
+        }
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(idx) if idx < cached.len() => {
+                let chosen = &cached[idx];
+                let folder_prompt = run_input_prompt(
+                    "WORLD FOLDER NAME",
+                    &format!("Enter world folder name (leave blank for '{}'):", chosen.display_title()),
+                    None,
+                )?;
+                let custom_name = folder_prompt
+                    .as_ref()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| Some(chosen.display_title()));
+
+                let _ = print_in_place_status(
+                    "EXTRACTING CACHED MAP",
+                    &[format!(
+                        "Extracting '{}' into server worlds...",
+                        chosen.display_title()
+                    )],
+                );
+                match craft_plugins::install_cached_map(server_path, chosen.rel_subpath(), custom_name) {
+                    Ok((dest, installed_name)) => {
+                        show_modal_message(
+                            "MAP INSTALLED",
+                            &[
+                                format!(
+                                    "[OK] Successfully installed map '{}' from local cache!",
+                                    installed_name
+                                )
+                                .green()
+                                .bold()
+                                .to_string(),
+                                format!("Path: {}", dest.display()),
+                                format!(
+                                    "Uncompressed Size: {}",
+                                    craft_core::format_size(chosen.uncompressed_size)
+                                ),
+                            ],
+                            false,
+                        )?;
+                        prompt_set_as_default_world(server_path, &installed_name)?;
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        show_modal_message(
+                            "INSTALLATION FAILED",
+                            &[format!("[ERROR] Failed to install map from cache: {}", e)],
+                            true,
+                        )?;
                     }
                 }
             }

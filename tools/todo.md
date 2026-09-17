@@ -76,3 +76,18 @@ This task list tracks ongoing development, bug fixes, enhancements, and UI polis
 - [x] Build comprehensive 21-page VitePress documentation suite for `modalx` under `tools/modalx/docs/`.
 - [x] Configure automated GitHub Pages deployment workflow for `modalx` docs (`.github/workflows/deploy-docs.yml`).
 - [x] Perform Unicode zero-emoji audit on documentation and README.
+
+### 9. Zstandard-Compressed Caching & Inside-the-Box Console Input
+- [x] **Universal ModalX `TextInput` Component**:
+  - Implemented `tools/modalx/src/input.rs` (`TextInput`, `TextInputAction`) with full readline editing, cursor movement, character insertion/deletion, word-jump, word deletion, command history, and `render_box_row` for rendering inside box frames with horizontal scrolling and cursor positioning.
+  - Added universal `Ctrl+Backspace` / `Alt+Backspace` word deletion in `tools/modalx/src/keys.rs` and `tools/modalx/src/modals/form.rs`.
+- [x] **Anchored Inside-the-Box Live Console Input**:
+  - Moved the interactive command input inside the box frame at row `term_h - 2` with divider/scroll badge at `term_h - 3` and box bottom at `term_h - 1`.
+  - Input remains anchored inside the box as logs scroll without row drift or boundary jumping.
+  - Removed `[Ctrl+Backspace] Delete Word` from the console subtitle.
+- [x] **Zstandard-Compressed Plugin & Map Caching**:
+  - Added `put_artifact_compressed`, `get_artifact_data`, `extract_artifact_to`, `has_artifact`, and `list_cached_artifacts` in `crates/core/src/cache.rs` with Zstandard level 3 compression and metadata tracking (`title`, `category`, `is_compressed`, `uncompressed_size`, `size_bytes`).
+  - Integrated compressed caching in `crates/plugins/src/lib.rs` (`install_artifact_cached`, `list_cached_plugins`, `install_cached_plugin`) and `crates/plugins/src/world.rs` (`install_world_from_url`, `list_cached_maps`, `install_cached_map`).
+- [x] **Install From Cache Menus in Dashboard**:
+  - Added `[3] Install From Cache` in Server Plugins menu (`crates/cli/src/commands/dashboard/server_control.rs`) displaying cached plugins, uncompressed sizes, and zstd compression savings.
+  - Added `[c] Install Map from Cache` in Curated Maps menu (`crates/cli/src/commands/dashboard/worlds_tui.rs`) displaying cached world archives and extracting them into the server.

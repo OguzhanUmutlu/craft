@@ -23,6 +23,26 @@ pub struct CacheEntryMeta {
     pub sha256: Option<String>,
     pub etag: Option<String>,
     pub expires_at: Option<i64>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+}
+
+impl CacheEntryMeta {
+    pub fn rel_subpath(&self) -> &str {
+        self.key.strip_prefix("artifacts/").unwrap_or(&self.key)
+    }
+
+    pub fn display_title(&self) -> &str {
+        if let Some(ref t) = self.title {
+            if !t.is_empty() {
+                return t.as_str();
+            }
+        }
+        let sub = self.rel_subpath();
+        Path::new(sub).file_name().and_then(|n| n.to_str()).unwrap_or(sub)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -207,6 +227,8 @@ impl CacheStore {
             sha256: Some(actual_hash),
             etag: None,
             expires_at: None,
+            title: None,
+            category: None,
         };
 
         let mut idx = self.load_index();
@@ -261,6 +283,8 @@ impl CacheStore {
             sha256: Some(actual_hash),
             etag: None,
             expires_at: None,
+            title: None,
+            category: None,
         };
 
         let mut idx = self.load_index();
@@ -290,6 +314,19 @@ impl CacheStore {
         }
     }
 
+    pub fn has_artifact(&self, rel_subpath: &str) -> bool {
+        let clean = rel_subpath.strip_prefix("artifacts/").unwrap_or(rel_subpath);
+        let key = format!("artifacts/{}", clean);
+        let idx = self.load_index();
+        if let Some(entry) = idx.entries.get(&key) {
+            if self.cache_dir.join(&entry.rel_path).is_file() {
+                return true;
+            }
+        }
+        self.artifacts_dir.join(format!("{}.zst", clean)).is_file()
+            || self.artifacts_dir.join(clean).is_file()
+    }
+
     pub fn link_or_copy(&self, cached_path: &Path, destination_file: &Path) -> Result<()> {
         if let Some(parent) = destination_file.parent() {
             fs::create_dir_all(parent)?;
@@ -304,6 +341,201 @@ impl CacheStore {
             fs::copy(cached_path, destination_file)?;
         }
         Ok(())
+    }
+
+    pub fn put_artifact_compressed(
+        &self,
+        rel_subpath: &str,
+        data: &[u8],
+        title: Option<&str>,
+        category: Option<&str>,
+        expected_sha256: Option<&str>,
+    ) -> Result<(PathBuf, CacheEntryMeta)> {
+        let _lock = self.lock()?;
+
+        let actual_hash = compute_sha256_bytes(data);
+        if let Some(expected) = expected_sha256 {
+            if !actual_hash.eq_ignore_ascii_case(expected) {
+                return Err(CraftError::ChecksumMismatch {
+                    file: rel_subpath.to_string(),
+                    expected: expected.to_string(),
+                    actual: actual_hash,
+                });
+            }
+        }
+
+        let compressed = zstd::encode_all(data, 3)
+            .map_err(|e| CraftError::Other(format!("Zstandard compression failed: {}", e)))?;
+
+        let filename = if rel_subpath.ends_with(".zst") {
+            rel_subpath.to_string()
+        } else {
+            format!("{}.zst", rel_subpath)
+        };
+
+        let full_path = self.artifacts_dir.join(&filename);
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let tmp_path = full_path.with_extension("tmp");
+        fs::write(&tmp_path, &compressed)?;
+        fs::rename(&tmp_path, &full_path)?;
+
+        let now = Utc::now().timestamp_millis();
+        let key = format!("artifacts/{}", rel_subpath);
+        let meta = CacheEntryMeta {
+            key: key.clone(),
+            rel_path: format!("artifacts/{}", filename),
+            size_bytes: compressed.len() as u64,
+            is_compressed: true,
+            uncompressed_size: data.len() as u64,
+            created_at: now,
+            last_accessed_at: now,
+            access_count: 1,
+            sha256: Some(actual_hash),
+            etag: None,
+            expires_at: None,
+            title: title.map(|t| t.to_string()),
+            category: category.map(|c| c.to_string()),
+        };
+
+        let mut idx = self.load_index();
+        idx.entries.insert(key, meta.clone());
+        self.save_index(&idx)?;
+
+        self.prune_if_needed_locked(&mut idx)?;
+
+        Ok((full_path, meta))
+    }
+
+    pub fn get_artifact_data(&self, rel_subpath: &str) -> Result<Option<Vec<u8>>> {
+        let clean = rel_subpath.strip_prefix("artifacts/").unwrap_or(rel_subpath);
+        let key = format!("artifacts/{}", clean);
+        let _lock = self.lock()?;
+        let mut idx = self.load_index();
+        if let Some(entry) = idx.entries.get_mut(&key) {
+            entry.last_accessed_at = Utc::now().timestamp_millis();
+            entry.access_count += 1;
+            let full_path = self.cache_dir.join(&entry.rel_path);
+            let is_compressed = entry.is_compressed;
+            let _ = self.save_index(&idx);
+
+            if !full_path.is_file() {
+                return Ok(None);
+            }
+
+            let raw_bytes = fs::read(&full_path)?;
+            if is_compressed {
+                let decompressed = zstd::decode_all(raw_bytes.as_slice())
+                    .map_err(|e| CraftError::Other(format!("Failed to decompress cached artifact: {}", e)))?;
+                Ok(Some(decompressed))
+            } else {
+                Ok(Some(raw_bytes))
+            }
+        } else {
+            let compressed_path = self.artifacts_dir.join(format!("{}.zst", clean));
+            if compressed_path.is_file() {
+                let raw_bytes = fs::read(&compressed_path)?;
+                let decompressed = zstd::decode_all(raw_bytes.as_slice())
+                    .map_err(|e| CraftError::Other(format!("Failed to decompress cached artifact: {}", e)))?;
+                return Ok(Some(decompressed));
+            }
+            let uncompressed_path = self.artifacts_dir.join(clean);
+            if uncompressed_path.is_file() {
+                let raw_bytes = fs::read(&uncompressed_path)?;
+                return Ok(Some(raw_bytes));
+            }
+            Ok(None)
+        }
+    }
+
+    pub fn extract_artifact_to(&self, rel_subpath: &str, destination_file: &Path) -> Result<()> {
+        if let Some(parent) = destination_file.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if destination_file.exists() {
+            let _ = fs::remove_file(destination_file);
+        }
+
+        let clean = rel_subpath.strip_prefix("artifacts/").unwrap_or(rel_subpath);
+        let key = format!("artifacts/{}", clean);
+        let (rel_path, is_compressed) = {
+            let _lock = self.lock()?;
+            let mut idx = self.load_index();
+            if let Some(entry) = idx.entries.get_mut(&key) {
+                entry.last_accessed_at = Utc::now().timestamp_millis();
+                entry.access_count += 1;
+                let rel = entry.rel_path.clone();
+                let comp = entry.is_compressed;
+                let _ = self.save_index(&idx);
+                (Some(rel), comp)
+            } else {
+                (None, false)
+            }
+        };
+
+        let source_path = if let Some(rel) = rel_path {
+            self.cache_dir.join(rel)
+        } else {
+            let comp = self.artifacts_dir.join(format!("{}.zst", clean));
+            if comp.is_file() {
+                comp
+            } else {
+                self.artifacts_dir.join(clean)
+            }
+        };
+
+        if !source_path.exists() {
+            return Err(CraftError::Other(format!(
+                "Artifact '{}' not found in cache",
+                clean
+            )));
+        }
+
+        let is_zstd = is_compressed || source_path.extension().map(|e| e == "zst").unwrap_or(false);
+        if is_zstd {
+            let file = File::open(&source_path)?;
+            let mut decoder = zstd::Decoder::new(file)
+                .map_err(|e| CraftError::Other(format!("Zstandard decoder error: {}", e)))?;
+            let mut dest_file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(destination_file)?;
+            std::io::copy(&mut decoder, &mut dest_file)?;
+        } else {
+            self.link_or_copy(&source_path, destination_file)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn list_cached_artifacts(&self, category: Option<&str>) -> Vec<CacheEntryMeta> {
+        let idx = self.load_index();
+        let mut items: Vec<CacheEntryMeta> = idx
+            .entries
+            .into_values()
+            .filter(|e| e.key.starts_with("artifacts/"))
+            .filter(|e| match category {
+                Some("plugin") | Some("plugins") => {
+                    e.category.as_deref() == Some("plugin")
+                        || e.category.as_deref() == Some("plugins")
+                        || e.key.starts_with("artifacts/plugins/")
+                }
+                Some("map") | Some("maps") => {
+                    e.category.as_deref() == Some("map")
+                        || e.category.as_deref() == Some("maps")
+                        || e.key.starts_with("artifacts/worlds/")
+                        || e.key.starts_with("artifacts/maps/")
+                }
+                Some(cat) => e.category.as_deref() == Some(cat),
+                None => true,
+            })
+            .collect();
+
+        items.sort_by_key(|a| std::cmp::Reverse(a.last_accessed_at));
+        items
     }
 
     pub fn put_metadata(
@@ -342,6 +574,8 @@ impl CacheStore {
             sha256: Some(compute_sha256_bytes(data)),
             etag: None,
             expires_at,
+            title: None,
+            category: Some("metadata".to_string()),
         };
 
         let mut idx = self.load_index();
@@ -757,5 +991,45 @@ mod tests {
         assert_eq!(format_size(1024), "1.00 KiB");
         assert_eq!(format_size(1048576), "1.00 MiB");
         assert_eq!(format_size(1073741824), "1.00 GiB");
+    }
+
+    #[test]
+    fn test_put_artifact_compressed_and_extract() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = CacheStore::new(tmp.path().join("cache"), 10 * 1024 * 1024).unwrap();
+
+        let sample_data = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(100);
+        let (path, meta) = store
+            .put_artifact_compressed(
+                "plugins/EssentialsX.jar",
+                &sample_data,
+                Some("EssentialsX"),
+                Some("plugin"),
+                None,
+            )
+            .unwrap();
+
+        assert!(path.exists());
+        assert!(meta.is_compressed);
+        assert!(meta.size_bytes < meta.uncompressed_size);
+        assert_eq!(meta.uncompressed_size, sample_data.len() as u64);
+
+        // Verify retrieval of uncompressed bytes
+        let retrieved = store.get_artifact_data("plugins/EssentialsX.jar").unwrap().unwrap();
+        assert_eq!(retrieved, sample_data);
+
+        // Verify extraction directly into a destination file
+        let dest = tmp.path().join("server/plugins/EssentialsX.jar");
+        store.extract_artifact_to("plugins/EssentialsX.jar", &dest).unwrap();
+        assert!(dest.exists());
+        assert_eq!(fs::read(&dest).unwrap(), sample_data);
+
+        // Verify listing by category
+        let plugins = store.list_cached_artifacts(Some("plugin"));
+        assert_eq!(plugins.len(), 1);
+        assert_eq!(plugins[0].title.as_deref(), Some("EssentialsX"));
+
+        let maps = store.list_cached_artifacts(Some("map"));
+        assert_eq!(maps.len(), 0);
     }
 }

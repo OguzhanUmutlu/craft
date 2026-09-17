@@ -583,24 +583,44 @@ pub async fn install_world_from_url(
         };
         let rel_subpath = format!("worlds/{}.zip", &hash[..24]);
 
-        let path = match store.get_artifact(&rel_subpath) {
-            Some(p) => p,
-            None => {
-                let resp = reqwest::get(&resolved_url).await.map_err(|e| {
-                    CraftError::Download(format!("Failed to download world archive: {}", e))
-                })?;
-                let bytes = resp.bytes().await.map_err(|e| {
-                    CraftError::Download(format!("Failed to read world bytes: {}", e))
-                })?;
-                let (p, _) = store.put_artifact(&rel_subpath, &bytes, None)?;
-                p
+        if !store.has_artifact(&rel_subpath) {
+            let resp = reqwest::get(&resolved_url).await.map_err(|e| {
+                CraftError::Download(format!("Failed to download world archive: {}", e))
+            })?;
+            if !resp.status().is_success() {
+                return Err(CraftError::Download(format!(
+                    "Failed to download world archive with status {}: {}",
+                    resp.status(),
+                    resolved_url
+                )));
             }
-        };
-        (path, None)
+            let bytes = resp.bytes().await.map_err(|e| {
+                CraftError::Download(format!("Failed to read world bytes: {}", e))
+            })?;
+            store.put_artifact_compressed(
+                &rel_subpath,
+                &bytes,
+                world_name.or(Some("Custom Map")),
+                Some("map"),
+                None,
+            )?;
+        }
+
+        let temp_dir = tempfile::tempdir()?;
+        let temp_zip = temp_dir.path().join("world_archive.zip");
+        store.extract_artifact_to(&rel_subpath, &temp_zip)?;
+        (temp_zip, Some(temp_dir))
     } else {
         let resp = reqwest::get(&resolved_url).await.map_err(|e| {
             CraftError::Download(format!("Failed to download world archive: {}", e))
         })?;
+        if !resp.status().is_success() {
+            return Err(CraftError::Download(format!(
+                "Failed to download world archive with status {}: {}",
+                resp.status(),
+                resolved_url
+            )));
+        }
         let bytes = resp
             .bytes()
             .await
@@ -612,6 +632,49 @@ pub async fn install_world_from_url(
     };
 
     install_world_from_zip(server_path, &zip_path, world_name)
+}
+
+pub fn list_cached_maps() -> Vec<craft_core::CacheEntryMeta> {
+    let store = craft_core::CraftPaths::new().ok().and_then(|paths| {
+        let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
+        craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes).ok()
+    });
+
+    if let Some(store) = store {
+        list_cached_maps_with_store(&store)
+    } else {
+        Vec::new()
+    }
+}
+
+pub fn list_cached_maps_with_store(store: &craft_core::CacheStore) -> Vec<craft_core::CacheEntryMeta> {
+    store.list_cached_artifacts(Some("map"))
+}
+
+pub fn install_cached_map_with_store(
+    server_path: &Path,
+    store: &craft_core::CacheStore,
+    rel_subpath: &str,
+    world_name: Option<&str>,
+) -> Result<(PathBuf, String)> {
+    let temp_dir = tempfile::tempdir()?;
+    let temp_zip = temp_dir.path().join("cached_map.zip");
+    store.extract_artifact_to(rel_subpath, &temp_zip)?;
+
+    install_world_from_zip(server_path, &temp_zip, world_name)
+}
+
+pub fn install_cached_map(
+    server_path: &Path,
+    rel_subpath: &str,
+    world_name: Option<&str>,
+) -> Result<(PathBuf, String)> {
+    let store = craft_core::CraftPaths::new().ok().and_then(|paths| {
+        let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
+        craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes).ok()
+    }).ok_or_else(|| CraftError::Other("Cache store is not available".to_string()))?;
+
+    install_cached_map_with_store(server_path, &store, rel_subpath, world_name)
 }
 
 pub fn install_world_from_zip(
@@ -862,5 +925,63 @@ mod tests {
         assert_eq!(players[0].health, 18.5);
         assert_eq!(players[0].xp_level, 30);
         assert_eq!(players[0].pos, (100.0, 70.0, -200.0));
+    }
+
+    #[test]
+    fn test_cached_map_lifecycle() {
+        use std::io::Write;
+        use zip::write::SimpleFileOptions;
+        use zip::ZipWriter;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let cache_dir = tmp.path().join("cache");
+        let server_dir = tmp.path().join("server");
+        fs::create_dir_all(&server_dir).unwrap();
+
+        let store = craft_core::CacheStore::new(cache_dir, 50 * 1024 * 1024).unwrap();
+
+        // 1. Build a dummy world archive zip in memory
+        let mut zip_bytes = Vec::new();
+        {
+            let mut zip = ZipWriter::new(std::io::Cursor::new(&mut zip_bytes));
+            let options =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            zip.start_file("MyMap/level.dat", options).unwrap();
+            zip.write_all(b"fake level dat bytes").unwrap();
+            zip.finish().unwrap();
+        }
+
+        // 2. Put compressed map into cache store
+        store
+            .put_artifact_compressed(
+                "worlds/test_map.zip",
+                &zip_bytes,
+                Some("Test Sky Island"),
+                Some("map"),
+                None,
+            )
+            .unwrap();
+
+        // 3. List cached maps
+        let cached = list_cached_maps_with_store(&store);
+        assert_eq!(cached.len(), 1);
+        assert_eq!(cached[0].display_title(), "Test Sky Island");
+        assert!(cached[0].is_compressed);
+
+        // 4. Install from cache
+        let (installed_path, final_name) = install_cached_map_with_store(
+            &server_dir,
+            &store,
+            "worlds/test_map.zip",
+            Some("SkyWorld"),
+        )
+        .unwrap();
+
+        assert_eq!(final_name, "SkyWorld");
+        assert!(installed_path.join("level.dat").exists());
+        assert_eq!(
+            fs::read(installed_path.join("level.dat")).unwrap(),
+            b"fake level dat bytes"
+        );
     }
 }

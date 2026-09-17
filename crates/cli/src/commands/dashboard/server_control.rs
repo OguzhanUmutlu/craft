@@ -2292,7 +2292,8 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
         let entries = vec![
             MenuEntry::new("1", "Search Online"),
             MenuEntry::new("2", "Install by Slug / ID"),
-            MenuEntry::new("3", "Manage Installed"),
+            MenuEntry::new("3", "Install From Cache").with_aliases(&["c", "cache"]),
+            MenuEntry::new("4", "Manage Installed"),
             MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
 
@@ -2434,8 +2435,119 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
                 }
             }
             Some(2) => {
+                // Install from cache
+                install_plugin_from_cache_menu(&server.name, &plugins_dir).await?;
+            }
+            Some(3) => {
                 // Manage installed plugins
                 manage_installed_plugins_menu(&server.name, &plugins_dir).await?;
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+async fn install_plugin_from_cache_menu(
+    server_name: &str,
+    plugins_dir: &std::path::Path,
+) -> Result<()> {
+    let mut selected = 0;
+
+    loop {
+        let cached = craft_plugins::list_cached_plugins();
+        if cached.is_empty() {
+            show_modal_message(
+                "CACHE EMPTY",
+                &[
+                    "No cached plugins found in local storage.".to_string(),
+                    "Plugins downloaded online are automatically compressed with Zstandard and saved to .craft/cache/ for offline installation.".dimmed().to_string(),
+                ],
+                false,
+            )?;
+            return Ok(());
+        }
+
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Select a cached plugin to install into '{}':\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("INSTALL PLUGIN FROM CACHE", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            server_name,
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries = Vec::new();
+        for (i, entry) in cached.iter().enumerate() {
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else if i < 35 {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            } else {
+                format!("{}", i + 1)
+            };
+
+            let size_str = if entry.is_compressed && entry.uncompressed_size > entry.size_bytes {
+                let saved_pct = ((entry.uncompressed_size - entry.size_bytes) as f64
+                    / entry.uncompressed_size as f64)
+                    * 100.0;
+                format!(
+                    "{} (zstd -{:.0}%)",
+                    craft_core::format_size(entry.uncompressed_size),
+                    saved_pct
+                )
+            } else {
+                craft_core::format_size(entry.size_bytes)
+            };
+
+            let title = entry.display_title();
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<28} [{}]", title, size_str),
+            ));
+        }
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(idx) if idx < cached.len() => {
+                let chosen = &cached[idx];
+                let _ = print_in_place_status(
+                    "EXTRACTING PLUGIN",
+                    &[format!(
+                        "Extracting '{}' into '{}'...",
+                        chosen.display_title(),
+                        plugins_dir.display()
+                    )],
+                );
+                match craft_plugins::install_cached_plugin(chosen.rel_subpath(), plugins_dir) {
+                    Ok(dest) => {
+                        show_modal_message(
+                            "PLUGIN INSTALLED",
+                            &[
+                                format!(
+                                    "[OK] Successfully installed '{}' from local cache!",
+                                    chosen.display_title()
+                                )
+                                .green()
+                                .bold()
+                                .to_string(),
+                                format!("File: {}", dest.display()),
+                                format!(
+                                    "Uncompressed Size: {}",
+                                    craft_core::format_size(chosen.uncompressed_size)
+                                ),
+                            ],
+                            false,
+                        )?;
+                    }
+                    Err(e) => {
+                        show_modal_message(
+                            "INSTALLATION FAILED",
+                            &[format!("[ERROR] Failed to install from cache: {}", e)],
+                            true,
+                        )?;
+                    }
+                }
             }
             _ => return Ok(()),
         }
