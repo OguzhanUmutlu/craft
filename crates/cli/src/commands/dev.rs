@@ -32,7 +32,7 @@ pub enum DevAction {
 
 pub async fn handle_dev(server_name: &str, action: DevAction, paths: &CraftPaths) -> Result<()> {
     let server_path = paths.resolve_server_path(None, Some(server_name), true)?;
-    let mut registry = ServersRegistry::load(paths)?;
+    let registry = ServersRegistry::load(paths)?;
 
     match action {
         DevAction::Link { jar, folder } => {
@@ -129,35 +129,7 @@ pub async fn handle_dev(server_name: &str, action: DevAction, paths: &CraftPaths
             Ok(())
         }
         DevAction::Debug { port, disable } => {
-            let (target_server_config, target_jvm_args) = {
-                let server = registry
-                    .servers
-                    .iter_mut()
-                    .find(|s| s.path == server_path || s.name.eq_ignore_ascii_case(server_name))
-                    .ok_or_else(|| CraftError::ServerNotFound(server_name.to_string()))?;
-
-                if disable {
-                    server.jdwp_debug_port = None;
-                    if let Some(ref mut args) = server.jvm_args {
-                        args.retain(|a| !a.contains("jdwp="));
-                    }
-                    (server.clone(), None)
-                } else {
-                    server.jdwp_debug_port = Some(port);
-                    let jdwp_flag = format!(
-                        "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:{}",
-                        port
-                    );
-                    let mut args = server.jvm_args.clone().unwrap_or_default();
-                    args.retain(|a| !a.contains("jdwp="));
-                    args.push(jdwp_flag);
-                    server.jvm_args = Some(args.clone());
-                    (server.clone(), Some(args))
-                }
-            };
-
-            registry.save(paths)?;
-            regenerate_server_script(&target_server_config, target_jvm_args.as_deref())?;
+            let _ = configure_jdwp_debug(server_name, port, disable, paths)?;
 
             if disable {
                 println!(
@@ -223,6 +195,48 @@ pub async fn handle_dev(server_name: &str, action: DevAction, paths: &CraftPaths
             Ok(())
         }
     }
+}
+
+pub fn configure_jdwp_debug(
+    server_name: &str,
+    port: u16,
+    disable: bool,
+    paths: &CraftPaths,
+) -> Result<craft_core::ServerConfig> {
+    let server_path = paths.resolve_server_path(None, Some(server_name), true)?;
+    let mut registry = ServersRegistry::load(paths)?;
+
+    let (target_server_config, target_jvm_args) = {
+        let server = registry
+            .servers
+            .iter_mut()
+            .find(|s| s.path == server_path || s.name.eq_ignore_ascii_case(server_name))
+            .ok_or_else(|| CraftError::ServerNotFound(server_name.to_string()))?;
+
+        if disable {
+            server.jdwp_debug_port = None;
+            if let Some(ref mut args) = server.jvm_args {
+                args.retain(|a| !a.contains("jdwp="));
+            }
+            (server.clone(), None)
+        } else {
+            server.jdwp_debug_port = Some(port);
+            let jdwp_flag = format!(
+                "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:{}",
+                port
+            );
+            let mut args = server.jvm_args.clone().unwrap_or_default();
+            args.retain(|a| !a.contains("jdwp="));
+            args.push(jdwp_flag);
+            server.jvm_args = Some(args.clone());
+            (server.clone(), Some(args))
+        }
+    };
+
+    registry.save(paths)?;
+    regenerate_server_script(&target_server_config, target_jvm_args.as_deref())?;
+
+    Ok(target_server_config)
 }
 
 fn regenerate_server_script(

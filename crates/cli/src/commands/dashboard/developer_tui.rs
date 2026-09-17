@@ -190,143 +190,189 @@ async fn template_scaffolding_menu(_paths: &CraftPaths) -> Result<()> {
 
 async fn jdwp_setup_menu(server: &ServerConfig, paths: &CraftPaths) -> Result<()> {
     let mut selected = 0;
-    let width = get_content_width(80);
+    let mut current_server = server.clone();
 
-    let is_enabled = server.jdwp_debug_port.is_some();
-    let status_str = if let Some(p) = server.jdwp_debug_port {
-        format!("ENABLED on Port {}", p).green().bold().to_string()
-    } else {
-        "DISABLED".yellow().bold().to_string()
-    };
+    loop {
+        let width = get_content_width(80);
 
-    let header = format!(
-        "{}\r\n{}\r\n{}\r\n Server: {}\r\n Current Status: {}\r\n Configure JVM JDWP remote debugging for IDE attaching:\r\n{}",
-        box_top(width).cyan().bold(),
-        box_title("JVM JDWP DEBUGGER SETUP", width, false).cyan().bold(),
-        box_divider(width).cyan().bold(),
-        server.name.white().bold(),
-        status_str,
-        box_divider(width).dimmed(),
-    );
+        let is_enabled = current_server.jdwp_debug_port.is_some();
+        let status_str = if let Some(p) = current_server.jdwp_debug_port {
+            format!("ENABLED on Port {}", p).green().bold().to_string()
+        } else {
+            "DISABLED".yellow().bold().to_string()
+        };
 
-    let entries = if is_enabled {
-        vec![
-            MenuEntry::new("1", "Disable Remote Debugging"),
-            MenuEntry::new("2", "Change Debug Port"),
-            MenuEntry::new("3", "View IDE Connection Snippets (VS Code / IntelliJ)"),
-            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
-        ]
-    } else {
-        vec![
-            MenuEntry::new("1", "Enable Remote Debugging (Default Port: 5005)"),
-            MenuEntry::new("2", "Enable with Custom Port"),
-            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
-        ]
-    };
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Server: {}\r\n Current Status: {}\r\n Configure JVM JDWP remote debugging for IDE attaching:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("JVM JDWP DEBUGGER SETUP", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            current_server.name.white().bold(),
+            status_str,
+            box_divider(width).dimmed(),
+        );
 
-    match run_menu(&header, &entries, &mut selected)? {
-        Some(0) => {
-            if is_enabled {
-                crate::commands::dev::handle_dev(
-                    &server.name,
-                    crate::commands::dev::DevAction::Debug {
-                        port: 5005,
-                        disable: true,
-                    },
-                    paths,
-                )
-                .await?;
-                show_modal_message(
-                    "DEBUGGER DISABLED",
-                    &["[OK] Remote debugging disabled and start scripts regenerated.".to_string()],
-                    false,
-                )?;
-            } else {
-                crate::commands::dev::handle_dev(
-                    &server.name,
-                    crate::commands::dev::DevAction::Debug {
-                        port: 5005,
-                        disable: false,
-                    },
-                    paths,
-                )
-                .await?;
-                show_modal_message(
-                    "DEBUGGER ENABLED",
-                    &["[OK] Enabled JDWP remote debugging on port 5005!".to_string()],
-                    false,
-                )?;
-            }
-        }
-        Some(1) => {
-            if is_enabled {
-                if let Some(port_str) =
-                    run_input_prompt("DEBUG PORT", "Enter new port:", Some("5005"))?
-                {
-                    if let Ok(port) = port_str.trim().parse::<u16>() {
-                        crate::commands::dev::handle_dev(
-                            &server.name,
-                            crate::commands::dev::DevAction::Debug {
-                                port,
-                                disable: false,
-                            },
-                            paths,
-                        )
-                        .await?;
-                        show_modal_message(
-                            "PORT UPDATED",
-                            &[format!("[OK] Set JDWP debug port to {}!", port)],
-                            false,
-                        )?;
+        let entries = if is_enabled {
+            vec![
+                MenuEntry::new("1", "Disable Remote Debugging"),
+                MenuEntry::new("2", "Change Debug Port"),
+                MenuEntry::new("3", "View IDE Connection Snippets (VS Code / IntelliJ)"),
+                MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
+            ]
+        } else {
+            vec![
+                MenuEntry::new("1", "Enable Remote Debugging (Default Port: 5005)"),
+                MenuEntry::new("2", "Enable with Custom Port"),
+                MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
+            ]
+        };
+
+        selected = selected.min(entries.len().saturating_sub(1));
+
+        match run_menu(&header, &entries, &mut selected)? {
+            Some(0) => {
+                if is_enabled {
+                    match crate::commands::dev::configure_jdwp_debug(
+                        &current_server.name,
+                        5005,
+                        true,
+                        paths,
+                    ) {
+                        Ok(updated) => {
+                            current_server = updated;
+                        }
+                        Err(e) => {
+                            show_modal_message(
+                                "ERROR",
+                                &[format!("Failed to disable debugging: {}", e)],
+                                true,
+                            )?;
+                        }
                     }
-                }
-            } else {
-                if let Some(port_str) =
-                    run_input_prompt("CUSTOM PORT", "Enter debug port:", Some("5005"))?
-                {
-                    if let Ok(port) = port_str.trim().parse::<u16>() {
-                        crate::commands::dev::handle_dev(
-                            &server.name,
-                            crate::commands::dev::DevAction::Debug {
-                                port,
-                                disable: false,
-                            },
-                            paths,
-                        )
-                        .await?;
-                        show_modal_message(
-                            "DEBUGGER ENABLED",
-                            &[format!("[OK] Enabled JDWP on port {}!", port)],
-                            false,
-                        )?;
+                } else {
+                    match crate::commands::dev::configure_jdwp_debug(
+                        &current_server.name,
+                        5005,
+                        false,
+                        paths,
+                    ) {
+                        Ok(updated) => {
+                            current_server = updated;
+                        }
+                        Err(e) => {
+                            show_modal_message(
+                                "ERROR",
+                                &[format!("Failed to enable debugging: {}", e)],
+                                true,
+                            )?;
+                        }
                     }
                 }
             }
+            Some(1) => {
+                if is_enabled {
+                    let default_port = current_server.jdwp_debug_port.unwrap_or(5005).to_string();
+                    if let Some(port_str) =
+                        run_input_prompt("DEBUG PORT", "Enter new port:", Some(&default_port))?
+                    {
+                        if let Ok(port) = port_str.trim().parse::<u16>() {
+                            if port == 0 {
+                                show_modal_message(
+                                    "INVALID PORT",
+                                    &["Port must be between 1 and 65535.".to_string()],
+                                    true,
+                                )?;
+                            } else {
+                                match crate::commands::dev::configure_jdwp_debug(
+                                    &current_server.name,
+                                    port,
+                                    false,
+                                    paths,
+                                ) {
+                                    Ok(updated) => {
+                                        current_server = updated;
+                                    }
+                                    Err(e) => {
+                                        show_modal_message(
+                                            "ERROR",
+                                            &[format!("Failed to update port: {}", e)],
+                                            true,
+                                        )?;
+                                    }
+                                }
+                            }
+                        } else {
+                            show_modal_message(
+                                "INVALID PORT",
+                                &["Please enter a valid port between 1 and 65535.".to_string()],
+                                true,
+                            )?;
+                        }
+                    }
+                } else {
+                    if let Some(port_str) =
+                        run_input_prompt("CUSTOM PORT", "Enter debug port:", Some("5005"))?
+                    {
+                        if let Ok(port) = port_str.trim().parse::<u16>() {
+                            if port == 0 {
+                                show_modal_message(
+                                    "INVALID PORT",
+                                    &["Port must be between 1 and 65535.".to_string()],
+                                    true,
+                                )?;
+                            } else {
+                                match crate::commands::dev::configure_jdwp_debug(
+                                    &current_server.name,
+                                    port,
+                                    false,
+                                    paths,
+                                ) {
+                                    Ok(updated) => {
+                                        current_server = updated;
+                                    }
+                                    Err(e) => {
+                                        show_modal_message(
+                                            "ERROR",
+                                            &[format!("Failed to enable debugging: {}", e)],
+                                            true,
+                                        )?;
+                                    }
+                                }
+                            }
+                        } else {
+                            show_modal_message(
+                                "INVALID PORT",
+                                &["Please enter a valid port between 1 and 65535.".to_string()],
+                                true,
+                            )?;
+                        }
+                    }
+                }
+            }
+            Some(2) if is_enabled => {
+                let port = current_server.jdwp_debug_port.unwrap_or(5005);
+                let lines = vec![
+                    format!("Debug Port: {}", port).cyan().bold().to_string(),
+                    "Host:       localhost / 127.0.0.1".to_string(),
+                    "Mode:       Attach (Socket)".to_string(),
+                    "".to_string(),
+                    "VS Code launch.json:".yellow().to_string(),
+                    format!(
+                        r#"{{ "type": "java", "name": "Attach", "request": "attach", "hostName": "localhost", "port": {} }}"#,
+                        port
+                    ),
+                    "".to_string(),
+                    "IntelliJ IDEA:".yellow().to_string(),
+                    format!(
+                        "Run -> Edit Configurations -> '+' -> Remote JVM Debug -> Port {}",
+                        port
+                    ),
+                ];
+                show_modal_message("IDE CONFIGURATIONS", &lines, false)?;
+            }
+            _ => return Ok(()),
         }
-        Some(2) if is_enabled => {
-            let port = server.jdwp_debug_port.unwrap_or(5005);
-            let lines = vec![
-                format!("Debug Port: {}", port).cyan().bold().to_string(),
-                "Host:       localhost / 127.0.0.1".to_string(),
-                "Mode:       Attach (Socket)".to_string(),
-                "".to_string(),
-                "VS Code launch.json:".yellow().to_string(),
-                format!(
-                    r#"{{ "type": "java", "name": "Attach", "request": "attach", "hostName": "localhost", "port": {} }}"#,
-                    port
-                ),
-                "".to_string(),
-                "IntelliJ IDEA:".yellow().to_string(),
-                format!(
-                    "Run -> Edit Configurations -> '+' -> Remote JVM Debug -> Port {}",
-                    port
-                ),
-            ];
-            show_modal_message("IDE CONFIGURATIONS", &lines, false)?;
-        }
-        _ => {}
     }
-    Ok(())
 }
 
 async fn link_local_jar_menu(server: &ServerConfig) -> Result<()> {

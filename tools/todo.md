@@ -20,6 +20,9 @@ This task list tracks ongoing development, bug fixes, enhancements, and UI polis
   - `SelectModal` (`tools/modalx/src/modals/select.rs`): Mapped `KeyAction::Right` to select (`SelectOutcome::Selected`), and `KeyAction::Left` to cancel/back (`SelectOutcome::Cancelled`).
   - `TableModal` (`tools/modalx/src/modals/table.rs`): Mapped `KeyAction::Right` to select row, and `KeyAction::Left` to back/cancel.
   - `ConfirmModal` (`tools/modalx/src/modals/confirm.rs`): Mapped `KeyAction::Left` explicitly to `[ Yes ]` (`selected_yes = true`) and `KeyAction::Right` explicitly to `[ No ]` (`selected_yes = false`).
+- [x] **JVM JDWP Debugger Setup In-Place Status Updates**:
+  - In `crates/cli/src/commands/dev.rs`, extracted `configure_jdwp_debug` to decouple server registry modification and start script regeneration from CLI stdout output.
+  - In `crates/cli/src/commands/dashboard/developer_tui.rs`, looped `jdwp_setup_menu` so toggling debugging or changing the debug port updates the header status and menu entries in-place without triggering disruptive popup modals (`DEBUGGER ENABLED`, `DEBUGGER DISABLED`, `PORT UPDATED`).
 
 ### 2. Properties Menu & Descriptions
 - [x] **Comprehensive Minecraft Server Property Descriptions**:
