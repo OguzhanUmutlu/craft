@@ -111,6 +111,13 @@ sync_static_assets() {
     if [ -f "${ROOT_DIR}/docs/public/install.sh" ]; then
         chmod +x "${ROOT_DIR}/docs/public/install.sh"
     fi
+
+    # Sync VDS automated setup script
+    if [ -f "${ROOT_DIR}/scripts/setup-vds.sh" ]; then
+        cp -f "${ROOT_DIR}/scripts/setup-vds.sh" "${DOCS_DIR}/public/setup-vds.sh"
+        chmod +x "${DOCS_DIR}/public/setup-vds.sh"
+        echo -e "${GREEN}[OK] Synced setup-vds.sh to docs/public/${NC}"
+    fi
 }
 
 cmd_build() {

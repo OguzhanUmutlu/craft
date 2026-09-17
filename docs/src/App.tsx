@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Monitor,
   Apple,
-  BookOpen
+  BookOpen,
+  Database
 } from 'lucide-react';
 import Documentation from './components/Documentation';
 
@@ -52,24 +53,24 @@ interface VersionsManifest {
 const DEFAULT_VERSIONS: VersionsManifest = {
   latest: "1.0.0",
   lts: "1.0.0",
-  updated_at: "2026-09-13T07:56:34Z",
+  updated_at: "2026-09-17T05:21:16Z",
   versions: [
     {
       version: "1.0.0",
       channel: "latest",
       label: "v1.0.0",
-      release_date: "2026-09-13",
-      notes: "Official Craft release: native high-performance Minecraft server supervisor, multi-platform runner, remote TUI, and backup engine.",
+      release_date: "2026-09-17",
+      notes: "Craft v1.0.0: native supervisor, centralized version catalog with background auto-sync, automated safe SSH VDS setup, multi-platform runner, and remote TUI.",
       assets: {
         linux_tar: {
           name: "craft-linux-amd64.tar.gz",
           url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64.tar.gz",
-          size: "7.0M",
+          size: "5.7M",
         },
         linux_bin: {
           name: "craft-linux-amd64",
           url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64",
-          size: "20M",
+          size: "15M",
         },
         windows_zip: {
           name: "craft-windows-amd64.zip",
@@ -99,7 +100,7 @@ const DEFAULT_VERSIONS: VersionsManifest = {
 export default function App() {
   const [view, setView] = useState<'home' | 'docs'>('home');
   const [docPage, setDocPage] = useState<string>('getting-started');
-  const [activeTab, setActiveTab] = useState<'linux' | 'macos' | 'windows' | 'docker'>('linux');
+  const [activeTab, setActiveTab] = useState<'linux' | 'macos' | 'windows' | 'docker' | 'vds'>('linux');
   const [copied, setCopied] = useState(false);
   const [manifest, setManifest] = useState<VersionsManifest>(DEFAULT_VERSIONS);
   const [selectedVersion, setSelectedVersion] = useState<string>('1.0.0');
@@ -192,6 +193,7 @@ export default function App() {
       ? `irm ${baseUrl}/install.ps1 | iex`
       : `$env:CRAFT_VERSION="${activeRelease.version}"; irm ${baseUrl}/install.ps1 | iex`,
     docker: `curl -fsSL ${baseUrl}/docker-compose.yml -o docker-compose.yml && docker compose up -d`,
+    vds: `curl -fsSL ${baseUrl}/setup-vds.sh | bash -s -- <ssh-alias>`,
   };
 
   const handleCopy = (text: string) => {
@@ -210,7 +212,7 @@ export default function App() {
       <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-emerald-950/80 border-b border-emerald-500/20 py-2 px-4 text-center text-xs font-medium text-emerald-300">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          Craft v{manifest.latest} is Live! 100% Standalone native binary &bull; Zero runtime dependencies.
+          Craft v{manifest.latest} is Live! Centralized Version Catalog with Background Auto-Sync &bull; Automated Safe SSH VDS Setup &bull; Pure Rust
         </span>
       </div>
 
@@ -299,6 +301,20 @@ export default function App() {
                 Read the Documentation
               </button>
               <button
+                onClick={() => openDocs('remote')}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 font-medium text-sm transition-all"
+              >
+                <Cloud className="h-4 w-4 text-emerald-400" />
+                Safe SSH VDS Setup
+              </button>
+              <button
+                onClick={() => openDocs('catalog')}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 font-medium text-sm transition-all"
+              >
+                <Database className="h-4 w-4 text-slate-400" />
+                Version Catalog
+              </button>
+              <button
                 onClick={() => openHome('#downloads')}
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white font-medium text-sm transition-all"
               >
@@ -311,7 +327,7 @@ export default function App() {
             <div id="install" className="max-w-2xl mx-auto bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-2xl backdrop-blur-md">
               {/* Platform Tabs */}
               <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setActiveTab('linux')}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
@@ -343,6 +359,14 @@ export default function App() {
                     }`}
                   >
                     Docker
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('vds')}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      activeTab === 'vds' ? 'bg-emerald-500 text-black shadow' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    VDS Setup
                   </button>
                 </div>
 
@@ -378,6 +402,16 @@ export default function App() {
                   )}
                 </button>
               </div>
+
+              {/* VDS Setup Subtitle & Alternative */}
+              {activeTab === 'vds' && (
+                <div className="mt-3 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <span>Replace <code className="text-emerald-400">&lt;ssh-alias&gt;</code> with your host (e.g. <code className="text-slate-200">saga</code>). Or run with Craft CLI: <code className="text-emerald-400 font-mono">craft remote setup-docker saga</code></span>
+                  <button onClick={() => openDocs('remote')} className="text-emerald-400 hover:underline flex items-center gap-1 font-medium whitespace-nowrap">
+                    VDS Guide &rarr;
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -397,17 +431,19 @@ export default function App() {
             <div className="p-6 space-y-4 text-slate-300">
               <div>
                 <span className="text-emerald-400 font-semibold">user@workstation:~$</span> craft new paper 1.21.4 survival --memory 4G --aikar
-                <p className="text-slate-500 mt-1">&check; Resolving Paper 1.21.4 stable build...</p>
+                <p className="text-slate-500 mt-1">&check; Loading version catalog from cache (0 ms)...</p>
+                <p className="text-slate-500">&check; Resolving Paper 1.21.4 stable build from catalog...</p>
                 <p className="text-slate-500">&check; Downloaded server.jar [51.4 MB / 51.4 MB] (100%)</p>
                 <p className="text-slate-500">&check; Applied Aikar's optimized G1GC JVM flags</p>
                 <p className="text-slate-500">&check; Detected OpenJDK 21 (Temurin-21.0.4+7)</p>
                 <p className="text-emerald-400 font-semibold">&check; Server 'survival' successfully provisioned!</p>
               </div>
               <div>
-                <span className="text-emerald-400 font-semibold">user@workstation:~$</span> craft run survival
-                <p className="text-slate-500 mt-1">Starting Craft supervisor daemon...</p>
-                <p className="text-slate-500">Server 'survival' started in background [PID: 41829]</p>
-                <p className="text-emerald-400 font-semibold">&check; Live on port 25565. Attach anytime with: craft view survival</p>
+                <span className="text-emerald-400 font-semibold">user@workstation:~$</span> craft remote setup-docker saga
+                <p className="text-slate-500 mt-1">&check; Connected to remote host 'saga' over safe SSH</p>
+                <p className="text-slate-500">&check; Verified Docker CE & Docker Compose</p>
+                <p className="text-slate-500">&check; Deployed Craft container stack into /opt/craft</p>
+                <p className="text-emerald-400 font-semibold">&check; Remote host 'saga' registered and ready for management!</p>
               </div>
             </div>
           </div>
@@ -596,65 +632,149 @@ export default function App() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="bg-[#121824] border border-slate-800 rounded-2xl p-6">
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4">
-                  <Zap className="h-5 w-5" />
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div 
+                onClick={() => openDocs('catalog')}
+                className="bg-[#121824] border border-slate-800 rounded-2xl p-6 hover:border-emerald-500/50 transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Database className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-base text-white mb-2 group-hover:text-emerald-400 transition-colors">Centralized Version Catalog</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Zero-latency startup (&lt;1ms) powered by local zstd-compressed catalog cache. Silent background auto-updates and in-wizard manual reload.
+                  </p>
                 </div>
-                <h3 className="font-bold text-base text-white mb-2">24/7 Supervisor Daemon</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  IPC over Unix Domain Sockets and Windows Named Pipes (<code className="text-emerald-400 font-mono">\\.\pipe\craft-daemon</code>). Native automated service installation for systemd, launchd, and Windows Task Scheduler.
-                </p>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
+                  Read Catalog Docs &rarr;
+                </div>
               </div>
 
-              <div className="bg-[#121824] border border-slate-800 rounded-2xl p-6">
-                <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mb-4">
-                  <Cloud className="h-5 w-5" />
+              <div 
+                onClick={() => openDocs('remote')}
+                className="bg-[#121824] border border-slate-800 rounded-2xl p-6 hover:border-cyan-500/50 transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-10 w-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Server className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-base text-white mb-2 group-hover:text-cyan-400 transition-colors">Automated Safe SSH VDS</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Zero-friction remote deployment over safe SSH aliases (e.g. <code className="text-cyan-300">saga</code>). Auto-installs Docker CE, Compose, and deploys Craft stack.
+                  </p>
                 </div>
-                <h3 className="font-bold text-base text-white mb-2">Remote SSH Bootstrapping</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Target remote machines over SSH. Automatically provisions OpenJDK 21, sets up systemd user units, and streams interactive remote consoles.
-                </p>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-cyan-400 flex items-center gap-1 font-medium">
+                  Read VDS Setup Guide &rarr;
+                </div>
               </div>
 
-              <div className="bg-[#121824] border border-slate-800 rounded-2xl p-6">
-                <div className="h-10 w-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center mb-4">
-                  <ShieldCheck className="h-5 w-5" />
+              <div 
+                onClick={() => openDocs('daemon-service')}
+                className="bg-[#121824] border border-slate-800 rounded-2xl p-6 hover:border-emerald-500/50 transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Zap className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-base text-white mb-2 group-hover:text-emerald-400 transition-colors">24/7 Supervisor Daemon</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    IPC over Unix Domain Sockets and Windows Named Pipes. Native automated service installation for systemd, launchd, and Task Scheduler.
+                  </p>
                 </div>
-                <h3 className="font-bold text-base text-white mb-2">Smart Selective Snapshots</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  RCON-synchronized safe flushes with automatic exclusion of logs/caches and optional <code className="text-emerald-400 font-mono">--world-only</code> flag for ultra-compact backups.
-                </p>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
+                  Read Service Docs &rarr;
+                </div>
               </div>
 
-              <div className="bg-[#121824] border border-slate-800 rounded-2xl p-6">
-                <div className="h-10 w-10 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 flex items-center justify-center mb-4">
-                  <Cpu className="h-5 w-5" />
+              <div 
+                onClick={() => openDocs('remote')}
+                className="bg-[#121824] border border-slate-800 rounded-2xl p-6 hover:border-blue-500/50 transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Cloud className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-base text-white mb-2 group-hover:text-blue-400 transition-colors">Remote SSH Bootstrapping</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Target remote machines with <code className="text-blue-300 font-mono">--remote</code>. Provisions OpenJDK 21, registers systemd units, and streams consoles.
+                  </p>
                 </div>
-                <h3 className="font-bold text-base text-white mb-2">JVM Garbage Collection Tuning</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Out-of-the-box presets for Aikar's G1GC (<code className="text-emerald-400 font-mono">--aikar</code>), ZGC low-latency (<code className="text-emerald-400 font-mono">--zgc</code>), and Shenandoah GC (<code className="text-emerald-400 font-mono">--shenandoah</code>).
-                </p>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-blue-400 flex items-center gap-1 font-medium">
+                  Read Remote Docs &rarr;
+                </div>
               </div>
 
-              <div className="bg-[#121824] border border-slate-800 rounded-2xl p-6">
-                <div className="h-10 w-10 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center mb-4">
-                  <Globe className="h-5 w-5" />
+              <div 
+                onClick={() => openDocs('backups')}
+                className="bg-[#121824] border border-slate-800 rounded-2xl p-6 hover:border-purple-500/50 transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-10 w-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-base text-white mb-2 group-hover:text-purple-400 transition-colors">Smart Selective Snapshots</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    RCON-synchronized safe flushes with automatic exclusion of logs/caches and optional <code className="text-purple-300 font-mono">--world-only</code> flag saving 90% space.
+                  </p>
                 </div>
-                <h3 className="font-bold text-base text-white mb-2">Native SLP & RakNet Ping</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Zero-dependency network diagnostics: ping Java servers via Minecraft Server List Ping (SLP) and Bedrock servers via RakNet UDP.
-                </p>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-purple-400 flex items-center gap-1 font-medium">
+                  Read Backup Docs &rarr;
+                </div>
               </div>
 
-              <div className="bg-[#121824] border border-slate-800 rounded-2xl p-6">
-                <div className="h-10 w-10 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mb-4">
-                  <Layers className="h-5 w-5" />
+              <div 
+                onClick={() => openDocs('jvm-tuning')}
+                className="bg-[#121824] border border-slate-800 rounded-2xl p-6 hover:border-yellow-500/50 transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-10 w-10 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Cpu className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-base text-white mb-2 group-hover:text-yellow-400 transition-colors">JVM GC Presets</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Out-of-the-box presets for Aikar's G1GC (<code className="text-yellow-300 font-mono">--aikar</code>), ZGC low-latency (<code className="text-yellow-300 font-mono">--zgc</code>), and Shenandoah GC.
+                  </p>
                 </div>
-                <h3 className="font-bold text-base text-white mb-2">Multi-Source Plugin Search</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Query Modrinth API v2, PaperMC Hangar v1, and PocketMine Poggit in parallel with direct installation into your server plugins folder.
-                </p>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-yellow-400 flex items-center gap-1 font-medium">
+                  Read Tuning Docs &rarr;
+                </div>
+              </div>
+
+              <div 
+                onClick={() => openDocs('cli-commands')}
+                className="bg-[#121824] border border-slate-800 rounded-2xl p-6 hover:border-teal-500/50 transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-10 w-10 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Globe className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-base text-white mb-2 group-hover:text-teal-400 transition-colors">Native SLP & RakNet Ping</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Zero-dependency network diagnostics: ping Java servers via Minecraft Server List Ping (SLP) and Bedrock servers via RakNet UDP.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-teal-400 flex items-center gap-1 font-medium">
+                  Read CLI Docs &rarr;
+                </div>
+              </div>
+
+              <div 
+                onClick={() => openDocs('plugins')}
+                className="bg-[#121824] border border-slate-800 rounded-2xl p-6 hover:border-red-500/50 transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="h-10 w-10 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <Layers className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-base text-white mb-2 group-hover:text-red-400 transition-colors">Multi-Source Plugin Search</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Query Modrinth API v2, PaperMC Hangar v1, and PocketMine Poggit in parallel with direct installation into your server plugins folder.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-red-400 flex items-center gap-1 font-medium">
+                  Read Plugin Docs &rarr;
+                </div>
               </div>
             </div>
           </div>

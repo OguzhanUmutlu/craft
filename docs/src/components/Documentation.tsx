@@ -19,7 +19,8 @@ import {
   Code,
   BookOpen,
   Info,
-  AlertCircle
+  AlertCircle,
+  Database
 } from 'lucide-react';
 
 export interface DocPage {
@@ -212,6 +213,45 @@ export default function Documentation({ onBackToHome, initialPage = 'getting-sta
               </tbody>
             </table>
           </div>
+        </div>
+      ),
+    },
+    {
+      id: 'catalog',
+      title: 'Version Catalog & Cache',
+      category: 'Core',
+      icon: Database,
+      description: 'Zero-latency startup, offline-first zstandard catalog, background auto-sync, and manual reload.',
+      content: (
+        <div className="space-y-6">
+          <p className="text-sm text-slate-300 leading-relaxed">
+            Craft features an offline-first, pre-compiled server version catalog compressed with high-ratio Zstandard (<code className="text-emerald-400 font-mono">versions.zst</code>).
+            Server creation starts instantly (&lt;1ms) without blocking on upstream APIs.
+          </p>
+
+          <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-start gap-3 text-xs text-emerald-300">
+            <Info className="h-5 w-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <span className="font-semibold text-white">Offline-First Architecture:</span> The catalog is cached locally at <code className="text-white">~/.craft/cache/catalog/versions.zst</code>. All 16+ server platforms (Paper, Purpur, Folia, Fabric, NeoForge, etc.) can be queried immediately even with no internet connection.
+            </div>
+          </div>
+
+          <h3 className="text-lg font-bold text-white mt-8 mb-2">Background Auto-Update Engine</h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            When you interact with Craft, a detached background thread checks if the local catalog cache is older than 6 hours. If expired, it silently downloads and replaces the catalog in the background without introducing any latency to your command.
+          </p>
+
+          <h3 className="text-lg font-bold text-white mt-8 mb-2">Interactive Version Wizard Controls</h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Inside the interactive server creation wizard (<code className="text-emerald-400 font-mono">craft</code> dashboard or <code className="text-emerald-400 font-mono">craft new</code>), you can manage the catalog directly from Step 4 (Version Selection):
+          </p>
+          <ul className="list-disc pl-5 text-xs text-slate-300 space-y-1 my-2">
+            <li><strong className="text-emerald-400 font-mono">[u] Update Version Catalog Now:</strong> Triggers an immediate asynchronous download of the latest zstd catalog and live-reloads the version table in place.</li>
+            <li><strong className="text-emerald-400 font-mono">[a] Auto-Update in Background: [ON / OFF]:</strong> Toggles the persistent auto-update setting stored in <code className="text-slate-300">~/.craft/config.toml</code>.</li>
+          </ul>
+
+          <h3 className="text-lg font-bold text-white mt-8 mb-2">CLI Catalog Commands</h3>
+          <CodeBlock id="cat-cli" code="# Inspect catalog cache status, entry count, and last update\ncraft catalog status\n\n# Force immediate manual update\ncraft catalog update\n\n# Synchronize and verify catalog\ncraft catalog sync\n\n# Clear local catalog cache\ncraft catalog clear" />
         </div>
       ),
     },
