@@ -101,7 +101,10 @@ pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
                     None => {
                         show_modal_message(
                             "TRASH ITEM NOT FOUND",
-                            &["This trash item was restored or removed by another process.".to_string()],
+                            &[
+                                "This trash item was restored or removed by another process."
+                                    .to_string(),
+                            ],
                             true,
                         )?;
                         continue;

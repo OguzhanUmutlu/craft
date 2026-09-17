@@ -95,7 +95,10 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
                 } else {
                     show_modal_message(
                         "HOST NOT FOUND",
-                        &[format!("Remote host '{}' was removed by another process.", alias)],
+                        &[format!(
+                            "Remote host '{}' was removed by another process.",
+                            alias
+                        )],
                         true,
                     )?;
                 }
@@ -108,7 +111,10 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
                 } else {
                     show_modal_message(
                         "HOST NOT FOUND",
-                        &[format!("Remote host '{}' was removed by another process.", alias)],
+                        &[format!(
+                            "Remote host '{}' was removed by another process.",
+                            alias
+                        )],
                         true,
                     )?;
                 }

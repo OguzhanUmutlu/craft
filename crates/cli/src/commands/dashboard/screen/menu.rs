@@ -85,6 +85,7 @@ pub fn run_menu(
 }
 
 /// Runs a menu with an in-place action/event handler callback that can cancel/intercept actions.
+#[allow(dead_code)]
 pub fn run_menu_with_handler<F>(
     header: &str,
     entries: &[MenuEntry],
@@ -98,6 +99,30 @@ where
         .with_allow_quit_on_q(super::NavGuard::depth() <= 1);
 
     match modal.run_with_handler(selected_idx, handler)? {
+        super::modals::SelectOutcome::Selected(idx) => Ok(Some(idx)),
+        super::modals::SelectOutcome::Toggled(idx) => Ok(Some(idx)),
+        _ => Ok(None),
+    }
+}
+
+/// Runs a menu with an in-place action/event handler and a periodic tick handler.
+pub fn run_menu_with_tick_handler<F, T>(
+    header: &str,
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+    tick_interval: std::time::Duration,
+    handler: F,
+    ticker: T,
+) -> Result<Option<usize>>
+where
+    F: FnMut(char, usize, &mut Vec<modalx::SelectItem>, &mut Vec<String>) -> modalx::EventDecision,
+    T: FnMut(&mut usize, &mut Vec<modalx::SelectItem>, &mut Vec<String>) -> bool,
+{
+    let modal = super::modals::SelectModal::from_legacy(header, entries)
+        .with_tick_interval(tick_interval)
+        .with_allow_quit_on_q(super::NavGuard::depth() <= 1);
+
+    match modal.run_with_tick_handler(selected_idx, handler, ticker)? {
         super::modals::SelectOutcome::Selected(idx) => Ok(Some(idx)),
         super::modals::SelectOutcome::Toggled(idx) => Ok(Some(idx)),
         _ => Ok(None),

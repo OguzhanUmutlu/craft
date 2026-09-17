@@ -1768,21 +1768,30 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         let mut actions = Vec::new();
         let mut num = 1;
 
-        entries.push(MenuEntry::new(num.to_string(), "Server Network Ping").with_aliases(&["p", "ping"]));
+        entries.push(
+            MenuEntry::new(num.to_string(), "Server Network Ping").with_aliases(&["p", "ping"]),
+        );
         actions.push(ToolItemAction::Ping);
         num += 1;
 
-        entries.push(MenuEntry::new(num.to_string(), "Daemon Control").with_aliases(&["d", "daemon"]));
+        entries
+            .push(MenuEntry::new(num.to_string(), "Daemon Control").with_aliases(&["d", "daemon"]));
         actions.push(ToolItemAction::Daemon);
         num += 1;
 
-        entries.push(MenuEntry::new(num.to_string(), "Firewall Manager (Port/IP Rules)").with_aliases(&["f", "firewall"]));
+        entries.push(
+            MenuEntry::new(num.to_string(), "Firewall Manager (Port/IP Rules)")
+                .with_aliases(&["f", "firewall"]),
+        );
         actions.push(ToolItemAction::Firewall);
         num += 1;
 
         #[cfg(target_os = "windows")]
         {
-            entries.push(MenuEntry::new(num.to_string(), "Windows Bedrock Loopback Exemption").with_aliases(&["l", "loopback"]));
+            entries.push(
+                MenuEntry::new(num.to_string(), "Windows Bedrock Loopback Exemption")
+                    .with_aliases(&["l", "loopback"]),
+            );
             actions.push(ToolItemAction::Loopback);
             num += 1;
         }
@@ -1829,17 +1838,22 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                                 let cl_mb = (cleaned as f64) / (1024.0 * 1024.0);
                                 show_modal_message(
                                     "CACHE PURGED",
-                                    &[
-                                        format!("[OK] Cleared {:.2} MB of downloaded caches.", cl_mb)
-                                            .green()
-                                            .bold()
-                                            .to_string(),
-                                    ],
+                                    &[format!(
+                                        "[OK] Cleared {:.2} MB of downloaded caches.",
+                                        cl_mb
+                                    )
+                                    .green()
+                                    .bold()
+                                    .to_string()],
                                     false,
                                 )?;
                             }
                             Err(e) => {
-                                show_modal_message("PURGE FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                show_modal_message(
+                                    "PURGE FAILED",
+                                    &[format!("[ERROR] {}", e)],
+                                    true,
+                                )?;
                             }
                         }
                     }

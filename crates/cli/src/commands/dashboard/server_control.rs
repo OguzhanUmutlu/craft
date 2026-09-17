@@ -769,14 +769,20 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                     } else {
                         show_modal_message(
                             "SERVER NOT FOUND",
-                            &[format!("Server directory for '{}' was deleted or moved.", server_name)],
+                            &[format!(
+                                "Server directory for '{}' was deleted or moved.",
+                                server_name
+                            )],
                             true,
                         )?;
                     }
                 } else {
                     show_modal_message(
                         "SERVER NOT FOUND",
-                        &[format!("Server '{}' was deleted by another process.", server_name)],
+                        &[format!(
+                            "Server '{}' was deleted by another process.",
+                            server_name
+                        )],
                         true,
                     )?;
                 }
@@ -790,7 +796,10 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                     if !chosen.path.exists() {
                         show_modal_message(
                             "SERVER NOT FOUND",
-                            &[format!("Server directory for '{}' was deleted or moved.", server_name)],
+                            &[format!(
+                                "Server directory for '{}' was deleted or moved.",
+                                server_name
+                            )],
                             true,
                         )?;
                         continue;
@@ -827,7 +836,10 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                 } else {
                     show_modal_message(
                         "SERVER NOT FOUND",
-                        &[format!("Server '{}' was deleted by another process.", server_name)],
+                        &[format!(
+                            "Server '{}' was deleted by another process.",
+                            server_name
+                        )],
                         true,
                     )?;
                 }
@@ -1132,7 +1144,10 @@ pub(crate) async fn server_control_panel(
                     let _ = print_in_place_status(
                         "STARTING SERVER",
                         &[
-                            format!("Starting server '{}' in background daemon...", fresh_server.name),
+                            format!(
+                                "Starting server '{}' in background daemon...",
+                                fresh_server.name
+                            ),
                             "Initializing supervisor process...".to_string(),
                         ],
                     );
@@ -1232,7 +1247,11 @@ pub(crate) async fn server_control_panel(
                 }
             }
             ControlAction::ServerProperties => {
-                super::properties_tui::server_properties_editor(&fresh_server.path, &fresh_server.name).await?;
+                super::properties_tui::server_properties_editor(
+                    &fresh_server.path,
+                    &fresh_server.name,
+                )
+                .await?;
             }
             ControlAction::ManageWorlds => {
                 super::worlds_tui::manage_installed_worlds_menu(&fresh_server).await?;
@@ -1303,7 +1322,10 @@ pub(crate) async fn server_content_menu(
         if !server.path.exists() {
             show_modal_message(
                 "SERVER NOT FOUND",
-                &[format!("Server directory '{}' was deleted or moved.", server.path.display())],
+                &[format!(
+                    "Server directory '{}' was deleted or moved.",
+                    server.path.display()
+                )],
                 true,
             )?;
             return Ok(());
@@ -1496,11 +1518,11 @@ pub(crate) async fn server_maintenance_menu(
                 }
 
                 let prompt = format!("Enter new name for server '{}':", current_server.name);
-                let new_name = match run_input_prompt("RENAME SERVER", &prompt, Some(&current_server.name))?
-                {
-                    Some(n) => n.trim().to_string(),
-                    None => continue,
-                };
+                let new_name =
+                    match run_input_prompt("RENAME SERVER", &prompt, Some(&current_server.name))? {
+                        Some(n) => n.trim().to_string(),
+                        None => continue,
+                    };
 
                 if new_name.is_empty() || new_name == server.name {
                     continue;
@@ -1597,9 +1619,13 @@ pub(crate) async fn server_maintenance_menu(
                 let confirm_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose removal method for server '{}':\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title(&format!("DELETE SERVER: {}", current_server.name), width, false)
-                        .cyan()
-                        .bold(),
+                    box_title(
+                        &format!("DELETE SERVER: {}", current_server.name),
+                        width,
+                        false
+                    )
+                    .cyan()
+                    .bold(),
                     box_divider(width).cyan().bold(),
                     current_server.name,
                     box_divider(width).dimmed(),
@@ -1623,7 +1649,8 @@ pub(crate) async fn server_maintenance_menu(
 
                         let trash = TrashManager::new(paths);
                         if current_server.path.exists() {
-                            let _ = trash.trash_file(&current_server.path, Some(&current_server.name));
+                            let _ =
+                                trash.trash_file(&current_server.path, Some(&current_server.name));
                         }
                         show_modal_message(
                             "MOVED TO TRASH",
@@ -1716,7 +1743,10 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
             _ => {
                 show_modal_message(
                     "SERVER NOT FOUND",
-                    &[format!("Server '{}' was deleted or moved by another process.", server_name)],
+                    &[format!(
+                        "Server '{}' was deleted or moved by another process.",
+                        server_name
+                    )],
                     true,
                 )?;
                 return Ok(());
@@ -2644,7 +2674,9 @@ async fn install_plugin_from_cache_menu(
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Select a cached plugin to install into '{}':\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("INSTALL PLUGIN FROM CACHE", width, false).cyan().bold(),
+            box_title("INSTALL PLUGIN FROM CACHE", width, false)
+                .cyan()
+                .bold(),
             box_divider(width).cyan().bold(),
             server_name,
             box_divider(width).dimmed(),

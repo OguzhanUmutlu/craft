@@ -81,13 +81,11 @@ pub async fn handle_new(
                     .interact()?;
 
                 if java_choice == 0 {
-                    vec![
-                        (
-                            "vanilla_java",
-                            "Vanilla Java",
-                            "Official Mojang Java dedicated server",
-                        ),
-                    ]
+                    vec![(
+                        "vanilla_java",
+                        "Vanilla Java",
+                        "Official Mojang Java dedicated server",
+                    )]
                 } else if java_choice == 1 {
                     vec![
                         (
@@ -228,18 +226,29 @@ pub async fn handle_new(
         if v == "latest" {
             default_version
         } else {
+            let is_available = bundled.contains(&v.to_string())
+                || software.get_assets(v).is_ok()
+                || catalog_mgr
+                    .as_ref()
+                    .map(|m| m.load().get_assets(software.id(), v).is_some())
+                    .unwrap_or(false);
+            if !is_available {
+                return Err(CraftError::UnknownVersion {
+                    software: software.name().to_string(),
+                    version: v.to_string(),
+                });
+            }
             v.to_string()
         }
     } else if is_tty {
         println!();
         println!("{}", "Select software version:".cyan().bold());
         let mut version_options = vec![format!("latest (Recommended: {})", default_version)];
-        for b in bundled.iter().take(5) {
+        for b in bundled.iter() {
             if b != &default_version {
                 version_options.push(b.clone());
             }
         }
-        version_options.push("Custom version...".to_string());
 
         let ver_choice = Select::with_theme(&theme)
             .with_prompt("Version")
@@ -249,11 +258,6 @@ pub async fn handle_new(
 
         if ver_choice == 0 {
             default_version
-        } else if ver_choice == version_options.len() - 1 {
-            Input::with_theme(&theme)
-                .with_prompt("Enter custom Minecraft version")
-                .default(default_version)
-                .interact_text()?
         } else {
             version_options[ver_choice].clone()
         }

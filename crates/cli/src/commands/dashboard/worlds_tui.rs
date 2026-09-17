@@ -28,7 +28,10 @@ pub async fn manage_installed_worlds_menu(server: &ServerConfig) -> Result<()> {
         if !server.path.exists() {
             show_modal_message(
                 "SERVER NOT FOUND",
-                &[format!("Server directory '{}' was deleted or moved.", server.path.display())],
+                &[format!(
+                    "Server directory '{}' was deleted or moved.",
+                    server.path.display()
+                )],
                 true,
             )?;
             return Ok(());
@@ -160,7 +163,10 @@ async fn world_detail_menu(server: &ServerConfig, world: &InstalledWorldItem) ->
         if !world.path.exists() {
             show_modal_message(
                 "WORLD NOT FOUND",
-                &[format!("World directory '{}' was deleted or moved.", world.path.display())],
+                &[format!(
+                    "World directory '{}' was deleted or moved.",
+                    world.path.display()
+                )],
                 true,
             )?;
             return Ok(());
@@ -977,10 +983,7 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
             let desc = craft_core::truncate_ellipsis(m.description, available_desc);
             entries.push(MenuEntry::new(hotkey, format!("{}{}", prefix, desc)));
         }
-        entries.push(
-            MenuEntry::new("c", "Install Map from Cache")
-                .with_aliases(&["cache"]),
-        );
+        entries.push(MenuEntry::new("c", "Install Map from Cache").with_aliases(&["cache"]));
         entries.push(
             MenuEntry::new("u", "Install Map from Direct Link or Website URL")
                 .with_aliases(&["url", "link"]),
@@ -1173,7 +1176,9 @@ async fn install_map_from_cache_menu(server_path: &Path) -> Result<()> {
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Select a cached world map to install into the server:\r\n{}",
             box_top(width).cyan().bold(),
-            box_title("INSTALL MAP FROM CACHE", width, false).cyan().bold(),
+            box_title("INSTALL MAP FROM CACHE", width, false)
+                .cyan()
+                .bold(),
             box_divider(width).cyan().bold(),
             box_divider(width).dimmed(),
         );
@@ -1214,7 +1219,10 @@ async fn install_map_from_cache_menu(server_path: &Path) -> Result<()> {
                 let chosen = &cached[idx];
                 let folder_prompt = run_input_prompt(
                     "WORLD FOLDER NAME",
-                    &format!("Enter world folder name (leave blank for '{}'):", chosen.display_title()),
+                    &format!(
+                        "Enter world folder name (leave blank for '{}'):",
+                        chosen.display_title()
+                    ),
                     None,
                 )?;
                 let custom_name = folder_prompt
@@ -1230,7 +1238,11 @@ async fn install_map_from_cache_menu(server_path: &Path) -> Result<()> {
                         chosen.display_title()
                     )],
                 );
-                match craft_plugins::install_cached_map(server_path, chosen.rel_subpath(), custom_name) {
+                match craft_plugins::install_cached_map(
+                    server_path,
+                    chosen.rel_subpath(),
+                    custom_name,
+                ) {
                     Ok((dest, installed_name)) => {
                         show_modal_message(
                             "MAP INSTALLED",

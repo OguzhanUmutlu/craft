@@ -62,10 +62,9 @@ fn run_boxed_bootstrap(
             {
                 if let Ok(mut s) = state_clone.lock() {
                     s.spinner_idx = s.spinner_idx.wrapping_add(1);
-                    let mut modal =
-                        modalx::modals::WaitingModal::new(&s.title, &s.current)
-                            .with_max_width(84)
-                            .with_cancellable(true);
+                    let mut modal = modalx::modals::WaitingModal::new(&s.title, &s.current)
+                        .with_max_width(84)
+                        .with_cancellable(true);
                     for (step_label, completed) in &s.steps {
                         modal = modal.with_step(step_label.clone(), *completed);
                     }
@@ -264,9 +263,7 @@ pub enum HostProbeResult {
     Cancelled,
 }
 
-pub async fn connect_and_probe_host(
-    host_config: &RemoteHostConfig,
-) -> Result<HostProbeResult> {
+pub async fn connect_and_probe_host(host_config: &RemoteHostConfig) -> Result<HostProbeResult> {
     let _alt = AltScreenGuard::enter();
     let (tx, rx) = mpsc::channel();
     let cfg_clone = host_config.clone();
@@ -333,7 +330,10 @@ pub async fn connect_and_probe_host(
         }
 
         if let Ok(mut msg) = status_clone.lock() {
-            *msg = format!("Preparing daemon & launching remote session on '{}'", cfg_clone.alias);
+            *msg = format!(
+                "Preparing daemon & launching remote session on '{}'",
+                cfg_clone.alias
+            );
         }
 
         let _ = client.ensure_daemon_started();
@@ -384,7 +384,11 @@ pub async fn connect_and_probe_host(
             let mut frame = BoxFrame::new(width);
             frame.title = Some(("CONNECTING TO REMOTE HOST".to_string(), false));
             frame.empty_row();
-            frame.row(format!("{} {}", current_text, frames[frame_idx % frames.len()]));
+            frame.row(format!(
+                "{} {}",
+                current_text,
+                frames[frame_idx % frames.len()]
+            ));
             frame.empty_row();
             frame.footer("[Esc] Cancel  |  Please wait...".to_string());
             frame.render(&mut stdout)?;
@@ -476,7 +480,11 @@ pub async fn manage_host_servers(
                         Err(e) => {
                             let err_msg = e.to_string();
                             if !err_msg.contains("cancelled") && !err_msg.contains("Cancelled") {
-                                show_modal_message("BOOTSTRAP FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                show_modal_message(
+                                    "BOOTSTRAP FAILED",
+                                    &[format!("[ERROR] {}", e)],
+                                    true,
+                                )?;
                             }
                             return Ok(());
                         }
@@ -486,7 +494,10 @@ pub async fn manage_host_servers(
                 _ => return Ok(()),
             }
         }
-        HostProbeResult::RemoteOutdated { client, remote_version: r_ver } => {
+        HostProbeResult::RemoteOutdated {
+            client,
+            remote_version: r_ver,
+        } => {
             let width = get_content_width(80);
             let local_version = craft_core::CRAFT_VERSION;
             let update_header = format!(
@@ -546,7 +557,10 @@ pub async fn manage_host_servers(
                 _ => return Ok(()),
             }
         }
-        HostProbeResult::LocalOutdated { client, remote_version: r_ver } => {
+        HostProbeResult::LocalOutdated {
+            client,
+            remote_version: r_ver,
+        } => {
             let width = get_content_width(80);
             let local_version = craft_core::CRAFT_VERSION;
             let adv_header = format!(

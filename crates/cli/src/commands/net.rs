@@ -1,9 +1,9 @@
 use crate::cli::LoopbackCommands;
 use colored::Colorize;
 use craft_core::{CraftError, CraftPaths, QueryProtocolKind, Result, ServersRegistry};
+use craft_net::{allow_ip_port, ping_server_auto, RconClient, UniversalPingStatus};
 #[cfg(target_os = "windows")]
 use craft_net::{enable_bedrock_loopback, is_bedrock_loopback_enabled};
-use craft_net::{allow_ip_port, ping_server_auto, RconClient, UniversalPingStatus};
 
 pub async fn handle_ping(target: &str, is_bedrock: bool, is_a2s: bool) -> Result<()> {
     let (default_port, proto_hint) = if is_bedrock {
@@ -194,7 +194,7 @@ pub fn handle_loopback(_action: Option<LoopbackCommands>) -> Result<()> {
             "Note: Bedrock loopback exemption is only required on Windows (UWP AppContainer isolation).\r\nLoopback connections are unrestricted on Linux and macOS."
                 .cyan()
         );
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(target_os = "windows")]

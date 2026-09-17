@@ -746,7 +746,9 @@ mod tests {
 
     #[test]
     fn test_catalog_commands_parsing() {
-        let cli_build = Cli::try_parse_from(["craft", "catalog", "build", "--output", "/tmp/versions.zst"]).unwrap();
+        let cli_build =
+            Cli::try_parse_from(["craft", "catalog", "build", "--output", "/tmp/versions.zst"])
+                .unwrap();
         match cli_build.command {
             Some(Commands::Catalog {
                 action: Some(CatalogCommands::Build { output }),
@@ -756,7 +758,14 @@ mod tests {
             _ => panic!("Expected Catalog Build command"),
         }
 
-        let cli_update = Cli::try_parse_from(["craft", "catalog", "update", "--url", "https://example.com/versions.zst"]).unwrap();
+        let cli_update = Cli::try_parse_from([
+            "craft",
+            "catalog",
+            "update",
+            "--url",
+            "https://example.com/versions.zst",
+        ])
+        .unwrap();
         match cli_update.command {
             Some(Commands::Catalog {
                 action: Some(CatalogCommands::Update { url }),
@@ -798,7 +807,8 @@ mod tests {
             _ => panic!("Expected Remote SetupDocker command"),
         }
 
-        let cli_vds = Cli::try_parse_from(["craft", "deploy", "vds", "saga", "--dir", "/opt/craft"]).unwrap();
+        let cli_vds =
+            Cli::try_parse_from(["craft", "deploy", "vds", "saga", "--dir", "/opt/craft"]).unwrap();
         match cli_vds.command {
             Some(Commands::Deploy {
                 action: Some(DeployCommands::Vds { target, dir }),

@@ -1,32 +1,24 @@
-use std::fs;
-use std::path::PathBuf;
+use crate::cli::CatalogCommands;
 use colored::Colorize;
 use craft_core::{CraftError, CraftPaths, Result};
 use craft_providers::{CatalogBuilder, CatalogManager};
-use crate::cli::CatalogCommands;
+use std::fs;
+use std::path::PathBuf;
 
-pub async fn handle_catalog(
-    action: Option<CatalogCommands>,
-    _paths: &CraftPaths,
-) -> Result<()> {
+pub async fn handle_catalog(action: Option<CatalogCommands>, _paths: &CraftPaths) -> Result<()> {
     match action.unwrap_or(CatalogCommands::Info) {
-        CatalogCommands::Build { output } => {
-            handle_build(output).await
-        }
-        CatalogCommands::Update { url } => {
-            handle_update(url).await
-        }
-        CatalogCommands::Info => {
-            handle_info()
-        }
-        CatalogCommands::List { software } => {
-            handle_list(software)
-        }
+        CatalogCommands::Build { output } => handle_build(output).await,
+        CatalogCommands::Update { url } => handle_update(url).await,
+        CatalogCommands::Info => handle_info(),
+        CatalogCommands::List { software } => handle_list(software),
     }
 }
 
 async fn handle_build(output: PathBuf) -> Result<()> {
-    println!("{}", "Craft Centralized Version Catalog Builder".cyan().bold());
+    println!(
+        "{}",
+        "Craft Centralized Version Catalog Builder".cyan().bold()
+    );
     println!("Querying upstream providers (PaperMC, Purpur, Mojang, Fabric, NeoForge, Spigot, PocketMine, etc.)...");
 
     let start = std::time::Instant::now();
@@ -48,7 +40,10 @@ async fn handle_build(output: PathBuf) -> Result<()> {
 
     println!();
     println!("{}", "Catalog Build Successful:".green().bold());
-    println!("  Output File:      {}", output.display().to_string().cyan());
+    println!(
+        "  Output File:      {}",
+        output.display().to_string().cyan()
+    );
     println!("  Compressed Size:  {:.2} KB (zstd level 19)", size_kb);
     println!("  Total Softwares:  {}", total_softwares);
     println!("  Total Versions:   {}", total_versions);
@@ -99,7 +94,8 @@ fn handle_info() -> Result<()> {
 
         match mgr.load_from_cache() {
             Ok(catalog) => {
-                let total_versions: usize = catalog.softwares.values().map(|s| s.versions.len()).sum();
+                let total_versions: usize =
+                    catalog.softwares.values().map(|s| s.versions.len()).sum();
                 println!("  Schema:     v{}", catalog.schema_version);
                 println!("  Softwares:  {}", catalog.softwares.len());
                 println!("  Versions:   {}", total_versions);
@@ -109,7 +105,10 @@ fn handle_info() -> Result<()> {
             }
         }
     } else {
-        println!("  Status:     {}", "Not Cached (using bundled fallbacks)".yellow());
+        println!(
+            "  Status:     {}",
+            "Not Cached (using bundled fallbacks)".yellow()
+        );
         println!("  Note:       Run 'craft catalog update' to fetch the latest catalog.");
     }
 
@@ -128,11 +127,7 @@ fn handle_list(software_filter: Option<String>) -> Result<()> {
             ))
         })?;
 
-        println!(
-            "{} ({})",
-            sw.name.cyan().bold(),
-            sw.edition.dimmed()
-        );
+        println!("{} ({})", sw.name.cyan().bold(), sw.edition.dimmed());
         println!("  Game:         {}", sw.game_id);
         println!("  Description:  {}", sw.description);
         println!("  Recommended:  {}", sw.recommended_version.green().bold());
@@ -161,7 +156,9 @@ fn handle_list(software_filter: Option<String>) -> Result<()> {
             );
         }
         println!();
-        println!("Use 'craft catalog list <software>' to view version details for a specific software.");
+        println!(
+            "Use 'craft catalog list <software>' to view version details for a specific software."
+        );
     }
 
     Ok(())

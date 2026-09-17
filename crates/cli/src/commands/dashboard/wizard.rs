@@ -7,8 +7,8 @@ use craft_providers::get_all_softwares;
 use super::get_system_summary;
 use super::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
-    run_menu, run_menu_with_handler, show_modal_message, AltScreenGuard, EventDecision, MenuEntry,
-    NavGuard,
+    run_menu, run_menu_with_tick_handler, show_modal_message, AltScreenGuard, EventDecision,
+    MenuEntry, NavGuard,
 };
 use crate::commands::new::handle_new;
 
@@ -84,11 +84,20 @@ pub async fn gui_create_server_wizard_with_name(
     let mut mem_sel = 1;
     let mut start_sel = 0;
 
-    let get_cat_crumbs = |cat_idx: usize, java_type: usize, game_id: &str| -> (Option<&'static str>, Option<&'static str>) {
+    let get_cat_crumbs = |cat_idx: usize,
+                          java_type: usize,
+                          game_id: &str|
+     -> (Option<&'static str>, Option<&'static str>) {
         if game_id == "minecraft" {
             match cat_idx {
                 0 => {
-                    let sub = if java_type == 1 { "Plugins" } else if java_type == 2 { "Modded" } else { "Vanilla" };
+                    let sub = if java_type == 1 {
+                        "Plugins"
+                    } else if java_type == 2 {
+                        "Modded"
+                    } else {
+                        "Vanilla"
+                    };
                     (Some("Java Edition"), Some(sub))
                 }
                 1 => (Some("Bedrock Edition"), None),
@@ -104,26 +113,50 @@ pub async fn gui_create_server_wizard_with_name(
         }
     };
 
-    let get_ver_step_num = |game_id: &str, cat_idx: usize, java_type: usize, has_name_override: bool| -> usize {
-        if game_id != "minecraft" && cat_idx != 99 {
-            if has_name_override { 2 } else { 3 }
-        } else if cat_idx == 99 {
-            if has_name_override { 3 } else { 4 }
-        } else if cat_idx == 0 && java_type == 0 {
-            if has_name_override { 4 } else { 5 }
-        } else if cat_idx == 0 {
-            if has_name_override { 5 } else { 6 }
-        } else {
-            if has_name_override { 4 } else { 5 }
-        }
-    };
+    let get_ver_step_num =
+        |game_id: &str, cat_idx: usize, java_type: usize, has_name_override: bool| -> usize {
+            if game_id != "minecraft" && cat_idx != 99 {
+                if has_name_override {
+                    2
+                } else {
+                    3
+                }
+            } else if cat_idx == 99 {
+                if has_name_override {
+                    3
+                } else {
+                    4
+                }
+            } else if cat_idx == 0 && java_type == 0 {
+                if has_name_override {
+                    4
+                } else {
+                    5
+                }
+            } else if cat_idx == 0 {
+                if has_name_override {
+                    5
+                } else {
+                    6
+                }
+            } else {
+                if has_name_override {
+                    4
+                } else {
+                    5
+                }
+            }
+        };
 
     loop {
         match step {
             WizardStep::Name => {
                 let current_step = 1;
                 let total_steps = 6;
-                let title = format!("SERVER SETUP WIZARD (STEP {}/{})", current_step, total_steps);
+                let title = format!(
+                    "SERVER SETUP WIZARD (STEP {}/{})",
+                    current_step, total_steps
+                );
                 match run_input_prompt(&title, "Enter server name:", Some(&server_name))? {
                     Some(n) if !n.trim().is_empty() => {
                         let name = n.trim().to_string();
@@ -157,7 +190,10 @@ pub async fn gui_create_server_wizard_with_name(
             WizardStep::GameSelect => {
                 let current_step = if has_name_override { 1 } else { 2 };
                 let total_steps = if has_name_override { 5 } else { 6 };
-                let title = format!("SELECT GAME ENVIRONMENT (STEP {}/{})", current_step, total_steps);
+                let title = format!(
+                    "SELECT GAME ENVIRONMENT (STEP {}/{})",
+                    current_step, total_steps
+                );
                 let width = get_content_width(80);
                 let game_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose dedicated game environment for server '{}':\r\n{}",
@@ -234,7 +270,10 @@ pub async fn gui_create_server_wizard_with_name(
             WizardStep::MinecraftCategory => {
                 let current_step = if has_name_override { 2 } else { 3 };
                 let total_steps = current_step + 3;
-                let title = format!("SELECT MINECRAFT CATEGORY (STEP {}/{})", current_step, total_steps);
+                let title = format!(
+                    "SELECT MINECRAFT CATEGORY (STEP {}/{})",
+                    current_step, total_steps
+                );
                 let width = get_content_width(80);
                 let mc_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose Minecraft platform category for '{}':\r\n{}",
@@ -286,7 +325,10 @@ pub async fn gui_create_server_wizard_with_name(
                 let _sub_nav = NavGuard::enter("Java Edition");
                 let current_step = if has_name_override { 3 } else { 4 };
                 let total_steps = current_step + 3;
-                let title = format!("SELECT JAVA SERVER TYPE (STEP {}/{})", current_step, total_steps);
+                let title = format!(
+                    "SELECT JAVA SERVER TYPE (STEP {}/{})",
+                    current_step, total_steps
+                );
                 let width = get_content_width(80);
                 let jt_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose server type for Java Edition:\r\n{}",
@@ -343,7 +385,10 @@ pub async fn gui_create_server_wizard_with_name(
                     let s = if has_name_override { 3 } else { 4 };
                     (s, s + 2)
                 };
-                let title = format!("SELECT SERVER SOFTWARE (STEP {}/{})", current_step, total_steps);
+                let title = format!(
+                    "SELECT SERVER SOFTWARE (STEP {}/{})",
+                    current_step, total_steps
+                );
 
                 let software_choices: Vec<(&'static str, &'static str, &'static str)> =
                     match cat_idx {
@@ -374,13 +419,11 @@ pub async fn gui_create_server_wizard_with_name(
                                     ),
                                 ]
                             } else {
-                                vec![
-                                    (
-                                        "vanilla_java",
-                                        "Vanilla Java",
-                                        "Official Mojang Java dedicated server",
-                                    ),
-                                ]
+                                vec![(
+                                    "vanilla_java",
+                                    "Vanilla Java",
+                                    "Official Mojang Java dedicated server",
+                                )]
                             }
                         }
                         1 => vec![
@@ -436,9 +479,7 @@ pub async fn gui_create_server_wizard_with_name(
                 let sw_header = format!(
                     "{}\r\n{}\r\n{}\r\n Select the server software implementation:\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title(&title, width, false)
-                        .cyan()
-                        .bold(),
+                    box_title(&title, width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
                     box_divider(width).dimmed(),
                 );
@@ -490,7 +531,10 @@ pub async fn gui_create_server_wizard_with_name(
                 let current_step = get_ver_step_num(game_id, cat_idx, java_type, has_name_override);
                 let min_menus_left = if is_java { 2 } else { 1 };
                 let total_steps = current_step + min_menus_left;
-                let title = format!("SELECT SERVER VERSION (STEP {}/{})", current_step, total_steps);
+                let title = format!(
+                    "SELECT SERVER VERSION (STEP {}/{})",
+                    current_step, total_steps
+                );
 
                 let width = get_content_width(80);
                 let mut settings = craft_core::GlobalSettings::load(paths).unwrap_or_default();
@@ -555,7 +599,7 @@ pub async fn gui_create_server_wizard_with_name(
                     .map(|s| s.recommended_version())
                     .unwrap_or_else(|| versions_list[0].clone());
 
-                let display_versions: Vec<String> = versions_list;
+                let display_versions = std::sync::Arc::new(std::sync::Mutex::new(versions_list));
 
                 let mut ver_entries: Vec<MenuEntry> = Vec::new();
 
@@ -568,51 +612,260 @@ pub async fn gui_create_server_wizard_with_name(
                 let update_idx = ver_entries.len();
                 ver_entries.push(MenuEntry::new("u", "Update Versions"));
 
-                let custom_idx = ver_entries.len();
-                ver_entries.push(MenuEntry::new("c", "Custom Version"));
-
                 let versions_start_idx = ver_entries.len();
-                for v in &display_versions {
-                    let label = if v == &recommended_ver {
-                        format!("{} (Recommended)", v)
-                    } else {
-                        v.clone()
-                    };
-                    ver_entries.push(MenuEntry::button(label));
+                {
+                    let v_list = display_versions.lock().unwrap();
+                    for v in v_list.iter() {
+                        let label = if v == &recommended_ver {
+                            format!("{} (Recommended)", v)
+                        } else {
+                            v.clone()
+                        };
+                        ver_entries.push(MenuEntry::button(label));
+                    }
                 }
 
-                let rec_offset = display_versions
-                    .iter()
-                    .position(|v| v == &recommended_ver)
-                    .unwrap_or(0);
+                let rec_offset = {
+                    let v_list = display_versions.lock().unwrap();
+                    v_list
+                        .iter()
+                        .position(|v| v == &recommended_ver)
+                        .unwrap_or(0)
+                };
                 let default_ver_sel = versions_start_idx + rec_offset;
                 if ver_sel < versions_start_idx || ver_sel >= ver_entries.len() {
                     ver_sel = default_ver_sel;
                 }
 
-                let cache_status_str = cache_status.clone();
-                let ver_choice = run_menu_with_handler(
+                let (bg_tx, bg_rx) = std::sync::mpsc::channel::<
+                    std::result::Result<craft_providers::VersionCatalog, String>,
+                >();
+                let is_updating = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+                let is_updating_action = is_updating.clone();
+                let is_updating_tick = is_updating.clone();
+                let auto_update_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(
+                    settings.auto_update_catalog,
+                ));
+                let auto_update_action = auto_update_flag.clone();
+                let auto_update_tick = auto_update_flag.clone();
+                let display_versions_clone = display_versions.clone();
+                let selected_sw_id_str = selected_sw_id.to_string();
+                let cache_status_str = cache_status.to_string();
+
+                let ver_choice = run_menu_with_tick_handler(
                     &ver_header,
                     &ver_entries,
                     &mut ver_sel,
+                    std::time::Duration::from_millis(60),
                     |ch, idx, entries, header_rows| {
-                        if ch == 'a' || ch == 'A' || entries.get(idx).map(|e| e.hotkey.as_str()) == Some("a") {
-                            settings.auto_update_catalog = !settings.auto_update_catalog;
+                        if ch == 'a'
+                            || ch == 'A'
+                            || entries.get(idx).map(|e| e.hotkey.as_str()) == Some("a")
+                        {
+                            let new_val =
+                                !auto_update_action.load(std::sync::atomic::Ordering::SeqCst);
+                            auto_update_action.store(new_val, std::sync::atomic::Ordering::SeqCst);
+                            settings.auto_update_catalog = new_val;
                             let _ = settings.save(paths);
-                            let new_auto = if settings.auto_update_catalog {
+                            let new_auto = if new_val {
                                 "ON".green()
                             } else {
                                 "OFF".dimmed()
                             };
                             for row in header_rows.iter_mut() {
                                 if modalx::strip_ansi(row).contains("Auto-Update:") {
-                                    *row = format!("Status: {} | Auto-Update: {}", cache_status_str, new_auto);
+                                    let status_part = if is_updating_action
+                                        .load(std::sync::atomic::Ordering::SeqCst)
+                                    {
+                                        "Updating...".yellow()
+                                    } else {
+                                        cache_status_str.as_str().green()
+                                    };
+                                    *row = format!(
+                                        " Status: {} | Auto-Update: {}",
+                                        status_part, new_auto
+                                    );
                                 }
                             }
+                            EventDecision::Cancel
+                        } else if ch == 'u' || ch == 'U' || idx == update_idx {
+                            if is_updating_action.load(std::sync::atomic::Ordering::SeqCst) {
+                                return EventDecision::Cancel;
+                            }
+                            is_updating_action.store(true, std::sync::atomic::Ordering::SeqCst);
+
+                            // Grey out update button
+                            if update_idx < entries.len() {
+                                entries[update_idx] = modalx::SelectItem::new(
+                                    "-",
+                                    "Updating...".dimmed().to_string(),
+                                );
+                            }
+
+                            // Update header status
+                            let auto_part =
+                                if auto_update_action.load(std::sync::atomic::Ordering::SeqCst) {
+                                    "ON".green()
+                                } else {
+                                    "OFF".dimmed()
+                                };
+                            for row in header_rows.iter_mut() {
+                                if modalx::strip_ansi(row).contains("Auto-Update:") {
+                                    *row = format!(
+                                        " Status: {} | Auto-Update: {}",
+                                        "Updating...".yellow(),
+                                        auto_part
+                                    );
+                                }
+                            }
+
+                            // Spawn background catalog update
+                            let tx = bg_tx.clone();
+                            std::thread::Builder::new()
+                                .name("craft-catalog-update".to_string())
+                                .spawn(move || {
+                                    let rt = match tokio::runtime::Builder::new_current_thread()
+                                        .enable_all()
+                                        .build()
+                                    {
+                                        Ok(r) => r,
+                                        Err(e) => {
+                                            let _ = tx.send(Err(e.to_string()));
+                                            return;
+                                        }
+                                    };
+                                    let res = rt.block_on(async {
+                                        let mgr = craft_providers::CatalogManager::new()?;
+                                        mgr.update().await
+                                    });
+                                    let _ = tx.send(res.map_err(|e| e.to_string()));
+                                })
+                                .ok();
+
                             EventDecision::Cancel
                         } else {
                             EventDecision::Proceed
                         }
+                    },
+                    |selected_idx, entries, header_rows| -> bool {
+                        if is_updating_tick.load(std::sync::atomic::Ordering::SeqCst) {
+                            if let Ok(res) = bg_rx.try_recv() {
+                                is_updating_tick.store(false, std::sync::atomic::Ordering::SeqCst);
+
+                                // Restore update button
+                                if update_idx < entries.len() {
+                                    entries[update_idx] =
+                                        modalx::SelectItem::new("u", "Update Versions");
+                                }
+
+                                match res {
+                                    Ok(cat) => {
+                                        let mut new_versions =
+                                            cat.get_versions(&selected_sw_id_str);
+                                        if new_versions.is_empty() {
+                                            if let Some(sw) =
+                                                craft_providers::find_software(&selected_sw_id_str)
+                                            {
+                                                new_versions = sw.bundled_versions();
+                                            }
+                                        }
+                                        craft_core::sort_versions_descending(&mut new_versions);
+                                        if new_versions.is_empty() {
+                                            new_versions.push("latest".to_string());
+                                        }
+
+                                        let new_rec =
+                                            craft_providers::find_software(&selected_sw_id_str)
+                                                .map(|s| s.recommended_version())
+                                                .unwrap_or_else(|| new_versions[0].clone());
+
+                                        // Preserve currently selected version
+                                        let prev_selected_ver = {
+                                            let v_list = display_versions_clone.lock().unwrap();
+                                            if *selected_idx >= versions_start_idx {
+                                                v_list
+                                                    .get(*selected_idx - versions_start_idx)
+                                                    .cloned()
+                                            } else {
+                                                None
+                                            }
+                                        };
+
+                                        // Update shared versions list
+                                        {
+                                            let mut v_list = display_versions_clone.lock().unwrap();
+                                            *v_list = new_versions.clone();
+                                        }
+
+                                        // Rebuild version entries
+                                        entries.truncate(versions_start_idx);
+                                        for v in &new_versions {
+                                            let label = if v == &new_rec {
+                                                format!("{} (Recommended)", v)
+                                            } else {
+                                                v.clone()
+                                            };
+                                            entries.push(modalx::SelectItem::button(label));
+                                        }
+
+                                        // Keep selected version highlighted if it still exists; fallback to recommended
+                                        if let Some(ref prev_v) = prev_selected_ver {
+                                            if let Some(pos) =
+                                                new_versions.iter().position(|v| v == prev_v)
+                                            {
+                                                *selected_idx = versions_start_idx + pos;
+                                            } else {
+                                                let rec_pos = new_versions
+                                                    .iter()
+                                                    .position(|v| v == &new_rec)
+                                                    .unwrap_or(0);
+                                                *selected_idx = versions_start_idx + rec_pos;
+                                            }
+                                        }
+
+                                        // Update header
+                                        let auto_part = if auto_update_tick
+                                            .load(std::sync::atomic::Ordering::SeqCst)
+                                        {
+                                            "ON".green()
+                                        } else {
+                                            "OFF".dimmed()
+                                        };
+                                        for row in header_rows.iter_mut() {
+                                            if modalx::strip_ansi(row).contains("Auto-Update:") {
+                                                *row = format!(
+                                                    " Status: {} | Auto-Update: {}",
+                                                    "Fresh Cache".green(),
+                                                    auto_part
+                                                );
+                                            }
+                                        }
+                                        return true;
+                                    }
+                                    Err(_) => {
+                                        // On error, restore header status
+                                        let auto_part = if auto_update_tick
+                                            .load(std::sync::atomic::Ordering::SeqCst)
+                                        {
+                                            "ON".green()
+                                        } else {
+                                            "OFF".dimmed()
+                                        };
+                                        for row in header_rows.iter_mut() {
+                                            if modalx::strip_ansi(row).contains("Auto-Update:") {
+                                                *row = format!(
+                                                    " Status: {} | Auto-Update: {}",
+                                                    "Offline (Cache)".yellow(),
+                                                    auto_part
+                                                );
+                                            }
+                                        }
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                        false
                     },
                 )?;
                 match ver_choice {
@@ -629,59 +882,11 @@ pub async fn gui_create_server_wizard_with_name(
                         settings.auto_update_catalog = !settings.auto_update_catalog;
                         let _ = settings.save(paths);
                     }
-                    Some(idx) if idx == update_idx => {
-                        if let Some(ref mgr) = catalog_mgr {
-                            match mgr.update().await {
-                                Ok(cat) => {
-                                    let total = cat.softwares.values().map(|s| s.versions.len()).sum::<usize>();
-                                    show_modal_message(
-                                        "VERSION CATALOG UPDATED",
-                                        &[
-                                            "Version catalog refreshed successfully from remote endpoint.".to_string(),
-                                            format!("Softwares: {} | Total versions indexed: {}", cat.softwares.len(), total),
-                                        ],
-                                        false,
-                                    )?;
-                                }
-                                Err(e) => {
-                                    show_modal_message(
-                                        "CATALOG UPDATE FAILED",
-                                        &[
-                                            "Unable to fetch version catalog from remote endpoint.".to_string(),
-                                            e.to_string(),
-                                        ],
-                                        true,
-                                    )?;
-                                }
-                            }
-                        }
-                    }
-                    Some(idx) if idx == custom_idx => {
-                        let default_v = display_versions.first().map(|s| s.as_str()).unwrap_or("latest");
-                        match run_input_prompt(
-                            "CUSTOM SERVER VERSION",
-                            "Enter target release version string:",
-                            Some(default_v),
-                        )? {
-                            Some(v) if !v.trim().is_empty() => {
-                                version = v.trim().to_string();
-                                let is_java = sw_obj
-                                    .as_ref()
-                                    .map(|s| s.edition() == craft_providers::ServerEdition::Java)
-                                    .unwrap_or(true);
-                                if is_java {
-                                    step = WizardStep::Memory;
-                                } else {
-                                    step = WizardStep::Autostart;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
                     Some(idx) if idx >= versions_start_idx => {
                         let v_idx = idx - versions_start_idx;
-                        if v_idx < display_versions.len() {
-                            version = display_versions[v_idx].clone();
+                        let v_list = display_versions.lock().unwrap();
+                        if v_idx < v_list.len() {
+                            version = v_list[v_idx].clone();
                             let is_java = sw_obj
                                 .as_ref()
                                 .map(|s| s.edition() == craft_providers::ServerEdition::Java)
@@ -714,7 +919,10 @@ pub async fn gui_create_server_wizard_with_name(
                 let ver_step_num = get_ver_step_num(game_id, cat_idx, java_type, has_name_override);
                 let current_step = ver_step_num + 1;
                 let total_steps = current_step + 1;
-                let title = format!("ALLOCATE SERVER MEMORY (STEP {}/{})", current_step, total_steps);
+                let title = format!(
+                    "ALLOCATE SERVER MEMORY (STEP {}/{})",
+                    current_step, total_steps
+                );
 
                 let (_os, total_ram, used_ram, ram_pct) = get_system_summary();
                 let width = get_content_width(80);
@@ -787,9 +995,16 @@ pub async fn gui_create_server_wizard_with_name(
                     .map(|s| s.edition() == craft_providers::ServerEdition::Java)
                     .unwrap_or(true);
                 let ver_step_num = get_ver_step_num(game_id, cat_idx, java_type, has_name_override);
-                let current_step = if is_java { ver_step_num + 2 } else { ver_step_num + 1 };
+                let current_step = if is_java {
+                    ver_step_num + 2
+                } else {
+                    ver_step_num + 1
+                };
                 let total_steps = current_step;
-                let title = format!("INITIALIZATION MODE (STEP {}/{})", current_step, total_steps);
+                let title = format!(
+                    "INITIALIZATION MODE (STEP {}/{})",
+                    current_step, total_steps
+                );
 
                 let width = get_content_width(80);
                 let start_header = format!(

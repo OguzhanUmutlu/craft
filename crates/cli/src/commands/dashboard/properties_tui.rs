@@ -14,7 +14,10 @@ pub async fn server_properties_editor(server_path: &Path, server_name: &str) -> 
     if !server_path.exists() {
         show_modal_message(
             "SERVER NOT FOUND",
-            &[format!("Server directory '{}' was deleted or moved.", server_path.display())],
+            &[format!(
+                "Server directory '{}' was deleted or moved.",
+                server_path.display()
+            )],
             true,
         )?;
         return Ok(());
@@ -36,7 +39,10 @@ pub async fn server_properties_editor(server_path: &Path, server_name: &str) -> 
         if !server_path.exists() {
             show_modal_message(
                 "SERVER NOT FOUND",
-                &[format!("Server directory '{}' was deleted or moved.", server_path.display())],
+                &[format!(
+                    "Server directory '{}' was deleted or moved.",
+                    server_path.display()
+                )],
                 true,
             )?;
             return Ok(());
@@ -153,7 +159,10 @@ async fn category_properties_menu(
     if !props_path.exists() {
         show_modal_message(
             "SERVER NOT FOUND",
-            &[format!("Properties file for '{}' was deleted or moved.", server_name)],
+            &[format!(
+                "Properties file for '{}' was deleted or moved.",
+                server_name
+            )],
             true,
         )?;
         return Ok(());
@@ -200,7 +209,9 @@ async fn category_properties_menu(
             category.name().white().bold(),
             items.len()
         ))
-        .with_header_row("Edit values, press Space to toggle checkboxes, Ctrl+S or Submit to save:");
+        .with_header_row(
+            "Edit values, press Space to toggle checkboxes, Ctrl+S or Submit to save:",
+        );
 
     for (k, v) in &items {
         let desc = ServerProperties::property_description(k);
@@ -211,17 +222,15 @@ async fn category_properties_menu(
         };
 
         if v == "true" || v == "false" || props.get_bool(k).is_some() {
-            form = form.with_field(
-                FormField::checkbox_with_default(k.clone(), label, v == "true"),
-            );
+            form = form.with_field(FormField::checkbox_with_default(
+                k.clone(),
+                label,
+                v == "true",
+            ));
         } else if props.get_i32(k).is_some() || v.parse::<i64>().is_ok() {
-            form = form.with_field(
-                FormField::integer(k.clone(), label).with_default(v.clone()),
-            );
+            form = form.with_field(FormField::integer(k.clone(), label).with_default(v.clone()));
         } else {
-            form = form.with_field(
-                FormField::string(k.clone(), label).with_default(v.clone()),
-            );
+            form = form.with_field(FormField::string(k.clone(), label).with_default(v.clone()));
         }
     }
 
@@ -229,7 +238,7 @@ async fn category_properties_menu(
         if !props_path.exists() {
             show_modal_message(
                 "SERVER NOT FOUND",
-                &[format!("Server was deleted before settings could be saved.")],
+                &["Server was deleted before settings could be saved.".to_string()],
                 true,
             )?;
             return Ok(());
@@ -260,7 +269,10 @@ async fn search_properties_menu(props_path: &Path, server_name: &str, query: &st
     if !props_path.exists() {
         show_modal_message(
             "SERVER NOT FOUND",
-            &[format!("Properties file for '{}' was deleted or moved.", server_name)],
+            &[format!(
+                "Properties file for '{}' was deleted or moved.",
+                server_name
+            )],
             true,
         )?;
         return Ok(());
@@ -298,7 +310,9 @@ async fn search_properties_menu(props_path: &Path, server_name: &str, query: &st
             query.cyan().bold(),
             matches.len()
         ))
-        .with_header_row("Edit values, press Space to toggle checkboxes, Ctrl+S or Submit to save:");
+        .with_header_row(
+            "Edit values, press Space to toggle checkboxes, Ctrl+S or Submit to save:",
+        );
 
     for (k, v) in &matches {
         let desc = ServerProperties::property_description(k);
@@ -309,17 +323,15 @@ async fn search_properties_menu(props_path: &Path, server_name: &str, query: &st
         };
 
         if v == "true" || v == "false" || props.get_bool(k).is_some() {
-            form = form.with_field(
-                FormField::checkbox_with_default(k.clone(), label, v == "true"),
-            );
+            form = form.with_field(FormField::checkbox_with_default(
+                k.clone(),
+                label,
+                v == "true",
+            ));
         } else if props.get_i32(k).is_some() || v.parse::<i64>().is_ok() {
-            form = form.with_field(
-                FormField::integer(k.clone(), label).with_default(v.clone()),
-            );
+            form = form.with_field(FormField::integer(k.clone(), label).with_default(v.clone()));
         } else {
-            form = form.with_field(
-                FormField::string(k.clone(), label).with_default(v.clone()),
-            );
+            form = form.with_field(FormField::string(k.clone(), label).with_default(v.clone()));
         }
     }
 
@@ -327,7 +339,7 @@ async fn search_properties_menu(props_path: &Path, server_name: &str, query: &st
         if !props_path.exists() {
             show_modal_message(
                 "SERVER NOT FOUND",
-                &[format!("Server was deleted before settings could be saved.")],
+                &["Server was deleted before settings could be saved.".to_string()],
                 true,
             )?;
             return Ok(());
