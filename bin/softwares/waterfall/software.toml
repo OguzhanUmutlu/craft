@@ -1,0 +1,46 @@
+[software]
+id = "waterfall"
+name = "Waterfall"
+display_name = "Waterfall Proxy"
+game = "minecraft"
+edition = "proxy"
+description = "BungeeCord fork by PaperMC"
+author = "PaperMC Team"
+version = "1.0.0"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = false
+rcon = false
+
+[runtime]
+kind = "java"
+default_server_file = "waterfall.jar"
+
+[network]
+default_port = 25577
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "1.20"
+bundled = ["1.20", "1.19", "1.18", "1.17", "1.16"]
+fetch_mode = "http_json"
+api_url = "https://api.papermc.io/v2/projects/waterfall"
+json_path = "versions"
+
+[assets]
+download_mode = "lua"
+script = "scripts/assets.lua"
+
+[properties]
+file = "config.yml"
+format = "yaml"
+
+[plugins]
+folder = "plugins"
+search_providers = ["modrinth"]
+
+[developer]
+jdwp = true

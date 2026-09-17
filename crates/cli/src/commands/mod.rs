@@ -20,6 +20,7 @@ pub mod restart;
 pub mod rm;
 pub mod run;
 pub mod service;
+pub mod software;
 pub mod stop;
 pub mod template;
 pub mod trash;

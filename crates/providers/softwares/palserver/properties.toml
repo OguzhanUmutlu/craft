@@ -1,0 +1,74 @@
+[meta]
+file = "PalWorldSettings.ini"
+format = "ini"
+
+[[categories]]
+id = "network"
+name = "Server & Network"
+
+[[categories]]
+id = "gameplay"
+name = "Gameplay & Multipliers"
+
+[[categories]]
+id = "rcon"
+name = "RCON & Admin"
+
+[[properties]]
+key = "ServerName"
+category = "network"
+label = "Server Name"
+description = "Name displayed in the public server list"
+type = "string"
+default = "A Craft Palworld Server"
+
+[[properties]]
+key = "PublicPort"
+category = "network"
+label = "Public Port"
+description = "Game port for client connections"
+type = "integer"
+default = 8211
+min = 1
+max = 65535
+
+[[properties]]
+key = "ServerPlayerMaxNum"
+category = "network"
+label = "Max Players"
+description = "Maximum player count"
+type = "integer"
+default = 32
+min = 1
+max = 128
+
+[[properties]]
+key = "Difficulty"
+category = "gameplay"
+label = "Difficulty"
+description = "Preset difficulty mode"
+type = "enum"
+options = ["None", "Easy", "Normal", "Hard"]
+default = "Normal"
+
+[[properties]]
+key = "ExpRate"
+category = "gameplay"
+label = "EXP Multiplier"
+description = "Experience multiplier"
+type = "string"
+default = "1.000000"
+
+[[properties]]
+key = "RCONEnabled"
+category = "rcon"
+label = "Enable RCON"
+type = "boolean"
+default = true
+
+[[properties]]
+key = "RCONPort"
+category = "rcon"
+label = "RCON Port"
+type = "integer"
+default = 25575

@@ -1,0 +1,47 @@
+[software]
+id = "velocity"
+name = "Velocity"
+display_name = "Velocity Proxy"
+game = "minecraft"
+edition = "proxy"
+description = "Next-generation proxy server"
+author = "PaperMC Team"
+version = "1.0.0"
+website = "https://papermc.io"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = false
+rcon = false
+
+[runtime]
+kind = "java"
+default_server_file = "velocity.jar"
+
+[network]
+default_port = 25577
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "3.4.0"
+bundled = ["3.4.0", "3.3.0-SNAPSHOT", "3.2.0-SNAPSHOT", "3.1.2-SNAPSHOT"]
+fetch_mode = "http_json"
+api_url = "https://api.papermc.io/v2/projects/velocity"
+json_path = "versions"
+
+[assets]
+download_mode = "lua"
+script = "scripts/assets.lua"
+
+[properties]
+file = "velocity.toml"
+format = "toml"
+
+[plugins]
+folder = "plugins"
+search_providers = ["modrinth", "hangar"]
+
+[developer]
+jdwp = true

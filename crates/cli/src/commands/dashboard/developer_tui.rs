@@ -58,8 +58,12 @@ pub async fn developer_tools_menu(server: &ServerConfig, paths: &CraftPaths) -> 
             && craft_providers::find_software(&current_server.software)
                 .map(|s| s.edition() == craft_providers::ServerEdition::Java)
                 .unwrap_or(true);
+        let bundle = craft_providers::get_software_bundle(&current_server.software);
+        let allows_jdwp = bundle
+            .as_ref()
+            .map_or(is_java, |b| b.definition.developer.jdwp);
 
-        let jdwp_label = if is_java {
+        let jdwp_label = if allows_jdwp {
             "JVM JDWP Remote Debugger Setup"
         } else {
             "JVM JDWP Remote Debugger Setup (Java Only)"
@@ -81,7 +85,7 @@ pub async fn developer_tools_menu(server: &ServerConfig, paths: &CraftPaths) -> 
             }
             Some(1) => {
                 // JDWP Debugger
-                if !is_java {
+                if !allows_jdwp {
                     show_modal_message(
                         "JVM DEBUGGER UNAVAILABLE",
                         &[
@@ -513,8 +517,14 @@ async fn rcon_reload_menu(server: &ServerConfig) -> Result<()> {
     let port = props.get_u16("rcon.port").unwrap_or(25575);
     let pass = props.get("rcon.password").unwrap_or("craft");
 
+    let bundle = craft_providers::get_software_bundle(&server.software);
+    let software_reload = bundle
+        .as_ref()
+        .and_then(|b| b.definition.developer.reload_command.clone())
+        .unwrap_or_else(|| "reload confirm".to_string());
+
     let reload_cmds = vec![
-        MenuEntry::new("1", "reload confirm (Paper / Purpur / Spigot)"),
+        MenuEntry::new("1", format!("{} (Software Default)", software_reload)),
         MenuEntry::new("2", "datapack reload (Datapack hot reload)"),
         MenuEntry::new("3", "Custom in-game command"),
         MenuEntry::new("0", "Cancel"),
@@ -523,7 +533,7 @@ async fn rcon_reload_menu(server: &ServerConfig) -> Result<()> {
     let mut sel = 0;
     if let Some(idx) = run_menu("Select In-Game Reload Command:", &reload_cmds, &mut sel)? {
         let cmd = match idx {
-            0 => "reload confirm".to_string(),
+            0 => software_reload,
             1 => "datapack reload".to_string(),
             2 => {
                 if let Some(c) =

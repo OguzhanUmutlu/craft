@@ -300,6 +300,96 @@ impl LuaEngine {
             .set("exec", exec_fn)
             .map_err(|e| CraftError::Other(e.to_string()))?;
 
+        // JSON decode / encode
+        let json_table = self
+            .lua
+            .create_table()
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+        let json_decode = self
+            .lua
+            .create_function(|lua, s: String| {
+                let val: serde_json::Value = serde_json::from_str(&s)
+                    .map_err(|e| mlua::Error::RuntimeError(format!("JSON decode error: {}", e)))?;
+                lua.to_value(&val)
+            })
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+        json_table
+            .set("decode", json_decode)
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+
+        let json_encode = self
+            .lua
+            .create_function(|lua, val: mlua::Value| {
+                let serde_val: serde_json::Value = lua
+                    .from_value(val)
+                    .map_err(|e| mlua::Error::RuntimeError(format!("JSON encode error: {}", e)))?;
+                serde_json::to_string(&serde_val)
+                    .map_err(|e| mlua::Error::RuntimeError(format!("JSON encode error: {}", e)))
+            })
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+        json_table
+            .set("encode", json_encode)
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+        craft_table
+            .set("json", json_table)
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+
+        // HTTP GET helper
+        let http_table = self
+            .lua
+            .create_table()
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+        let http_get = self
+            .lua
+            .create_function(|lua, url: String| {
+                let fetch = async {
+                    let client = reqwest::Client::builder()
+                        .user_agent("craft/1.0")
+                        .build()
+                        .map_err(|e| format!("{}", e))?;
+                    let res = client
+                        .get(&url)
+                        .send()
+                        .await
+                        .map_err(|e| format!("{}", e))?;
+                    let status = res.status().as_u16();
+                    let body = res.text().await.map_err(|e| format!("{}", e))?;
+                    Ok::<_, String>((status, body))
+                };
+
+                let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    tokio::task::block_in_place(|| handle.block_on(fetch))
+                } else {
+                    match tokio::runtime::Runtime::new() {
+                        Ok(rt) => rt.block_on(fetch),
+                        Err(e) => Err(e.to_string()),
+                    }
+                };
+
+                let res_tbl = lua.create_table()?;
+                match result {
+                    Ok((status, body)) => {
+                        res_tbl.set("status", status)?;
+                        res_tbl.set("ok", (200..300).contains(&status))?;
+                        res_tbl.set("body", body)?;
+                    }
+                    Err(e) => {
+                        res_tbl.set("status", 0)?;
+                        res_tbl.set("ok", false)?;
+                        res_tbl.set("error", e)?;
+                        res_tbl.set("body", "")?;
+                    }
+                }
+                Ok(res_tbl)
+            })
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+        http_table
+            .set("get", http_get)
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+        craft_table
+            .set("http", http_table)
+            .map_err(|e| CraftError::Other(e.to_string()))?;
+
         // Contextual craft.server table
         if let Some((server_dir, config, pid)) = ctx {
             let server_tbl = self

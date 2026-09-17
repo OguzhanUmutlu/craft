@@ -1,0 +1,137 @@
+[meta]
+file = "server.properties"
+format = "properties"
+
+[[categories]]
+id = "network"
+name = "Network & Connectivity"
+
+[[categories]]
+id = "security"
+name = "Security & Access"
+
+[[categories]]
+id = "gameplay"
+name = "Gameplay & Difficulty"
+
+[[categories]]
+id = "world"
+name = "World & Generation"
+
+[[categories]]
+id = "performance"
+name = "Performance & View Distance"
+
+[[categories]]
+id = "rcon"
+name = "RCON & Remote Console"
+
+[[categories]]
+id = "general"
+name = "General & MOTD"
+
+[[properties]]
+key = "server-port"
+category = "network"
+label = "Server Port"
+description = "Network port on which the server listens for player connections"
+type = "integer"
+default = 25565
+min = 1
+max = 65535
+
+[[properties]]
+key = "online-mode"
+category = "security"
+label = "Online Mode (Mojang Auth)"
+description = "Check connecting players against central authentication servers"
+type = "boolean"
+default = true
+
+[[properties]]
+key = "white-list"
+category = "security"
+label = "Whitelist Enabled"
+description = "Only allow players on the whitelist to join"
+type = "boolean"
+default = false
+
+[[properties]]
+key = "gamemode"
+category = "gameplay"
+label = "Game Mode"
+description = "Default game mode for new players"
+type = "enum"
+options = ["survival", "creative", "adventure", "spectator"]
+default = "survival"
+
+[[properties]]
+key = "difficulty"
+category = "gameplay"
+label = "Difficulty"
+description = "Game difficulty level"
+type = "enum"
+options = ["peaceful", "easy", "normal", "hard"]
+default = "normal"
+
+[[properties]]
+key = "pvp"
+category = "gameplay"
+label = "PvP Enabled"
+description = "Allow players to damage each other"
+type = "boolean"
+default = true
+
+[[properties]]
+key = "level-name"
+category = "world"
+label = "World Name"
+description = "Folder name containing the world data"
+type = "string"
+default = "world"
+
+[[properties]]
+key = "view-distance"
+category = "performance"
+label = "View Distance (Chunks)"
+description = "Maximum distance in chunks sent to players"
+type = "integer"
+default = 10
+min = 2
+max = 32
+
+[[properties]]
+key = "max-players"
+category = "performance"
+label = "Max Players"
+description = "Maximum number of simultaneous players"
+type = "integer"
+default = 20
+min = 1
+max = 10000
+
+[[properties]]
+key = "enable-rcon"
+category = "rcon"
+label = "Enable RCON"
+description = "Enable remote console connection"
+type = "boolean"
+default = false
+
+[[properties]]
+key = "rcon.port"
+category = "rcon"
+label = "RCON Port"
+description = "Port used for RCON administration"
+type = "integer"
+default = 25575
+min = 1
+max = 65535
+
+[[properties]]
+key = "motd"
+category = "general"
+label = "Message of the Day (MOTD)"
+description = "Server description displayed in the client server list"
+type = "string"
+default = "A Craft Minecraft Server"

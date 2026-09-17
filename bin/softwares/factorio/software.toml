@@ -1,0 +1,45 @@
+[software]
+id = "factorio"
+name = "Factorio Headless"
+display_name = "Factorio Headless Server"
+game = "factorio"
+edition = "native"
+description = "Factorio Headless"
+author = "Wube Software"
+version = "1.0.0"
+
+[capabilities]
+plugins = false
+mods = true
+datapacks = false
+rcon = true
+
+[runtime]
+kind = "native"
+default_server_file = "bin/x64/factorio"
+arguments = ["--start-server-load-latest", "--server-settings", "data/server-settings.json"]
+stop_method = "sigint"
+stop_timeout_seconds = 10
+
+[network]
+default_port = 34197
+protocol = "udp"
+
+[versions]
+recommended = "2.0.28"
+bundled = ["2.0.28", "1.1.109", "1.1.104"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://www.factorio.com/get-download/{version}/headless/linux64"
+filename = "factorio.tar.xz"
+is_archive = true
+
+[properties]
+file = "data/server-settings.json"
+format = "json"
+schema_file = "properties.toml"
+
+[plugins]
+folder = "mods"

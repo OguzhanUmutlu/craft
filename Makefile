@@ -63,9 +63,10 @@ fmt-all:
 build-bin:
 	@echo "==> Compiling Craft CLI [profile: release]..."
 	cargo build --release
-	@mkdir -p bin
+	@mkdir -p bin/softwares
 	@cp -f target/release/craft bin/craft
-	@echo "✓ Successfully built and installed bin/craft ($$(ls -lh bin/craft | awk '{print $$5}'))."
+	@cp -rf crates/providers/softwares/* bin/softwares/
+	@echo "✓ Successfully built and installed bin/craft ($$(ls -lh bin/craft | awk '{print $$5}')) and bin/softwares/."
 
 check: fmt-check clippy test build-bin
 	@echo ""

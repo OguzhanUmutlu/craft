@@ -1,0 +1,49 @@
+[software]
+id = "quilt"
+name = "Quilt"
+display_name = "Quilt Mod Loader"
+game = "minecraft"
+edition = "java"
+description = "Modular mod loader compatible with Fabric"
+author = "QuiltMC"
+version = "1.0.0"
+website = "https://quiltmc.org"
+
+[capabilities]
+plugins = false
+mods = true
+datapacks = true
+rcon = true
+
+[runtime]
+kind = "java"
+default_server_file = "quilt-server-launch.jar"
+
+[network]
+default_port = 25565
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "1.21.4"
+bundled = ["1.21.4", "1.21.3", "1.21.1", "1.20.6", "1.20.4", "1.20.1"]
+fetch_mode = "http_json"
+api_url = "https://meta.quiltmc.org/v3/versions/game"
+json_path = "[].version"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://meta.quiltmc.org/v3/versions/loader/{version}/0.27.1/server/jar"
+filename = "quilt-server-launch.jar"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"
+
+[plugins]
+folder = "mods"
+search_providers = ["modrinth"]
+
+[developer]
+jdwp = true

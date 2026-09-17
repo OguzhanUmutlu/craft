@@ -1,0 +1,44 @@
+[software]
+id = "palserver"
+name = "Palworld"
+display_name = "Palworld Dedicated Server"
+game = "palworld"
+edition = "native"
+description = "Palworld (UE5)"
+author = "Pocketpair"
+version = "1.0.0"
+
+[capabilities]
+plugins = false
+mods = false
+datapacks = false
+rcon = true
+
+[runtime]
+kind = "native"
+default_server_file = "PalServer.sh"
+arguments = ["-useperfthreads", "-NoAsyncLoadingThread", "-UseMultithreadForDS"]
+stop_method = "sigterm"
+stop_timeout_seconds = 15
+
+[network]
+default_port = 8211
+default_query_port = 27015
+protocol = "udp"
+query_protocol = "a2s"
+
+[versions]
+recommended = "v0.4.11"
+bundled = ["v0.4.11", "v0.4.10", "v0.3.8"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
+filename = "steamcmd_linux.tar.gz"
+is_archive = true
+
+[properties]
+file = "PalWorldSettings.ini"
+format = "ini"
+schema_file = "properties.toml"

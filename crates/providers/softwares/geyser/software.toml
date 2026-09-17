@@ -1,0 +1,39 @@
+[software]
+id = "geyser"
+name = "Geyser Standalone"
+display_name = "Geyser Standalone Bridge"
+game = "minecraft"
+edition = "proxy"
+description = "Java/Bedrock cross-play proxy"
+author = "GeyserMC"
+version = "1.0.0"
+website = "https://geysermc.org"
+
+[capabilities]
+plugins = false
+mods = false
+datapacks = false
+rcon = false
+
+[runtime]
+kind = "java"
+default_server_file = "Geyser.jar"
+
+[network]
+default_port = 19132
+protocol = "udp"
+query_protocol = "raknet"
+
+[versions]
+recommended = "latest"
+bundled = ["latest"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/standalone"
+filename = "Geyser.jar"
+
+[properties]
+file = "config.yml"
+format = "yaml"

@@ -1,0 +1,41 @@
+[software]
+id = "vanilla_bedrock"
+name = "Vanilla Bedrock"
+display_name = "Vanilla Bedrock Dedicated Server (BDS)"
+game = "minecraft"
+edition = "bedrock"
+description = "Official Bedrock Dedicated Server"
+author = "Mojang Studios"
+version = "1.0.0"
+website = "https://minecraft.net"
+
+[capabilities]
+plugins = false
+mods = false
+datapacks = false
+rcon = false
+
+[runtime]
+kind = "native"
+default_server_file = "bedrock_server"
+
+[network]
+default_port = 19132
+protocol = "udp"
+query_protocol = "raknet"
+
+[versions]
+recommended = "1.21.51.02"
+bundled = ["1.21.51.02", "1.21.50.07", "1.21.44.01", "1.21.40.04", "1.21.30.03", "1.21.20.03", "1.21.2.02"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://minecraft.azureedge.net/bin-linux/bedrock-server-{version}.zip"
+filename = "bedrock-server-{version}.zip"
+is_archive = true
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"

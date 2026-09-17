@@ -1,0 +1,44 @@
+[software]
+id = "waterdog"
+name = "WaterdogPE"
+display_name = "WaterdogPE Proxy"
+game = "minecraft"
+edition = "proxy"
+description = "Bedrock proxy protocol support"
+author = "WaterdogPE Team"
+version = "1.0.0"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = false
+rcon = false
+
+[runtime]
+kind = "java"
+default_server_file = "waterdog.jar"
+
+[network]
+default_port = 19132
+protocol = "udp"
+query_protocol = "raknet"
+
+[versions]
+recommended = "latest"
+bundled = ["latest"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://repo.waterdog.dev/snapshots/dev/waterdog/waterdogpe/waterdogpe/2.0.2-SNAPSHOT/waterdogpe-2.0.2-SNAPSHOT.jar"
+filename = "waterdog.jar"
+
+[properties]
+file = "config.yml"
+format = "yaml"
+
+[plugins]
+folder = "plugins"
+
+[developer]
+jdwp = true

@@ -439,6 +439,7 @@ dependencies = [
  "futures-util",
  "hex",
  "indicatif",
+ "mlua",
  "modalx",
  "reqwest",
  "serde",
@@ -483,6 +484,7 @@ dependencies = [
  "chrono",
  "craft-core",
  "mlua",
+ "reqwest",
  "serde",
  "serde_json",
  "tempfile",
@@ -490,6 +492,7 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+ "zip",
 ]
 
 [[package]]

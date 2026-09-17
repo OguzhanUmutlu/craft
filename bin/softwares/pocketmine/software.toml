@@ -1,0 +1,45 @@
+[software]
+id = "pocketmine"
+name = "PocketMine-MP"
+display_name = "PocketMine-MP (PHP)"
+game = "minecraft"
+edition = "bedrock"
+description = "PHP-based Bedrock server"
+author = "PocketMine Team"
+version = "1.0.0"
+website = "https://pmmp.io"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = false
+rcon = true
+
+[runtime]
+kind = "native"
+default_server_file = "PocketMine-MP.phar"
+
+[network]
+default_port = 19132
+protocol = "udp"
+query_protocol = "raknet"
+
+[versions]
+recommended = "5.22.0"
+bundled = ["5.22.0", "5.21.1", "5.20.0", "5.19.0", "5.18.0"]
+fetch_mode = "github_releases"
+api_url = "https://api.github.com/repos/pmmp/PocketMine-MP/releases"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://github.com/pmmp/PocketMine-MP/releases/download/{version}/PocketMine-MP.phar"
+filename = "PocketMine-MP.phar"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"
+
+[plugins]
+folder = "plugins"
+search_providers = ["poggit"]

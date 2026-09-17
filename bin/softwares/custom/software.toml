@@ -1,0 +1,40 @@
+[software]
+id = "custom"
+name = "Custom Game"
+display_name = "Custom Game Server (Generic binary/script)"
+game = "custom"
+edition = "native"
+description = "Custom binary or script"
+version = "1.0.0"
+
+[capabilities]
+plugins = false
+mods = false
+datapacks = false
+rcon = false
+
+[runtime]
+kind = "native"
+default_server_file = "server"
+arguments = []
+stop_method = "sigterm"
+stop_timeout_seconds = 10
+
+[network]
+default_port = 8080
+protocol = "tcp"
+
+[versions]
+recommended = "1.0.0"
+bundled = ["1.0.0"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = ""
+filename = "server"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"

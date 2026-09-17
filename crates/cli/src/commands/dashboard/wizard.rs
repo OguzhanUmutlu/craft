@@ -217,7 +217,13 @@ pub async fn gui_create_server_wizard_with_name(
                     MenuEntry::new("4", "Valheim"),
                     MenuEntry::new("5", "Factorio (Headless)"),
                     MenuEntry::new("6", "Custom Game (Generic binary/script)"),
-                    MenuEntry::new("7", "Browse All 21 Softwares"),
+                    MenuEntry::new(
+                        "7",
+                        format!(
+                            "Browse All Softwares ({} Available)",
+                            craft_providers::get_all_softwares().len()
+                        ),
+                    ),
                     MenuEntry::new("0", if has_name_override { "Cancel" } else { "Back" })
                         .with_aliases(&["b"]),
                 ];

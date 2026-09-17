@@ -1,0 +1,49 @@
+[software]
+id = "neoforge"
+name = "NeoForge"
+display_name = "NeoForge Mod Loader"
+game = "minecraft"
+edition = "java"
+description = "NeoForged modern mod loader"
+author = "NeoForged"
+version = "1.0.0"
+website = "https://neoforged.net"
+
+[capabilities]
+plugins = false
+mods = true
+datapacks = true
+rcon = true
+
+[runtime]
+kind = "java"
+default_server_file = "neoforge-installer.jar"
+
+[network]
+default_port = 25565
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "21.4.11-beta"
+bundled = ["21.4.11-beta", "21.1.72", "20.6.119", "20.4.237"]
+fetch_mode = "http_json"
+api_url = "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge"
+json_path = "versions"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://maven.neoforged.net/releases/net/neoforged/neoforge/{version}/neoforge-{version}-installer.jar"
+filename = "neoforge-installer.jar"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"
+
+[plugins]
+folder = "mods"
+search_providers = ["modrinth"]
+
+[developer]
+jdwp = true

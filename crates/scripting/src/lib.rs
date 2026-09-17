@@ -1,9 +1,16 @@
 pub mod config;
+pub mod definition;
 pub mod engine;
+pub mod package;
+pub mod properties_schema;
 pub mod starter;
 
 pub use config::{CustomRuntimeType, CustomServerConfig, CUSTOM_CONFIG_FILE};
+pub use definition::*;
 pub use engine::LuaEngine;
+pub use mlua;
+pub use package::*;
+pub use properties_schema::*;
 pub use starter::*;
 
 #[cfg(test)]
@@ -234,5 +241,214 @@ mod tests {
 
         let content = std::fs::read_to_string(&output_path).expect("read output");
         assert_eq!(content, "apple:banana");
+    }
+
+    #[test]
+    fn test_software_definition_roundtrip() {
+        let toml_content = r#"
+[software]
+id = "test-game"
+name = "Test Game Server"
+display_name = "Test Game (Dedicated)"
+game = "testgame"
+edition = "native"
+description = "A great test game server"
+version = "1.0.0"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = false
+rcon = true
+
+[runtime]
+kind = "native"
+default_server_file = "test_server"
+arguments = ["--port", "{port}"]
+stop_method = "sigterm"
+stop_timeout_seconds = 10
+
+[network]
+default_port = 7777
+protocol = "udp"
+
+[versions]
+recommended = "2.0.0"
+bundled = ["2.0.0", "1.9.0"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://example.com/downloads/v{version}/server.tar.gz"
+filename = "server.tar.gz"
+is_archive = true
+strip_components = 1
+
+[properties]
+file = "config.toml"
+format = "toml"
+schema_file = "properties.toml"
+
+[developer]
+reload_command = "reload"
+"#;
+
+        let def = SoftwareDefinition::parse(toml_content).expect("parse definition");
+        assert_eq!(def.id(), "test-game");
+        assert_eq!(def.name(), "Test Game Server");
+        assert_eq!(def.display_name(), "Test Game (Dedicated)");
+        assert_eq!(def.game(), "testgame");
+        assert_eq!(def.edition(), "native");
+        assert!(def.capabilities.plugins);
+        assert!(!def.capabilities.mods);
+        assert_eq!(def.network.default_port, 7777);
+        assert_eq!(def.network.protocol, "udp");
+        assert_eq!(def.default_server_file(), "test_server");
+        assert_eq!(def.versions.bundled.len(), 2);
+
+        let serialized = def.to_toml().expect("serialize definition");
+        let def2 = SoftwareDefinition::parse(&serialized).expect("reparse definition");
+        assert_eq!(def, def2);
+    }
+
+    #[test]
+    fn test_properties_schema_and_generic_properties() {
+        let schema_toml = r#"
+[meta]
+file = "server.properties"
+format = "properties"
+
+[[categories]]
+id = "general"
+name = "General Settings"
+
+[[categories]]
+id = "network"
+name = "Network Settings"
+
+[[properties]]
+key = "server-port"
+category = "network"
+label = "Server Port"
+description = "Port to listen on"
+type = "integer"
+default = 25565
+min = 1
+max = 65535
+
+[[properties]]
+key = "online-mode"
+category = "general"
+label = "Online Mode"
+type = "boolean"
+default = true
+
+[[properties]]
+key = "difficulty"
+category = "general"
+label = "Difficulty"
+type = "enum"
+options = ["peaceful", "easy", "normal", "hard"]
+default = "normal"
+"#;
+
+        let schema = PropertiesSchema::parse(schema_toml).expect("parse schema");
+        assert_eq!(schema.meta.file, "server.properties");
+        assert_eq!(schema.meta.format, "properties");
+        assert_eq!(schema.categories.len(), 2);
+        assert_eq!(schema.properties.len(), 3);
+
+        let port_prop = schema.get_property("server-port").expect("port prop");
+        assert_eq!(port_prop.property_type, PropertyType::Integer);
+        assert_eq!(port_prop.min, Some(1));
+        assert_eq!(port_prop.max, Some(65535));
+
+        let cat_props = schema.properties_for_category("general");
+        assert_eq!(cat_props.len(), 2);
+
+        // Test GenericProperties
+        let raw = "# Comment\nserver-port=25565\nonline-mode=true\ndifficulty=normal\n";
+        let mut props = GenericProperties::parse_properties(raw);
+        assert_eq!(props.get("server-port"), Some("25565"));
+        assert_eq!(props.get("online-mode"), Some("true"));
+        assert_eq!(props.get("difficulty"), Some("normal"));
+
+        props.set("server-port", "25570");
+        assert_eq!(props.get("server-port"), Some("25570"));
+        let dumped = props.dump_properties();
+        assert!(dumped.contains("server-port=25570"));
+        assert!(dumped.contains("# Comment"));
+    }
+
+    #[test]
+    fn test_craft_package_roundtrip() {
+        let dir = tempdir().expect("tempdir");
+        let pkg_src = dir.path().join("my_software");
+        std::fs::create_dir_all(&pkg_src).expect("create dir");
+
+        let toml_content = r#"
+[software]
+id = "my-soft"
+name = "My Software"
+game = "minecraft"
+edition = "java"
+"#;
+        std::fs::write(pkg_src.join("software.toml"), toml_content).expect("write software.toml");
+
+        let props_content = r#"
+[meta]
+file = "server.properties"
+format = "properties"
+
+[[categories]]
+id = "main"
+name = "Main"
+"#;
+        std::fs::write(pkg_src.join("properties.toml"), props_content)
+            .expect("write properties.toml");
+
+        let scripts_dir = pkg_src.join("scripts");
+        std::fs::create_dir_all(&scripts_dir).expect("create scripts");
+        std::fs::write(scripts_dir.join("assets.lua"), "-- assets resolver")
+            .expect("write assets.lua");
+
+        // 1. Load from directory
+        let bundle_dir = load_from_directory(&pkg_src).expect("load from directory");
+        assert_eq!(bundle_dir.id(), "my-soft");
+        assert_eq!(bundle_dir.name(), "My Software");
+        assert!(bundle_dir.properties_schema.is_some());
+        assert_eq!(
+            bundle_dir.get_script("scripts/assets.lua"),
+            Some("-- assets resolver")
+        );
+
+        // 2. Package into .zip file
+        let zip_file = dir.path().join("my-soft.zip");
+        package_directory(&pkg_src, &zip_file).expect("package directory");
+        assert!(zip_file.exists());
+
+        // 3. Load from .zip file
+        let bundle_file = load_from_zip_file(&zip_file).expect("load from zip file");
+        assert_eq!(bundle_file.id(), "my-soft");
+        assert_eq!(bundle_file.name(), "My Software");
+        assert!(bundle_file.is_bundle_file);
+        assert!(bundle_file.properties_schema.is_some());
+        assert_eq!(
+            bundle_file.get_script("scripts/assets.lua"),
+            Some("-- assets resolver")
+        );
+
+        // 4. Test auto-detect load_bundle
+        let bundle_auto = load_bundle(&zip_file).expect("auto load bundle");
+        assert_eq!(bundle_auto.id(), "my-soft");
+
+        // 5. Test extract_bundle_to_dir
+        let extracted_dir = dir.path().join("extracted");
+        extract_bundle_to_dir(&bundle_auto, &extracted_dir).expect("extract bundle to dir");
+        assert!(extracted_dir.join("software.toml").exists());
+        assert!(extracted_dir.join("properties.toml").exists());
+        assert!(extracted_dir.join("scripts/assets.lua").exists());
+        let bundle_reloaded = load_from_directory(&extracted_dir).expect("reload extracted");
+        assert_eq!(bundle_reloaded.id(), "my-soft");
     }
 }

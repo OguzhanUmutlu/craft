@@ -577,6 +577,28 @@ export default function Documentation({ onBackToHome, initialPage = 'getting-sta
               <p className="text-slate-400 mt-1">Supervises Factorio headless binary with RCON commands and save management.</p>
             </div>
           </div>
+
+          <h3 className="text-lg font-bold text-white mt-8 mb-2">Universal Server Software Definitions (.zip)</h3>
+          <p className="text-xs text-slate-400">
+            Craft includes a general-purpose declarative engine where all server software definitions (including Paper, Fabric, Palworld, and Factorio) are defined using standard configuration files. Default definitions are extracted into <code className="text-emerald-400 font-mono">~/.craft/softwares/</code> and <code className="text-emerald-400 font-mono">bin/softwares/</code> for direct user editing.
+          </p>
+          <CodeBlock id="software-commands" code={`# List all available software definitions and check editability
+craft software list
+
+# Inspect detailed schema, ports, bundled versions, and config path
+craft software inspect paper
+
+# Scaffold a new custom server software definition directory
+craft software template mygame
+
+# Package a software directory into a shareable .zip bundle
+craft software package mygame
+
+# Install a .zip definition package into ~/.craft/softwares/
+craft software install mygame.zip
+
+# Restore a modified software definition back to factory defaults
+craft software reset paper`} />
         </div>
       ),
     },

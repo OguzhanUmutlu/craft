@@ -407,6 +407,9 @@ async fn main() {
         Some(Commands::Lua { script, args }) => {
             craft_scripting::LuaEngine::new().and_then(|engine| engine.run_file(&script, &args))
         }
+        Some(Commands::Software { action }) => {
+            commands::software::handle_software(action, &paths).await
+        }
     };
 
     if let Err(e) = result {

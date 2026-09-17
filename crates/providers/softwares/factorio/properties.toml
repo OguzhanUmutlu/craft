@@ -1,0 +1,40 @@
+[meta]
+file = "data/server-settings.json"
+format = "json"
+
+[[categories]]
+id = "general"
+name = "General Settings"
+
+[[categories]]
+id = "security"
+name = "Security & Auth"
+
+[[properties]]
+key = "name"
+category = "general"
+label = "Server Name"
+type = "string"
+default = "A Craft Factorio Server"
+
+[[properties]]
+key = "description"
+category = "general"
+label = "Description"
+type = "string"
+default = "Craft-managed Factorio Headless Server"
+
+[[properties]]
+key = "max_players"
+category = "general"
+label = "Max Players"
+type = "integer"
+default = 32
+min = 0
+
+[[properties]]
+key = "require_user_verification"
+category = "security"
+label = "Verify Accounts"
+type = "boolean"
+default = true

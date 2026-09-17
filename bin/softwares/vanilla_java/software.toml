@@ -1,0 +1,45 @@
+[software]
+id = "vanilla_java"
+name = "Vanilla Java"
+display_name = "Vanilla (Mojang Official)"
+game = "minecraft"
+edition = "java"
+description = "Official Mojang Minecraft server"
+author = "Mojang Studios"
+version = "1.0.0"
+website = "https://minecraft.net"
+
+[capabilities]
+plugins = false
+mods = false
+datapacks = true
+rcon = true
+
+[runtime]
+kind = "java"
+default_server_file = "server.jar"
+
+[network]
+default_port = 25565
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "1.21.4"
+bundled = ["1.21.4", "1.21.3", "1.21.1", "1.21", "1.20.6", "1.20.4", "1.20.2", "1.20.1", "1.19.4", "1.18.2", "1.16.5"]
+fetch_mode = "http_json"
+api_url = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+json_path = "versions[].id"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://piston-data.mojang.com/v1/objects/{version}/server.jar"
+filename = "server.jar"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"
+
+[developer]
+jdwp = true

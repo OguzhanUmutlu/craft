@@ -1,0 +1,44 @@
+[software]
+id = "valheim"
+name = "Valheim"
+display_name = "Valheim Dedicated Server"
+game = "valheim"
+edition = "native"
+description = "Valheim (Unity)"
+author = "Iron Gate Studio"
+version = "1.0.0"
+
+[capabilities]
+plugins = false
+mods = false
+datapacks = false
+rcon = false
+
+[runtime]
+kind = "native"
+default_server_file = "valheim_server.x86_64"
+arguments = ["-nographics", "-batchmode", "-port", "2456", "-name", "My Server", "-world", "Dedicated"]
+stop_method = "sigterm"
+stop_timeout_seconds = 15
+
+[network]
+default_port = 2456
+default_query_port = 2457
+protocol = "udp"
+query_protocol = "a2s"
+
+[versions]
+recommended = "0.218.15"
+bundled = ["0.218.15", "0.217.46"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
+filename = "steamcmd_linux.tar.gz"
+is_archive = true
+
+[properties]
+file = "valheim_server.properties"
+format = "properties"
+schema_file = "properties.toml"

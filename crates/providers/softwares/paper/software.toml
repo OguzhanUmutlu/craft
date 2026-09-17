@@ -1,0 +1,51 @@
+[software]
+id = "paper"
+name = "Paper"
+display_name = "Paper (High-Performance Java)"
+game = "minecraft"
+edition = "java"
+description = "High-performance PaperMC fork"
+author = "PaperMC Team"
+version = "1.0.0"
+website = "https://papermc.io"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = true
+rcon = true
+
+[runtime]
+kind = "java"
+default_server_file = "paper.jar"
+
+[network]
+default_port = 25565
+default_query_port = 25565
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "1.21.4"
+bundled = ["1.21.4", "1.21.3", "1.21.1", "1.21", "1.20.6", "1.20.4", "1.20.2", "1.20.1", "1.19.4", "1.18.2", "1.16.5"]
+fetch_mode = "http_json"
+api_url = "https://api.papermc.io/v2/projects/paper"
+json_path = "versions"
+
+[assets]
+download_mode = "lua"
+script = "scripts/assets.lua"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"
+
+[plugins]
+folder = "plugins"
+search_providers = ["modrinth", "hangar"]
+
+[developer]
+jdwp = true
+reload_command = "reload confirm"
+scaffolding = ["paper-plugin"]

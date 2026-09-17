@@ -1,0 +1,50 @@
+[software]
+id = "purpur"
+name = "Purpur"
+display_name = "Purpur (Gameplay Tweaks)"
+game = "minecraft"
+edition = "java"
+description = "Paper fork with extensive gameplay tweaks"
+author = "PurpurMC"
+version = "1.0.0"
+website = "https://purpurmc.org"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = true
+rcon = true
+
+[runtime]
+kind = "java"
+default_server_file = "server.jar"
+
+[network]
+default_port = 25565
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "1.21.4"
+bundled = ["1.21.4", "1.21.3", "1.21.1", "1.20.6", "1.20.4", "1.19.4"]
+fetch_mode = "http_json"
+api_url = "https://api.purpurmc.org/v2/purpur"
+json_path = "versions"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://api.purpurmc.org/v2/purpur/{version}/latest/download"
+filename = "server.jar"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"
+
+[plugins]
+folder = "plugins"
+search_providers = ["modrinth", "hangar"]
+
+[developer]
+jdwp = true
+reload_command = "reload confirm"

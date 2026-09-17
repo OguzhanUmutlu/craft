@@ -1,0 +1,45 @@
+[software]
+id = "nukkit"
+name = "NukkitX"
+display_name = "NukkitX (Java Bedrock)"
+game = "minecraft"
+edition = "bedrock"
+description = "Java-based Bedrock server"
+author = "CloudburstMC"
+version = "1.0.0"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = false
+rcon = true
+
+[runtime]
+kind = "java"
+default_server_file = "nukkit.jar"
+
+[network]
+default_port = 19132
+protocol = "udp"
+query_protocol = "raknet"
+
+[versions]
+recommended = "latest"
+bundled = ["latest"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://ci.opencollab.dev/job/NukkitX/job/Nukkit/job/master/lastSuccessfulBuild/artifact/target/nukkit-1.0-SNAPSHOT.jar"
+filename = "nukkit.jar"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"
+
+[plugins]
+folder = "plugins"
+
+[developer]
+jdwp = true

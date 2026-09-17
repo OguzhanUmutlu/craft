@@ -1,0 +1,48 @@
+[software]
+id = "spigot"
+name = "Spigot"
+display_name = "Spigot (Classic)"
+game = "minecraft"
+edition = "java"
+description = "High-performance Bukkit server"
+author = "SpigotMC"
+version = "1.0.0"
+website = "https://spigotmc.org"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = true
+rcon = true
+
+[runtime]
+kind = "java"
+default_server_file = "spigot.jar"
+
+[network]
+default_port = 25565
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "1.21.4"
+bundled = ["1.21.4", "1.21.3", "1.21.1", "1.21", "1.20.6", "1.20.4", "1.20.2", "1.20.1", "1.19.4", "1.18.2", "1.16.5"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://cdn.getbukkit.org/spigot/spigot-{version}.jar"
+filename = "spigot.jar"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"
+
+[plugins]
+folder = "plugins"
+search_providers = ["modrinth"]
+
+[developer]
+jdwp = true
+reload_command = "reload"

@@ -1,12 +1,13 @@
-use std::path::{Path, PathBuf};
+use crate::error::{CraftError, Result};
 use std::env;
 use std::fs;
-use crate::error::{CraftError, Result};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct CraftPaths {
     pub home: PathBuf,
     pub servers_dir: PathBuf,
+    pub softwares_dir: PathBuf,
     pub cache_dir: PathBuf,
     pub backups_dir: PathBuf,
     pub run_dir: PathBuf,
@@ -23,6 +24,7 @@ pub struct CraftPaths {
 impl CraftPaths {
     pub fn from_base(home: PathBuf) -> Self {
         let servers_dir = home.join("servers");
+        let softwares_dir = home.join("softwares");
         let cache_dir = home.join("cache");
         let backups_dir = home.join("backups");
         let run_dir = home.join("run");
@@ -39,6 +41,7 @@ impl CraftPaths {
         Self {
             home,
             servers_dir,
+            softwares_dir,
             cache_dir,
             backups_dir,
             run_dir,
@@ -58,7 +61,9 @@ impl CraftPaths {
             PathBuf::from(val)
         } else {
             let user_home = directories::UserDirs::new()
-                .ok_or_else(|| CraftError::Config("Unable to locate user home directory".to_string()))?
+                .ok_or_else(|| {
+                    CraftError::Config("Unable to locate user home directory".to_string())
+                })?
                 .home_dir()
                 .to_path_buf();
 
@@ -66,6 +71,7 @@ impl CraftPaths {
         };
 
         let servers_dir = home.join("servers");
+        let softwares_dir = home.join("softwares");
         let cache_dir = home.join("cache");
         let backups_dir = home.join("backups");
         let run_dir = home.join("run");
@@ -74,7 +80,17 @@ impl CraftPaths {
         let trash_dir = home.join("trash");
 
         // Ensure all primary directories exist
-        for dir in [&home, &servers_dir, &cache_dir, &backups_dir, &trash_dir, &run_dir, &locks_dir, &logs_dir] {
+        for dir in [
+            &home,
+            &servers_dir,
+            &softwares_dir,
+            &cache_dir,
+            &backups_dir,
+            &trash_dir,
+            &run_dir,
+            &locks_dir,
+            &logs_dir,
+        ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
             }
@@ -89,6 +105,7 @@ impl CraftPaths {
         Ok(Self {
             home,
             servers_dir,
+            softwares_dir,
             cache_dir,
             backups_dir,
             run_dir,
@@ -104,13 +121,20 @@ impl CraftPaths {
     }
 
     /// Resolves a server path either from a provided path, a name, or partial name match
-    pub fn resolve_server_path(&self, explicit_path: Option<&Path>, name: Option<&str>, allow_partial: bool) -> Result<PathBuf> {
+    pub fn resolve_server_path(
+        &self,
+        explicit_path: Option<&Path>,
+        name: Option<&str>,
+        allow_partial: bool,
+    ) -> Result<PathBuf> {
         if let Some(p) = explicit_path {
             return Ok(p.to_path_buf());
         }
 
         let name = name.ok_or_else(|| {
-            CraftError::Config("Please specify a server name with --name, --path or as an argument.".to_string())
+            CraftError::Config(
+                "Please specify a server name with --name, --path or as an argument.".to_string(),
+            )
         })?;
 
         // 1. Check if the name matches any registered server in servers.toml

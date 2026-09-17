@@ -1,97 +1,72 @@
 use std::sync::Arc;
 
-pub mod traits;
-pub mod cache;
+pub mod builtins;
 pub mod bundled;
-pub mod paper;
-pub mod purpur;
-pub mod vanilla_java;
-pub mod fabric;
-pub mod spigot;
-pub mod vanilla_bedrock;
-pub mod pocketmine;
 pub mod bungee;
+pub mod cache;
+pub mod catalog;
+pub mod custom;
+pub mod dynamic;
+pub mod fabric;
+pub mod factorio;
 pub mod geyser;
 pub mod neoforge;
-pub mod quilt;
 pub mod nukkit;
-pub mod waterdog;
 pub mod palworld;
+pub mod paper;
+pub mod pocketmine;
+pub mod purpur;
+pub mod quilt;
+pub mod registry;
+pub mod spigot;
 pub mod terraria;
+pub mod traits;
 pub mod valheim;
-pub mod factorio;
-pub mod custom;
-pub mod catalog;
+pub mod vanilla_bedrock;
+pub mod vanilla_java;
+pub mod waterdog;
 
-pub use traits::{AssetDownload, ServerEdition, ServerSoftware};
+pub use bungee::BungeeProvider;
 pub use cache::CacheManager;
 pub use catalog::{
     CatalogAsset, CatalogBuilder, CatalogManager, SoftwareCatalogEntry, VersionCatalog,
     DEFAULT_CATALOG_TTL_SECS, DEFAULT_CATALOG_URL,
 };
-pub use paper::PaperProvider;
-pub use purpur::PurpurProvider;
-pub use vanilla_java::VanillaJavaProvider;
+pub use custom::CustomGameProvider;
+pub use dynamic::DynamicSoftwareProvider;
 pub use fabric::FabricProvider;
-pub use spigot::SpigotProvider;
-pub use vanilla_bedrock::VanillaBedrockProvider;
-pub use pocketmine::PocketmineProvider;
-pub use bungee::BungeeProvider;
+pub use factorio::FactorioProvider;
 pub use geyser::GeyserProvider;
 pub use neoforge::NeoForgeProvider;
-pub use quilt::QuiltProvider;
 pub use nukkit::NukkitProvider;
-pub use waterdog::WaterdogProvider;
 pub use palworld::PalworldProvider;
+pub use paper::PaperProvider;
+pub use pocketmine::PocketmineProvider;
+pub use purpur::PurpurProvider;
+pub use quilt::QuiltProvider;
+pub use registry::{global_registry, reload_registry, SoftwareRegistry};
+pub use spigot::SpigotProvider;
 pub use terraria::TerrariaProvider;
+pub use traits::{AssetDownload, ServerEdition, ServerSoftware};
 pub use valheim::ValheimProvider;
-pub use factorio::FactorioProvider;
-pub use custom::CustomGameProvider;
+pub use vanilla_bedrock::VanillaBedrockProvider;
+pub use vanilla_java::VanillaJavaProvider;
+pub use waterdog::WaterdogProvider;
 
 pub fn get_all_softwares() -> Vec<Arc<dyn ServerSoftware>> {
-    vec![
-        Arc::new(PaperProvider::new_paper()),
-        Arc::new(PurpurProvider::new()),
-        Arc::new(PaperProvider::new_folia()),
-        Arc::new(PaperProvider::new_velocity()),
-        Arc::new(PaperProvider::new_waterfall()),
-        Arc::new(VanillaJavaProvider::new()),
-        Arc::new(FabricProvider::new()),
-        Arc::new(QuiltProvider::new()),
-        Arc::new(NeoForgeProvider::new()),
-        Arc::new(SpigotProvider::new()),
-        Arc::new(BungeeProvider::new()),
-        Arc::new(GeyserProvider::new()),
-        Arc::new(VanillaBedrockProvider::new()),
-        Arc::new(PocketmineProvider::new()),
-        Arc::new(NukkitProvider::new()),
-        Arc::new(WaterdogProvider::new()),
-        Arc::new(PalworldProvider::new()),
-        Arc::new(TerrariaProvider::new()),
-        Arc::new(ValheimProvider::new()),
-        Arc::new(FactorioProvider::new()),
-        Arc::new(CustomGameProvider::new()),
-    ]
+    global_registry().read().unwrap().get_all()
 }
 
 pub fn get_softwares_for_game(game_id: &str) -> Vec<Arc<dyn ServerSoftware>> {
-    get_all_softwares()
-        .into_iter()
-        .filter(|s| s.game_id().eq_ignore_ascii_case(game_id))
-        .collect()
+    global_registry().read().unwrap().for_game(game_id)
 }
 
 pub fn find_software(id: &str) -> Option<Arc<dyn ServerSoftware>> {
-    let lower = id.to_lowercase();
-    get_all_softwares().into_iter().find(|s| {
-        s.id().eq_ignore_ascii_case(&lower)
-            || s.name().eq_ignore_ascii_case(&lower)
-            || (lower == "vanilla" && s.id() == "vanilla_java")
-            || (lower == "bedrock" && s.id() == "vanilla_bedrock")
-            || (lower == "bungee" && s.id() == "bungeecord")
-            || (lower == "palworld" && s.id() == "palserver")
-            || (lower == "terraria" && s.id() == "tshock")
-    })
+    global_registry().read().unwrap().find(id)
+}
+
+pub fn get_software_bundle(id: &str) -> Option<craft_scripting::SoftwareDefinitionBundle> {
+    global_registry().read().unwrap().get_bundle(id).cloned()
 }
 
 pub fn get_content_capabilities(software: &str) -> craft_core::ContentCapabilities {
@@ -180,7 +155,11 @@ mod tests {
     fn test_bundled_versions_non_empty() {
         for soft in get_all_softwares() {
             let versions = soft.bundled_versions();
-            assert!(!versions.is_empty(), "Software {} has empty bundled versions", soft.name());
+            assert!(
+                !versions.is_empty(),
+                "Software {} has empty bundled versions",
+                soft.name()
+            );
         }
     }
 
@@ -190,9 +169,24 @@ mod tests {
         assert_eq!(softwares.len(), 21);
         for soft in softwares {
             let desc = soft.description();
-            assert!(!desc.is_empty(), "Software {} has empty description", soft.name());
-            assert_ne!(desc, "Supported Minecraft Server Platform", "Software {} has generic placeholder", soft.name());
-            assert!(desc.len() <= 48, "Software {} description is too long ({} chars): {}", soft.name(), desc.len(), desc);
+            assert!(
+                !desc.is_empty(),
+                "Software {} has empty description",
+                soft.name()
+            );
+            assert_ne!(
+                desc,
+                "Supported Minecraft Server Platform",
+                "Software {} has generic placeholder",
+                soft.name()
+            );
+            assert!(
+                desc.len() <= 48,
+                "Software {} description is too long ({} chars): {}",
+                soft.name(),
+                desc.len(),
+                desc
+            );
         }
     }
 
@@ -258,7 +252,85 @@ mod tests {
         // Palworld, Valheim, Custom: none
         for id in &["palserver", "valheim", "custom"] {
             let caps = get_content_capabilities(id);
-            assert!(!caps.has_any(), "{} should have no content capabilities", id);
+            assert!(
+                !caps.has_any(),
+                "{} should have no content capabilities",
+                id
+            );
         }
+    }
+
+    #[test]
+    fn test_software_registry_user_override_and_custom_package() {
+        use craft_core::CraftPaths;
+        use craft_scripting::package_directory;
+        use tempfile::tempdir;
+
+        let dir = tempdir().expect("tempdir");
+        let paths = CraftPaths::from_base(dir.path().to_path_buf());
+        std::fs::create_dir_all(&paths.softwares_dir).expect("create softwares dir");
+
+        // 1. Initial registry has 21 softwares
+        let mut reg = SoftwareRegistry::load(&paths);
+        assert_eq!(reg.get_all().len(), 21);
+
+        // 2. Add a new custom software definition as a directory
+        let new_sw_dir = paths.softwares_dir.join("myserver");
+        std::fs::create_dir_all(&new_sw_dir).expect("create myserver dir");
+        let toml_content = r#"
+[software]
+id = "myserver"
+name = "My Custom Server"
+game = "custom"
+edition = "native"
+description = "My test custom game"
+"#;
+        std::fs::write(new_sw_dir.join("software.toml"), toml_content)
+            .expect("write software.toml");
+
+        // 3. Package another custom software into a .zip bundle
+        let bundle_src = dir.path().join("bundled_src");
+        std::fs::create_dir_all(&bundle_src).expect("create bundle src");
+        let bundle_toml = r#"
+[software]
+id = "bundlegame"
+name = "Bundle Game"
+game = "custom"
+edition = "native"
+description = "Packed .zip bundle test"
+"#;
+        std::fs::write(bundle_src.join("software.toml"), bundle_toml).expect("write toml");
+        let zip_file = paths.softwares_dir.join("bundlegame.zip");
+        package_directory(&bundle_src, &zip_file).expect("package zip file");
+
+        // 4. Reload registry and verify both new softwares are discovered
+        reg = SoftwareRegistry::load(&paths);
+        assert_eq!(reg.get_all().len(), 23);
+
+        let myserver = reg.find("myserver").expect("myserver found");
+        assert_eq!(myserver.name(), "My Custom Server");
+        assert_eq!(myserver.game_id(), "custom");
+
+        let bundlegame = reg.find("bundlegame").expect("bundlegame found");
+        assert_eq!(bundlegame.name(), "Bundle Game");
+
+        // 5. Test override of an existing built-in software (e.g. paper)
+        let override_dir = paths.softwares_dir.join("paper_override");
+        std::fs::create_dir_all(&override_dir).expect("create override dir");
+        let override_toml = r#"
+[software]
+id = "paper"
+name = "Paper Custom Override"
+game = "minecraft"
+edition = "java"
+description = "User overridden Paper definition"
+"#;
+        std::fs::write(override_dir.join("software.toml"), override_toml)
+            .expect("write override toml");
+
+        reg = SoftwareRegistry::load(&paths);
+        let paper = reg.find("paper").expect("paper found");
+        assert_eq!(paper.name(), "Paper Custom Override");
+        assert_eq!(paper.description(), "User overridden Paper definition");
     }
 }

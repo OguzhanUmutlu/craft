@@ -1250,6 +1250,7 @@ pub(crate) async fn server_control_panel(
                 super::properties_tui::server_properties_editor(
                     &fresh_server.path,
                     &fresh_server.name,
+                    Some(&fresh_server.software),
                 )
                 .await?;
             }

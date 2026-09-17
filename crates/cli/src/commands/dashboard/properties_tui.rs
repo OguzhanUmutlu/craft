@@ -7,7 +7,38 @@ use craft_core::{PropertyCategory, Result, ServerProperties};
 use modalx::modals::{FormField, FormModal};
 use std::path::Path;
 
-pub async fn server_properties_editor(server_path: &Path, server_name: &str) -> Result<()> {
+pub async fn server_properties_editor(
+    server_path: &Path,
+    server_name: &str,
+    software: Option<&str>,
+) -> Result<()> {
+    if let Some(sw) = software {
+        if let Some(bundle) = craft_providers::get_software_bundle(sw) {
+            if let Some(ref schema) = bundle.properties_schema {
+                // If it's a non-Minecraft game or custom server, use the schema-driven editor
+                let is_mc_builtin = matches!(
+                    sw,
+                    "paper"
+                        | "purpur"
+                        | "folia"
+                        | "spigot"
+                        | "vanilla_java"
+                        | "fabric"
+                        | "quilt"
+                        | "neoforge"
+                        | "vanilla_bedrock"
+                );
+                if !is_mc_builtin {
+                    return schema_properties_editor(server_path, server_name, schema).await;
+                }
+            }
+        }
+    }
+
+    minecraft_properties_editor(server_path, server_name).await
+}
+
+pub async fn minecraft_properties_editor(server_path: &Path, server_name: &str) -> Result<()> {
     let _guard = AltScreenGuard::enter();
     let _nav = NavGuard::enter("Properties");
 
@@ -355,6 +386,236 @@ async fn search_properties_menu(props_path: &Path, server_name: &str, query: &st
             &[format!(
                 "Successfully saved matched settings for '{}'.",
                 server_name
+            )],
+            false,
+        )?;
+    }
+
+    Ok(())
+}
+
+pub async fn schema_properties_editor(
+    server_path: &Path,
+    server_name: &str,
+    schema: &craft_scripting::PropertiesSchema,
+) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Config");
+
+    if !server_path.exists() {
+        show_modal_message(
+            "SERVER NOT FOUND",
+            &[format!(
+                "Server directory '{}' was deleted or moved.",
+                server_path.display()
+            )],
+            true,
+        )?;
+        return Ok(());
+    }
+
+    let props_path = server_path.join(&schema.meta.file);
+
+    // Seed defaults if file doesn't exist
+    if !props_path.exists() {
+        let mut props =
+            craft_scripting::GenericProperties::load_file(&props_path, &schema.meta.format)
+                .map_err(craft_core::CraftError::Other)?;
+        for prop in &schema.properties {
+            if let Some(ref def_val) = prop.default {
+                let s = match def_val {
+                    serde_json::Value::String(s) => s.clone(),
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    _ => def_val.to_string(),
+                };
+                props.set(&prop.key, s);
+            }
+        }
+        let _ = props.save_file(&props_path);
+    }
+
+    let mut selected_cat = 0;
+    let mut flash_msg: Option<String> = None;
+
+    loop {
+        if !server_path.exists() {
+            show_modal_message(
+                "SERVER NOT FOUND",
+                &[format!(
+                    "Server directory '{}' was deleted or moved.",
+                    server_path.display()
+                )],
+                true,
+            )?;
+            return Ok(());
+        }
+
+        let width = get_content_width(80);
+        let mut header = format!(
+            "{}\r\n{}\r\n{}\r\n Server:   {:<18} | Format: {:<8} | File: {}\r\n",
+            box_top(width).cyan().bold(),
+            box_title(
+                &format!("SERVER CONFIG EDITOR: {}", server_name),
+                width,
+                false
+            )
+            .cyan()
+            .bold(),
+            box_divider(width).cyan().bold(),
+            server_name.white().bold(),
+            schema.meta.format.yellow().bold(),
+            schema.meta.file.cyan(),
+        );
+
+        if let Some(msg) = flash_msg.take() {
+            header.push_str(&format!(" {}\r\n", msg));
+        }
+
+        header.push_str(&box_divider(width).dimmed().to_string());
+
+        let mut entries = Vec::new();
+        for (i, cat) in schema.categories.iter().enumerate() {
+            let hotkey = (i + 1).to_string();
+            let count = schema.properties_for_category(&cat.id).len();
+            entries.push(MenuEntry::new(
+                hotkey,
+                format!("{:<26} ({} settings)", cat.name, count),
+            ));
+        }
+
+        entries.push(MenuEntry::new("r", "View Raw Config File").with_aliases(&["raw", "view"]));
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+
+        match run_menu(&header, &entries, &mut selected_cat)? {
+            Some(idx) if idx < schema.categories.len() => {
+                let cat = &schema.categories[idx];
+                schema_category_form(
+                    &props_path,
+                    server_name,
+                    schema,
+                    &cat.id,
+                    &cat.name,
+                    &schema.meta.format,
+                )
+                .await?;
+            }
+            Some(idx) if idx == schema.categories.len() => {
+                // View raw config
+                if let Ok(raw) = std::fs::read_to_string(&props_path) {
+                    let raw_lines: Vec<String> =
+                        raw.lines().take(40).map(|s| s.to_string()).collect();
+                    show_modal_message(
+                        &format!("RAW {}", schema.meta.file.to_uppercase()),
+                        &raw_lines,
+                        false,
+                    )?;
+                }
+            }
+            _ => return Ok(()),
+        }
+    }
+}
+
+async fn schema_category_form(
+    props_path: &Path,
+    server_name: &str,
+    schema: &craft_scripting::PropertiesSchema,
+    cat_id: &str,
+    cat_name: &str,
+    format: &str,
+) -> Result<()> {
+    let _nav = NavGuard::enter(cat_name);
+
+    let mut props = craft_scripting::GenericProperties::load_file(props_path, format)
+        .map_err(craft_core::CraftError::Other)?;
+
+    let prop_defs = schema.properties_for_category(cat_id);
+    if prop_defs.is_empty() {
+        show_modal_message(
+            "NO SETTINGS",
+            &[format!(
+                "No settings configured for category '{}'.",
+                cat_name
+            )],
+            false,
+        )?;
+        return Ok(());
+    }
+
+    let mut form = FormModal::new(format!("{} - {}", cat_name, server_name))
+        .with_confirm_on_cancel(true)
+        .with_header_row(format!(
+            "Category: {} | Total Settings: {}",
+            cat_name.white().bold(),
+            prop_defs.len()
+        ))
+        .with_header_row("Edit values, Space to toggle checkboxes, Ctrl+S or Submit to save:");
+
+    for prop in &prop_defs {
+        let current_val = props
+            .get(&prop.key)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                prop.default
+                    .as_ref()
+                    .map(|d| match d {
+                        serde_json::Value::String(s) => s.clone(),
+                        serde_json::Value::Bool(b) => b.to_string(),
+                        serde_json::Value::Number(n) => n.to_string(),
+                        _ => d.to_string(),
+                    })
+                    .unwrap_or_default()
+            });
+
+        match prop.property_type {
+            craft_scripting::PropertyType::Boolean => {
+                let checked = current_val == "true" || current_val == "1";
+                form = form.with_field(FormField::checkbox_with_default(
+                    prop.key.clone(),
+                    prop.label.clone(),
+                    checked,
+                ));
+            }
+            craft_scripting::PropertyType::Integer => {
+                form = form.with_field(
+                    FormField::integer(prop.key.clone(), prop.label.clone())
+                        .with_default(current_val),
+                );
+            }
+            craft_scripting::PropertyType::Enum => {
+                let label = if let Some(ref opts) = prop.options {
+                    format!("{} [{}]", prop.label, opts.join("/"))
+                } else {
+                    prop.label.clone()
+                };
+                form = form.with_field(
+                    FormField::string(prop.key.clone(), label).with_default(current_val),
+                );
+            }
+            craft_scripting::PropertyType::String => {
+                form = form.with_field(
+                    FormField::string(prop.key.clone(), prop.label.clone())
+                        .with_default(current_val),
+                );
+            }
+        }
+    }
+
+    if let Some(result) = form.run()? {
+        for prop in &prop_defs {
+            if let Some(new_val) = result.get(&prop.key) {
+                props.set(&prop.key, new_val);
+            }
+        }
+        props
+            .save_file(props_path)
+            .map_err(craft_core::CraftError::Other)?;
+        show_modal_message(
+            "SETTINGS SAVED",
+            &[format!(
+                "Successfully saved {} settings for '{}'.",
+                cat_name, server_name
             )],
             false,
         )?;

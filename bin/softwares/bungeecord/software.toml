@@ -1,0 +1,46 @@
+[software]
+id = "bungeecord"
+name = "BungeeCord"
+display_name = "BungeeCord Proxy"
+game = "minecraft"
+edition = "proxy"
+description = "Multi-server network proxy"
+author = "SpigotMC"
+version = "1.0.0"
+website = "https://spigotmc.org"
+
+[capabilities]
+plugins = true
+mods = false
+datapacks = false
+rcon = false
+
+[runtime]
+kind = "java"
+default_server_file = "BungeeCord.jar"
+
+[network]
+default_port = 25577
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "latest"
+bundled = ["latest"]
+fetch_mode = "static"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://ci.md-5.net/job/BungeeCord/lastSuccessfulBuild/artifact/bootstrap/target/BungeeCord.jar"
+filename = "BungeeCord.jar"
+
+[properties]
+file = "config.yml"
+format = "yaml"
+
+[plugins]
+folder = "plugins"
+search_providers = ["modrinth"]
+
+[developer]
+jdwp = true

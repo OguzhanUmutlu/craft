@@ -1,0 +1,51 @@
+[meta]
+file = "serverconfig.txt"
+format = "properties"
+
+[[categories]]
+id = "network"
+name = "Network & Server"
+
+[[categories]]
+id = "world"
+name = "World Configuration"
+
+[[properties]]
+key = "port"
+category = "network"
+label = "Server Port"
+type = "integer"
+default = 7777
+min = 1
+max = 65535
+
+[[properties]]
+key = "maxplayers"
+category = "network"
+label = "Max Players"
+type = "integer"
+default = 16
+min = 1
+max = 255
+
+[[properties]]
+key = "worldname"
+category = "world"
+label = "World Name"
+type = "string"
+default = "World"
+
+[[properties]]
+key = "difficulty"
+category = "world"
+label = "Difficulty"
+type = "enum"
+options = ["0", "1", "2", "3"]
+default = "1"
+
+[[properties]]
+key = "motd"
+category = "network"
+label = "MOTD"
+type = "string"
+default = "Welcome to our Terraria Server!"

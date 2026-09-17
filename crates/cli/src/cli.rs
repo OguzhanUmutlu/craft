@@ -372,6 +372,65 @@ pub enum Commands {
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
+
+    /// Manage server software definitions and .zip packages
+    #[command(name = "software", alias = "sw")]
+    Software {
+        #[command(subcommand)]
+        action: SoftwareCommands,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum SoftwareCommands {
+    /// List all available software definitions (built-in and custom)
+    List {
+        /// Filter by game ID (e.g. minecraft, palworld, terraria)
+        #[arg(short, long)]
+        game: Option<String>,
+    },
+    /// Inspect details and schema of a specific software definition
+    Inspect {
+        /// Software ID (e.g. paper, palserver, custom)
+        id: String,
+    },
+    /// Package a definition directory into a .zip bundle archive
+    Package {
+        /// Path to directory containing software.toml
+        dir: PathBuf,
+        /// Output .zip file path (defaults to <id>.zip)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+    /// Install a .zip package or directory into ~/.craft/softwares/
+    Install {
+        /// Path to .zip file or definition directory
+        package: PathBuf,
+        /// Force overwrite if software already exists
+        #[arg(short, long)]
+        force: bool,
+    },
+    /// Remove an installed custom software definition
+    Remove {
+        /// Software ID to remove
+        id: String,
+    },
+    /// Reset default software definitions to factory defaults in ~/.craft/softwares/
+    Reset {
+        /// Specific software ID to reset (e.g. paper, purpur, palserver)
+        id: Option<String>,
+        /// Reset all default software definitions
+        #[arg(short, long)]
+        all: bool,
+    },
+    /// Scaffold a new custom server software definition directory with templates
+    Template {
+        /// Software ID for the new definition
+        id: String,
+        /// Destination directory path (defaults to ./<id>)
+        #[arg(short, long)]
+        path: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]

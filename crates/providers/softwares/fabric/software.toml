@@ -1,0 +1,49 @@
+[software]
+id = "fabric"
+name = "Fabric"
+display_name = "Fabric Mod Loader"
+game = "minecraft"
+edition = "java"
+description = "Lightweight modular mod loader"
+author = "FabricMC"
+version = "1.0.0"
+website = "https://fabricmc.net"
+
+[capabilities]
+plugins = false
+mods = true
+datapacks = true
+rcon = true
+
+[runtime]
+kind = "java"
+default_server_file = "fabric-server-launch.jar"
+
+[network]
+default_port = 25565
+protocol = "tcp"
+query_protocol = "slp"
+
+[versions]
+recommended = "1.21.4"
+bundled = ["1.21.4", "1.21.3", "1.21.1", "1.21", "1.20.6", "1.20.4", "1.20.2", "1.20.1", "1.19.4", "1.18.2", "1.16.5"]
+fetch_mode = "http_json"
+api_url = "https://meta.fabricmc.net/v2/versions/game"
+json_path = "[].version"
+
+[assets]
+download_mode = "url_template"
+url_template = "https://meta.fabricmc.net/v2/versions/loader/{version}/0.16.10/1.0.1/server/jar"
+filename = "fabric-server-launch.jar"
+
+[properties]
+file = "server.properties"
+format = "properties"
+schema_file = "properties.toml"
+
+[plugins]
+folder = "mods"
+search_providers = ["modrinth"]
+
+[developer]
+jdwp = true
