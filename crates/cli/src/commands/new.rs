@@ -356,17 +356,19 @@ pub async fn handle_new(
     }
 
     // 8. Download assets and set up server
-    println!();
-    println!(
-        "{}",
-        format!(
-            "Setting up {} version {} in '{}'...",
-            software.name(),
-            version,
-            target_dir.display()
-        )
-        .cyan()
-    );
+    if !yes {
+        println!();
+        println!(
+            "{}",
+            format!(
+                "Setting up {} version {} in '{}'...",
+                software.name(),
+                version,
+                target_dir.display()
+            )
+            .cyan()
+        );
+    }
 
     let assets = if let Ok(catalog_mgr) = craft_providers::CatalogManager::new() {
         catalog_mgr

@@ -1,7 +1,7 @@
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::path::Path;
-use indicatif::{ProgressBar, ProgressStyle};
+use modalx::modals::ProgressModal;
 use craft_core::{CraftError, Result};
 use crate::session::RemoteSession;
 
@@ -22,14 +22,14 @@ impl<'a> SftpOps<'a> {
         let meta = local_file.metadata().map_err(CraftError::Io)?;
         let total_size = meta.len();
 
-        let pb = ProgressBar::new(total_size);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, ETA: {eta})")
-                .unwrap()
-                .progress_chars("#>-"),
+        let mut stdout = io::stdout();
+        let name = local_path.file_name().unwrap_or_default().to_string_lossy();
+        let mut modal = ProgressModal::new(
+            "UPLOADING FILE",
+            format!("Uploading {} to remote host...", name),
+            total_size,
         );
-        pb.set_message(format!("Uploading {}", local_path.file_name().unwrap_or_default().to_string_lossy()));
+        let _ = modal.render_forced(&mut stdout);
 
         let mut remote_file = sftp.create(remote_path)
             .map_err(|e| CraftError::Other(format!("Failed to create remote file '{}': {}", remote_path.display(), e)))?;
@@ -42,10 +42,11 @@ impl<'a> SftpOps<'a> {
             }
             remote_file.write_all(&buf[..count])
                 .map_err(|e| CraftError::Other(format!("SFTP write error: {}", e)))?;
-            pb.inc(count as u64);
+            modal.inc(count as u64);
+            let _ = modal.render(&mut stdout);
         }
 
-        pb.finish_with_message("Upload complete");
+        let _ = modal.finish("Upload complete", &mut stdout);
         Ok(())
     }
 
@@ -58,14 +59,21 @@ impl<'a> SftpOps<'a> {
             .map_err(|e| CraftError::Other(format!("Failed to stat remote file: {}", e)))?;
         let total_size = stat.size.unwrap_or(0);
 
-        let pb = ProgressBar::new(total_size);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, ETA: {eta})")
-                .unwrap()
-                .progress_chars("#>-"),
-        );
-        pb.set_message(format!("Downloading {}", remote_path.file_name().unwrap_or_default().to_string_lossy()));
+        let mut stdout = io::stdout();
+        let name = remote_path.file_name().unwrap_or_default().to_string_lossy();
+        let mut modal = if total_size > 0 {
+            ProgressModal::new(
+                "DOWNLOADING FILE",
+                format!("Downloading {} from remote host...", name),
+                total_size,
+            )
+        } else {
+            ProgressModal::indeterminate(
+                "DOWNLOADING FILE",
+                format!("Downloading {} from remote host...", name),
+            )
+        };
+        let _ = modal.render_forced(&mut stdout);
 
         if let Some(parent) = local_path.parent() {
             std::fs::create_dir_all(parent).map_err(CraftError::Io)?;
@@ -81,10 +89,11 @@ impl<'a> SftpOps<'a> {
                 break;
             }
             local_file.write_all(&buf[..count]).map_err(CraftError::Io)?;
-            pb.inc(count as u64);
+            modal.inc(count as u64);
+            let _ = modal.render(&mut stdout);
         }
 
-        pb.finish_with_message("Download complete");
+        let _ = modal.finish("Download complete", &mut stdout);
         Ok(())
     }
 

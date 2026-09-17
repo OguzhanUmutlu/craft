@@ -1,8 +1,8 @@
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use indicatif::{ProgressBar, ProgressStyle};
+use modalx::modals::ProgressModal;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
 use futures_util::StreamExt;
@@ -136,20 +136,21 @@ impl CacheManager {
         }
 
         let total_size = response.content_length().unwrap_or(0);
-        let pb = if total_size > 0 {
-            let pb = ProgressBar::new(total_size);
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template("{msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, ETA: {eta})")
-                    .unwrap()
-                    .progress_chars("#>-"),
-            );
-            pb.set_message(format!("Downloading {}", display_name));
-            Some(pb)
+        let mut stdout = io::stdout();
+        let mut modal = if total_size > 0 {
+            ProgressModal::new(
+                "DOWNLOADING SERVER ASSETS",
+                format!("Downloading {}", display_name),
+                total_size,
+            )
         } else {
-            println!("Downloading {} (indeterminate size)...", display_name);
-            None
+            ProgressModal::indeterminate(
+                "DOWNLOADING SERVER ASSETS",
+                format!("Downloading {} (indeterminate size)...", display_name),
+            )
         };
+
+        let _ = modal.render_forced(&mut stdout);
 
         let temp_path = target_path.with_extension("download.tmp");
         let mut file = File::create(&temp_path)?;
@@ -159,14 +160,11 @@ impl CacheManager {
             let chunk = chunk_result
                 .map_err(|e| CraftError::Download(format!("Error reading stream: {}", e)))?;
             file.write_all(&chunk)?;
-            if let Some(ref pb) = pb {
-                pb.inc(chunk.len() as u64);
-            }
+            modal.inc(chunk.len() as u64);
+            let _ = modal.render(&mut stdout);
         }
 
-        if let Some(pb) = pb {
-            pb.finish_with_message(format!("Downloaded {}", display_name));
-        }
+        let _ = modal.finish(format!("Downloaded {}", display_name), &mut stdout);
 
         fs::rename(&temp_path, target_path)?;
         Ok(())

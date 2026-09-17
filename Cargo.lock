@@ -426,6 +426,7 @@ dependencies = [
  "futures-util",
  "hex",
  "indicatif",
+ "modalx",
  "reqwest",
  "serde",
  "serde_json",
@@ -452,6 +453,7 @@ dependencies = [
  "dialoguer",
  "directories",
  "indicatif",
+ "modalx",
  "serde",
  "serde_json",
  "ssh2",
@@ -1237,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "modalx"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "colored",
  "crossterm",
