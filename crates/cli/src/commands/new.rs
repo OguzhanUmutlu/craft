@@ -368,7 +368,18 @@ pub async fn handle_new(
         .cyan()
     );
 
-    let assets = software.get_assets(&version)?;
+    let assets = if let Ok(catalog_mgr) = craft_providers::CatalogManager::new() {
+        catalog_mgr
+            .load()
+            .get_assets(software.id(), &version)
+            .or_else(|| software.get_assets(&version).ok())
+            .ok_or_else(|| CraftError::UnknownVersion {
+                software: software.name().to_string(),
+                version: version.clone(),
+            })?
+    } else {
+        software.get_assets(&version)?
+    };
     let cache = CacheManager::new(paths);
 
     for asset in assets {

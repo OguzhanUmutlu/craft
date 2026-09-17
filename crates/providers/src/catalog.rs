@@ -9,7 +9,7 @@ use crate::traits::AssetDownload;
 use crate::get_all_softwares;
 
 pub const DEFAULT_CATALOG_URL: &str =
-    "https://craft-versions-worker.someoneontheinternet.workers.dev/api/versions.zst";
+    "https://github.com/OguzhanUmutlu/craft/releases/download/catalog/versions.zst";
 pub const DEFAULT_CATALOG_TTL_SECS: u64 = 6 * 3600; // 6 hours
 
 /// Complete software and version catalog.
@@ -324,7 +324,7 @@ impl CatalogManager {
     /// Downloads and decodes the catalog from the remote HTTP endpoint.
     pub async fn fetch_remote(&self) -> Result<VersionCatalog> {
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(10))
             .user_agent("Craft-CLI/1.0 (VersionCatalogClient)")
             .build()
             .map_err(|e| CraftError::Download(format!("HTTP client error: {}", e)))?;

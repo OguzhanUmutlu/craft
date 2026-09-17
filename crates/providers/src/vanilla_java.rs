@@ -115,16 +115,25 @@ impl ServerSoftware for VanillaJavaProvider {
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
         Box::pin(async move {
-            if let Ok(manifest) = self.fetch_mojang_manifest().await {
-                let mut versions: Vec<String> = manifest.versions
+            let mut versions: Vec<String> = if let Ok(manifest) = self.fetch_mojang_manifest().await {
+                manifest.versions
                     .into_iter()
                     .filter(|v| v.release_type == "release")
                     .map(|v| v.id)
-                    .collect();
-                if !versions.is_empty() {
-                    craft_core::sort_versions_descending(&mut versions);
-                    return Ok(versions);
+                    .collect()
+            } else {
+                Vec::new()
+            };
+
+            for k in self.bundled.keys() {
+                if !versions.contains(k) {
+                    versions.push(k.clone());
                 }
+            }
+
+            if !versions.is_empty() {
+                craft_core::sort_versions_descending(&mut versions);
+                return Ok(versions);
             }
             Ok(self.bundled_versions())
         })
@@ -138,6 +147,14 @@ impl ServerSoftware for VanillaJavaProvider {
                 sha256: None,
                 is_archive: false,
             }]);
+        }
+
+        if let Ok(mgr) = crate::catalog::CatalogManager::new() {
+            if let Some(assets) = mgr.load().get_assets(self.id(), version) {
+                if !assets.is_empty() {
+                    return Ok(assets);
+                }
+            }
         }
 
         Err(CraftError::UnknownVersion {

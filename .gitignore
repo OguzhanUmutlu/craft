@@ -16,6 +16,8 @@ cargo-timing.html
 /tools/*
 !/tools/modalx/
 !/tools/todo.md
+!/tools/catalog/
+/tools/catalog/output/
 *.log
 *.sock
 *.pid

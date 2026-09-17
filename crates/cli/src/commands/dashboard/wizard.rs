@@ -555,7 +555,7 @@ pub async fn gui_create_server_wizard_with_name(
                     .map(|s| s.recommended_version())
                     .unwrap_or_else(|| versions_list[0].clone());
 
-                let display_versions: Vec<String> = versions_list.into_iter().take(30).collect();
+                let display_versions: Vec<String> = versions_list;
 
                 let mut ver_entries: Vec<MenuEntry> = display_versions
                     .iter()
