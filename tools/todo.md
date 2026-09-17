@@ -28,8 +28,8 @@ This task list tracks ongoing development, bug fixes, enhancements, and UI polis
   - In `crates/cli/src/commands/dashboard/properties_tui.rs`, eliminated hardcoded `craft_core::truncate_ellipsis(..., 38)`. Descriptions now dynamically adapt to viewport width, allowing wide terminals to display full descriptions without ellipses.
 
 ### 3. Visual Layout, Unicode Width & Zero-Emoji Policy
-- [x] **Eliminate Emojis from TUI**:
-  - Replaced emoji icons in `PropertyCategory::icon()` (`crates/core/src/properties.rs`) with clean ASCII/bracket text badges: `[NET]`, `[GAME]`, `[WORLD]`, `[SEC]`, `[PERF]`, `[RCON]`, `[GEN]`.
+- [x] **Eliminate Emojis & Badges from Categories**:
+  - Removed emoji icons and badges completely from `PropertyCategory` and properties menus, displaying only clean, plain category names.
   - Zero emoji characters exist in any TUI rendering components.
 - [x] **Fix Box Frame Border Misalignment with `unicode-width`**:
   - Added `unicode-width = "0.2"` to `tools/modalx/Cargo.toml`.
