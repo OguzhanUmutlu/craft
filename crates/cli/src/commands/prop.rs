@@ -155,9 +155,8 @@ pub async fn handle_prop(
                     }
                 }
 
-                let cat_label = format!("{} {}", cat.icon(), cat.name());
                 table.add_row(vec![
-                    Cell::new(cat_label),
+                    Cell::new(cat.name()),
                     Cell::new(key).fg(Color::White),
                     Cell::new(val).fg(Color::Green),
                     Cell::new(desc),

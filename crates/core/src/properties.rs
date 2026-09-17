@@ -26,18 +26,6 @@ impl PropertyCategory {
         }
     }
 
-    pub fn icon(&self) -> &'static str {
-        match self {
-            PropertyCategory::Network => "[NET]",
-            PropertyCategory::Gameplay => "[GAME]",
-            PropertyCategory::World => "[WORLD]",
-            PropertyCategory::Security => "[SEC]",
-            PropertyCategory::Performance => "[PERF]",
-            PropertyCategory::Rcon => "[RCON]",
-            PropertyCategory::General => "[GEN]",
-        }
-    }
-
     pub fn all() -> &'static [PropertyCategory] {
         &[
             PropertyCategory::Network,

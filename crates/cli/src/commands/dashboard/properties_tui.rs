@@ -59,7 +59,7 @@ pub async fn server_properties_editor(server_path: &Path, server_name: &str) -> 
             let count = props.list_by_category(*cat).len();
             entries.push(MenuEntry::new(
                 hotkey,
-                format!("{} {:<26} ({} settings)", cat.icon(), cat.name(), count),
+                format!("{:<26} ({} settings)", cat.name(), count),
             ));
         }
 
@@ -140,11 +140,10 @@ async fn category_properties_menu(
 
         let width = get_content_width(80);
         let mut header = format!(
-            "{}\r\n{}\r\n{}\r\n Category: {} {} | Total Settings: {}\r\n Select any setting to toggle boolean or edit value:\r\n",
+            "{}\r\n{}\r\n{}\r\n Category: {} | Total Settings: {}\r\n Select any setting to toggle boolean or edit value:\r\n",
             box_top(width).cyan().bold(),
             box_title(&format!("{} - {}", category.name(), server_name), width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
-            category.icon(),
             category.name().white().bold(),
             items.len(),
         );
