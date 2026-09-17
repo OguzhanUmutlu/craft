@@ -93,10 +93,19 @@ TMP_FILE="$(mktemp "${TMPDIR:-/tmp}/craft.XXXXXX")"
 fetch_file() {
   local url="$1"
   local dest="$2"
+  local silent="${3:-false}"
   if command -v curl &> /dev/null; then
-    curl -fsSL "$url" -o "$dest"
+    if [ "$silent" = true ]; then
+      curl -fsSL "$url" -o "$dest" 2>/dev/null
+    else
+      curl -fsSL "$url" -o "$dest"
+    fi
   elif command -v wget &> /dev/null; then
-    wget -qO "$dest" "$url"
+    if [ "$silent" = true ]; then
+      wget -qO "$dest" "$url" 2>/dev/null
+    else
+      wget -qO "$dest" "$url"
+    fi
   else
     echo -e "${RED}Error: Neither curl nor wget was found on your system.${NC}"
     exit 1
@@ -106,12 +115,12 @@ fetch_file() {
 INSTALLED=false
 
 if [ "$COMPRESSION" = "zst" ]; then
-  echo -e "${BLUE}==> Downloading compressed package (${CYAN}zstd${BLUE}, ~4.9 MB, saves 68% bandwidth)...${NC}"
   TMP_ZST="${TMP_FILE}.zst"
-  if fetch_file "${DOWNLOAD_URL}.zst" "${TMP_ZST}"; then
+  if fetch_file "${DOWNLOAD_URL}.zst" "${TMP_ZST}" true; then
     if zstd -d -q -f "${TMP_ZST}" -o "${TMP_FILE}" 2>/dev/null; then
       rm -f "${TMP_ZST}"
       INSTALLED=true
+      echo -e "${BLUE}==> Downloaded compressed package (${CYAN}zstd${BLUE}, ~4.9 MB, saves 68% bandwidth)${NC}"
     fi
   fi
   rm -f "${TMP_ZST}" 2>/dev/null || true
@@ -119,12 +128,12 @@ fi
 
 if [ "$INSTALLED" = false ] && { [ "$COMPRESSION" = "gz" ] || [ "$COMPRESSION" = "zst" ]; }; then
   if command -v gzip &> /dev/null; then
-    echo -e "${BLUE}==> Downloading compressed package (${CYAN}gzip${BLUE}, ~6.0 MB, saves 60% bandwidth)...${NC}"
     TMP_GZ="${TMP_FILE}.gz"
-    if fetch_file "${DOWNLOAD_URL}.gz" "${TMP_GZ}"; then
+    if fetch_file "${DOWNLOAD_URL}.gz" "${TMP_GZ}" true; then
       if gzip -d -c "${TMP_GZ}" > "${TMP_FILE}" 2>/dev/null; then
         rm -f "${TMP_GZ}"
         INSTALLED=true
+        echo -e "${BLUE}==> Downloaded compressed package (${CYAN}gzip${BLUE}, ~6.0 MB, saves 60% bandwidth)${NC}"
       fi
     fi
     rm -f "${TMP_GZ}" 2>/dev/null || true
@@ -133,7 +142,7 @@ fi
 
 if [ "$INSTALLED" = false ]; then
   echo -e "${BLUE}==> Fetching Craft executable from:${NC} ${DOWNLOAD_URL}"
-  fetch_file "${DOWNLOAD_URL}" "${TMP_FILE}"
+  fetch_file "${DOWNLOAD_URL}" "${TMP_FILE}" false
 fi
 
 chmod +x "${TMP_FILE}"
