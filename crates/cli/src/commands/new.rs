@@ -27,6 +27,8 @@ pub async fn handle_new(
     mut zgc: bool,
     mut shenandoah: bool,
     jvm_flags: Option<Vec<String>>,
+    runtime_input: Option<&str>,
+    exec_input: Option<&str>,
     paths: &CraftPaths,
 ) -> Result<()> {
     let is_tty = std::io::stdin().is_terminal() && !yes;
@@ -268,7 +270,7 @@ pub async fn handle_new(
     // 5. Determine memory allocation
     let memory = if let Some(m) = memory_input {
         m.to_string()
-    } else if is_tty {
+    } else if is_tty && software.edition() == ServerEdition::Java {
         println!();
         println!("{}", "Select memory allocation (RAM):".cyan().bold());
         let mem_options = &[
@@ -379,6 +381,83 @@ pub async fn handle_new(
                 asset.sha256.as_deref(),
             )
             .await?;
+    }
+
+    // Configure custom server runtime if using Custom Game software
+    if software.id() == "custom" {
+        let existing_cfg = craft_scripting::CustomServerConfig::load_from_dir(&target_dir)?;
+        if existing_cfg.is_none() {
+            let runtime_type = match runtime_input.map(|s| s.to_lowercase()).as_deref() {
+                Some("binary") | Some("bin") | Some("native") => {
+                    craft_scripting::CustomRuntimeType::Binary
+                }
+                Some("script") | Some("sh") | Some("bash") | Some("cmd") | Some("bat") => {
+                    craft_scripting::CustomRuntimeType::Script
+                }
+                Some("lua") => craft_scripting::CustomRuntimeType::Lua,
+                _ => {
+                    if is_tty {
+                        println!();
+                        println!("{}", "Select Custom Server Runtime Type:".cyan().bold());
+                        let rt_options = &[
+                            "[1] Lua Script Server (Interactive server with Craft standard library)",
+                            "[2] Native Binary Executable (C/C++, Rust, Go, Unity, Unreal binary)",
+                            "[3] Shell / Batch Script Server (Custom bash / batch wrapper)",
+                        ];
+                        let choice = Select::with_theme(&theme)
+                            .with_prompt("Runtime Type")
+                            .items(rt_options)
+                            .default(0)
+                            .interact()?;
+                        match choice {
+                            0 => craft_scripting::CustomRuntimeType::Lua,
+                            1 => craft_scripting::CustomRuntimeType::Binary,
+                            _ => craft_scripting::CustomRuntimeType::Script,
+                        }
+                    } else {
+                        craft_scripting::CustomRuntimeType::Lua
+                    }
+                }
+            };
+
+            let default_exec = match runtime_type {
+                craft_scripting::CustomRuntimeType::Binary => {
+                    if cfg!(windows) {
+                        "server.exe"
+                    } else {
+                        "./server"
+                    }
+                }
+                craft_scripting::CustomRuntimeType::Lua => "server.lua",
+                craft_scripting::CustomRuntimeType::Script => {
+                    if cfg!(windows) {
+                        "server.cmd"
+                    } else {
+                        "./server.sh"
+                    }
+                }
+            };
+
+            let exec = if let Some(e) = exec_input {
+                e.to_string()
+            } else if is_tty {
+                Input::with_theme(&theme)
+                    .with_prompt("Server executable or script file")
+                    .default(default_exec.to_string())
+                    .interact_text()?
+            } else {
+                default_exec.to_string()
+            };
+
+            let port = port_input.unwrap_or(8080);
+            let custom_cfg = craft_scripting::CustomServerConfig::default_for(
+                &server_name,
+                runtime_type,
+                port,
+                Some(&exec),
+            );
+            custom_cfg.save_to_dir(&target_dir)?;
+        }
     }
 
     // Run post download hooks

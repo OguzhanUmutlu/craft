@@ -200,6 +200,16 @@ impl Supervisor {
             }
         }
 
+        // Custom server pre-start lifecycle hook
+        let custom_config = craft_scripting::CustomServerConfig::load_from_dir(&canonical)
+            .ok()
+            .flatten();
+        if let Some(ref cfg) = custom_config {
+            if let Err(e) = craft_scripting::LuaEngine::run_pre_start(&canonical, cfg) {
+                warn!("Custom server on_pre_start hook error: {}", e);
+            }
+        }
+
         info!("Starting server process in '{}'", canonical.display());
 
         let mut cmd = if cfg!(windows) {
@@ -228,6 +238,11 @@ impl Supervisor {
 
         if let Some(pid) = child.id() {
             let _ = lock_guard.record_pid(pid);
+            if let Some(ref cfg) = custom_config {
+                if let Err(e) = craft_scripting::LuaEngine::run_post_start(&canonical, cfg, pid) {
+                    warn!("Custom server on_post_start hook error: {}", e);
+                }
+            }
         }
 
         let stdin = child.stdin.take();
@@ -320,6 +335,10 @@ impl Supervisor {
             .canonicalize()
             .unwrap_or_else(|_| server_path.to_path_buf());
 
+        let custom_config = craft_scripting::CustomServerConfig::load_from_dir(&canonical)
+            .ok()
+            .flatten();
+
         let (child, stdin) = {
             let servers = self.servers.lock().await;
             if let Some(active) = servers.get(&canonical) {
@@ -330,20 +349,92 @@ impl Supervisor {
         };
 
         if let (Some(child), Some(stdin)) = (child, stdin) {
+            let child_pid = {
+                let c = child.lock().await;
+                c.id()
+            };
+
+            if let (Some(pid), Some(ref cfg)) = (child_pid, &custom_config) {
+                if let Err(e) = craft_scripting::LuaEngine::run_pre_stop(&canonical, cfg, pid) {
+                    warn!("Custom server on_pre_stop hook error: {}", e);
+                }
+            }
+
             if !force {
-                // Attempt graceful stop command via stdin
-                if let Some(ref mut input) = *stdin.lock().await {
-                    let _ = input.write_all(b"stop\n").await;
-                    let _ = input.flush().await;
+                let stop_method = custom_config
+                    .as_ref()
+                    .map(|c| c.lifecycle.stop_method.as_str())
+                    .unwrap_or("stdin");
+                let default_stop_cmd = "stop\n".to_string();
+                let stop_cmd = custom_config
+                    .as_ref()
+                    .and_then(|c| c.lifecycle.stop_command.as_deref())
+                    .unwrap_or(&default_stop_cmd);
+                let timeout_secs = custom_config
+                    .as_ref()
+                    .map(|c| c.lifecycle.stop_timeout_seconds)
+                    .unwrap_or(10);
+
+                match stop_method {
+                    "sigint" => {
+                        if let Some(pid) = child_pid {
+                            #[cfg(not(target_os = "windows"))]
+                            {
+                                let _ = std::process::Command::new("kill")
+                                    .args(["-INT", &format!("-{}", pid)])
+                                    .status();
+                            }
+                            #[cfg(target_os = "windows")]
+                            {
+                                let _ = std::process::Command::new("taskkill")
+                                    .args(["/PID", &pid.to_string()])
+                                    .status();
+                            }
+                        }
+                    }
+                    "sigterm" => {
+                        if let Some(pid) = child_pid {
+                            #[cfg(not(target_os = "windows"))]
+                            {
+                                let _ = std::process::Command::new("kill")
+                                    .args(["-TERM", &format!("-{}", pid)])
+                                    .status();
+                            }
+                            #[cfg(target_os = "windows")]
+                            {
+                                let _ = std::process::Command::new("taskkill")
+                                    .args(["/PID", &pid.to_string()])
+                                    .status();
+                            }
+                        }
+                    }
+                    _ => {
+                        // Stdin command
+                        if let Some(ref mut input) = *stdin.lock().await {
+                            let cmd_to_send = if stop_cmd.ends_with('\n') {
+                                stop_cmd.to_string()
+                            } else {
+                                format!("{}\n", stop_cmd)
+                            };
+                            let _ = input.write_all(cmd_to_send.as_bytes()).await;
+                            let _ = input.flush().await;
+                        }
+                    }
                 }
 
-                // Wait up to 10 seconds for graceful exit
-                for _ in 0..20 {
+                // Wait up to timeout_secs for graceful exit
+                let intervals = (timeout_secs * 2).max(1);
+                for _ in 0..intervals {
                     sleep(Duration::from_millis(500)).await;
                     let mut c = child.lock().await;
-                    if let Ok(Some(_)) = c.try_wait() {
+                    if let Ok(Some(status)) = c.try_wait() {
+                        let code = status.code().unwrap_or(0);
                         let mut servers = self.servers.lock().await;
                         servers.remove(&canonical);
+                        if let Some(ref cfg) = custom_config {
+                            let _ =
+                                craft_scripting::LuaEngine::run_post_stop(&canonical, cfg, code);
+                        }
                         return Ok(());
                     }
                 }
@@ -372,6 +463,10 @@ impl Supervisor {
 
             let mut servers = self.servers.lock().await;
             servers.remove(&canonical);
+
+            if let Some(ref cfg) = custom_config {
+                let _ = craft_scripting::LuaEngine::run_post_stop(&canonical, cfg, -9);
+            }
 
             Ok(())
         } else if let Some(pid) = craft_core::get_server_running_pid(&canonical) {

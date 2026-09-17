@@ -116,6 +116,8 @@ async fn main() {
             shenandoah,
             jvm_flags,
             remote,
+            runtime,
+            exec,
         }) => {
             let server_name = if !name.trim().is_empty() {
                 name
@@ -158,6 +160,12 @@ async fn main() {
                 if let Some(ref flags) = jvm_flags {
                     remote_cmd.push_str(&format!(" --jvm-flags \"{}\"", flags.join(" ")));
                 }
+                if let Some(ref r) = runtime {
+                    remote_cmd.push_str(&format!(" --runtime {}", r));
+                }
+                if let Some(ref e) = exec {
+                    remote_cmd.push_str(&format!(" --exec \"{}\"", e));
+                }
                 execute_remote(&alias, &remote_cmd, false, &paths)
             } else if (server_name.is_empty() || sw.is_none())
                 && std::io::stdin().is_terminal()
@@ -180,6 +188,8 @@ async fn main() {
                     zgc,
                     shenandoah,
                     jvm_flags,
+                    runtime.as_deref(),
+                    exec.as_deref(),
                     &paths,
                 )
                 .await
@@ -394,6 +404,9 @@ async fn main() {
         Some(Commands::World { server, action }) => handle_world(&server, action, &paths).await,
         Some(Commands::Dev { server, action }) => handle_dev(&server, action, &paths).await,
         Some(Commands::Trash { action }) => handle_trash(action, &paths).await,
+        Some(Commands::Lua { script, args }) => {
+            craft_scripting::LuaEngine::new().and_then(|engine| engine.run_file(&script, &args))
+        }
     };
 
     if let Err(e) = result {
@@ -444,6 +457,7 @@ fn print_banner() {
     println!("  trash [ls|restore|empty]          Manage recoverable trash bin items");
     println!("  remote <add|ls|rm|test|setup>     Manage remote hosts over SSH");
     println!("  deploy <up|down|status|logs|exec> Deploy containerized stack with Docker");
+    println!("  lua <script> [args...]            Execute Lua script with Craft API");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

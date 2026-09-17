@@ -83,6 +83,18 @@ impl ServerSoftware for CustomGameProvider {
         _version: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
+            let config = match craft_scripting::CustomServerConfig::load_from_dir(server_path)? {
+                Some(cfg) => cfg,
+                None => {
+                    let name = server_path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("custom-server");
+                    craft_scripting::CustomServerConfig::default_lua(name, 8080)
+                }
+            };
+            craft_scripting::generate_all_starter_files(server_path, &config)?;
+
             #[cfg(not(target_os = "windows"))]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -104,23 +116,29 @@ impl ServerSoftware for CustomGameProvider {
         _java_path: Option<&Path>,
         _memory: &str,
     ) -> Result<()> {
-        #[cfg(target_os = "windows")]
-        {
-            let cmd_content = "@echo off\r\nserver.exe\r\n";
-            std::fs::write(server_path.join("start.cmd"), cmd_content)?;
-        }
+        let config = match craft_scripting::CustomServerConfig::load_from_dir(server_path)? {
+            Some(cfg) => cfg,
+            None => {
+                let name = server_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("custom-server");
+                craft_scripting::CustomServerConfig::default_lua(name, 8080)
+            }
+        };
 
-        #[cfg(not(target_os = "windows"))]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let sh_content = "#!/bin/sh\nexec ./server\n";
-            let sh_path = server_path.join("start.sh");
-            std::fs::write(&sh_path, sh_content)?;
-            let mut perms = std::fs::metadata(&sh_path)?.permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&sh_path, perms)?;
-        }
-
+        craft_scripting::generate_all_starter_files(server_path, &config)?;
         Ok(())
+    }
+
+    fn generate_start_script_with_flags(
+        &self,
+        server_path: &Path,
+        version: &str,
+        java_path: Option<&Path>,
+        memory: &str,
+        _jvm_flags: Option<&[String]>,
+    ) -> Result<()> {
+        self.generate_start_script(server_path, version, java_path, memory)
     }
 }

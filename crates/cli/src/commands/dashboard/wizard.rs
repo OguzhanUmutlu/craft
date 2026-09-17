@@ -33,6 +33,7 @@ pub async fn gui_create_server_wizard_with_name(
     enum WizardStep {
         Name,
         GameSelect,
+        CustomRuntime,
         MinecraftCategory,
         JavaType,
         Software,
@@ -75,6 +76,11 @@ pub async fn gui_create_server_wizard_with_name(
     let mut version: String = "latest".to_string();
     let mut memory: String = "4G".to_string();
     let mut start_now: bool = true;
+
+    let mut custom_runtime_type = craft_scripting::CustomRuntimeType::Lua;
+    let mut custom_port: u16 = 8080;
+    let mut custom_exec: String = "server.lua".to_string();
+    let mut custom_sel = 0;
 
     let mut game_sel = 0;
     let mut cat_sel = 0;
@@ -250,7 +256,7 @@ pub async fn gui_create_server_wizard_with_name(
                         game_id = "custom";
                         selected_sw_id = "custom";
                         selected_sw_name = "Custom Game";
-                        step = WizardStep::Version;
+                        step = WizardStep::CustomRuntime;
                     }
                     Some(6) => {
                         game_id = "all";
@@ -263,6 +269,124 @@ pub async fn gui_create_server_wizard_with_name(
                         } else {
                             step = WizardStep::Name;
                         }
+                    }
+                }
+            }
+
+            WizardStep::CustomRuntime => {
+                let _sub_nav = NavGuard::enter("Custom Runtime");
+                let current_step = if has_name_override { 2 } else { 3 };
+                let total_steps = current_step + 1;
+                let title = format!(
+                    "SELECT RUNTIME ENVIRONMENT (STEP {}/{})",
+                    current_step, total_steps
+                );
+                let width = get_content_width(80);
+                let cr_header = format!(
+                    "{}\r\n{}\r\n{}\r\n Choose runtime type for custom server '{}':\r\n{}",
+                    box_top(width).cyan().bold(),
+                    box_title(&title, width, false).cyan().bold(),
+                    box_divider(width).cyan().bold(),
+                    server_name,
+                    box_divider(width).dimmed(),
+                );
+
+                let cr_entries = vec![
+                    MenuEntry::new(
+                        "1",
+                        "Lua Script Server (Interactive server with Craft standard library)",
+                    ),
+                    MenuEntry::new(
+                        "2",
+                        "Native Binary Executable (C/C++, Rust, Go, Unity, Unreal binary)",
+                    ),
+                    MenuEntry::new(
+                        "3",
+                        "Shell / Batch Script Server (Custom bash / batch wrapper)",
+                    ),
+                    MenuEntry::new("0", "Back to Game Selection").with_aliases(&["b"]),
+                ];
+
+                let cr_choice = run_menu(&cr_header, &cr_entries, &mut custom_sel)?;
+                match cr_choice {
+                    Some(0) => {
+                        custom_runtime_type = craft_scripting::CustomRuntimeType::Lua;
+                        custom_exec = "server.lua".to_string();
+                        if let Ok(Some(p_str)) = run_input_prompt(
+                            "CUSTOM SERVER PORT",
+                            "Enter listening network port for Lua server:",
+                            Some("8080"),
+                        ) {
+                            if let Ok(p) = p_str.trim().parse::<u16>() {
+                                custom_port = p;
+                            }
+                        }
+                        step = WizardStep::Autostart;
+                    }
+                    Some(1) => {
+                        custom_runtime_type = craft_scripting::CustomRuntimeType::Binary;
+                        let default_bin = if cfg!(windows) {
+                            "server.exe"
+                        } else {
+                            "./server"
+                        };
+                        if let Ok(Some(exec_str)) = run_input_prompt(
+                            "BINARY EXECUTABLE PATH",
+                            "Enter executable file path or command:",
+                            Some(default_bin),
+                        ) {
+                            if !exec_str.trim().is_empty() {
+                                custom_exec = exec_str.trim().to_string();
+                            } else {
+                                custom_exec = default_bin.to_string();
+                            }
+                        } else {
+                            custom_exec = default_bin.to_string();
+                        }
+                        if let Ok(Some(p_str)) = run_input_prompt(
+                            "CUSTOM SERVER PORT",
+                            "Enter listening network port for binary server:",
+                            Some("8080"),
+                        ) {
+                            if let Ok(p) = p_str.trim().parse::<u16>() {
+                                custom_port = p;
+                            }
+                        }
+                        step = WizardStep::Autostart;
+                    }
+                    Some(2) => {
+                        custom_runtime_type = craft_scripting::CustomRuntimeType::Script;
+                        let default_script = if cfg!(windows) {
+                            "server.cmd"
+                        } else {
+                            "./server.sh"
+                        };
+                        if let Ok(Some(exec_str)) = run_input_prompt(
+                            "SCRIPT FILE PATH",
+                            "Enter script file path:",
+                            Some(default_script),
+                        ) {
+                            if !exec_str.trim().is_empty() {
+                                custom_exec = exec_str.trim().to_string();
+                            } else {
+                                custom_exec = default_script.to_string();
+                            }
+                        } else {
+                            custom_exec = default_script.to_string();
+                        }
+                        if let Ok(Some(p_str)) = run_input_prompt(
+                            "CUSTOM SERVER PORT",
+                            "Enter listening network port for script server:",
+                            Some("8080"),
+                        ) {
+                            if let Ok(p) = p_str.trim().parse::<u16>() {
+                                custom_port = p;
+                            }
+                        }
+                        step = WizardStep::Autostart;
+                    }
+                    _ => {
+                        step = WizardStep::GameSelect;
                     }
                 }
             }
@@ -995,7 +1119,13 @@ pub async fn gui_create_server_wizard_with_name(
                     .map(|s| s.edition() == craft_providers::ServerEdition::Java)
                     .unwrap_or(true);
                 let ver_step_num = get_ver_step_num(game_id, cat_idx, java_type, has_name_override);
-                let current_step = if is_java {
+                let current_step = if selected_sw_id == "custom" {
+                    if has_name_override {
+                        3
+                    } else {
+                        4
+                    }
+                } else if is_java {
                     ver_step_num + 2
                 } else {
                     ver_step_num + 1
@@ -1033,15 +1163,19 @@ pub async fn gui_create_server_wizard_with_name(
                         step = WizardStep::Execute;
                     }
                     _ => {
-                        let sw_obj = craft_providers::find_software(selected_sw_id);
-                        let is_java = sw_obj
-                            .as_ref()
-                            .map(|s| s.edition() == craft_providers::ServerEdition::Java)
-                            .unwrap_or(true);
-                        if is_java {
-                            step = WizardStep::Memory;
+                        if selected_sw_id == "custom" {
+                            step = WizardStep::CustomRuntime;
                         } else {
-                            step = WizardStep::Version;
+                            let sw_obj = craft_providers::find_software(selected_sw_id);
+                            let is_java = sw_obj
+                                .as_ref()
+                                .map(|s| s.edition() == craft_providers::ServerEdition::Java)
+                                .unwrap_or(true);
+                            if is_java {
+                                step = WizardStep::Memory;
+                            } else {
+                                step = WizardStep::Version;
+                            }
                         }
                     }
                 }
@@ -1070,7 +1204,11 @@ pub async fn gui_create_server_wizard_with_name(
         &server_name,
         Some(selected_sw_id),
         Some(&version),
-        None, // port: defaults to 25565
+        if selected_sw_id == "custom" {
+            Some(custom_port)
+        } else {
+            None
+        },
         None, // custom_path
         Some(&memory),
         true,  // agree_eula
@@ -1081,6 +1219,16 @@ pub async fn gui_create_server_wizard_with_name(
         false, // zgc
         false, // shenandoah
         None,  // jvm_flags
+        if selected_sw_id == "custom" {
+            Some(custom_runtime_type.as_str())
+        } else {
+            None
+        },
+        if selected_sw_id == "custom" {
+            Some(custom_exec.as_str())
+        } else {
+            None
+        },
         paths,
     )
     .await;

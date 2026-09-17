@@ -17,6 +17,7 @@ craft-plugins.workspace = true
 craft-daemon.workspace = true
 craft-backup.workspace = true
 craft-remote.workspace = true
+craft-scripting.workspace = true
 modalx.workspace = true
 
 clap.workspace = true

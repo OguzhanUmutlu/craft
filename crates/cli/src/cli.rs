@@ -81,6 +81,12 @@ pub enum Commands {
         /// Target remote host alias
         #[arg(long)]
         remote: Option<String>,
+        /// Custom server runtime type (binary, lua, script)
+        #[arg(long = "runtime")]
+        runtime: Option<String>,
+        /// Custom server executable or script path
+        #[arg(long = "exec")]
+        exec: Option<String>,
     },
 
     /// Run an existing server
@@ -356,6 +362,15 @@ pub enum Commands {
     Trash {
         #[command(subcommand)]
         action: Option<crate::commands::trash::TrashAction>,
+    },
+
+    /// Execute a Lua script using the built-in Craft Lua runtime
+    Lua {
+        /// Path to the Lua script to execute
+        script: PathBuf,
+        /// Arguments passed to the Lua script
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
     },
 }
 
