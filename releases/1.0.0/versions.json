@@ -1,24 +1,24 @@
 {
   "latest": "1.0.0",
   "lts": "1.0.0",
-  "updated_at": "2026-09-13T18:48:37Z",
+  "updated_at": "2026-09-17T05:16:19Z",
   "versions": [
     {
       "version": "1.0.0",
       "channel": "latest",
       "label": "v1.0.0",
-      "release_date": "2026-09-13",
+      "release_date": "2026-09-17",
       "notes": "Craft official release v1.0.0: native high-performance Minecraft server supervisor, multi-platform runner, remote TUI, and backup engine.",
       "assets": {
         "linux_tar": {
           "name": "craft-linux-amd64.tar.gz",
           "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64.tar.gz",
-          "size": "7.0M"
+          "size": "5.7M"
         },
         "linux_bin": {
           "name": "craft-linux-amd64",
           "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64",
-          "size": "20M"
+          "size": "15M"
         },
         "windows_zip": {
           "name": "craft-windows-amd64.zip",

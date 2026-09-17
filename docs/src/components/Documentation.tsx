@@ -190,6 +190,21 @@ export default function Documentation({ onBackToHome, initialPage = 'getting-sta
                   <td className="py-3 px-4 font-mono">craft ver velocity</td>
                 </tr>
                 <tr>
+                  <td className="py-3 px-4 font-mono text-emerald-400 font-medium">craft catalog</td>
+                  <td className="py-3 px-4">Centralized version catalog (build, update, info, list)</td>
+                  <td className="py-3 px-4 font-mono">craft catalog update</td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 font-mono text-emerald-400 font-medium">craft remote setup-docker</td>
+                  <td className="py-3 px-4">Automated VDS Docker setup over safe SSH</td>
+                  <td className="py-3 px-4 font-mono">craft remote setup-docker saga</td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 font-mono text-emerald-400 font-medium">craft deploy vds</td>
+                  <td className="py-3 px-4">Deploy Craft container stack to remote VDS</td>
+                  <td className="py-3 px-4 font-mono">craft deploy vds saga</td>
+                </tr>
+                <tr>
                   <td className="py-3 px-4 font-mono text-emerald-400 font-medium">craft cache</td>
                   <td className="py-3 px-4">Inspect or clean downloaded asset cache</td>
                   <td className="py-3 px-4 font-mono">craft cache clean --force</td>
@@ -396,6 +411,12 @@ export default function Documentation({ onBackToHome, initialPage = 'getting-sta
 
           <h3 className="text-base font-bold text-white mt-6 mb-2">Remote Command Execution</h3>
           <CodeBlock id="rem-run" code="# Provision a remote server\ncraft new paper 1.21.4 lobby --memory 4G --remote my-vps\n\n# View live remote console (interactive PTY stream)\ncraft view lobby --remote my-vps" />
+
+          <h3 className="text-base font-bold text-white mt-6 mb-2">Automated VDS Docker Setup (Safe SSH)</h3>
+          <p className="text-xs text-slate-400">
+            Set up Docker, Docker Compose, deploy the Craft container stack, and register your VDS in one command. Automatically resolves host configurations from <code className="text-emerald-400 font-mono">~/.ssh/config</code>:
+          </p>
+          <CodeBlock id="rem-docker" code="# Using automated script:\n./setup-vds.sh saga\n\n# Or using Craft CLI:\ncraft remote setup-docker saga\ncraft deploy vds saga" />
         </div>
       ),
     },
