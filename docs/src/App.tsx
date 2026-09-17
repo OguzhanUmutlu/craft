@@ -27,12 +27,18 @@ interface ReleaseAsset {
   size?: string;
 }
 
+interface ChecksumItem {
+  asset: string;
+  hash: string;
+}
+
 interface ReleaseVersion {
   version: string;
   channel: string;
   label: string;
   release_date: string;
   notes: string;
+  checksums?: ChecksumItem[];
   assets: {
     linux_tar: ReleaseAsset;
     linux_bin: ReleaseAsset;
@@ -50,6 +56,60 @@ interface VersionsManifest {
   versions: ReleaseVersion[];
 }
 
+const extractSummaryNote = (body?: string, fallbackTag?: string): string => {
+  if (!body) return `Craft release ${fallbackTag || ''}`.trim();
+  const lines = body.split(/\r?\n/);
+  const summaryParts: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (summaryParts.length > 0) break;
+      continue;
+    }
+    if (
+      trimmed.startsWith('#') ||
+      trimmed.startsWith('|') ||
+      trimmed.startsWith('```') ||
+      trimmed.startsWith('---') ||
+      trimmed.startsWith('***') ||
+      trimmed.startsWith('Verify any downloaded binary')
+    ) {
+      break;
+    }
+    summaryParts.push(trimmed);
+  }
+  const summary = summaryParts.join(' ').trim();
+  return summary || `Craft release ${fallbackTag || ''}`.trim();
+};
+
+const extractChecksums = (body?: string): ChecksumItem[] => {
+  if (!body) return [];
+  const lines = body.split(/\r?\n/);
+  const list: ChecksumItem[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (
+      trimmed.startsWith('|') &&
+      trimmed.endsWith('|') &&
+      !trimmed.includes(':---') &&
+      !trimmed.toLowerCase().includes('checksum')
+    ) {
+      const parts = trimmed
+        .split('|')
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (parts.length >= 2) {
+        const asset = parts[0].replace(/`/g, '');
+        const hash = parts[1].replace(/`/g, '');
+        if (asset && hash && hash.length === 64) {
+          list.push({ asset, hash });
+        }
+      }
+    }
+  }
+  return list;
+};
+
 const DEFAULT_VERSIONS: VersionsManifest = {
   latest: "0.1.0",
   lts: "0.1.0",
@@ -60,7 +120,16 @@ const DEFAULT_VERSIONS: VersionsManifest = {
       channel: "latest",
       label: "v0.1.0",
       release_date: "2026-09-17",
-      notes: "Craft release v0.1.0: native supervisor, centralized version catalog with background auto-sync, automated safe SSH VDS setup, multi-platform runner, and remote TUI.",
+      notes: "Craft release v0.1.0: native high-performance Minecraft server supervisor, multi-platform runner, remote TUI, and backup engine.",
+      checksums: [
+        { asset: "craft-linux-amd64", hash: "5e37ec297b553e0c654c6da6e31b14b63cd1406cf569f2ba4e906ff3685da4e6" },
+        { asset: "craft-linux-amd64.tar.gz", hash: "db5302c7d4d7077a07ade6c9979e536b773de62b6c83d057b9460f40b2ed98c0" },
+        { asset: "craft-linux-amd64.gz", hash: "27bfe873cdb04ed5c4df481fd7c42bc1d76567db97e360e544a92abc538a89e5" },
+        { asset: "craft-windows-amd64.exe", hash: "66de6465e24a2713afc9e45fe5a82985a1de660fb90e3b8966c0dac48f1ae8b9" },
+        { asset: "craft-windows-amd64.zip", hash: "9293ccbe72f104bb7bb969bd043f51a0fbd6f8ac63d79e8d129c6a094cf07123" },
+        { asset: "craft-darwin-arm64.tar.gz", hash: "6656a64328c0e9bc1e099364e0f67ce5834b89cebc21e386b4d311c9ad595b70" },
+        { asset: "craft-darwin-amd64.tar.gz", hash: "996cb522b4961348257aab44897e77bc5f98efc0bc7d75a007957b842fecf986" },
+      ],
       assets: {
         linux_tar: {
           name: "craft-linux-amd64.tar.gz",
@@ -104,6 +173,8 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [manifest, setManifest] = useState<VersionsManifest>(DEFAULT_VERSIONS);
   const [selectedVersion, setSelectedVersion] = useState<string>('0.1.0');
+  const [showChecksums, setShowChecksums] = useState(false);
+  const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
   // Base URL resolves dynamically to current static origin or official production domain
   const getBaseUrl = () => {
@@ -160,7 +231,8 @@ export default function App() {
                   channel: idx === 0 ? 'latest' : 'stable',
                   label: tag.startsWith('v') ? tag : `v${ver}`,
                   release_date: (r.published_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
-                  notes: r.body || `Craft release ${tag}`,
+                  notes: extractSummaryNote(r.body, tag),
+                  checksums: extractChecksums(r.body),
                   assets: {
                     linux_tar: findAsset((n: string) => n.includes('linux') && n.endsWith('.tar.gz'), 'craft-linux-amd64.tar.gz'),
                     linux_bin: findAsset((n: string) => n.includes('linux') && !n.endsWith('.tar.gz') && !n.endsWith('.gz') && !n.endsWith('.sha256'), 'craft-linux-amd64'),
@@ -704,6 +776,73 @@ export default function App() {
               </div>
             </div>
           </div>
+
+          {/* Collapsible SHA-256 Checksums */}
+          {activeRelease.checksums && activeRelease.checksums.length > 0 && (
+            <div className="mt-8 max-w-4xl mx-auto">
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setShowChecksums(!showChecksums)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-sm"
+                >
+                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                  <span>{showChecksums ? 'Hide SHA-256 Checksums' : 'Verify SHA-256 Checksums'}</span>
+                </button>
+              </div>
+
+              {showChecksums && (
+                <div className="mt-4 bg-[#121824] border border-slate-800 rounded-2xl p-6 shadow-xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                      Official SHA-256 Checksums ({activeRelease.label})
+                    </h3>
+                    <span className="text-[11px] text-slate-500 font-mono">Algorithm: SHA-256</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-mono">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400">
+                          <th className="py-2 px-3 font-medium">Asset</th>
+                          <th className="py-2 px-3 font-medium">SHA-256 Hash</th>
+                          <th className="py-2 px-3 text-right">Copy</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {activeRelease.checksums.map((item) => (
+                          <tr key={item.asset} className="hover:bg-slate-900/50 transition-colors">
+                            <td className="py-2.5 px-3 text-slate-200 font-semibold">{item.asset}</td>
+                            <td className="py-2.5 px-3 text-slate-400 select-all break-all">{item.hash}</td>
+                            <td className="py-2.5 px-3 text-right">
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(item.hash);
+                                  setCopiedHash(item.asset);
+                                  setTimeout(() => setCopiedHash(null), 2000);
+                                }}
+                                className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                                title="Copy hash"
+                              >
+                                {copiedHash === item.asset ? (
+                                  <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-[11px] text-slate-500 gap-2">
+                    <span>Linux / macOS: <code className="bg-slate-900 px-1.5 py-0.5 rounded text-slate-400 border border-slate-800">sha256sum -c craft-linux-amd64.sha256</code></span>
+                    <span>PowerShell: <code className="bg-slate-900 px-1.5 py-0.5 rounded text-slate-400 border border-slate-800">Get-FileHash .\craft-windows-amd64.exe -Algorithm SHA256</code></span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Feature Grid */}
