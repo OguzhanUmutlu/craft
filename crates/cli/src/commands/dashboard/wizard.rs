@@ -209,7 +209,7 @@ pub async fn gui_create_server_wizard_with_name(
                 );
 
                 let mc_entries = vec![
-                    MenuEntry::new("1", "Java Edition (Plugins & Modded)"),
+                    MenuEntry::new("1", "Java Edition (Vanilla, Plugins & Modded)"),
                     MenuEntry::new("2", "Bedrock Edition"),
                     MenuEntry::new("3", "Network Proxies & Bridges"),
                     MenuEntry::new("4", "Hybrid & Cross-Play"),
@@ -258,7 +258,7 @@ pub async fn gui_create_server_wizard_with_name(
                 );
 
                 let jt_entries = vec![
-                    MenuEntry::new("1", "Plugins & Vanilla"),
+                    MenuEntry::new("1", "Vanilla & Plugins"),
                     MenuEntry::new("2", "Modded Servers"),
                     MenuEntry::new("0", "Back to Minecraft Categories").with_aliases(&["b"]),
                 ];
@@ -286,6 +286,11 @@ pub async fn gui_create_server_wizard_with_name(
                             if java_type == 0 {
                                 vec![
                                     (
+                                        "vanilla_java",
+                                        "Vanilla Java",
+                                        "Official Mojang Java dedicated server",
+                                    ),
+                                    (
                                         "paper",
                                         "Paper",
                                         "High-performance standard Java server (Rec.)",
@@ -297,11 +302,6 @@ pub async fn gui_create_server_wizard_with_name(
                                     ),
                                     ("folia", "Folia", "Multi-threaded regional ticking server"),
                                     ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
-                                    (
-                                        "vanilla_java",
-                                        "Vanilla Java",
-                                        "Official Mojang Java dedicated server",
-                                    ),
                                 ]
                             } else {
                                 vec![
