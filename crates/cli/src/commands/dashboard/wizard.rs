@@ -7,7 +7,8 @@ use craft_providers::get_all_softwares;
 use super::get_system_summary;
 use super::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
-    run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
+    run_menu, run_menu_with_handler, show_modal_message, AltScreenGuard, EventDecision, MenuEntry,
+    NavGuard,
 };
 use crate::commands::new::handle_new;
 
@@ -209,7 +210,7 @@ pub async fn gui_create_server_wizard_with_name(
                 );
 
                 let mc_entries = vec![
-                    MenuEntry::new("1", "Java Edition (Vanilla, Plugins & Modded)"),
+                    MenuEntry::new("1", "Java Edition"),
                     MenuEntry::new("2", "Bedrock Edition"),
                     MenuEntry::new("3", "Network Proxies & Bridges"),
                     MenuEntry::new("4", "Hybrid & Cross-Play"),
@@ -258,19 +259,29 @@ pub async fn gui_create_server_wizard_with_name(
                 );
 
                 let jt_entries = vec![
-                    MenuEntry::new("1", "Vanilla & Plugins"),
-                    MenuEntry::new("2", "Modded Servers"),
-                    MenuEntry::new("0", "Back to Minecraft Categories").with_aliases(&["b"]),
+                    MenuEntry::new("1", "Vanilla"),
+                    MenuEntry::new("2", "Plugins"),
+                    MenuEntry::new("3", "Modded"),
+                    MenuEntry::new("0", "Back").with_aliases(&["b"]),
                 ];
 
                 let jt_choice = run_menu(&jt_header, &jt_entries, &mut java_sel)?;
                 match jt_choice {
                     Some(0) => {
+                        // Vanilla: auto-advance directly to Version selection
                         java_type = 0;
-                        step = WizardStep::Software;
+                        selected_sw_id = "vanilla_java";
+                        selected_sw_name = "Vanilla Java";
+                        step = WizardStep::Version;
                     }
                     Some(1) => {
+                        // Plugins (Paper, Purpur, Folia, Spigot)
                         java_type = 1;
+                        step = WizardStep::Software;
+                    }
+                    Some(2) => {
+                        // Modded (Fabric, Quilt, NeoForge)
+                        java_type = 2;
                         step = WizardStep::Software;
                     }
                     _ => {
@@ -283,13 +294,8 @@ pub async fn gui_create_server_wizard_with_name(
                 let software_choices: Vec<(&'static str, &'static str, &'static str)> =
                     match cat_idx {
                         0 => {
-                            if java_type == 0 {
+                            if java_type == 1 {
                                 vec![
-                                    (
-                                        "vanilla_java",
-                                        "Vanilla Java",
-                                        "Official Mojang Java dedicated server",
-                                    ),
                                     (
                                         "paper",
                                         "Paper",
@@ -303,7 +309,7 @@ pub async fn gui_create_server_wizard_with_name(
                                     ("folia", "Folia", "Multi-threaded regional ticking server"),
                                     ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
                                 ]
-                            } else {
+                            } else if java_type == 2 {
                                 vec![
                                     ("fabric", "Fabric", "Lightweight modular modded server"),
                                     ("quilt", "Quilt", "Community-driven modular modded server"),
@@ -311,6 +317,14 @@ pub async fn gui_create_server_wizard_with_name(
                                         "neoforge",
                                         "NeoForge",
                                         "Modern Forge-compatible modded server",
+                                    ),
+                                ]
+                            } else {
+                                vec![
+                                    (
+                                        "vanilla_java",
+                                        "Vanilla Java",
+                                        "Official Mojang Java dedicated server",
                                     ),
                                 ]
                             }
@@ -477,15 +491,13 @@ pub async fn gui_create_server_wizard_with_name(
 
                 let mut ver_entries: Vec<MenuEntry> = display_versions
                     .iter()
-                    .enumerate()
-                    .map(|(i, v)| {
-                        let hotkey = (i + 1).to_string();
+                    .map(|v| {
                         let label = if v == &recommended_ver {
                             format!("{} (Recommended)", v)
                         } else {
                             v.clone()
                         };
-                        MenuEntry::new(hotkey, label)
+                        MenuEntry::button(label)
                     })
                     .collect();
 
@@ -493,13 +505,13 @@ pub async fn gui_create_server_wizard_with_name(
                 ver_entries.push(MenuEntry::new("c", "Custom Version"));
 
                 let update_idx = ver_entries.len();
-                ver_entries.push(MenuEntry::new("u", "Update Version Catalog Now"));
+                ver_entries.push(MenuEntry::new("u", "Update Versions"));
 
                 let toggle_idx = ver_entries.len();
                 ver_entries.push(MenuEntry::new(
                     "a",
                     format!(
-                        "Auto-Update in Background: [{}]",
+                        "Toggle Auto-Update: [{}]",
                         if settings.auto_update_catalog { "ON" } else { "OFF" }
                     ),
                 ));
@@ -507,7 +519,26 @@ pub async fn gui_create_server_wizard_with_name(
                 let back_idx = ver_entries.len();
                 ver_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
-                let ver_choice = run_menu(&ver_header, &ver_entries, &mut ver_sel)?;
+                let ver_choice = run_menu_with_handler(
+                    &ver_header,
+                    &ver_entries,
+                    &mut ver_sel,
+                    |ch, idx, entries, _header_rows| {
+                        if ch == 'a' || ch == 'A' || entries.get(idx).map(|e| e.hotkey.as_str()) == Some("a") {
+                            settings.auto_update_catalog = !settings.auto_update_catalog;
+                            let _ = settings.save(paths);
+                            if let Some(entry) = entries.iter_mut().find(|e| e.hotkey == "a") {
+                                entry.label = format!(
+                                    "Toggle Auto-Update: [{}]",
+                                    if settings.auto_update_catalog { "ON" } else { "OFF" }
+                                );
+                            }
+                            EventDecision::Cancel
+                        } else {
+                            EventDecision::Proceed
+                        }
+                    },
+                )?;
                 match ver_choice {
                     Some(idx) if idx < custom_idx => {
                         version = display_versions[idx].clone();
@@ -577,6 +608,8 @@ pub async fn gui_create_server_wizard_with_name(
                     Some(idx) if idx == back_idx => {
                         if game_id != "minecraft" && cat_idx != 99 {
                             step = WizardStep::GameSelect;
+                        } else if cat_idx == 0 && java_type == 0 {
+                            step = WizardStep::JavaType;
                         } else {
                             step = WizardStep::Software;
                         }
@@ -584,6 +617,8 @@ pub async fn gui_create_server_wizard_with_name(
                     _ => {
                         if game_id != "minecraft" && cat_idx != 99 {
                             step = WizardStep::GameSelect;
+                        } else if cat_idx == 0 && java_type == 0 {
+                            step = WizardStep::JavaType;
                         } else {
                             step = WizardStep::Software;
                         }

@@ -70,8 +70,9 @@ pub async fn handle_new(
                 println!();
                 println!("{}", "Select Java server type:".cyan().bold());
                 let java_types = &[
-                    "[1] Vanilla & Plugins (Vanilla, Paper, Purpur, Folia, Spigot)",
-                    "[2] Modded Servers (Fabric, Quilt, NeoForge)",
+                    "[1] Vanilla",
+                    "[2] Plugins (Paper, Purpur, Folia, Spigot)",
+                    "[3] Modded Servers (Fabric, Quilt, NeoForge)",
                 ];
                 let java_choice = Select::with_theme(&theme)
                     .with_prompt("Java Type")
@@ -86,6 +87,9 @@ pub async fn handle_new(
                             "Vanilla Java",
                             "Official Mojang Java dedicated server",
                         ),
+                    ]
+                } else if java_choice == 1 {
+                    vec![
                         (
                             "paper",
                             "Paper",

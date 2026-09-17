@@ -1,6 +1,6 @@
 use craft_core::Result;
 
-pub use modalx::MenuEntry;
+pub use modalx::{EventDecision, MenuEntry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
@@ -80,6 +80,26 @@ pub fn run_menu(
     match run_menu_impl(header, entries, selected_idx, false, false)? {
         MenuAction::Select(idx) => Ok(Some(idx)),
         MenuAction::Space(idx) => Ok(Some(idx)),
+        _ => Ok(None),
+    }
+}
+
+/// Runs a menu with an in-place action/event handler callback that can cancel/intercept actions.
+pub fn run_menu_with_handler<F>(
+    header: &str,
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+    handler: F,
+) -> Result<Option<usize>>
+where
+    F: FnMut(char, usize, &mut [modalx::SelectItem], &mut Vec<String>) -> modalx::EventDecision,
+{
+    let modal = super::modals::SelectModal::from_legacy(header, entries)
+        .with_allow_quit_on_q(super::NavGuard::depth() <= 1);
+
+    match modal.run_with_handler(selected_idx, handler)? {
+        super::modals::SelectOutcome::Selected(idx) => Ok(Some(idx)),
+        super::modals::SelectOutcome::Toggled(idx) => Ok(Some(idx)),
         _ => Ok(None),
     }
 }
