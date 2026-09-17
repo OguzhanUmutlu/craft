@@ -42,7 +42,7 @@ pub use theme::*;
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, LeaveAlternateScreen},
 };
 use std::io;
 
@@ -85,6 +85,11 @@ where
 
     let res = action().await;
 
+    if is_alt_screen_active() {
+        restore_alt_screen_if_active();
+    } else {
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, Show);
+    }
     let _ = enable_raw_mode();
     let _ = execute!(io::stdout(), Hide);
     res

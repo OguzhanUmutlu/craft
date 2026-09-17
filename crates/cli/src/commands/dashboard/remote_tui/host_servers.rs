@@ -443,7 +443,9 @@ pub async fn manage_host_servers(
         "export PATH=\"$HOME/.local/bin:$PATH\"; ~/.local/bin/craft ui --remote-node \"{}\" 2>/dev/null || craft ui --remote-node \"{}\"",
         host_config.alias, host_config.alias
     );
-    if let Err(e) = craft_remote::run_remote_pty_session(&client.session, &remote_cmd) {
+    let pty_res = craft_remote::run_remote_pty_session(&client.session, &remote_cmd);
+    modalx::terminal::restore_alt_screen_if_active();
+    if let Err(e) = pty_res {
         show_modal_message(
             "REMOTE TUI ERROR",
             &[

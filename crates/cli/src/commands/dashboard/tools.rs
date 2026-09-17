@@ -1671,6 +1671,7 @@ pub async fn firewall_menu(paths: &CraftPaths) -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
 pub async fn loopback_menu() -> Result<()> {
     let _guard = AltScreenGuard::enter();
     let _nav = NavGuard::enter("Loopback");
@@ -1751,66 +1752,100 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         );
 
         let purge_label = format!("Purge Download Cache ({:.2} MB)", mb);
-        let entries = vec![
-            MenuEntry::new("1", "Server Network Ping").with_aliases(&["p", "ping"]),
-            MenuEntry::new("2", "Daemon Control").with_aliases(&["d", "daemon"]),
-            MenuEntry::new("3", "Firewall Manager (Port/IP Rules)")
-                .with_aliases(&["f", "firewall"]),
-            MenuEntry::new("4", "Windows Bedrock Loopback Exemption")
-                .with_aliases(&["l", "loopback"]),
-            MenuEntry::new("5", purge_label).with_aliases(&["c", "cache"]),
-            MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
-        ];
+
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        enum ToolItemAction {
+            Ping,
+            Daemon,
+            Firewall,
+            #[cfg(target_os = "windows")]
+            Loopback,
+            PurgeCache,
+            Back,
+        }
+
+        let mut entries = Vec::new();
+        let mut actions = Vec::new();
+        let mut num = 1;
+
+        entries.push(MenuEntry::new(num.to_string(), "Server Network Ping").with_aliases(&["p", "ping"]));
+        actions.push(ToolItemAction::Ping);
+        num += 1;
+
+        entries.push(MenuEntry::new(num.to_string(), "Daemon Control").with_aliases(&["d", "daemon"]));
+        actions.push(ToolItemAction::Daemon);
+        num += 1;
+
+        entries.push(MenuEntry::new(num.to_string(), "Firewall Manager (Port/IP Rules)").with_aliases(&["f", "firewall"]));
+        actions.push(ToolItemAction::Firewall);
+        num += 1;
+
+        #[cfg(target_os = "windows")]
+        {
+            entries.push(MenuEntry::new(num.to_string(), "Windows Bedrock Loopback Exemption").with_aliases(&["l", "loopback"]));
+            actions.push(ToolItemAction::Loopback);
+            num += 1;
+        }
+
+        entries.push(MenuEntry::new(num.to_string(), purge_label).with_aliases(&["c", "cache"]));
+        actions.push(ToolItemAction::PurgeCache);
+
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+        actions.push(ToolItemAction::Back);
 
         match run_menu(&header, &entries, &mut selected)? {
-            Some(0) => {
-                ping_menu().await?;
-            }
-            Some(1) => {
-                daemon_menu(paths).await?;
-            }
-            Some(2) => {
-                firewall_menu(paths).await?;
-            }
-            Some(3) => {
-                loopback_menu().await?;
-            }
-            Some(4) => {
-                let width = get_content_width(80);
-                let conf_header = format!(
-                    "{}\r\n{}\r\n{}\r\n Delete all cached jarfiles and archives ({:.2} MB)?\r\n{}",
-                    box_top(width).cyan().bold(),
-                    box_title("CONFIRM CACHE PURGE", width, false).cyan().bold(),
-                    box_divider(width).cyan().bold(),
-                    mb,
-                    box_divider(width).dimmed(),
-                );
-                let conf_entries = vec![
-                    MenuEntry::new("1", "Purge Cache"),
-                    MenuEntry::new("2", "Cancel"),
-                ];
-                let mut c_sel = 1;
-                if let Some(0) = run_menu(&conf_header, &conf_entries, &mut c_sel)? {
-                    match cache.clean_cache() {
-                        Ok(cleaned) => {
-                            let cl_mb = (cleaned as f64) / (1024.0 * 1024.0);
-                            show_modal_message(
-                                "CACHE PURGED",
-                                &[
-                                    format!("[OK] Cleared {:.2} MB of downloaded caches.", cl_mb)
-                                        .green()
-                                        .bold()
-                                        .to_string(),
-                                ],
-                                false,
-                            )?;
-                        }
-                        Err(e) => {
-                            show_modal_message("PURGE FAILED", &[format!("[ERROR] {}", e)], true)?;
+            Some(idx) if idx < actions.len() => match actions[idx] {
+                ToolItemAction::Ping => {
+                    ping_menu().await?;
+                }
+                ToolItemAction::Daemon => {
+                    daemon_menu(paths).await?;
+                }
+                ToolItemAction::Firewall => {
+                    firewall_menu(paths).await?;
+                }
+                #[cfg(target_os = "windows")]
+                ToolItemAction::Loopback => {
+                    loopback_menu().await?;
+                }
+                ToolItemAction::PurgeCache => {
+                    let width = get_content_width(80);
+                    let conf_header = format!(
+                        "{}\r\n{}\r\n{}\r\n Delete all cached jarfiles and archives ({:.2} MB)?\r\n{}",
+                        box_top(width).cyan().bold(),
+                        box_title("CONFIRM CACHE PURGE", width, false).cyan().bold(),
+                        box_divider(width).cyan().bold(),
+                        mb,
+                        box_divider(width).dimmed(),
+                    );
+                    let conf_entries = vec![
+                        MenuEntry::new("1", "Purge Cache"),
+                        MenuEntry::new("2", "Cancel"),
+                    ];
+                    let mut c_sel = 1;
+                    if let Some(0) = run_menu(&conf_header, &conf_entries, &mut c_sel)? {
+                        match cache.clean_cache() {
+                            Ok(cleaned) => {
+                                let cl_mb = (cleaned as f64) / (1024.0 * 1024.0);
+                                show_modal_message(
+                                    "CACHE PURGED",
+                                    &[
+                                        format!("[OK] Cleared {:.2} MB of downloaded caches.", cl_mb)
+                                            .green()
+                                            .bold()
+                                            .to_string(),
+                                    ],
+                                    false,
+                                )?;
+                            }
+                            Err(e) => {
+                                show_modal_message("PURGE FAILED", &[format!("[ERROR] {}", e)], true)?;
+                            }
                         }
                     }
                 }
-            }
+                ToolItemAction::Back => return Ok(()),
+            },
             _ => return Ok(()),
         }
     }

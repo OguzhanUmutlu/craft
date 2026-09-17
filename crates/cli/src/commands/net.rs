@@ -1,10 +1,9 @@
 use crate::cli::LoopbackCommands;
 use colored::Colorize;
 use craft_core::{CraftError, CraftPaths, QueryProtocolKind, Result, ServersRegistry};
-use craft_net::{
-    allow_ip_port, enable_bedrock_loopback, is_bedrock_loopback_enabled, ping_server_auto,
-    RconClient, UniversalPingStatus,
-};
+#[cfg(target_os = "windows")]
+use craft_net::{enable_bedrock_loopback, is_bedrock_loopback_enabled};
+use craft_net::{allow_ip_port, ping_server_auto, RconClient, UniversalPingStatus};
 
 pub async fn handle_ping(target: &str, is_bedrock: bool, is_a2s: bool) -> Result<()> {
     let (default_port, proto_hint) = if is_bedrock {
@@ -187,8 +186,19 @@ pub fn handle_firewall(server: &str, ip: &str, paths: &CraftPaths) -> Result<()>
     Ok(())
 }
 
-pub fn handle_loopback(action: Option<LoopbackCommands>) -> Result<()> {
-    match action.unwrap_or(LoopbackCommands::Status) {
+pub fn handle_loopback(_action: Option<LoopbackCommands>) -> Result<()> {
+    #[cfg(not(target_os = "windows"))]
+    {
+        println!(
+            "{}",
+            "Note: Bedrock loopback exemption is only required on Windows (UWP AppContainer isolation).\r\nLoopback connections are unrestricted on Linux and macOS."
+                .cyan()
+        );
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    match _action.unwrap_or(LoopbackCommands::Status) {
         LoopbackCommands::Status => {
             let enabled = is_bedrock_loopback_enabled()?;
             if enabled {
@@ -218,5 +228,6 @@ pub fn handle_loopback(action: Option<LoopbackCommands>) -> Result<()> {
             );
         }
     }
+    #[cfg(target_os = "windows")]
     Ok(())
 }

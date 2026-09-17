@@ -23,6 +23,17 @@ pub fn run_remote_pty_session(session: &RemoteSession, remote_command: &str) -> 
     session.session.set_blocking(true);
 
     let _ = disable_raw_mode();
+
+    if modalx::terminal::is_alt_screen_active() {
+        modalx::terminal::restore_alt_screen_if_active();
+    } else {
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::cursor::Show
+        );
+    }
+
     res
 }
 
