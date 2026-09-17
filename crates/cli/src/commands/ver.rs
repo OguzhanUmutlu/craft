@@ -4,11 +4,15 @@ use craft_providers::{find_software, get_all_softwares};
 
 pub async fn handle_ver(software_arg: Option<String>) -> Result<()> {
     if let Some(soft_id) = software_arg {
-        let software = find_software(&soft_id).ok_or_else(|| {
-            CraftError::UnknownSoftware(soft_id.clone())
-        })?;
+        let software =
+            find_software(&soft_id).ok_or_else(|| CraftError::UnknownSoftware(soft_id.clone()))?;
 
-        println!("{}", format!("Available versions for {}:", software.name()).cyan().bold());
+        println!(
+            "{}",
+            format!("Available versions for {}:", software.name())
+                .cyan()
+                .bold()
+        );
         let versions = software.bundled_versions();
         println!("{}", versions.join(", "));
     } else {

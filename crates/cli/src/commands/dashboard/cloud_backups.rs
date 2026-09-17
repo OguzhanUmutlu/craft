@@ -1,10 +1,10 @@
-use std::path::PathBuf;
 use colored::Colorize;
 use craft_backup::{GDriveStorageProvider, S3StorageProvider, StorageProvider};
 use craft_core::{
-    CraftPaths, GDriveBackupTarget, GlobalBackupRegistry, LocalBackupTarget,
-    Result, S3BackupTarget, ServersRegistry,
+    CraftPaths, GDriveBackupTarget, GlobalBackupRegistry, LocalBackupTarget, Result,
+    S3BackupTarget, ServersRegistry,
 };
+use std::path::PathBuf;
 
 use crate::commands::dashboard::screen::{
     box_divider, box_title, box_title_simple, box_top, get_content_width, print_in_place_status,
@@ -66,9 +66,8 @@ pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()>
     loop {
         let registry = GlobalBackupRegistry::load(paths)?;
         let width = get_content_width(80);
-        let action_entries = vec![
-            MenuEntry::new("n", "New Local Storage").with_aliases(&["add", "a", "new"]),
-        ];
+        let action_entries =
+            vec![MenuEntry::new("n", "New Local Storage").with_aliases(&["add", "a", "new"])];
 
         let action = run_paged_list_menu(
             &registry.local_targets,
@@ -76,7 +75,9 @@ pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()>
             page_size,
             |page, total_pages, total_count| {
                 let page_info = if total_pages > 1 {
-                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                    format!(" | Page {} of {}", page, total_pages)
+                        .cyan()
+                        .to_string()
                 } else {
                     "".to_string()
                 };
@@ -102,13 +103,21 @@ pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()>
             }
             PagedMenuAction::Action(act) if act == "n" || act == "a" => {
                 // Add Local Storage
-                let name = match run_input_prompt("TARGET NAME", "Storage Name / Label (e.g. External Drive):", None)? {
+                let name = match run_input_prompt(
+                    "TARGET NAME",
+                    "Storage Name / Label (e.g. External Drive):",
+                    None,
+                )? {
                     Some(n) if !n.trim().is_empty() => n.trim().to_string(),
                     _ => continue,
                 };
 
                 let default_dir = paths.backups_dir.display().to_string();
-                let path_str = match run_input_prompt("STORAGE PATH", "Directory Path for Backups:", Some(&default_dir))? {
+                let path_str = match run_input_prompt(
+                    "STORAGE PATH",
+                    "Directory Path for Backups:",
+                    Some(&default_dir),
+                )? {
                     Some(p) if !p.trim().is_empty() => p.trim().to_string(),
                     _ => continue,
                 };
@@ -116,7 +125,14 @@ pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()>
                 let p = PathBuf::from(&path_str);
                 let _ = std::fs::create_dir_all(&p);
 
-                let id = slugify(&name, &registry.local_targets.iter().map(|t| t.id.as_str()).collect::<Vec<_>>());
+                let id = slugify(
+                    &name,
+                    &registry
+                        .local_targets
+                        .iter()
+                        .map(|t| t.id.as_str())
+                        .collect::<Vec<_>>(),
+                );
                 let mut reg = GlobalBackupRegistry::load(paths)?;
                 reg.local_targets.push(LocalBackupTarget {
                     id,
@@ -127,7 +143,10 @@ pub(crate) async fn local_storage_targets_menu(paths: &CraftPaths) -> Result<()>
 
                 show_modal_message(
                     "LOCAL STORAGE ADDED",
-                    &[format!("[OK] Added local storage target '{}'.", name).green().bold().to_string()],
+                    &[format!("[OK] Added local storage target '{}'.", name)
+                        .green()
+                        .bold()
+                        .to_string()],
                     false,
                 )?;
             }
@@ -152,7 +171,9 @@ async fn manage_single_local_target_menu(paths: &CraftPaths, target_id: &str) ->
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Target Name: {}\r\n Target ID:   {}\r\n Directory:   {}\r\n{}",
             box_top(width).cyan().bold(),
-            box_title(&format!("LOCAL STORAGE: {}", target.name), width, false).cyan().bold(),
+            box_title(&format!("LOCAL STORAGE: {}", target.name), width, false)
+                .cyan()
+                .bold(),
             box_divider(width).cyan().bold(),
             target.name.white().bold(),
             target.id.dimmed(),
@@ -170,7 +191,9 @@ async fn manage_single_local_target_menu(paths: &CraftPaths, target_id: &str) ->
         match run_menu(&header, &entries, &mut selected)? {
             Some(0) => {
                 let cur = target.path.display().to_string();
-                if let Some(new_p_str) = run_input_prompt("STORAGE PATH", "Enter new directory path:", Some(&cur))? {
+                if let Some(new_p_str) =
+                    run_input_prompt("STORAGE PATH", "Enter new directory path:", Some(&cur))?
+                {
                     let trimmed = new_p_str.trim();
                     if !trimmed.is_empty() {
                         let new_p = PathBuf::from(trimmed);
@@ -184,7 +207,9 @@ async fn manage_single_local_target_menu(paths: &CraftPaths, target_id: &str) ->
                 }
             }
             Some(1) => {
-                if let Some(new_name) = run_input_prompt("TARGET NAME", "Enter new name:", Some(&target.name))? {
+                if let Some(new_name) =
+                    run_input_prompt("TARGET NAME", "Enter new name:", Some(&target.name))?
+                {
                     let trimmed = new_name.trim();
                     if !trimmed.is_empty() {
                         let mut reg = GlobalBackupRegistry::load(paths)?;
@@ -224,7 +249,12 @@ async fn manage_single_local_target_menu(paths: &CraftPaths, target_id: &str) ->
                     reg.save(paths)?;
                     show_modal_message(
                         "TARGET REMOVED",
-                        &[format!("[OK] Local storage target '{}' removed.", target.name).green().bold().to_string()],
+                        &[
+                            format!("[OK] Local storage target '{}' removed.", target.name)
+                                .green()
+                                .bold()
+                                .to_string(),
+                        ],
                         false,
                     )?;
                     return Ok(());
@@ -243,9 +273,8 @@ pub(crate) async fn s3_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
     loop {
         let registry = GlobalBackupRegistry::load(paths)?;
         let width = get_content_width(80);
-        let action_entries = vec![
-            MenuEntry::new("n", "New S3 Storage").with_aliases(&["add", "a", "new"]),
-        ];
+        let action_entries =
+            vec![MenuEntry::new("n", "New S3 Storage").with_aliases(&["add", "a", "new"])];
 
         let action = run_paged_list_menu(
             &registry.s3_targets,
@@ -253,7 +282,9 @@ pub(crate) async fn s3_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
             page_size,
             |page, total_pages, total_count| {
                 let page_info = if total_pages > 1 {
-                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                    format!(" | Page {} of {}", page, total_pages)
+                        .cyan()
+                        .to_string()
                 } else {
                     "".to_string()
                 };
@@ -286,7 +317,11 @@ pub(crate) async fn s3_storage_targets_menu(paths: &CraftPaths) -> Result<()> {
 }
 
 pub(crate) async fn add_s3_target_wizard(paths: &CraftPaths) -> Result<Option<String>> {
-    let name = match run_input_prompt("S3 PROVIDER NAME", "Provider Label (e.g. Wasabi EU, Cloudflare R2, AWS Prod):", None)? {
+    let name = match run_input_prompt(
+        "S3 PROVIDER NAME",
+        "Provider Label (e.g. Wasabi EU, Cloudflare R2, AWS Prod):",
+        None,
+    )? {
         Some(n) if !n.trim().is_empty() => n.trim().to_string(),
         _ => return Ok(None),
     };
@@ -296,12 +331,20 @@ pub(crate) async fn add_s3_target_wizard(paths: &CraftPaths) -> Result<Option<St
         _ => return Ok(None),
     };
 
-    let region = match run_input_prompt("S3 REGION", "Region (e.g. us-east-1, eu-central-1, auto):", Some("us-east-1"))? {
+    let region = match run_input_prompt(
+        "S3 REGION",
+        "Region (e.g. us-east-1, eu-central-1, auto):",
+        Some("us-east-1"),
+    )? {
         Some(r) if !r.trim().is_empty() => r.trim().to_string(),
         _ => "us-east-1".to_string(),
     };
 
-    let endpoint = match run_input_prompt("S3 ENDPOINT", "Custom Endpoint URL (leave empty for AWS S3):", None)? {
+    let endpoint = match run_input_prompt(
+        "S3 ENDPOINT",
+        "Custom Endpoint URL (leave empty for AWS S3):",
+        None,
+    )? {
         Some(ep) if !ep.trim().is_empty() => Some(ep.trim().to_string()),
         _ => None,
     };
@@ -311,18 +354,29 @@ pub(crate) async fn add_s3_target_wizard(paths: &CraftPaths) -> Result<Option<St
         _ => return Ok(None),
     };
 
-    let secret_key = match run_password_prompt("SECRET ACCESS KEY", "AWS / R2 Secret Access Key:")? {
+    let secret_key = match run_password_prompt("SECRET ACCESS KEY", "AWS / R2 Secret Access Key:")?
+    {
         Some(k) if !k.trim().is_empty() => k.trim().to_string(),
         _ => return Ok(None),
     };
 
-    let prefix = match run_input_prompt("STORAGE PREFIX", "Key Prefix / Folder (optional):", Some("craft-backups"))? {
+    let prefix = match run_input_prompt(
+        "STORAGE PREFIX",
+        "Key Prefix / Folder (optional):",
+        Some("craft-backups"),
+    )? {
         Some(p) if !p.trim().is_empty() => Some(p.trim().to_string()),
         _ => None,
     };
 
     let mut reg = GlobalBackupRegistry::load(paths)?;
-    let id = slugify(&name, &reg.s3_targets.iter().map(|t| t.id.as_str()).collect::<Vec<_>>());
+    let id = slugify(
+        &name,
+        &reg.s3_targets
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>(),
+    );
     let target = S3BackupTarget {
         id: id.clone(),
         name: name.clone(),
@@ -339,7 +393,13 @@ pub(crate) async fn add_s3_target_wizard(paths: &CraftPaths) -> Result<Option<St
 
     show_modal_message(
         "S3 STORAGE ADDED",
-        &[format!("[OK] S3 storage provider '{}' (bucket: {}) configured.", name, bucket).green().bold().to_string()],
+        &[format!(
+            "[OK] S3 storage provider '{}' (bucket: {}) configured.",
+            name, bucket
+        )
+        .green()
+        .bold()
+        .to_string()],
         false,
     )?;
 
@@ -392,25 +452,30 @@ async fn manage_single_s3_target_menu(paths: &CraftPaths, target_id: &str) -> Re
                         show_modal_message(
                             "CONNECTION SUCCESS",
                             &[
-                                "[OK] Successfully connected to S3 bucket!".green().bold().to_string(),
+                                "[OK] Successfully connected to S3 bucket!"
+                                    .green()
+                                    .bold()
+                                    .to_string(),
                                 format!("Found {} existing files.", items.len()),
                             ],
                             false,
                         )?;
                     }
                     Err(e) => {
-                        show_modal_message(
-                            "CONNECTION FAILED",
-                            &[format!("[ERROR] {}", e)],
-                            true,
-                        )?;
+                        show_modal_message("CONNECTION FAILED", &[format!("[ERROR] {}", e)], true)?;
                     }
                 }
             }
             Some(1) => {
-                if let Some(new_name) = run_input_prompt("NAME", "Provider Name:", Some(&target.name))? {
-                    if let Some(new_b) = run_input_prompt("BUCKET", "Bucket Name:", Some(&target.bucket))? {
-                        if let Some(new_r) = run_input_prompt("REGION", "Region:", Some(&target.region))? {
+                if let Some(new_name) =
+                    run_input_prompt("NAME", "Provider Name:", Some(&target.name))?
+                {
+                    if let Some(new_b) =
+                        run_input_prompt("BUCKET", "Bucket Name:", Some(&target.bucket))?
+                    {
+                        if let Some(new_r) =
+                            run_input_prompt("REGION", "Region:", Some(&target.region))?
+                        {
                             let mut reg = GlobalBackupRegistry::load(paths)?;
                             if let Some(t) = reg.s3_targets.iter_mut().find(|t| t.id == target_id) {
                                 t.name = new_name.trim().to_string();
@@ -428,7 +493,10 @@ async fn manage_single_s3_target_menu(paths: &CraftPaths, target_id: &str) -> Re
                 reg.save(paths)?;
                 show_modal_message(
                     "PROVIDER REMOVED",
-                    &[format!("[OK] Removed S3 provider '{}'.", target.name).green().bold().to_string()],
+                    &[format!("[OK] Removed S3 provider '{}'.", target.name)
+                        .green()
+                        .bold()
+                        .to_string()],
                     false,
                 )?;
                 return Ok(());
@@ -446,9 +514,8 @@ pub(crate) async fn gdrive_storage_targets_menu(paths: &CraftPaths) -> Result<()
     loop {
         let registry = GlobalBackupRegistry::load(paths)?;
         let width = get_content_width(80);
-        let action_entries = vec![
-            MenuEntry::new("n", "New Google Drive").with_aliases(&["add", "a", "new"]),
-        ];
+        let action_entries =
+            vec![MenuEntry::new("n", "New Google Drive").with_aliases(&["add", "a", "new"])];
 
         let action = run_paged_list_menu(
             &registry.gdrive_targets,
@@ -456,7 +523,9 @@ pub(crate) async fn gdrive_storage_targets_menu(paths: &CraftPaths) -> Result<()
             page_size,
             |page, total_pages, total_count| {
                 let page_info = if total_pages > 1 {
-                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                    format!(" | Page {} of {}", page, total_pages)
+                        .cyan()
+                        .to_string()
                 } else {
                     "".to_string()
                 };
@@ -489,7 +558,11 @@ pub(crate) async fn gdrive_storage_targets_menu(paths: &CraftPaths) -> Result<()
 }
 
 pub(crate) async fn add_gdrive_target_wizard(paths: &CraftPaths) -> Result<Option<String>> {
-    let name = match run_input_prompt("GDRIVE NAME", "Provider Label (e.g. Personal Drive, Team Drive):", None)? {
+    let name = match run_input_prompt(
+        "GDRIVE NAME",
+        "Provider Label (e.g. Personal Drive, Team Drive):",
+        None,
+    )? {
         Some(n) if !n.trim().is_empty() => n.trim().to_string(),
         _ => return Ok(None),
     };
@@ -506,7 +579,8 @@ pub(crate) async fn add_gdrive_target_wizard(paths: &CraftPaths) -> Result<Optio
         MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
     ];
     let mut a_sel = 0;
-    let (api_token, service_account_path) = match run_menu(auth_header, &auth_entries, &mut a_sel)? {
+    let (api_token, service_account_path) = match run_menu(auth_header, &auth_entries, &mut a_sel)?
+    {
         Some(0) => {
             let tok = run_password_prompt("GDRIVE TOKEN", "Enter OAuth / API Token:")?;
             (tok, None)
@@ -520,7 +594,13 @@ pub(crate) async fn add_gdrive_target_wizard(paths: &CraftPaths) -> Result<Optio
     };
 
     let mut reg = GlobalBackupRegistry::load(paths)?;
-    let id = slugify(&name, &reg.gdrive_targets.iter().map(|t| t.id.as_str()).collect::<Vec<_>>());
+    let id = slugify(
+        &name,
+        &reg.gdrive_targets
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>(),
+    );
     let target = GDriveBackupTarget {
         id: id.clone(),
         name: name.clone(),
@@ -534,7 +614,10 @@ pub(crate) async fn add_gdrive_target_wizard(paths: &CraftPaths) -> Result<Optio
 
     show_modal_message(
         "GOOGLE DRIVE ADDED",
-        &[format!("[OK] Google Drive provider '{}' configured.", name).green().bold().to_string()],
+        &[format!("[OK] Google Drive provider '{}' configured.", name)
+            .green()
+            .bold()
+            .to_string()],
         false,
     )?;
 
@@ -553,11 +636,17 @@ async fn manage_single_gdrive_target_menu(paths: &CraftPaths, target_id: &str) -
         let _nav = NavGuard::enter(&target.name);
 
         let width = get_content_width(80);
-        let auth_type_str = if target.api_token.is_some() { "OAuth / API Token" } else { "Service Account Key" };
+        let auth_type_str = if target.api_token.is_some() {
+            "OAuth / API Token"
+        } else {
+            "Service Account Key"
+        };
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Name:      {}\r\n Folder ID: {}\r\n Auth Type: {}\r\n{}",
             box_top(width).cyan().bold(),
-            box_title(&format!("GOOGLE DRIVE: {}", target.name), width, false).cyan().bold(),
+            box_title(&format!("GOOGLE DRIVE: {}", target.name), width, false)
+                .cyan()
+                .bold(),
             box_divider(width).cyan().bold(),
             target.name.white().bold(),
             target.folder_id.cyan(),
@@ -576,7 +665,10 @@ async fn manage_single_gdrive_target_menu(paths: &CraftPaths, target_id: &str) -
             Some(0) => {
                 let _ = print_in_place_status(
                     "TESTING GDRIVE CONNECTION",
-                    &[format!("Testing connectivity to Google Drive folder '{}'...", target.folder_id)],
+                    &[format!(
+                        "Testing connectivity to Google Drive folder '{}'...",
+                        target.folder_id
+                    )],
                 );
 
                 let provider = GDriveStorageProvider::new(target.clone().into());
@@ -585,24 +677,27 @@ async fn manage_single_gdrive_target_menu(paths: &CraftPaths, target_id: &str) -
                         show_modal_message(
                             "CONNECTION SUCCESS",
                             &[
-                                "[OK] Successfully connected to Google Drive!".green().bold().to_string(),
+                                "[OK] Successfully connected to Google Drive!"
+                                    .green()
+                                    .bold()
+                                    .to_string(),
                                 format!("Found {} existing files.", items.len()),
                             ],
                             false,
                         )?;
                     }
                     Err(e) => {
-                        show_modal_message(
-                            "CONNECTION FAILED",
-                            &[format!("[ERROR] {}", e)],
-                            true,
-                        )?;
+                        show_modal_message("CONNECTION FAILED", &[format!("[ERROR] {}", e)], true)?;
                     }
                 }
             }
             Some(1) => {
-                if let Some(new_name) = run_input_prompt("NAME", "Provider Name:", Some(&target.name))? {
-                    if let Some(new_f) = run_input_prompt("FOLDER ID", "Folder ID:", Some(&target.folder_id))? {
+                if let Some(new_name) =
+                    run_input_prompt("NAME", "Provider Name:", Some(&target.name))?
+                {
+                    if let Some(new_f) =
+                        run_input_prompt("FOLDER ID", "Folder ID:", Some(&target.folder_id))?
+                    {
                         let mut reg = GlobalBackupRegistry::load(paths)?;
                         if let Some(t) = reg.gdrive_targets.iter_mut().find(|t| t.id == target_id) {
                             t.name = new_name.trim().to_string();
@@ -618,7 +713,12 @@ async fn manage_single_gdrive_target_menu(paths: &CraftPaths, target_id: &str) -
                 reg.save(paths)?;
                 show_modal_message(
                     "PROVIDER REMOVED",
-                    &[format!("[OK] Removed Google Drive provider '{}'.", target.name).green().bold().to_string()],
+                    &[
+                        format!("[OK] Removed Google Drive provider '{}'.", target.name)
+                            .green()
+                            .bold()
+                            .to_string(),
+                    ],
                     false,
                 )?;
                 return Ok(());
@@ -628,7 +728,10 @@ async fn manage_single_gdrive_target_menu(paths: &CraftPaths, target_id: &str) -
     }
 }
 
-pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &str) -> Result<Option<String>> {
+pub(crate) async fn pick_server_backup_method(
+    paths: &CraftPaths,
+    server_name: &str,
+) -> Result<Option<String>> {
     let mut reg = GlobalBackupRegistry::load(paths)?;
     reg.ensure_defaults(paths);
 
@@ -653,9 +756,14 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
                 let mut entries = Vec::new();
                 for (i, t) in r.local_targets.iter().enumerate() {
                     let hk = (i + 1).to_string();
-                    entries.push(MenuEntry::new(hk, format!("{:<20} ({})", t.name, t.path.display())));
+                    entries.push(MenuEntry::new(
+                        hk,
+                        format!("{:<20} ({})", t.name, t.path.display()),
+                    ));
                 }
-                entries.push(MenuEntry::new("n", "New Local Storage").with_aliases(&["a", "add", "new"]));
+                entries.push(
+                    MenuEntry::new("n", "New Local Storage").with_aliases(&["a", "add", "new"]),
+                );
                 entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let header = format!(" Select local storage target for '{}':", server_name);
@@ -667,11 +775,22 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
                     Some(idx) if idx == num_targets => {
                         // Add local
                         if let Some(name) = run_input_prompt("TARGET NAME", "Name:", None)? {
-                            if let Some(p_str) = run_input_prompt("DIRECTORY", "Path:", Some(&paths.backups_dir.display().to_string()))? {
+                            if let Some(p_str) = run_input_prompt(
+                                "DIRECTORY",
+                                "Path:",
+                                Some(&paths.backups_dir.display().to_string()),
+                            )? {
                                 let p = PathBuf::from(p_str.trim());
                                 let _ = std::fs::create_dir_all(&p);
                                 let mut updated = GlobalBackupRegistry::load(paths)?;
-                                let id = slugify(name.trim(), &updated.local_targets.iter().map(|t| t.id.as_str()).collect::<Vec<_>>());
+                                let id = slugify(
+                                    name.trim(),
+                                    &updated
+                                        .local_targets
+                                        .iter()
+                                        .map(|t| t.id.as_str())
+                                        .collect::<Vec<_>>(),
+                                );
                                 updated.local_targets.push(LocalBackupTarget {
                                     id,
                                     name: name.trim().to_string(),
@@ -693,7 +812,10 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
                 if r.s3_targets.is_empty() {
                     show_modal_message(
                         "NO S3 PROVIDERS",
-                        &["No S3 storage providers are registered yet.", "Opening setup wizard now..."],
+                        &[
+                            "No S3 storage providers are registered yet.",
+                            "Opening setup wizard now...",
+                        ],
                         false,
                     )?;
                     if let Some(id) = add_s3_target_wizard(paths).await? {
@@ -706,9 +828,13 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
                 let mut entries = Vec::new();
                 for (i, t) in r.s3_targets.iter().enumerate() {
                     let hk = (i + 1).to_string();
-                    entries.push(MenuEntry::new(hk, format!("{:<20} (s3://{})", t.name, t.bucket)));
+                    entries.push(MenuEntry::new(
+                        hk,
+                        format!("{:<20} (s3://{})", t.name, t.bucket),
+                    ));
                 }
-                entries.push(MenuEntry::new("n", "New S3 Storage").with_aliases(&["a", "add", "new"]));
+                entries
+                    .push(MenuEntry::new("n", "New S3 Storage").with_aliases(&["a", "add", "new"]));
                 entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let header = format!(" Select S3 storage provider for '{}':", server_name);
@@ -734,7 +860,10 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
                 if r.gdrive_targets.is_empty() {
                     show_modal_message(
                         "NO GDRIVE PROVIDERS",
-                        &["No Google Drive providers are registered yet.", "Opening setup wizard now..."],
+                        &[
+                            "No Google Drive providers are registered yet.",
+                            "Opening setup wizard now...",
+                        ],
                         false,
                     )?;
                     if let Some(id) = add_gdrive_target_wizard(paths).await? {
@@ -747,9 +876,14 @@ pub(crate) async fn pick_server_backup_method(paths: &CraftPaths, server_name: &
                 let mut entries = Vec::new();
                 for (i, t) in r.gdrive_targets.iter().enumerate() {
                     let hk = (i + 1).to_string();
-                    entries.push(MenuEntry::new(hk, format!("{:<20} (folder: {})", t.name, t.folder_id)));
+                    entries.push(MenuEntry::new(
+                        hk,
+                        format!("{:<20} (folder: {})", t.name, t.folder_id),
+                    ));
                 }
-                entries.push(MenuEntry::new("n", "New Google Drive").with_aliases(&["a", "add", "new"]));
+                entries.push(
+                    MenuEntry::new("n", "New Google Drive").with_aliases(&["a", "add", "new"]),
+                );
                 entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let header = format!(" Select Google Drive provider for '{}':", server_name);
@@ -804,8 +938,16 @@ pub(crate) async fn configure_policies_menu(paths: &CraftPaths) -> Result<()> {
             let policy = reg.server_policies.get(&s.name);
             let status = if let Some(p) = policy {
                 if p.enabled {
-                    let method_name = reg.format_method_display(p.backup_method.as_deref().or(s.backup_method.as_deref()));
-                    format!("[EVERY {}h | KEEP {} | {}]", p.interval_hours, p.retention_count, method_name).green().bold().to_string()
+                    let method_name = reg.format_method_display(
+                        p.backup_method.as_deref().or(s.backup_method.as_deref()),
+                    );
+                    format!(
+                        "[EVERY {}h | KEEP {} | {}]",
+                        p.interval_hours, p.retention_count, method_name
+                    )
+                    .green()
+                    .bold()
+                    .to_string()
                 } else {
                     "[DISABLED]".dimmed().to_string()
                 }
@@ -821,7 +963,10 @@ pub(crate) async fn configure_policies_menu(paths: &CraftPaths) -> Result<()> {
                 if idx < servers_reg.servers.len() {
                     let server_name = &servers_reg.servers[idx].name;
                     let mut reg = GlobalBackupRegistry::load(paths)?;
-                    let current = reg.server_policies.entry(server_name.to_string()).or_default();
+                    let current = reg
+                        .server_policies
+                        .entry(server_name.to_string())
+                        .or_default();
                     current.enabled = !current.enabled;
                     let _ = reg.save(paths);
                 }
@@ -841,10 +986,18 @@ pub(crate) async fn configure_single_policy(paths: &CraftPaths, server_name: &st
 
     loop {
         let mut reg = GlobalBackupRegistry::load(paths)?;
-        let policy = reg.server_policies.entry(server_name.to_string()).or_default().clone();
+        let policy = reg
+            .server_policies
+            .entry(server_name.to_string())
+            .or_default()
+            .clone();
 
         let s_reg = ServersRegistry::load(paths)?;
-        let s_method = s_reg.servers.iter().find(|s| s.name == server_name).and_then(|s| s.backup_method.clone());
+        let s_method = s_reg
+            .servers
+            .iter()
+            .find(|s| s.name == server_name)
+            .and_then(|s| s.backup_method.clone());
         let effective_method = policy.backup_method.as_deref().or(s_method.as_deref());
         let method_display = reg.format_method_display(effective_method);
 
@@ -864,35 +1017,74 @@ pub(crate) async fn configure_single_policy(paths: &CraftPaths, server_name: &st
         );
 
         let entries = vec![
-            MenuEntry::new("1", format!("Toggle Status ({})", if policy.enabled { "Disable" } else { "Enable" })),
+            MenuEntry::new(
+                "1",
+                format!(
+                    "Toggle Status ({})",
+                    if policy.enabled { "Disable" } else { "Enable" }
+                ),
+            ),
             MenuEntry::new("2", "Change Interval (Hours)"),
             MenuEntry::new("3", "Change Retention Count"),
             MenuEntry::new("4", "Change Backup Destination"),
-            MenuEntry::new("5", format!("Toggle Scope ({})", if policy.world_only { "Switch to Full" } else { "Switch to World Only" })),
+            MenuEntry::new(
+                "5",
+                format!(
+                    "Toggle Scope ({})",
+                    if policy.world_only {
+                        "Switch to Full"
+                    } else {
+                        "Switch to World Only"
+                    }
+                ),
+            ),
             MenuEntry::new("0", "Save & Back").with_aliases(&["b", "q"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
             Some(0) => {
-                let current = reg.server_policies.entry(server_name.to_string()).or_default();
+                let current = reg
+                    .server_policies
+                    .entry(server_name.to_string())
+                    .or_default();
                 current.enabled = !current.enabled;
                 reg.save(paths)?;
             }
             Some(1) => {
-                let prompt = format!("Current: {} hours. Enter interval in hours:", policy.interval_hours);
-                if let Some(val) = run_input_prompt("SCHEDULE INTERVAL", &prompt, Some(&policy.interval_hours.to_string()))? {
+                let prompt = format!(
+                    "Current: {} hours. Enter interval in hours:",
+                    policy.interval_hours
+                );
+                if let Some(val) = run_input_prompt(
+                    "SCHEDULE INTERVAL",
+                    &prompt,
+                    Some(&policy.interval_hours.to_string()),
+                )? {
                     if let Ok(hours) = val.trim().parse::<u32>() {
-                        let current = reg.server_policies.entry(server_name.to_string()).or_default();
+                        let current = reg
+                            .server_policies
+                            .entry(server_name.to_string())
+                            .or_default();
                         current.interval_hours = hours.max(1);
                         reg.save(paths)?;
                     }
                 }
             }
             Some(2) => {
-                let prompt = format!("Current: {} archives. Enter number of archives to retain:", policy.retention_count);
-                if let Some(val) = run_input_prompt("RETENTION COUNT", &prompt, Some(&policy.retention_count.to_string()))? {
+                let prompt = format!(
+                    "Current: {} archives. Enter number of archives to retain:",
+                    policy.retention_count
+                );
+                if let Some(val) = run_input_prompt(
+                    "RETENTION COUNT",
+                    &prompt,
+                    Some(&policy.retention_count.to_string()),
+                )? {
                     if let Ok(cnt) = val.trim().parse::<usize>() {
-                        let current = reg.server_policies.entry(server_name.to_string()).or_default();
+                        let current = reg
+                            .server_policies
+                            .entry(server_name.to_string())
+                            .or_default();
                         current.retention_count = cnt.max(1);
                         reg.save(paths)?;
                     }
@@ -900,7 +1092,10 @@ pub(crate) async fn configure_single_policy(paths: &CraftPaths, server_name: &st
             }
             Some(3) => {
                 if let Some(new_method) = pick_server_backup_method(paths, server_name).await? {
-                    let current = reg.server_policies.entry(server_name.to_string()).or_default();
+                    let current = reg
+                        .server_policies
+                        .entry(server_name.to_string())
+                        .or_default();
                     current.backup_method = Some(new_method.clone());
                     reg.save(paths)?;
 
@@ -912,7 +1107,10 @@ pub(crate) async fn configure_single_policy(paths: &CraftPaths, server_name: &st
                 }
             }
             Some(4) => {
-                let current = reg.server_policies.entry(server_name.to_string()).or_default();
+                let current = reg
+                    .server_policies
+                    .entry(server_name.to_string())
+                    .or_default();
                 current.world_only = !current.world_only;
                 reg.save(paths)?;
             }
@@ -920,7 +1118,6 @@ pub(crate) async fn configure_single_policy(paths: &CraftPaths, server_name: &st
         }
     }
 }
-
 
 fn slugify(name: &str, existing: &[&str]) -> String {
     let base: String = name

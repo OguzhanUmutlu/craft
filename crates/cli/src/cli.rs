@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "craft")]
@@ -416,9 +416,7 @@ pub enum AutoCommands {
 #[derive(Subcommand, Debug, Clone)]
 pub enum PluginCommands {
     /// Search for plugins across Modrinth, Hangar, and Poggit
-    Search {
-        query: String,
-    },
+    Search { query: String },
     /// Install a plugin from Modrinth by project ID or slug
     Install {
         project_id: String,
@@ -442,9 +440,7 @@ pub enum PluginCommands {
 #[derive(Subcommand, Debug, Clone)]
 pub enum ModCommands {
     /// Search for mods on Modrinth
-    Search {
-        query: String,
-    },
+    Search { query: String },
     /// Install a mod from Modrinth to a modded server
     Install {
         project_id: String,
@@ -468,9 +464,7 @@ pub enum ModCommands {
 #[derive(Subcommand, Debug, Clone)]
 pub enum DatapackCommands {
     /// Search for datapacks on Modrinth
-    Search {
-        query: String,
-    },
+    Search { query: String },
     /// Install a datapack from Modrinth to a Minecraft Java server world
     Install {
         project_id: String,
@@ -510,9 +504,7 @@ pub enum BackupCommands {
         world_only: bool,
     },
     /// List backups for a server
-    List {
-        server: String,
-    },
+    List { server: String },
     /// Restore a backup archive to a server
     Restore {
         server: String,
@@ -523,10 +515,7 @@ pub enum BackupCommands {
 #[derive(Subcommand)]
 pub enum FirewallCommands {
     /// Allow an IP to connect to server port
-    Allow {
-        server: String,
-        ip: String,
-    },
+    Allow { server: String, ip: String },
 }
 
 #[derive(Subcommand)]
@@ -546,9 +535,7 @@ pub enum TemplateCommands {
         platform: String,
     },
     /// Create a Java datapack template
-    Datapack {
-        name: String,
-    },
+    Datapack { name: String },
 }
 
 #[derive(Subcommand)]
@@ -567,17 +554,11 @@ pub enum RemoteCommands {
     /// List all configured remote hosts
     Ls,
     /// Remove a remote host configuration
-    Rm {
-        alias: String,
-    },
+    Rm { alias: String },
     /// Test connection and authentication to a remote host
-    Test {
-        alias: String,
-    },
+    Test { alias: String },
     /// Automatically setup and bootstrap a remote host (installs Java, Craft daemon, Firewall)
-    Setup {
-        alias: String,
-    },
+    Setup { alias: String },
     /// Synchronize files from local to remote server
     Sync {
         alias: String,
@@ -585,9 +566,7 @@ pub enum RemoteCommands {
         remote_dir: PathBuf,
     },
     /// Deploy Craft container stack to a remote host over SSH
-    Deploy {
-        alias: String,
-    },
+    Deploy { alias: String },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -640,7 +619,10 @@ mod tests {
     fn test_manage_flags_parsing() {
         let cli = Cli::try_parse_from(["craft", "manage", "--remote-node", "saga"]).unwrap();
         match cli.command {
-            Some(Commands::Manage { remote_node, remote }) => {
+            Some(Commands::Manage {
+                remote_node,
+                remote,
+            }) => {
                 assert_eq!(remote_node.as_deref(), Some("saga"));
                 assert_eq!(remote, None);
             }
@@ -649,7 +631,10 @@ mod tests {
 
         let cli_ui = Cli::try_parse_from(["craft", "ui", "--remote", "saga"]).unwrap();
         match cli_ui.command {
-            Some(Commands::Manage { remote_node, remote }) => {
+            Some(Commands::Manage {
+                remote_node,
+                remote,
+            }) => {
                 assert_eq!(remote_node, None);
                 assert_eq!(remote.as_deref(), Some("saga"));
             }
@@ -660,9 +645,12 @@ mod tests {
     #[test]
     fn test_content_commands_parsing() {
         // Plugin install
-        let cli_p = Cli::try_parse_from(["craft", "plugin", "install", "luckperms", "myserver"]).unwrap();
+        let cli_p =
+            Cli::try_parse_from(["craft", "plugin", "install", "luckperms", "myserver"]).unwrap();
         match cli_p.command {
-            Some(Commands::Plugin { action: Some(PluginCommands::Install { project_id, server }) }) => {
+            Some(Commands::Plugin {
+                action: Some(PluginCommands::Install { project_id, server }),
+            }) => {
                 assert_eq!(project_id, "luckperms");
                 assert_eq!(server, "myserver");
             }
@@ -670,9 +658,12 @@ mod tests {
         }
 
         // Mod install
-        let cli_m = Cli::try_parse_from(["craft", "mod", "install", "fabric-api", "mymodded"]).unwrap();
+        let cli_m =
+            Cli::try_parse_from(["craft", "mod", "install", "fabric-api", "mymodded"]).unwrap();
         match cli_m.command {
-            Some(Commands::Mod { action: Some(ModCommands::Install { project_id, server }) }) => {
+            Some(Commands::Mod {
+                action: Some(ModCommands::Install { project_id, server }),
+            }) => {
                 assert_eq!(project_id, "fabric-api");
                 assert_eq!(server, "mymodded");
             }
@@ -680,9 +671,25 @@ mod tests {
         }
 
         // Datapack install
-        let cli_d = Cli::try_parse_from(["craft", "datapack", "install", "terralith", "myserver", "--world", "custom_world"]).unwrap();
+        let cli_d = Cli::try_parse_from([
+            "craft",
+            "datapack",
+            "install",
+            "terralith",
+            "myserver",
+            "--world",
+            "custom_world",
+        ])
+        .unwrap();
         match cli_d.command {
-            Some(Commands::Datapack { action: Some(DatapackCommands::Install { project_id, server, world }) }) => {
+            Some(Commands::Datapack {
+                action:
+                    Some(DatapackCommands::Install {
+                        project_id,
+                        server,
+                        world,
+                    }),
+            }) => {
                 assert_eq!(project_id, "terralith");
                 assert_eq!(server, "myserver");
                 assert_eq!(world.as_deref(), Some("custom_world"));
@@ -691,4 +698,3 @@ mod tests {
         }
     }
 }
-

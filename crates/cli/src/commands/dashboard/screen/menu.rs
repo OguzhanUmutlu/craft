@@ -1,51 +1,35 @@
 use craft_core::Result;
 
-/// Represents an item in a menu with a primary hotkey and optional mnemonic aliases.
-#[derive(Debug, Clone)]
-pub struct MenuEntry {
-    pub hotkey: String,
-    pub label: String,
-    pub aliases: Vec<String>,
-}
-
-impl MenuEntry {
-    pub fn new(hotkey: impl Into<String>, label: impl Into<String>) -> Self {
-        Self {
-            hotkey: hotkey.into(),
-            label: label.into(),
-            aliases: Vec::new(),
-        }
-    }
-
-    pub fn with_aliases(mut self, aliases: &[&str]) -> Self {
-        self.aliases = aliases
-            .iter()
-            .map(|s| s.to_string())
-            .filter(|s| {
-                // Defensive rule 1: If an alias is a single ASCII digit, it must match self.hotkey.
-                // This prevents cross-digit collisions (e.g. key '2' activating option '1').
-                if s.len() == 1
-                    && s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false)
-                    && s != &self.hotkey
-                {
-                    return false;
-                }
-                // Defensive rule 2: 'q' and 'Q' are reserved globally for quitting the program completely.
-                if s.eq_ignore_ascii_case("q") && !self.hotkey.eq_ignore_ascii_case("q") {
-                    return false;
-                }
-                true
-            })
-            .collect();
-        self
-    }
-}
+pub use modal_tui::MenuEntry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
     Select(usize),
     Space(usize),
+    ItemAction(char, usize),
     Back,
+}
+
+/// Runs a high-level titled menu modal with automatic navigation bar and metadata header rows.
+pub fn run_titled_menu(
+    title: impl Into<String>,
+    header_rows: &[impl AsRef<str>],
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+) -> Result<Option<usize>> {
+    let mut modal = super::modals::SelectModal::menu(title)
+        .with_allow_quit_on_q(super::NavGuard::depth() <= 1)
+        .with_entries(entries.to_vec());
+
+    for row in header_rows {
+        modal = modal.with_header_row(row.as_ref());
+    }
+
+    match modal.run(selected_idx)? {
+        super::modals::SelectOutcome::Selected(idx) => Ok(Some(idx)),
+        super::modals::SelectOutcome::Toggled(idx) => Ok(Some(idx)),
+        _ => Ok(None),
+    }
 }
 
 /// Runs the main dashboard menu with the standard navigation footer bar.
@@ -57,7 +41,7 @@ pub fn run_main_menu(
     match run_menu_impl(header, entries, selected_idx, false, true)? {
         MenuAction::Select(idx) => Ok(Some(idx)),
         MenuAction::Space(idx) => Ok(Some(idx)),
-        MenuAction::Back => Ok(None),
+        _ => Ok(None),
     }
 }
 
@@ -70,7 +54,7 @@ pub fn run_menu(
     match run_menu_impl(header, entries, selected_idx, false, false)? {
         MenuAction::Select(idx) => Ok(Some(idx)),
         MenuAction::Space(idx) => Ok(Some(idx)),
-        MenuAction::Back => Ok(None),
+        _ => Ok(None),
     }
 }
 
@@ -82,6 +66,7 @@ pub fn run_menu_with_space(
     run_menu_impl(header, entries, selected_idx, true, false)
 }
 
+#[allow(dead_code)]
 pub fn run_menu_ext(
     header: &str,
     entries: &[MenuEntry],
@@ -98,13 +83,39 @@ pub fn run_menu_impl(
     allow_space: bool,
     is_main: bool,
 ) -> Result<MenuAction> {
-    let modal = super::modals::SelectModal::from_legacy(header, entries)
+    run_menu_custom(
+        header,
+        entries,
+        selected_idx,
+        allow_space,
+        is_main,
+        &[],
+        None,
+    )
+}
+
+pub fn run_menu_custom(
+    header: &str,
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+    allow_space: bool,
+    is_main: bool,
+    item_actions: &[char],
+    footer_help: Option<&str>,
+) -> Result<MenuAction> {
+    let mut modal = super::modals::SelectModal::from_legacy(header, entries)
         .with_allow_toggle(allow_space)
-        .with_allow_quit_on_q(is_main || super::NavGuard::depth() <= 1);
+        .with_allow_quit_on_q(is_main || super::NavGuard::depth() <= 1)
+        .with_item_actions(item_actions.iter().copied());
+
+    if let Some(footer) = footer_help {
+        modal = modal.with_footer_help(footer);
+    }
 
     match modal.run(selected_idx)? {
         super::modals::SelectOutcome::Selected(idx) => Ok(MenuAction::Select(idx)),
         super::modals::SelectOutcome::Toggled(idx) => Ok(MenuAction::Space(idx)),
+        super::modals::SelectOutcome::ItemAction(c, idx) => Ok(MenuAction::ItemAction(c, idx)),
         super::modals::SelectOutcome::Cancelled => Ok(MenuAction::Back),
     }
 }
@@ -114,6 +125,7 @@ pub enum PagedMenuAction {
     Select(usize),
     Space(usize),
     Action(String),
+    ItemAction(char, usize),
     Back,
 }
 
@@ -126,6 +138,36 @@ pub fn run_paged_list_menu<T, H, R>(
     render_item: R,
     action_entries: &[MenuEntry],
     allow_space: bool,
+) -> Result<PagedMenuAction>
+where
+    H: Fn(usize, usize, usize) -> String,
+    R: Fn(usize, usize, &T) -> String,
+{
+    run_paged_list_menu_ext(
+        items,
+        current_page,
+        page_size,
+        header_builder,
+        render_item,
+        action_entries,
+        allow_space,
+        &[],
+        None,
+    )
+}
+
+/// Runs an interactive paged menu with configurable item-level action hotkeys and custom footer help text.
+#[allow(clippy::too_many_arguments)]
+pub fn run_paged_list_menu_ext<T, H, R>(
+    items: &[T],
+    current_page: &mut usize,
+    page_size: usize,
+    header_builder: H,
+    render_item: R,
+    action_entries: &[MenuEntry],
+    allow_space: bool,
+    item_actions: &[char],
+    footer_help: Option<&str>,
 ) -> Result<PagedMenuAction>
 where
     H: Fn(usize, usize, usize) -> String,
@@ -176,14 +218,27 @@ where
         let action_start_idx = entries.len();
         for action in action_entries {
             entries.push(
-                MenuEntry::new(&action.hotkey, &action.label)
-                    .with_aliases(&action.aliases.iter().map(|s| s.as_str()).collect::<Vec<_>>()),
+                MenuEntry::new(&action.hotkey, &action.label).with_aliases(
+                    &action
+                        .aliases
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>(),
+                ),
             );
         }
 
         entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
-        let action = run_menu_ext(&header, &entries, &mut menu_selected, allow_space)?;
+        let action = run_menu_custom(
+            &header,
+            &entries,
+            &mut menu_selected,
+            allow_space,
+            false,
+            item_actions,
+            footer_help,
+        )?;
         match action {
             MenuAction::Select(idx) => {
                 if idx < page_count {
@@ -208,6 +263,11 @@ where
             MenuAction::Space(idx) => {
                 if idx < page_count {
                     return Ok(PagedMenuAction::Space(start_idx + idx));
+                }
+            }
+            MenuAction::ItemAction(c, idx) => {
+                if idx < page_count {
+                    return Ok(PagedMenuAction::ItemAction(c, start_idx + idx));
                 }
             }
             MenuAction::Back => {

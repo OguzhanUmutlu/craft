@@ -18,10 +18,7 @@ pub fn run_input_prompt(
 
 /// Displays an in-place single-line password input prompt where characters are masked as `*`.
 #[allow(dead_code)]
-pub fn run_password_prompt(
-    header_title: &str,
-    prompt_label: &str,
-) -> Result<Option<String>> {
+pub fn run_password_prompt(header_title: &str, prompt_label: &str) -> Result<Option<String>> {
     let modal = super::modals::InputModal::new(header_title, prompt_label).with_password(true);
     match modal.run()? {
         super::modals::InputOutcome::Submitted(val) => Ok(Some(val)),

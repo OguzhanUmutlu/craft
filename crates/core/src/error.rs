@@ -60,6 +60,9 @@ pub enum CraftError {
     #[error("Operation cancelled by user")]
     Cancelled,
 
+    #[error("TUI error: {0}")]
+    Tui(#[from] modal_tui::TuiError),
+
     #[error("{0}")]
     Other(String),
 }

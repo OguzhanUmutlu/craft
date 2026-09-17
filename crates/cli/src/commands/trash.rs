@@ -57,7 +57,12 @@ pub async fn handle_trash(action: Option<TrashAction>, paths: &CraftPaths) -> Re
                 ]);
             }
 
-            println!("\n{}", format!("=== Trash Bin ({} items) ===", items.len()).cyan().bold());
+            println!(
+                "\n{}",
+                format!("=== Trash Bin ({} items) ===", items.len())
+                    .cyan()
+                    .bold()
+            );
             println!("{table}\n");
             Ok(())
         }
@@ -66,7 +71,9 @@ pub async fn handle_trash(action: Option<TrashAction>, paths: &CraftPaths) -> Re
             let target_item = items
                 .iter()
                 .find(|i| i.id.eq_ignore_ascii_case(&id) || i.id.starts_with(&id))
-                .ok_or_else(|| CraftError::Other(format!("No trash item found matching ID '{}'", id)))?;
+                .ok_or_else(|| {
+                    CraftError::Other(format!("No trash item found matching ID '{}'", id))
+                })?;
 
             println!(
                 "{}: Restoring '{}' to '{}'...",
@@ -95,14 +102,22 @@ pub async fn handle_trash(action: Option<TrashAction>, paths: &CraftPaths) -> Re
                     "Are you sure you want to permanently delete all {} items in the trash bin?",
                     items.len()
                 );
-                if !dialoguer::Confirm::new().with_prompt(prompt).default(false).interact()? {
+                if !dialoguer::Confirm::new()
+                    .with_prompt(prompt)
+                    .default(false)
+                    .interact()?
+                {
                     println!("{}", "Operation cancelled.".yellow());
                     return Ok(());
                 }
             }
 
             let count = trash.empty_trash()?;
-            println!("{}: Permanently purged {} items from the trash bin.", "Success".green().bold(), count);
+            println!(
+                "{}: Permanently purged {} items from the trash bin.",
+                "Success".green().bold(),
+                count
+            );
             Ok(())
         }
     }

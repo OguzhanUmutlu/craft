@@ -1,9 +1,9 @@
+use crate::cli::DeployCommands;
+use colored::Colorize;
+use craft_core::{CraftError, CraftPaths, Result};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use colored::Colorize;
-use craft_core::{CraftError, CraftPaths, Result};
-use crate::cli::DeployCommands;
 
 const DOCKERFILE_TEMPLATE: &str = r#"FROM eclipse-temurin:21-jre-jammy
 
@@ -100,7 +100,12 @@ pub fn handle_deploy(action: Option<DeployCommands>, _paths: &CraftPaths) -> Res
 
     match action {
         DeployCommands::Up { detach, build } => {
-            println!("{}", "Deploying Craft container stack with Docker Compose...".cyan().bold());
+            println!(
+                "{}",
+                "Deploying Craft container stack with Docker Compose..."
+                    .cyan()
+                    .bold()
+            );
             ensure_compose_files_exist()?;
 
             let mut args = vec!["compose", "up"];
@@ -111,42 +116,61 @@ pub fn handle_deploy(action: Option<DeployCommands>, _paths: &CraftPaths) -> Res
                 args.push("--build");
             }
 
-            let status = Command::new("docker")
-                .args(&args)
-                .status()
-                .map_err(|e| CraftError::Other(format!("Failed to execute 'docker compose up': {}. Is Docker installed?", e)))?;
+            let status = Command::new("docker").args(&args).status().map_err(|e| {
+                CraftError::Other(format!(
+                    "Failed to execute 'docker compose up': {}. Is Docker installed?",
+                    e
+                ))
+            })?;
 
             if status.success() {
-                println!("{}", "[OK] Craft container stack deployed successfully!".green().bold());
-                println!("Run '{}' to view container health.", "craft deploy status".yellow());
+                println!(
+                    "{}",
+                    "[OK] Craft container stack deployed successfully!"
+                        .green()
+                        .bold()
+                );
+                println!(
+                    "Run '{}' to view container health.",
+                    "craft deploy status".yellow()
+                );
                 println!("Run '{}' to stream logs.", "craft deploy logs -f".yellow());
             } else {
-                return Err(CraftError::Other("docker compose up exited with an error".to_string()));
+                return Err(CraftError::Other(
+                    "docker compose up exited with an error".to_string(),
+                ));
             }
         }
         DeployCommands::Down { volumes } => {
-            println!("{}", "Tearing down Craft container stack...".yellow().bold());
+            println!(
+                "{}",
+                "Tearing down Craft container stack...".yellow().bold()
+            );
             let mut args = vec!["compose", "down"];
             if volumes {
                 args.push("-v");
             }
 
-            let status = Command::new("docker")
-                .args(&args)
-                .status()
-                .map_err(|e| CraftError::Other(format!("Failed to execute 'docker compose down': {}", e)))?;
+            let status = Command::new("docker").args(&args).status().map_err(|e| {
+                CraftError::Other(format!("Failed to execute 'docker compose down': {}", e))
+            })?;
 
             if status.success() {
-                println!("{}", "[OK] Craft container stack stopped and removed.".green().bold());
+                println!(
+                    "{}",
+                    "[OK] Craft container stack stopped and removed."
+                        .green()
+                        .bold()
+                );
             } else {
-                return Err(CraftError::Other("docker compose down exited with an error".to_string()));
+                return Err(CraftError::Other(
+                    "docker compose down exited with an error".to_string(),
+                ));
             }
         }
         DeployCommands::Status => {
             println!("{}", "Craft Container Status:".cyan().bold());
-            let _ = Command::new("docker")
-                .args(["compose", "ps"])
-                .status();
+            let _ = Command::new("docker").args(["compose", "ps"]).status();
         }
         DeployCommands::Logs { follow, tail } => {
             let mut args = vec!["compose", "logs"];
@@ -160,13 +184,13 @@ pub fn handle_deploy(action: Option<DeployCommands>, _paths: &CraftPaths) -> Res
                 args.push(&tail_val);
             }
 
-            let _ = Command::new("docker")
-                .args(&args)
-                .status();
+            let _ = Command::new("docker").args(&args).status();
         }
         DeployCommands::Exec { command } => {
             if command.is_empty() {
-                return Err(CraftError::Other("No command specified to execute inside container".to_string()));
+                return Err(CraftError::Other(
+                    "No command specified to execute inside container".to_string(),
+                ));
             }
 
             let mut args = vec!["compose", "exec", "craft", "craft"];
@@ -174,13 +198,15 @@ pub fn handle_deploy(action: Option<DeployCommands>, _paths: &CraftPaths) -> Res
                 args.push(arg);
             }
 
-            let status = Command::new("docker")
-                .args(&args)
-                .status()
-                .map_err(|e| CraftError::Other(format!("Failed to execute docker compose exec: {}", e)))?;
+            let status = Command::new("docker").args(&args).status().map_err(|e| {
+                CraftError::Other(format!("Failed to execute docker compose exec: {}", e))
+            })?;
 
             if !status.success() {
-                return Err(CraftError::Other(format!("In-container command exited with status {:?}", status.code())));
+                return Err(CraftError::Other(format!(
+                    "In-container command exited with status {:?}",
+                    status.code()
+                )));
             }
         }
         DeployCommands::Init { force } => {
@@ -193,7 +219,10 @@ pub fn handle_deploy(action: Option<DeployCommands>, _paths: &CraftPaths) -> Res
 
 fn ensure_compose_files_exist() -> Result<()> {
     if !Path::new("docker-compose.yml").exists() && !Path::new("compose.yaml").exists() {
-        println!("{}", "docker-compose.yml not found. Initializing default Docker files...".yellow());
+        println!(
+            "{}",
+            "docker-compose.yml not found. Initializing default Docker files...".yellow()
+        );
         init_docker_templates(false)?;
     }
     Ok(())
@@ -205,7 +234,10 @@ fn init_docker_templates(force: bool) -> Result<()> {
     let entrypoint = Path::new("docker-entrypoint.sh");
 
     if (!force) && dockerfile.exists() && compose.exists() {
-        println!("{}", "Docker deployment files already exist. Use --force to overwrite.".yellow());
+        println!(
+            "{}",
+            "Docker deployment files already exist. Use --force to overwrite.".yellow()
+        );
         return Ok(());
     }
 
@@ -225,6 +257,11 @@ fn init_docker_templates(force: bool) -> Result<()> {
     }
     println!("{}", "[OK] Created docker-entrypoint.sh".green());
 
-    println!("{}", "Successfully initialized Docker deployment templates!".green().bold());
+    println!(
+        "{}",
+        "Successfully initialized Docker deployment templates!"
+            .green()
+            .bold()
+    );
     Ok(())
 }

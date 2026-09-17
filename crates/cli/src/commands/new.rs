@@ -1,12 +1,15 @@
+use crate::commands::run::run_foreground_server;
+use colored::Colorize;
+use craft_core::{
+    auto_heal_server_file, find_best_java, get_jar_java_version, CraftError, CraftPaths, Result,
+    ServerConfig, ServersRegistry,
+};
+use craft_daemon::DaemonClient;
+use craft_providers::{find_software, get_all_softwares, CacheManager, ServerEdition};
+use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 use std::fs;
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use colored::Colorize;
-use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
-use craft_core::{auto_heal_server_file, find_best_java, get_jar_java_version, CraftError, CraftPaths, Result, ServerConfig, ServersRegistry};
-use craft_daemon::DaemonClient;
-use craft_providers::{find_software, get_all_softwares, CacheManager, ServerEdition};
-use crate::commands::run::run_foreground_server;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_new(
@@ -78,48 +81,106 @@ pub async fn handle_new(
 
                 if java_choice == 0 {
                     vec![
-                        ("paper", "Paper", "High-performance standard Java server (Rec.)"),
-                        ("purpur", "Purpur", "Paper fork with extensive gameplay tweaks"),
+                        (
+                            "paper",
+                            "Paper",
+                            "High-performance standard Java server (Rec.)",
+                        ),
+                        (
+                            "purpur",
+                            "Purpur",
+                            "Paper fork with extensive gameplay tweaks",
+                        ),
                         ("folia", "Folia", "Multi-threaded regional ticking server"),
                         ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
-                        ("vanilla_java", "Vanilla Java", "Official Mojang Java dedicated server"),
+                        (
+                            "vanilla_java",
+                            "Vanilla Java",
+                            "Official Mojang Java dedicated server",
+                        ),
                     ]
                 } else {
                     vec![
                         ("fabric", "Fabric", "Lightweight modular modded server"),
                         ("quilt", "Quilt", "Community-driven modular modded server"),
-                        ("neoforge", "NeoForge", "Modern Forge-compatible modded server"),
+                        (
+                            "neoforge",
+                            "NeoForge",
+                            "Modern Forge-compatible modded server",
+                        ),
                     ]
                 }
             }
             1 => vec![
-                ("vanilla_bedrock", "Vanilla Bedrock BDS", "Official Mojang Bedrock Dedicated Server"),
-                ("pocketmine", "PocketMine-MP", "High-performance C++ / PHP Bedrock server"),
-                ("nukkit", "NukkitX", "Java-based multi-threaded Bedrock server"),
+                (
+                    "vanilla_bedrock",
+                    "Vanilla Bedrock BDS",
+                    "Official Mojang Bedrock Dedicated Server",
+                ),
+                (
+                    "pocketmine",
+                    "PocketMine-MP",
+                    "High-performance C++ / PHP Bedrock server",
+                ),
+                (
+                    "nukkit",
+                    "NukkitX",
+                    "Java-based multi-threaded Bedrock server",
+                ),
             ],
             2 => vec![
-                ("velocity", "Velocity", "Next-generation ultra-fast proxy (Rec.)"),
+                (
+                    "velocity",
+                    "Velocity",
+                    "Next-generation ultra-fast proxy (Rec.)",
+                ),
                 ("waterfall", "Waterfall", "Optimized BungeeCord proxy fork"),
-                ("bungeecord", "BungeeCord", "Classic multi-server network proxy"),
+                (
+                    "bungeecord",
+                    "BungeeCord",
+                    "Classic multi-server network proxy",
+                ),
                 ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
             ],
             3 => vec![
-                ("geyser", "GeyserMC Standalone", "Cross-play bridge for Bedrock clients"),
+                (
+                    "geyser",
+                    "GeyserMC Standalone",
+                    "Cross-play bridge for Bedrock clients",
+                ),
                 ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
             ],
             4 => vec![
-                ("palserver", "Palworld Dedicated", "Palworld Dedicated Server (UE5)"),
-                ("tshock", "TShock (Terraria)", "TShock dedicated server for Terraria"),
-                ("valheim", "Valheim Dedicated", "Valheim Dedicated Server (Unity)"),
-                ("factorio", "Factorio Headless", "Factorio Headless Dedicated Server"),
-                ("custom", "Custom Game Server", "Custom dedicated server binary"),
+                (
+                    "palserver",
+                    "Palworld Dedicated",
+                    "Palworld Dedicated Server (UE5)",
+                ),
+                (
+                    "tshock",
+                    "TShock (Terraria)",
+                    "TShock dedicated server for Terraria",
+                ),
+                (
+                    "valheim",
+                    "Valheim Dedicated",
+                    "Valheim Dedicated Server (Unity)",
+                ),
+                (
+                    "factorio",
+                    "Factorio Headless",
+                    "Factorio Headless Dedicated Server",
+                ),
+                (
+                    "custom",
+                    "Custom Game Server",
+                    "Custom dedicated server binary",
+                ),
             ],
-            _ => {
-                get_all_softwares()
-                    .into_iter()
-                    .map(|s| (s.id(), s.name(), s.description()))
-                    .collect()
-            }
+            _ => get_all_softwares()
+                .into_iter()
+                .map(|s| (s.id(), s.name(), s.description()))
+                .collect(),
         };
 
         println!();
@@ -140,13 +201,15 @@ pub async fn handle_new(
         "paper".to_string()
     };
 
-    let software = find_software(&selected_software_id).ok_or_else(|| {
-        CraftError::UnknownSoftware(selected_software_id.clone())
-    })?;
+    let software = find_software(&selected_software_id)
+        .ok_or_else(|| CraftError::UnknownSoftware(selected_software_id.clone()))?;
 
     // 3. Determine target version
     let bundled = software.bundled_versions();
-    let default_version = bundled.first().cloned().unwrap_or_else(|| "latest".to_string());
+    let default_version = bundled
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "latest".to_string());
 
     let version = if let Some(v) = version_input {
         if v == "latest" {
@@ -157,9 +220,7 @@ pub async fn handle_new(
     } else if is_tty {
         println!();
         println!("{}", "Select software version:".cyan().bold());
-        let mut version_options = vec![
-            format!("latest (Recommended: {})", default_version),
-        ];
+        let mut version_options = vec![format!("latest (Recommended: {})", default_version)];
         for b in bundled.iter().take(5) {
             if b != &default_version {
                 version_options.push(b.clone());
@@ -199,7 +260,9 @@ pub async fn handle_new(
             .map(|mut r| r.next().is_none())
             .unwrap_or(false);
         if !is_empty {
-            return Err(CraftError::DirectoryNotEmpty(target_dir.to_string_lossy().to_string()));
+            return Err(CraftError::DirectoryNotEmpty(
+                target_dir.to_string_lossy().to_string(),
+            ));
         }
     } else {
         fs::create_dir_all(&target_dir)?;
@@ -267,7 +330,8 @@ pub async fn handle_new(
     }
 
     // 7. EULA Acceptance
-    if software.game_id() == "minecraft" && software.edition() == ServerEdition::Java && !agree_eula {
+    if software.game_id() == "minecraft" && software.edition() == ServerEdition::Java && !agree_eula
+    {
         if is_tty {
             agree_eula = Confirm::with_theme(&theme)
                 .with_prompt("Accept Minecraft EULA? (required to start server)")
@@ -280,20 +344,31 @@ pub async fn handle_new(
 
     // 8. Download assets and set up server
     println!();
-    println!("{}", format!("Setting up {} version {} in '{}'...", software.name(), version, target_dir.display()).cyan());
+    println!(
+        "{}",
+        format!(
+            "Setting up {} version {} in '{}'...",
+            software.name(),
+            version,
+            target_dir.display()
+        )
+        .cyan()
+    );
 
     let assets = software.get_assets(&version)?;
     let cache = CacheManager::new(paths);
 
     for asset in assets {
-        cache.fetch_and_install(
-            software.id(),
-            &version,
-            &asset.filename,
-            &asset.url,
-            &target_dir,
-            asset.sha256.as_deref(),
-        ).await?;
+        cache
+            .fetch_and_install(
+                software.id(),
+                &version,
+                &asset.filename,
+                &asset.url,
+                &target_dir,
+                asset.sha256.as_deref(),
+            )
+            .await?;
     }
 
     // Run post download hooks
@@ -308,9 +383,20 @@ pub async fn handle_new(
         let jar_path = target_dir.join(software.default_server_file());
         if jar_path.exists() {
             if let Ok(req_ver) = get_jar_java_version(&jar_path) {
-                println!("{}", format!("Detected bytecode requirement: Java {}", req_ver).dimmed());
+                println!(
+                    "{}",
+                    format!("Detected bytecode requirement: Java {}", req_ver).dimmed()
+                );
                 if let Ok(inst) = find_best_java(req_ver) {
-                    println!("{}", format!("Selected Java runtime: Java {} ({})", inst.major_version, inst.path.display()).green());
+                    println!(
+                        "{}",
+                        format!(
+                            "Selected Java runtime: Java {} ({})",
+                            inst.major_version,
+                            inst.path.display()
+                        )
+                        .green()
+                    );
                     java_path = Some(inst.path);
                 }
             }
@@ -367,10 +453,17 @@ pub async fn handle_new(
     let final_jvm_flags = if flags.is_empty() { None } else { Some(flags) };
 
     // Generate start scripts
-    software.generate_start_script_with_flags(&target_dir, &version, java_path.as_deref(), &memory, final_jvm_flags.as_deref())?;
+    software.generate_start_script_with_flags(
+        &target_dir,
+        &version,
+        java_path.as_deref(),
+        &memory,
+        final_jvm_flags.as_deref(),
+    )?;
 
     // Handle EULA
-    if software.game_id() == "minecraft" && software.edition() == ServerEdition::Java && agree_eula {
+    if software.game_id() == "minecraft" && software.edition() == ServerEdition::Java && agree_eula
+    {
         let eula_file = target_dir.join("eula.txt");
         let _ = fs::write(eula_file, "eula=true\n");
         println!("{}", "EULA accepted automatically.".green());
@@ -429,11 +522,23 @@ pub async fn handle_new(
     let _ = registry.add(server_config);
     registry.save(paths)?;
 
-    println!("{}", format!("Server '{}' successfully installed!", server_name).green().bold());
+    println!(
+        "{}",
+        format!("Server '{}' successfully installed!", server_name)
+            .green()
+            .bold()
+    );
 
     // 9. Startup decision
     if no_start {
-        println!("{}", format!("Server configured without starting. Start anytime with 'craft run {}'.", server_name).dimmed());
+        println!(
+            "{}",
+            format!(
+                "Server configured without starting. Start anytime with 'craft run {}'.",
+                server_name
+            )
+            .dimmed()
+        );
         return Ok(());
     }
 
@@ -455,16 +560,34 @@ pub async fn handle_new(
 
     match start_choice {
         0 => {
-            println!("{}", format!("Starting '{}' via supervisor daemon...", server_name).cyan());
+            println!(
+                "{}",
+                format!("Starting '{}' via supervisor daemon...", server_name).cyan()
+            );
             DaemonClient::ensure_daemon_started(paths).await?;
             let mut client = DaemonClient::connect(paths).await?;
             client.start_server(&target_dir).await?;
-            println!("{}", format!("Server '{}' is running in the background!", server_name).green().bold());
-            println!("{}", format!("Use 'craft view {}' to attach to its live console.", server_name).dimmed());
+            println!(
+                "{}",
+                format!("Server '{}' is running in the background!", server_name)
+                    .green()
+                    .bold()
+            );
+            println!(
+                "{}",
+                format!(
+                    "Use 'craft view {}' to attach to its live console.",
+                    server_name
+                )
+                .dimmed()
+            );
             Ok(())
         }
         1 => {
-            println!("{}", format!("Starting server '{}' in foreground...", server_name).cyan());
+            println!(
+                "{}",
+                format!("Starting server '{}' in foreground...", server_name).cyan()
+            );
             let run_res = run_foreground_server(&target_dir).await;
 
             if tmp {
@@ -479,7 +602,14 @@ pub async fn handle_new(
             run_res
         }
         _ => {
-            println!("{}", format!("Server '{}' is ready. Start anytime with 'craft run {}'.", server_name, server_name).dimmed());
+            println!(
+                "{}",
+                format!(
+                    "Server '{}' is ready. Start anytime with 'craft run {}'.",
+                    server_name, server_name
+                )
+                .dimmed()
+            );
             Ok(())
         }
     }

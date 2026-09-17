@@ -1,11 +1,11 @@
-use std::path::PathBuf;
-use colored::Colorize;
-use craft_core::{CraftPaths, Result, ServerConfig, ServersRegistry};
-use craft_net::RconClient;
 use super::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
     run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
 };
+use colored::Colorize;
+use craft_core::{CraftPaths, Result, ServerConfig, ServersRegistry};
+use craft_net::RconClient;
+use std::path::PathBuf;
 
 pub async fn developer_tools_menu(server: &ServerConfig, paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
@@ -23,7 +23,10 @@ pub async fn developer_tools_menu(server: &ServerConfig, paths: &CraftPaths) -> 
 
         let width = get_content_width(80);
         let debug_status = if let Some(port) = current_server.jdwp_debug_port {
-            format!("[ENABLED (Port {})]", port).green().bold().to_string()
+            format!("[ENABLED (Port {})]", port)
+                .green()
+                .bold()
+                .to_string()
         } else {
             "[DISABLED]".dimmed().to_string()
         };
@@ -94,14 +97,24 @@ pub async fn developer_tools_menu(server: &ServerConfig, paths: &CraftPaths) -> 
                         show_modal_message(
                             "DOCKERIZED",
                             &[
-                                format!("[OK] Generated Dockerfile and docker-compose.yml for '{}'!", current_server.name).green().bold().to_string(),
+                                format!(
+                                    "[OK] Generated Dockerfile and docker-compose.yml for '{}'!",
+                                    current_server.name
+                                )
+                                .green()
+                                .bold()
+                                .to_string(),
                                 format!("Located in: {}", current_server.path.display()),
                             ],
                             false,
                         )?;
                     }
                     Err(e) => {
-                        show_modal_message("ERROR", &[format!("Failed to dockerize: {}", e)], true)?;
+                        show_modal_message(
+                            "ERROR",
+                            &[format!("Failed to dockerize: {}", e)],
+                            true,
+                        )?;
                     }
                 }
             }
@@ -123,7 +136,10 @@ async fn template_scaffolding_menu(_paths: &CraftPaths) -> Result<()> {
     );
 
     let entries = vec![
-        MenuEntry::new("1", "Paper / Purpur / Spigot Plugin (Gradle + Java 21 / Kotlin)"),
+        MenuEntry::new(
+            "1",
+            "Paper / Purpur / Spigot Plugin (Gradle + Java 21 / Kotlin)",
+        ),
         MenuEntry::new("2", "Velocity Proxy Plugin (Gradle + Java 21)"),
         MenuEntry::new("3", "Minecraft Datapack (pack.mcmeta + functions)"),
         MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
@@ -131,27 +147,35 @@ async fn template_scaffolding_menu(_paths: &CraftPaths) -> Result<()> {
 
     match run_menu(&header, &entries, &mut selected)? {
         Some(0) => {
-            if let Some(name) = run_input_prompt("PLUGIN NAME", "Enter plugin project name (e.g. MyAwesomePlugin):", None)? {
-                crate::commands::template::handle_template(
-                    crate::cli::TemplateCommands::Plugin {
-                        name: name.trim().to_string(),
-                        platform: "paper".to_string(),
-                    },
-                )?;
+            if let Some(name) = run_input_prompt(
+                "PLUGIN NAME",
+                "Enter plugin project name (e.g. MyAwesomePlugin):",
+                None,
+            )? {
+                crate::commands::template::handle_template(crate::cli::TemplateCommands::Plugin {
+                    name: name.trim().to_string(),
+                    platform: "paper".to_string(),
+                })?;
             }
         }
         Some(1) => {
-            if let Some(name) = run_input_prompt("VELOCITY PLUGIN NAME", "Enter Velocity plugin project name:", None)? {
-                crate::commands::template::handle_template(
-                    crate::cli::TemplateCommands::Plugin {
-                        name: name.trim().to_string(),
-                        platform: "velocity".to_string(),
-                    },
-                )?;
+            if let Some(name) = run_input_prompt(
+                "VELOCITY PLUGIN NAME",
+                "Enter Velocity plugin project name:",
+                None,
+            )? {
+                crate::commands::template::handle_template(crate::cli::TemplateCommands::Plugin {
+                    name: name.trim().to_string(),
+                    platform: "velocity".to_string(),
+                })?;
             }
         }
         Some(2) => {
-            if let Some(name) = run_input_prompt("DATAPACK NAME", "Enter datapack name (e.g. custom_crafting):", None)? {
+            if let Some(name) = run_input_prompt(
+                "DATAPACK NAME",
+                "Enter datapack name (e.g. custom_crafting):",
+                None,
+            )? {
                 crate::commands::template::handle_template(
                     crate::cli::TemplateCommands::Datapack {
                         name: name.trim().to_string(),
@@ -205,40 +229,76 @@ async fn jdwp_setup_menu(server: &ServerConfig, paths: &CraftPaths) -> Result<()
             if is_enabled {
                 crate::commands::dev::handle_dev(
                     &server.name,
-                    crate::commands::dev::DevAction::Debug { port: 5005, disable: true },
+                    crate::commands::dev::DevAction::Debug {
+                        port: 5005,
+                        disable: true,
+                    },
                     paths,
-                ).await?;
-                show_modal_message("DEBUGGER DISABLED", &["[OK] Remote debugging disabled and start scripts regenerated.".to_string()], false)?;
+                )
+                .await?;
+                show_modal_message(
+                    "DEBUGGER DISABLED",
+                    &["[OK] Remote debugging disabled and start scripts regenerated.".to_string()],
+                    false,
+                )?;
             } else {
                 crate::commands::dev::handle_dev(
                     &server.name,
-                    crate::commands::dev::DevAction::Debug { port: 5005, disable: false },
+                    crate::commands::dev::DevAction::Debug {
+                        port: 5005,
+                        disable: false,
+                    },
                     paths,
-                ).await?;
-                show_modal_message("DEBUGGER ENABLED", &["[OK] Enabled JDWP remote debugging on port 5005!".to_string()], false)?;
+                )
+                .await?;
+                show_modal_message(
+                    "DEBUGGER ENABLED",
+                    &["[OK] Enabled JDWP remote debugging on port 5005!".to_string()],
+                    false,
+                )?;
             }
         }
         Some(1) => {
             if is_enabled {
-                if let Some(port_str) = run_input_prompt("DEBUG PORT", "Enter new port:", Some("5005"))? {
+                if let Some(port_str) =
+                    run_input_prompt("DEBUG PORT", "Enter new port:", Some("5005"))?
+                {
                     if let Ok(port) = port_str.trim().parse::<u16>() {
                         crate::commands::dev::handle_dev(
                             &server.name,
-                            crate::commands::dev::DevAction::Debug { port, disable: false },
+                            crate::commands::dev::DevAction::Debug {
+                                port,
+                                disable: false,
+                            },
                             paths,
-                        ).await?;
-                        show_modal_message("PORT UPDATED", &[format!("[OK] Set JDWP debug port to {}!", port)], false)?;
+                        )
+                        .await?;
+                        show_modal_message(
+                            "PORT UPDATED",
+                            &[format!("[OK] Set JDWP debug port to {}!", port)],
+                            false,
+                        )?;
                     }
                 }
             } else {
-                if let Some(port_str) = run_input_prompt("CUSTOM PORT", "Enter debug port:", Some("5005"))? {
+                if let Some(port_str) =
+                    run_input_prompt("CUSTOM PORT", "Enter debug port:", Some("5005"))?
+                {
                     if let Ok(port) = port_str.trim().parse::<u16>() {
                         crate::commands::dev::handle_dev(
                             &server.name,
-                            crate::commands::dev::DevAction::Debug { port, disable: false },
+                            crate::commands::dev::DevAction::Debug {
+                                port,
+                                disable: false,
+                            },
                             paths,
-                        ).await?;
-                        show_modal_message("DEBUGGER ENABLED", &[format!("[OK] Enabled JDWP on port {}!", port)], false)?;
+                        )
+                        .await?;
+                        show_modal_message(
+                            "DEBUGGER ENABLED",
+                            &[format!("[OK] Enabled JDWP on port {}!", port)],
+                            false,
+                        )?;
                     }
                 }
             }
@@ -251,10 +311,16 @@ async fn jdwp_setup_menu(server: &ServerConfig, paths: &CraftPaths) -> Result<()
                 "Mode:       Attach (Socket)".to_string(),
                 "".to_string(),
                 "VS Code launch.json:".yellow().to_string(),
-                format!(r#"{{ "type": "java", "name": "Attach", "request": "attach", "hostName": "localhost", "port": {} }}"#, port),
+                format!(
+                    r#"{{ "type": "java", "name": "Attach", "request": "attach", "hostName": "localhost", "port": {} }}"#,
+                    port
+                ),
                 "".to_string(),
                 "IntelliJ IDEA:".yellow().to_string(),
-                format!("Run -> Edit Configurations -> '+' -> Remote JVM Debug -> Port {}", port),
+                format!(
+                    "Run -> Edit Configurations -> '+' -> Remote JVM Debug -> Port {}",
+                    port
+                ),
             ];
             show_modal_message("IDE CONFIGURATIONS", &lines, false)?;
         }
@@ -269,9 +335,14 @@ async fn link_local_jar_menu(server: &ServerConfig) -> Result<()> {
         show_modal_message(
             "NOT SUPPORTED",
             &[
-                format!("Server '{}' (software: {}) does not support plugins or mods.", server.name, server.software),
+                format!(
+                    "Server '{}' (software: {}) does not support plugins or mods.",
+                    server.name, server.software
+                ),
                 "".to_string(),
-                "Local JAR linking is only available for plugin or mod server platforms.".yellow().to_string(),
+                "Local JAR linking is only available for plugin or mod server platforms."
+                    .yellow()
+                    .to_string(),
             ],
             true,
         )?;
@@ -285,7 +356,11 @@ async fn link_local_jar_menu(server: &ServerConfig) -> Result<()> {
     )? {
         let jar_path = PathBuf::from(path_str.trim());
         if !jar_path.exists() {
-            show_modal_message("FILE NOT FOUND", &[format!("File '{}' does not exist.", jar_path.display())], true)?;
+            show_modal_message(
+                "FILE NOT FOUND",
+                &[format!("File '{}' does not exist.", jar_path.display())],
+                true,
+            )?;
             return Ok(());
         }
 
@@ -340,8 +415,17 @@ async fn link_local_jar_menu(server: &ServerConfig) -> Result<()> {
         show_modal_message(
             "JAR LINKED",
             &[
-                format!("[OK] Linked '{}' -> '{}/{}'!", filename.to_string_lossy(), server.name, folder).green().bold().to_string(),
-                "Your build artifact will now automatically be loaded on server restarts!".to_string(),
+                format!(
+                    "[OK] Linked '{}' -> '{}/{}'!",
+                    filename.to_string_lossy(),
+                    server.name,
+                    folder
+                )
+                .green()
+                .bold()
+                .to_string(),
+                "Your build artifact will now automatically be loaded on server restarts!"
+                    .to_string(),
             ],
             false,
         )?;
@@ -357,8 +441,11 @@ async fn rcon_reload_menu(server: &ServerConfig) -> Result<()> {
         show_modal_message(
             "RCON REQUIRED",
             &[
-                "RCON remote console is disabled for this server.".yellow().to_string(),
-                "Please enable RCON in 'Server Properties' before using in-game reload.".to_string(),
+                "RCON remote console is disabled for this server."
+                    .yellow()
+                    .to_string(),
+                "Please enable RCON in 'Server Properties' before using in-game reload."
+                    .to_string(),
             ],
             true,
         )?;
@@ -381,7 +468,9 @@ async fn rcon_reload_menu(server: &ServerConfig) -> Result<()> {
             0 => "reload confirm".to_string(),
             1 => "datapack reload".to_string(),
             2 => {
-                if let Some(c) = run_input_prompt("RCON COMMAND", "Enter command:", Some("reload confirm"))? {
+                if let Some(c) =
+                    run_input_prompt("RCON COMMAND", "Enter command:", Some("reload confirm"))?
+                {
                     c
                 } else {
                     return Ok(());
@@ -390,27 +479,38 @@ async fn rcon_reload_menu(server: &ServerConfig) -> Result<()> {
             _ => return Ok(()),
         };
 
-        let _ = print_in_place_status("SENDING RCON COMMAND", &[format!("Dispatching '{}'...", cmd)]);
+        let _ = print_in_place_status(
+            "SENDING RCON COMMAND",
+            &[format!("Dispatching '{}'...", cmd)],
+        );
         match RconClient::connect("127.0.0.1", port, pass).await {
-            Ok(mut client) => {
-                match client.send_command(&cmd).await {
-                    Ok(resp) => {
-                        show_modal_message(
-                            "COMMAND EXECUTED",
-                            &[
-                                format!("[OK] Dispatched '{}' over RCON!", cmd).green().bold().to_string(),
-                                format!("Response: {}", resp.trim()),
-                            ],
-                            false,
-                        )?;
-                    }
-                    Err(e) => {
-                        show_modal_message("RCON ERROR", &[format!("Command failed: {}", e)], true)?;
-                    }
+            Ok(mut client) => match client.send_command(&cmd).await {
+                Ok(resp) => {
+                    show_modal_message(
+                        "COMMAND EXECUTED",
+                        &[
+                            format!("[OK] Dispatched '{}' over RCON!", cmd)
+                                .green()
+                                .bold()
+                                .to_string(),
+                            format!("Response: {}", resp.trim()),
+                        ],
+                        false,
+                    )?;
                 }
-            }
+                Err(e) => {
+                    show_modal_message("RCON ERROR", &[format!("Command failed: {}", e)], true)?;
+                }
+            },
             Err(e) => {
-                show_modal_message("CONNECTION FAILED", &[format!("Could not connect to RCON on 127.0.0.1:{}: {}", port, e)], true)?;
+                show_modal_message(
+                    "CONNECTION FAILED",
+                    &[format!(
+                        "Could not connect to RCON on 127.0.0.1:{}: {}",
+                        port, e
+                    )],
+                    true,
+                )?;
             }
         }
     }

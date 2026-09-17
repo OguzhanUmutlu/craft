@@ -1,22 +1,30 @@
-use std::collections::HashSet;
 use colored::Colorize;
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, Row, Table};
 use craft_core::{CraftPaths, Result, ServersRegistry};
 use craft_daemon::DaemonClient;
+use std::collections::HashSet;
 
 pub async fn handle_ls(paths: &CraftPaths) -> Result<()> {
     let registry = ServersRegistry::load(paths)?;
 
     if registry.servers.is_empty() {
-        println!("{}", "No servers found. Use 'craft new' to create one!".yellow());
+        println!(
+            "{}",
+            "No servers found. Use 'craft new' to create one!".yellow()
+        );
         return Ok(());
     }
 
     let running_paths: HashSet<_> = if DaemonClient::is_daemon_running(paths) {
         if let Ok(mut client) = DaemonClient::connect(paths).await {
-            client.get_running().await.unwrap_or_default().into_iter().collect()
+            client
+                .get_running()
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .collect()
         } else {
             HashSet::new()
         }
@@ -25,7 +33,9 @@ pub async fn handle_ls(paths: &CraftPaths) -> Result<()> {
     };
 
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS);
     table.set_header(vec![
         Cell::new("Name").fg(Color::Cyan),
         Cell::new("Game").fg(Color::Cyan),
@@ -38,7 +48,11 @@ pub async fn handle_ls(paths: &CraftPaths) -> Result<()> {
 
     for server in &registry.servers {
         let is_running = running_paths.contains(&server.path)
-            || server.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false)
+            || server
+                .path
+                .canonicalize()
+                .map(|p| running_paths.contains(&p))
+                .unwrap_or(false)
             || craft_core::is_server_locked(&server.path);
 
         let running_pid = if is_running {

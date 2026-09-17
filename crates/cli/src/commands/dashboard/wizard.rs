@@ -4,12 +4,12 @@ use craft_core::{CraftPaths, Result, ServersRegistry};
 use craft_daemon::DaemonClient;
 use craft_providers::get_all_softwares;
 
-use crate::commands::new::handle_new;
 use super::get_system_summary;
 use super::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
     run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
 };
+use crate::commands::new::handle_new;
 
 pub async fn gui_create_server_wizard(paths: &CraftPaths) -> Result<()> {
     gui_create_server_wizard_with_name("", paths).await
@@ -106,7 +106,8 @@ pub async fn gui_create_server_wizard_with_name(
                                         "A server named '{}' already exists on this machine.",
                                         name
                                     ),
-                                    "Please choose a different name for your new server.".to_string(),
+                                    "Please choose a different name for your new server."
+                                        .to_string(),
                                 ],
                                 true,
                             )?;
@@ -121,7 +122,8 @@ pub async fn gui_create_server_wizard_with_name(
 
             WizardStep::GameSelect => {
                 let width = get_content_width(80);
-                let game_header = format!(
+                let game_header =
+                    format!(
                     "{}\r\n{}\r\n{}\r\n Choose dedicated game environment for server '{}':\r\n{}",
                     box_top(width).cyan().bold(),
                     box_title("STEP 2/6: SELECT GAME ENVIRONMENT", width, false).cyan().bold(),
@@ -138,7 +140,8 @@ pub async fn gui_create_server_wizard_with_name(
                     MenuEntry::new("5", "Factorio (Headless Dedicated Server)"),
                     MenuEntry::new("6", "Custom Game Server (Generic binary/script)"),
                     MenuEntry::new("7", "Browse All 21 Softwares"),
-                    MenuEntry::new("0", if has_name_override { "Cancel" } else { "Back" }).with_aliases(&["b"]),
+                    MenuEntry::new("0", if has_name_override { "Cancel" } else { "Back" })
+                        .with_aliases(&["b"]),
                 ];
 
                 let game_choice = run_menu(&game_header, &game_entries, &mut game_sel)?;
@@ -197,7 +200,9 @@ pub async fn gui_create_server_wizard_with_name(
                 let mc_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose Minecraft platform category for '{}':\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 2b: SELECT MINECRAFT CATEGORY", width, false).cyan().bold(),
+                    box_title("STEP 2b: SELECT MINECRAFT CATEGORY", width, false)
+                        .cyan()
+                        .bold(),
                     box_divider(width).cyan().bold(),
                     server_name,
                     box_divider(width).dimmed(),
@@ -245,7 +250,9 @@ pub async fn gui_create_server_wizard_with_name(
                 let jt_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose server type for Java Edition:\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 2c: SELECT JAVA SERVER TYPE", width, false).cyan().bold(),
+                    box_title("STEP 2c: SELECT JAVA SERVER TYPE", width, false)
+                        .cyan()
+                        .bold(),
                     box_divider(width).cyan().bold(),
                     box_divider(width).dimmed(),
                 );
@@ -273,112 +280,97 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::Software => {
-                let software_choices: Vec<(&'static str, &'static str, &'static str)> = match cat_idx {
-                    0 => {
-                        if java_type == 0 {
-                            vec![
-                                (
-                                    "paper",
-                                    "Paper",
-                                    "High-performance standard Java server (Rec.)",
-                                ),
-                                (
-                                    "purpur",
-                                    "Purpur",
-                                    "Paper fork with extensive gameplay tweaks",
-                                ),
-                                (
-                                    "folia",
-                                    "Folia",
-                                    "Multi-threaded regional ticking server",
-                                ),
-                                ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
-                                (
-                                    "vanilla_java",
-                                    "Vanilla Java",
-                                    "Official Mojang Java dedicated server",
-                                ),
-                            ]
-                        } else {
-                            vec![
-                                (
-                                    "fabric",
-                                    "Fabric",
-                                    "Lightweight modular modded server",
-                                ),
-                                (
-                                    "quilt",
-                                    "Quilt",
-                                    "Community-driven modular modded server",
-                                ),
-                                (
-                                    "neoforge",
-                                    "NeoForge",
-                                    "Modern Forge-compatible modded server",
-                                ),
-                            ]
+                let software_choices: Vec<(&'static str, &'static str, &'static str)> =
+                    match cat_idx {
+                        0 => {
+                            if java_type == 0 {
+                                vec![
+                                    (
+                                        "paper",
+                                        "Paper",
+                                        "High-performance standard Java server (Rec.)",
+                                    ),
+                                    (
+                                        "purpur",
+                                        "Purpur",
+                                        "Paper fork with extensive gameplay tweaks",
+                                    ),
+                                    ("folia", "Folia", "Multi-threaded regional ticking server"),
+                                    ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
+                                    (
+                                        "vanilla_java",
+                                        "Vanilla Java",
+                                        "Official Mojang Java dedicated server",
+                                    ),
+                                ]
+                            } else {
+                                vec![
+                                    ("fabric", "Fabric", "Lightweight modular modded server"),
+                                    ("quilt", "Quilt", "Community-driven modular modded server"),
+                                    (
+                                        "neoforge",
+                                        "NeoForge",
+                                        "Modern Forge-compatible modded server",
+                                    ),
+                                ]
+                            }
                         }
-                    }
-                    1 => vec![
-                        (
-                            "vanilla_bedrock",
-                            "Vanilla Bedrock BDS",
-                            "Official Mojang Bedrock Dedicated Server",
-                        ),
-                        (
-                            "pocketmine",
-                            "PocketMine-MP",
-                            "High-performance C++ / PHP Bedrock server",
-                        ),
-                        (
-                            "nukkit",
-                            "NukkitX",
-                            "Java-based multi-threaded Bedrock server",
-                        ),
-                    ],
-                    2 => vec![
-                        (
-                            "velocity",
-                            "Velocity",
-                            "Next-generation ultra-fast proxy (Rec.)",
-                        ),
-                        (
-                            "waterfall",
-                            "Waterfall",
-                            "Optimized BungeeCord proxy fork",
-                        ),
-                        (
-                            "bungeecord",
-                            "BungeeCord",
-                            "Classic multi-server network proxy",
-                        ),
-                        ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
-                    ],
-                    3 => vec![
-                        (
-                            "geyser",
-                            "GeyserMC Standalone",
-                            "Cross-play bridge for Bedrock clients",
-                        ),
-                        ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
-                    ],
-                    4 => {
-                        craft_providers::get_softwares_for_game("minecraft")
+                        1 => vec![
+                            (
+                                "vanilla_bedrock",
+                                "Vanilla Bedrock BDS",
+                                "Official Mojang Bedrock Dedicated Server",
+                            ),
+                            (
+                                "pocketmine",
+                                "PocketMine-MP",
+                                "High-performance C++ / PHP Bedrock server",
+                            ),
+                            (
+                                "nukkit",
+                                "NukkitX",
+                                "Java-based multi-threaded Bedrock server",
+                            ),
+                        ],
+                        2 => vec![
+                            (
+                                "velocity",
+                                "Velocity",
+                                "Next-generation ultra-fast proxy (Rec.)",
+                            ),
+                            ("waterfall", "Waterfall", "Optimized BungeeCord proxy fork"),
+                            (
+                                "bungeecord",
+                                "BungeeCord",
+                                "Classic multi-server network proxy",
+                            ),
+                            ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
+                        ],
+                        3 => vec![
+                            (
+                                "geyser",
+                                "GeyserMC Standalone",
+                                "Cross-play bridge for Bedrock clients",
+                            ),
+                            ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
+                        ],
+                        4 => craft_providers::get_softwares_for_game("minecraft")
                             .into_iter()
                             .map(|s| (s.id(), s.name(), s.description()))
-                            .collect()
-                    }
-                    _ => get_all_softwares()
-                        .into_iter()
-                        .map(|s| (s.id(), s.name(), s.description()))
-                        .collect(),
-                };
+                            .collect(),
+                        _ => get_all_softwares()
+                            .into_iter()
+                            .map(|s| (s.id(), s.name(), s.description()))
+                            .collect(),
+                    };
 
                 let width = get_content_width(80);
                 let sw_header = format!(
                     "{}\r\n{}\r\n{}\r\n Select the server software implementation:\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 3/6: SELECT SERVER SOFTWARE", width, false).cyan().bold(),
+                    box_title("STEP 3/6: SELECT SERVER SOFTWARE", width, false)
+                        .cyan()
+                        .bold(),
                     box_divider(width).cyan().bold(),
                     box_divider(width).dimmed(),
                 );
@@ -421,7 +413,9 @@ pub async fn gui_create_server_wizard_with_name(
                 let ver_header = format!(
                     "{}\r\n{}\r\n{}\r\n Select release version for {}:\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 4/6: SELECT SERVER VERSION", width, false).cyan().bold(),
+                    box_title("STEP 4/6: SELECT SERVER VERSION", width, false)
+                        .cyan()
+                        .bold(),
                     box_divider(width).cyan().bold(),
                     selected_sw_name,
                     box_divider(width).dimmed(),
@@ -454,7 +448,10 @@ pub async fn gui_create_server_wizard_with_name(
                 match ver_choice {
                     Some(idx) if idx < num_bundled => {
                         version = bundled[idx].clone();
-                        let is_java = sw_obj.as_ref().map(|s| s.edition() == craft_providers::ServerEdition::Java).unwrap_or(true);
+                        let is_java = sw_obj
+                            .as_ref()
+                            .map(|s| s.edition() == craft_providers::ServerEdition::Java)
+                            .unwrap_or(true);
                         if is_java {
                             step = WizardStep::Memory;
                         } else {
@@ -470,7 +467,10 @@ pub async fn gui_create_server_wizard_with_name(
                         )? {
                             Some(v) if !v.trim().is_empty() => {
                                 version = v.trim().to_string();
-                                let is_java = sw_obj.as_ref().map(|s| s.edition() == craft_providers::ServerEdition::Java).unwrap_or(true);
+                                let is_java = sw_obj
+                                    .as_ref()
+                                    .map(|s| s.edition() == craft_providers::ServerEdition::Java)
+                                    .unwrap_or(true);
                                 if is_java {
                                     step = WizardStep::Memory;
                                 } else {
@@ -552,7 +552,8 @@ pub async fn gui_create_server_wizard_with_name(
 
             WizardStep::Autostart => {
                 let width = get_content_width(80);
-                let start_header = format!(
+                let start_header =
+                    format!(
                     "{}\r\n{}\r\n{}\r\n How should server '{}' be initialized upon creation?\r\n{}",
                     box_top(width).cyan().bold(),
                     box_title("STEP 6/6: INITIALIZATION MODE", width, false).cyan().bold(),
@@ -579,7 +580,10 @@ pub async fn gui_create_server_wizard_with_name(
                     }
                     _ => {
                         let sw_obj = craft_providers::find_software(selected_sw_id);
-                        let is_java = sw_obj.as_ref().map(|s| s.edition() == craft_providers::ServerEdition::Java).unwrap_or(true);
+                        let is_java = sw_obj
+                            .as_ref()
+                            .map(|s| s.edition() == craft_providers::ServerEdition::Java)
+                            .unwrap_or(true);
                         if is_java {
                             step = WizardStep::Memory;
                         } else {
@@ -612,17 +616,17 @@ pub async fn gui_create_server_wizard_with_name(
         &server_name,
         Some(selected_sw_id),
         Some(&version),
-        None,       // port: defaults to 25565
-        None,       // custom_path
+        None, // port: defaults to 25565
+        None, // custom_path
         Some(&memory),
-        true,       // agree_eula
-        false,      // tmp
-        true,       // no_start: wizard manages starting via daemon directly
-        true,       // yes = true (non-interactive execution)
-        true,       // aikar G1GC flags
-        false,      // zgc
-        false,      // shenandoah
-        None,       // jvm_flags
+        true,  // agree_eula
+        false, // tmp
+        true,  // no_start: wizard manages starting via daemon directly
+        true,  // yes = true (non-interactive execution)
+        true,  // aikar G1GC flags
+        false, // zgc
+        false, // shenandoah
+        None,  // jvm_flags
         paths,
     )
     .await;
@@ -650,13 +654,10 @@ pub async fn gui_create_server_wizard_with_name(
             show_modal_message(
                 "SERVER SETUP COMPLETE",
                 &[
-                    format!(
-                        "[OK] Server '{}' was registered successfully!",
-                        server_name
-                    )
-                    .green()
-                    .bold()
-                    .to_string(),
+                    format!("[OK] Server '{}' was registered successfully!", server_name)
+                        .green()
+                        .bold()
+                        .to_string(),
                     format!("Software: {} (Version: {})", selected_sw_name, version),
                     format!("Memory:   {}", memory),
                     format!("Status:   {}", status_note),

@@ -1,16 +1,18 @@
 use colored::Colorize;
 
 use craft_backup::{BackupEngine, GDriveStorageProvider, S3StorageProvider, StorageProvider};
-use craft_core::{CraftError, CraftPaths, GlobalBackupRegistry, Result, ServersRegistry, TrashManager};
+use craft_core::{
+    CraftError, CraftPaths, GlobalBackupRegistry, Result, ServersRegistry, TrashManager,
+};
 use craft_daemon::DaemonClient;
 
-use crate::commands::view::handle_view;
 use super::screen::{
     box_divider, box_title, box_top, exec_console_action, get_content_width, print_in_place_status,
     run_input_prompt, run_menu, run_paged_list_menu, show_modal_message, AltScreenGuard, MenuEntry,
     NavGuard, PagedMenuAction,
 };
 use super::wizard::gui_create_server_wizard;
+use crate::commands::view::handle_view;
 
 pub async fn show_empty_servers_modal(paths: &CraftPaths) -> Result<bool> {
     let width = get_content_width(80);
@@ -133,7 +135,9 @@ pub async fn quick_start_menu(paths: &CraftPaths) -> Result<()> {
             } else {
                 ((b'a' + (i - 9) as u8) as char).to_string()
             };
-            let game_badge = format!("[{}]", s.game_definition().name.to_uppercase()).magenta().to_string();
+            let game_badge = format!("[{}]", s.game_definition().name.to_uppercase())
+                .magenta()
+                .to_string();
             entries.push(MenuEntry::new(
                 hotkey,
                 format!(
@@ -269,20 +273,21 @@ pub async fn stop_servers_menu(paths: &CraftPaths) -> Result<()> {
                 ((b'a' + (i - 9) as u8) as char).to_string()
             };
             let status_str = if let Some(pid) = craft_core::get_server_running_pid(&s.path) {
-                format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
+                format!("[RUNNING (PID: {})]", pid)
+                    .green()
+                    .bold()
+                    .to_string()
             } else {
                 "[RUNNING]".green().bold().to_string()
             };
-            let game_badge = format!("[{}]", s.game_definition().name.to_uppercase()).magenta().to_string();
+            let game_badge = format!("[{}]", s.game_definition().name.to_uppercase())
+                .magenta()
+                .to_string();
             entries.push(MenuEntry::new(
                 hotkey,
                 format!(
                     "{:<18} {:<12} {:<10} {:<10} {}",
-                    s.name,
-                    game_badge,
-                    s.software,
-                    s.version,
-                    status_str
+                    s.name, game_badge, s.software, s.version, status_str
                 ),
             ));
         }
@@ -378,10 +383,15 @@ pub async fn restart_servers_menu(paths: &CraftPaths) -> Result<()> {
             } else {
                 ((b'a' + (i - 9) as u8) as char).to_string()
             };
-            let game_badge = format!("[{}]", s.game_definition().name.to_uppercase()).magenta().to_string();
+            let game_badge = format!("[{}]", s.game_definition().name.to_uppercase())
+                .magenta()
+                .to_string();
             entries.push(MenuEntry::new(
                 hotkey,
-                format!("{:<18} {:<12} {:<10} {:<10}", s.name, game_badge, s.software, s.version),
+                format!(
+                    "{:<18} {:<12} {:<10} {:<10}",
+                    s.name, game_badge, s.software, s.version
+                ),
             ));
         }
         if registry.servers.len() > 1 {
@@ -491,10 +501,8 @@ pub async fn view_servers_menu(paths: &CraftPaths) -> Result<()> {
     if let Some(idx) = run_menu(&header, &entries, &mut sel)? {
         if idx < registry.servers.len() {
             let server = &registry.servers[idx];
-            let _ = exec_console_action(|| async {
-                handle_view(&server.name, None, paths).await
-            })
-            .await;
+            let _ = exec_console_action(|| async { handle_view(&server.name, None, paths).await })
+                .await;
         }
     }
     Ok(())
@@ -646,7 +654,10 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                 "LOCAL SERVERS (HOST)".to_string()
             };
             let desc = if let Some(alias) = super::screen::get_remote_node() {
-                format!(" No servers currently registered on remote host '{}'.\r\n", alias)
+                format!(
+                    " No servers currently registered on remote host '{}'.\r\n",
+                    alias
+                )
             } else {
                 " No servers currently registered on this local host.\r\n".to_string()
             };
@@ -675,9 +686,8 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
         }
 
         let width = get_content_width(80);
-        let action_entries = vec![
-            MenuEntry::new("n", "New Server").with_aliases(&["c", "create", "new"]),
-        ];
+        let action_entries =
+            vec![MenuEntry::new("n", "New Server").with_aliases(&["c", "create", "new"])];
 
         let action = super::screen::run_paged_list_menu(
             &registry.servers,
@@ -685,7 +695,9 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
             page_size,
             |page, total_pages, total_count| {
                 let page_info = if total_pages > 1 {
-                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                    format!(" | Page {} of {}", page, total_pages)
+                        .cyan()
+                        .to_string()
                 } else {
                     "".to_string()
                 };
@@ -695,9 +707,15 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                     "LOCAL SERVERS".to_string()
                 };
                 let desc = if let Some(alias) = super::screen::get_remote_node() {
-                    format!(" Manage servers on remote host '{}' (Total: {}){}.\r\n", alias, total_count, page_info)
+                    format!(
+                        " Manage servers on remote host '{}' (Total: {}){}.\r\n",
+                        alias, total_count, page_info
+                    )
                 } else {
-                    format!(" Manage local servers on this host (Total: {}){}.\r\n", total_count, page_info)
+                    format!(
+                        " Manage local servers on this host (Total: {}){}.\r\n",
+                        total_count, page_info
+                    )
                 };
                 format!(
                     "{}\r\n{}\r\n{}\r\n{}{}",
@@ -717,14 +735,19 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                     || craft_core::is_server_locked(&s.path);
                 let status_str = if is_running {
                     if let Some(pid) = craft_core::get_server_running_pid(&s.path) {
-                        format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
+                        format!("[RUNNING (PID: {})]", pid)
+                            .green()
+                            .bold()
+                            .to_string()
                     } else {
                         "[RUNNING]".green().bold().to_string()
                     }
                 } else {
                     "[STOPPED]".dimmed().to_string()
                 };
-                let game_badge = format!("[{}]", s.game_definition().name.to_uppercase()).magenta().to_string();
+                let game_badge = format!("[{}]", s.game_definition().name.to_uppercase())
+                    .magenta()
+                    .to_string();
                 format!(
                     "{:<18} {:<12} {:<10} {:<10} {}",
                     s.name, game_badge, s.software, s.version, status_str
@@ -735,14 +758,19 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
         )?;
 
         match action {
-            super::screen::PagedMenuAction::Select(global_idx) if global_idx < registry.servers.len() => {
+            super::screen::PagedMenuAction::Select(global_idx)
+                if global_idx < registry.servers.len() =>
+            {
                 let chosen = &registry.servers[global_idx];
                 server_control_panel(&chosen.name, paths).await?;
             }
-            super::screen::PagedMenuAction::Space(global_idx) if global_idx < registry.servers.len() => {
+            super::screen::PagedMenuAction::Space(global_idx)
+                if global_idx < registry.servers.len() =>
+            {
                 let chosen = &registry.servers[global_idx];
                 let is_running = running_paths.contains(&chosen.path)
-                    || chosen.path
+                    || chosen
+                        .path
                         .canonicalize()
                         .map(|p| running_paths.contains(&p))
                         .unwrap_or(false)
@@ -769,19 +797,29 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
     }
 }
 
-pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &CraftPaths) -> Result<()> {
+pub(crate) async fn server_control_panel(
+    initial_server_name: &str,
+    paths: &CraftPaths,
+) -> Result<()> {
     let mut selected = 0;
     let mut current_server_name = initial_server_name.to_string();
     let mut flash_status: Option<String> = None;
 
     loop {
         let registry = ServersRegistry::load(paths)?;
-        let server = match registry.servers.iter().find(|s| s.name == current_server_name) {
+        let server = match registry
+            .servers
+            .iter()
+            .find(|s| s.name == current_server_name)
+        {
             Some(s) => s.clone(),
             None => {
                 show_modal_message(
                     "SERVER NOT FOUND",
-                    &[format!("Server '{}' is no longer registered.", current_server_name)],
+                    &[format!(
+                        "Server '{}' is no longer registered.",
+                        current_server_name
+                    )],
                     true,
                 )?;
                 return Ok(());
@@ -814,7 +852,10 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
 
         let status_badge = if is_running {
             if let Some(pid) = running_pid {
-                format!("[RUNNING (PID: {})]", pid).green().bold().to_string()
+                format!("[RUNNING (PID: {})]", pid)
+                    .green()
+                    .bold()
+                    .to_string()
             } else {
                 "[RUNNING]".green().bold().to_string()
             }
@@ -834,9 +875,16 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
         } else {
             String::new()
         };
-        let path_label = if super::screen::is_remote_node() { "Remote Path" } else { "Path" };
+        let path_label = if super::screen::is_remote_node() {
+            "Remote Path"
+        } else {
+            "Path"
+        };
         let game_def = server.game_definition();
-        let port_display = server.port.map(|p| p.to_string()).unwrap_or_else(|| "Default".to_string());
+        let port_display = server
+            .port
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "Default".to_string());
         let mut header = format!(
             "{}\r\n{}\r\n{}\r\n Game: {:<14} | Software: {:<12} | Version: {:<10} | Port: {}\r\n{}{}: {}\r\n",
             box_top(width).cyan().bold(),
@@ -887,11 +935,17 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
         }
 
         let prop_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(prop_hotkey, "Server Properties (Config Editor)").with_aliases(&["prop", "props", "cfg"]));
+        entries.push(
+            MenuEntry::new(prop_hotkey, "Server Properties (Config Editor)")
+                .with_aliases(&["prop", "props", "cfg"]),
+        );
         actions.push(ControlAction::ServerProperties);
 
         let wrd_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(wrd_hotkey, "Manage Worlds & Level Data").with_aliases(&["w", "worlds", "world"]));
+        entries.push(
+            MenuEntry::new(wrd_hotkey, "Manage Worlds & Level Data")
+                .with_aliases(&["w", "worlds", "world"]),
+        );
         actions.push(ControlAction::ManageWorlds);
 
         let caps = craft_providers::get_content_capabilities(&server.software);
@@ -917,7 +971,8 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
         }
 
         let dev_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(dev_hotkey, "Developer Tools").with_aliases(&["dev", "develop"]));
+        entries
+            .push(MenuEntry::new(dev_hotkey, "Developer Tools").with_aliases(&["dev", "develop"]));
         actions.push(ControlAction::DeveloperTools);
 
         let bkp_hotkey = (actions.len() + 1).to_string();
@@ -925,7 +980,10 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
         actions.push(ControlAction::Backups);
 
         let mnt_hotkey = (actions.len() + 1).to_string();
-        entries.push(MenuEntry::new(mnt_hotkey, "Server Maintenance (Fix, Rename, Delete)").with_aliases(&["m", "maintenance"]));
+        entries.push(
+            MenuEntry::new(mnt_hotkey, "Server Maintenance (Fix, Rename, Delete)")
+                .with_aliases(&["m", "maintenance"]),
+        );
         actions.push(ControlAction::Maintenance);
 
         entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
@@ -1024,7 +1082,8 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
             ControlAction::AttachConsole => {
                 let server_name = server.name.clone();
                 let server_path = server.path.clone();
-                let res = super::screen::run_virtual_console(&server_name, &server_path, paths).await;
+                let res =
+                    super::screen::run_virtual_console(&server_name, &server_path, paths).await;
                 match res {
                     Ok(_) => {
                         flash_status = Some(
@@ -1063,10 +1122,13 @@ pub(crate) async fn server_control_panel(initial_server_name: &str, paths: &Craf
                 match server_maintenance_menu(&server, paths, is_running).await? {
                     MaintenanceOutcome::Renamed(new_name) => {
                         flash_status = Some(
-                            format!("[OK] Server renamed from '{}' to '{}'.", current_server_name, new_name)
-                                .green()
-                                .bold()
-                                .to_string(),
+                            format!(
+                                "[OK] Server renamed from '{}' to '{}'.",
+                                current_server_name, new_name
+                            )
+                            .green()
+                            .bold()
+                            .to_string(),
                         );
                         current_server_name = new_name;
                     }
@@ -1111,7 +1173,8 @@ pub(crate) async fn server_content_menu(
 
     loop {
         let width = get_content_width(80);
-        let header = format!(
+        let header =
+            format!(
             "{}\r\n{}\r\n{}\r\n Server:   {}\r\n Software: {} {}\r\n Select content manager:\r\n{}",
             box_top(width).cyan().bold(),
             box_title(&format!("SERVER CONTENT: {}", server.name), width, false).cyan().bold(),
@@ -1129,7 +1192,10 @@ pub(crate) async fn server_content_menu(
             let plugins_dir = server.path.join("plugins");
             let count = list_server_plugins(&plugins_dir).len();
             let key = (entries.len() + 1).to_string();
-            entries.push(MenuEntry::new(key, format!("Plugins (Installed: {})", count)).with_aliases(&["p", "plugin", "plugins"]));
+            entries.push(
+                MenuEntry::new(key, format!("Plugins (Installed: {})", count))
+                    .with_aliases(&["p", "plugin", "plugins"]),
+            );
             kinds.push(ContentPanelKind::Plugins);
         }
 
@@ -1137,7 +1203,10 @@ pub(crate) async fn server_content_menu(
             let mods_dir = server.path.join("mods");
             let count = list_server_mods(&mods_dir).len();
             let key = (entries.len() + 1).to_string();
-            entries.push(MenuEntry::new(key, format!("Mods (Installed: {})", count)).with_aliases(&["m", "mod", "mods"]));
+            entries.push(
+                MenuEntry::new(key, format!("Mods (Installed: {})", count))
+                    .with_aliases(&["m", "mod", "mods"]),
+            );
             kinds.push(ContentPanelKind::Mods);
         }
 
@@ -1146,7 +1215,13 @@ pub(crate) async fn server_content_menu(
             let datapacks_dir = server.path.join(&default_world).join("datapacks");
             let count = list_server_datapacks(&datapacks_dir).len();
             let key = (entries.len() + 1).to_string();
-            entries.push(MenuEntry::new(key, format!("Datapacks (Installed: {})", count)).with_aliases(&["d", "datapack", "datapacks"]));
+            entries.push(
+                MenuEntry::new(key, format!("Datapacks (Installed: {})", count)).with_aliases(&[
+                    "d",
+                    "datapack",
+                    "datapacks",
+                ]),
+            );
             kinds.push(ContentPanelKind::Datapacks);
         }
 
@@ -1197,20 +1272,34 @@ pub(crate) async fn server_maintenance_menu(
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Auto-Heal / Fix Server (Repair Jars, Java Version, EULA)").with_aliases(&["f", "fix"]),
+            MenuEntry::new(
+                "1",
+                "Auto-Heal / Fix Server (Repair Jars, Java Version, EULA)",
+            )
+            .with_aliases(&["f", "fix"]),
             MenuEntry::new("2", "Rename Server").with_aliases(&["r", "rename"]),
-            MenuEntry::new("3", "Delete or Unregister Server (Safe Trash / Permanent)").with_aliases(&["del", "rm", "delete"]),
+            MenuEntry::new("3", "Delete or Unregister Server (Safe Trash / Permanent)")
+                .with_aliases(&["del", "rm", "delete"]),
             MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
             Some(0) => {
-                let _ = print_in_place_status("RUNNING AUTO-HEAL", &[format!("Analyzing server '{}'...", server.name)]);
+                let _ = print_in_place_status(
+                    "RUNNING AUTO-HEAL",
+                    &[format!("Analyzing server '{}'...", server.name)],
+                );
                 match crate::commands::fix::handle_fix(&server.name, None, paths).await {
                     Ok(_) => {
                         show_modal_message(
                             "FIX COMPLETE",
-                            &[format!("[OK] Server '{}' checked and repaired successfully.", server.name).green().bold().to_string()],
+                            &[format!(
+                                "[OK] Server '{}' checked and repaired successfully.",
+                                server.name
+                            )
+                            .green()
+                            .bold()
+                            .to_string()],
                             false,
                         )?;
                     }
@@ -1228,7 +1317,10 @@ pub(crate) async fn server_maintenance_menu(
                     show_modal_message(
                         "RENAME BLOCKED",
                         &[
-                            format!("Cannot rename server '{}': The server is currently RUNNING.", server.name),
+                            format!(
+                                "Cannot rename server '{}': The server is currently RUNNING.",
+                                server.name
+                            ),
                             "Please STOP the server first before renaming it.".to_string(),
                         ],
                         true,
@@ -1237,7 +1329,8 @@ pub(crate) async fn server_maintenance_menu(
                 }
 
                 let prompt = format!("Enter new name for server '{}':", server.name);
-                let new_name = match run_input_prompt("RENAME SERVER", &prompt, Some(&server.name))? {
+                let new_name = match run_input_prompt("RENAME SERVER", &prompt, Some(&server.name))?
+                {
                     Some(n) => n.trim().to_string(),
                     None => continue,
                 };
@@ -1246,7 +1339,10 @@ pub(crate) async fn server_maintenance_menu(
                     continue;
                 }
 
-                if !new_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+                if !new_name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                {
                     show_modal_message(
                         "INVALID NAME",
                         &[
@@ -1258,10 +1354,17 @@ pub(crate) async fn server_maintenance_menu(
                 }
 
                 let mut reg = ServersRegistry::load(paths)?;
-                if reg.servers.iter().any(|s| s.name.eq_ignore_ascii_case(&new_name)) {
+                if reg
+                    .servers
+                    .iter()
+                    .any(|s| s.name.eq_ignore_ascii_case(&new_name))
+                {
                     show_modal_message(
                         "NAME TAKEN",
-                        &[format!("A server named '{}' already exists in registry.", new_name)],
+                        &[format!(
+                            "A server named '{}' already exists in registry.",
+                            new_name
+                        )],
                         true,
                     )?;
                     continue;
@@ -1277,7 +1380,10 @@ pub(crate) async fn server_maintenance_menu(
                     if target_dir.exists() {
                         show_modal_message(
                             "DIRECTORY EXISTS",
-                            &[format!("Directory '{}' already exists on disk.", target_dir.display())],
+                            &[format!(
+                                "Directory '{}' already exists on disk.",
+                                target_dir.display()
+                            )],
                             true,
                         )?;
                         continue;
@@ -1321,15 +1427,20 @@ pub(crate) async fn server_maintenance_menu(
                 let confirm_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose removal method for server '{}':\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title(&format!("DELETE SERVER: {}", server.name), width, false).cyan().bold(),
+                    box_title(&format!("DELETE SERVER: {}", server.name), width, false)
+                        .cyan()
+                        .bold(),
                     box_divider(width).cyan().bold(),
                     server.name,
                     box_divider(width).dimmed(),
                 );
                 let confirm_entries = vec![
-                    MenuEntry::new("1", "Move to Trash Bin (Safe, Restorable)").with_aliases(&["t", "trash"]),
-                    MenuEntry::new("2", "Unregister Only (Keep Files on Disk)").with_aliases(&["u"]),
-                    MenuEntry::new("3", "Permanently Delete Files (Irreversible)").with_aliases(&["p"]),
+                    MenuEntry::new("1", "Move to Trash Bin (Safe, Restorable)")
+                        .with_aliases(&["t", "trash"]),
+                    MenuEntry::new("2", "Unregister Only (Keep Files on Disk)")
+                        .with_aliases(&["u"]),
+                    MenuEntry::new("3", "Permanently Delete Files (Irreversible)")
+                        .with_aliases(&["p"]),
                     MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                 ];
                 let mut c_sel = 0;
@@ -1346,8 +1457,15 @@ pub(crate) async fn server_maintenance_menu(
                         show_modal_message(
                             "MOVED TO TRASH",
                             &[
-                                format!("[OK] Server '{}' was safely moved to the Trash Bin.", server.name).green().bold().to_string(),
-                                "You can restore it anytime from the main dashboard Trash Bin.".to_string(),
+                                format!(
+                                    "[OK] Server '{}' was safely moved to the Trash Bin.",
+                                    server.name
+                                )
+                                .green()
+                                .bold()
+                                .to_string(),
+                                "You can restore it anytime from the main dashboard Trash Bin."
+                                    .to_string(),
                             ],
                             false,
                         )?;
@@ -1359,7 +1477,10 @@ pub(crate) async fn server_maintenance_menu(
                         reg.save(paths)?;
                         show_modal_message(
                             "SERVER UNREGISTERED",
-                            &[format!("[OK] Server '{}' unregistered. Files kept on disk.", server.name)],
+                            &[format!(
+                                "[OK] Server '{}' unregistered. Files kept on disk.",
+                                server.name
+                            )],
                             false,
                         )?;
                         return Ok(MaintenanceOutcome::Deleted);
@@ -1377,10 +1498,14 @@ pub(crate) async fn server_maintenance_menu(
                         );
                         let second_entries = vec![
                             MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
-                            MenuEntry::new("2", format!("Confirm Permanent Delete '{}'", server.name)),
+                            MenuEntry::new(
+                                "2",
+                                format!("Confirm Permanent Delete '{}'", server.name),
+                            ),
                         ];
                         let mut second_sel = 0;
-                        if let Some(1) = run_menu(&second_header, &second_entries, &mut second_sel)? {
+                        if let Some(1) = run_menu(&second_header, &second_entries, &mut second_sel)?
+                        {
                             let mut reg = ServersRegistry::load(paths)?;
                             reg.remove(&server.path);
                             reg.save(paths)?;
@@ -1389,7 +1514,10 @@ pub(crate) async fn server_maintenance_menu(
                             }
                             show_modal_message(
                                 "SERVER DELETED",
-                                &[format!("[OK] Server '{}' and directory permanently removed.", server.name)],
+                                &[format!(
+                                    "[OK] Server '{}' and directory permanently removed.",
+                                    server.name
+                                )],
                                 false,
                             )?;
                             return Ok(MaintenanceOutcome::Deleted);
@@ -1428,7 +1556,12 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
         let policy = backup_reg.server_policies.get(&server.name);
         let policy_str = if let Some(p) = policy {
             if p.enabled {
-                format!("[AUTO: Every {}h | Keep {}]", p.interval_hours, p.retention_count).green().to_string()
+                format!(
+                    "[AUTO: Every {}h | Keep {}]",
+                    p.interval_hours, p.retention_count
+                )
+                .green()
+                .to_string()
             } else {
                 "[AUTO: Disabled]".dimmed().to_string()
             }
@@ -1438,7 +1571,10 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
 
         let local_dir = if let Some(ref m) = server.backup_method {
             if let Some(id) = m.strip_prefix("local:") {
-                backup_reg.find_local(id).map(|t| t.path.clone()).unwrap_or_else(|| backup_reg.default_local_path(paths))
+                backup_reg
+                    .find_local(id)
+                    .map(|t| t.path.clone())
+                    .unwrap_or_else(|| backup_reg.default_local_path(paths))
             } else {
                 backup_reg.default_local_path(paths)
             }
@@ -1447,7 +1583,11 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
         };
         let engine = BackupEngine::with_dir(local_dir);
         let existing_backups = engine.list_backups(&server.name);
-        let total_size_mb: f64 = existing_backups.iter().map(|b| b.size_bytes as f64).sum::<f64>() / (1024.0 * 1024.0);
+        let total_size_mb: f64 = existing_backups
+            .iter()
+            .map(|b| b.size_bytes as f64)
+            .sum::<f64>()
+            / (1024.0 * 1024.0);
 
         let width = get_content_width(80);
         let header = format!(
@@ -1497,7 +1637,10 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                     ],
                 );
 
-                let archive_path = match engine.create_backup(&server.name, &server.path, None, world_only).await {
+                let archive_path = match engine
+                    .create_backup(&server.name, &server.path, None, world_only)
+                    .await
+                {
                     Ok(p) => p,
                     Err(e) => {
                         show_modal_message("BACKUP FAILED", &[format!("[ERROR] {}", e)], true)?;
@@ -1505,44 +1648,68 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                     }
                 };
 
-                let fname = archive_path.file_name().and_then(|f| f.to_str()).unwrap_or("backup.tar.gz");
-                let mut summary_lines = vec![
-                    format!("[OK] Local archive saved: {}", archive_path.display()).green().bold().to_string(),
-                ];
+                let fname = archive_path
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("backup.tar.gz");
+                let mut summary_lines =
+                    vec![
+                        format!("[OK] Local archive saved: {}", archive_path.display())
+                            .green()
+                            .bold()
+                            .to_string(),
+                    ];
 
                 let method = server.backup_method.as_deref().unwrap_or("local");
 
                 // Upload to S3 if method matches
-                let s3_targets_to_upload: Vec<craft_core::S3BackupConfig> = if let Some(id) = method.strip_prefix("s3:") {
-                    backup_reg.find_s3(id).cloned().map(|t| t.into()).into_iter().collect()
-                } else if method == "s3" {
-                    if let Some(first) = backup_reg.s3_targets.first() {
-                        vec![first.clone().into()]
-                    } else if let Some(ref legacy) = backup_reg.s3 {
-                        vec![legacy.clone()]
+                let s3_targets_to_upload: Vec<craft_core::S3BackupConfig> =
+                    if let Some(id) = method.strip_prefix("s3:") {
+                        backup_reg
+                            .find_s3(id)
+                            .cloned()
+                            .map(|t| t.into())
+                            .into_iter()
+                            .collect()
+                    } else if method == "s3" {
+                        if let Some(first) = backup_reg.s3_targets.first() {
+                            vec![first.clone().into()]
+                        } else if let Some(ref legacy) = backup_reg.s3 {
+                            vec![legacy.clone()]
+                        } else {
+                            vec![]
+                        }
+                    } else if method == "multi" {
+                        if !backup_reg.s3_targets.is_empty() {
+                            backup_reg
+                                .s3_targets
+                                .iter()
+                                .map(|t| t.clone().into())
+                                .collect()
+                        } else if let Some(ref legacy) = backup_reg.s3 {
+                            vec![legacy.clone()]
+                        } else {
+                            vec![]
+                        }
                     } else {
                         vec![]
-                    }
-                } else if method == "multi" {
-                    if !backup_reg.s3_targets.is_empty() {
-                        backup_reg.s3_targets.iter().map(|t| t.clone().into()).collect()
-                    } else if let Some(ref legacy) = backup_reg.s3 {
-                        vec![legacy.clone()]
-                    } else {
-                        vec![]
-                    }
-                } else {
-                    vec![]
-                };
+                    };
 
                 if method.starts_with("s3") && s3_targets_to_upload.is_empty() {
-                    summary_lines.push("[WARN] Selected S3 provider is not configured; kept locally.".yellow().to_string());
+                    summary_lines.push(
+                        "[WARN] Selected S3 provider is not configured; kept locally."
+                            .yellow()
+                            .to_string(),
+                    );
                 }
 
                 for s3_config in s3_targets_to_upload {
                     let _ = print_in_place_status(
                         "UPLOADING TO S3",
-                        &[format!("Uploading '{}' to S3 bucket '{}'...", fname, s3_config.bucket)],
+                        &[format!(
+                            "Uploading '{}' to S3 bucket '{}'...",
+                            fname, s3_config.bucket
+                        )],
                     );
                     let provider = S3StorageProvider::new(s3_config.clone());
                     let remote_key = if let Some(ref pfx) = s3_config.prefix {
@@ -1551,47 +1718,86 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                         format!("{}/{}", server.name, fname)
                     };
                     match provider.upload_file(&archive_path, &remote_key).await {
-                        Ok(_) => summary_lines.push(format!("[OK] S3 Upload complete: s3://{}/{}", s3_config.bucket, remote_key).green().to_string()),
-                        Err(e) => summary_lines.push(format!("[WARN] S3 Upload failed ({}): {}", s3_config.bucket, e).yellow().to_string()),
+                        Ok(_) => summary_lines.push(
+                            format!(
+                                "[OK] S3 Upload complete: s3://{}/{}",
+                                s3_config.bucket, remote_key
+                            )
+                            .green()
+                            .to_string(),
+                        ),
+                        Err(e) => summary_lines.push(
+                            format!("[WARN] S3 Upload failed ({}): {}", s3_config.bucket, e)
+                                .yellow()
+                                .to_string(),
+                        ),
                     }
                 }
 
                 // Upload to Google Drive if method matches
-                let gd_targets_to_upload: Vec<craft_core::GDriveBackupConfig> = if let Some(id) = method.strip_prefix("gdrive:") {
-                    backup_reg.find_gdrive(id).cloned().map(|t| t.into()).into_iter().collect()
-                } else if method == "gdrive" {
-                    if let Some(first) = backup_reg.gdrive_targets.first() {
-                        vec![first.clone().into()]
-                    } else if let Some(ref legacy) = backup_reg.gdrive {
-                        vec![legacy.clone()]
+                let gd_targets_to_upload: Vec<craft_core::GDriveBackupConfig> =
+                    if let Some(id) = method.strip_prefix("gdrive:") {
+                        backup_reg
+                            .find_gdrive(id)
+                            .cloned()
+                            .map(|t| t.into())
+                            .into_iter()
+                            .collect()
+                    } else if method == "gdrive" {
+                        if let Some(first) = backup_reg.gdrive_targets.first() {
+                            vec![first.clone().into()]
+                        } else if let Some(ref legacy) = backup_reg.gdrive {
+                            vec![legacy.clone()]
+                        } else {
+                            vec![]
+                        }
+                    } else if method == "multi" {
+                        if !backup_reg.gdrive_targets.is_empty() {
+                            backup_reg
+                                .gdrive_targets
+                                .iter()
+                                .map(|t| t.clone().into())
+                                .collect()
+                        } else if let Some(ref legacy) = backup_reg.gdrive {
+                            vec![legacy.clone()]
+                        } else {
+                            vec![]
+                        }
                     } else {
                         vec![]
-                    }
-                } else if method == "multi" {
-                    if !backup_reg.gdrive_targets.is_empty() {
-                        backup_reg.gdrive_targets.iter().map(|t| t.clone().into()).collect()
-                    } else if let Some(ref legacy) = backup_reg.gdrive {
-                        vec![legacy.clone()]
-                    } else {
-                        vec![]
-                    }
-                } else {
-                    vec![]
-                };
+                    };
 
                 if method.starts_with("gdrive") && gd_targets_to_upload.is_empty() {
-                    summary_lines.push("[WARN] Selected Google Drive provider is not configured; kept locally.".yellow().to_string());
+                    summary_lines.push(
+                        "[WARN] Selected Google Drive provider is not configured; kept locally."
+                            .yellow()
+                            .to_string(),
+                    );
                 }
 
                 for gd_config in gd_targets_to_upload {
                     let _ = print_in_place_status(
                         "UPLOADING TO GDRIVE",
-                        &[format!("Uploading '{}' to Google Drive folder '{}'...", fname, gd_config.folder_id)],
+                        &[format!(
+                            "Uploading '{}' to Google Drive folder '{}'...",
+                            fname, gd_config.folder_id
+                        )],
                     );
                     let provider = GDriveStorageProvider::new(gd_config.clone());
                     match provider.upload_file(&archive_path, fname).await {
-                        Ok(_) => summary_lines.push(format!("[OK] Google Drive Upload complete: folder {}", gd_config.folder_id).green().to_string()),
-                        Err(e) => summary_lines.push(format!("[WARN] Google Drive Upload failed: {}", e).yellow().to_string()),
+                        Ok(_) => summary_lines.push(
+                            format!(
+                                "[OK] Google Drive Upload complete: folder {}",
+                                gd_config.folder_id
+                            )
+                            .green()
+                            .to_string(),
+                        ),
+                        Err(e) => summary_lines.push(
+                            format!("[WARN] Google Drive Upload failed: {}", e)
+                                .yellow()
+                                .to_string(),
+                        ),
                     }
                 }
 
@@ -1606,7 +1812,10 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                     if list.is_empty() {
                         show_modal_message(
                             "NO BACKUPS FOUND",
-                            &[format!("No local backups found for server '{}'.", server.name)],
+                            &[format!(
+                                "No local backups found for server '{}'.",
+                                server.name
+                            )],
                             false,
                         )?;
                         break;
@@ -1619,7 +1828,9 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                         page_size,
                         |page, total_pages, total_count| {
                             let page_info = if total_pages > 1 {
-                                format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                                format!(" | Page {} of {}", page, total_pages)
+                                    .cyan()
+                                    .to_string()
                             } else {
                                 "".to_string()
                             };
@@ -1651,19 +1862,41 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                                 MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                             ];
                             let mut scope_sel = 0;
-                            if let Some(s_idx) = run_menu(scope_header, &scope_entries, &mut scope_sel)? {
+                            if let Some(s_idx) =
+                                run_menu(scope_header, &scope_entries, &mut scope_sel)?
+                            {
                                 let world_only = match s_idx {
                                     0 => false,
                                     1 => true,
                                     _ => continue,
                                 };
-                                let _ = print_in_place_status("CREATING BACKUP", &[format!("Creating snapshot for '{}'...", server.name)]);
-                                match engine.create_backup(&server.name, &server.path, None, world_only).await {
+                                let _ = print_in_place_status(
+                                    "CREATING BACKUP",
+                                    &[format!("Creating snapshot for '{}'...", server.name)],
+                                );
+                                match engine
+                                    .create_backup(&server.name, &server.path, None, world_only)
+                                    .await
+                                {
                                     Ok(archive_path) => {
-                                        show_modal_message("BACKUP GENERATED", &[format!("[OK] Generated: {}", archive_path.display()).green().bold().to_string()], false)?;
+                                        show_modal_message(
+                                            "BACKUP GENERATED",
+                                            &[format!(
+                                                "[OK] Generated: {}",
+                                                archive_path.display()
+                                            )
+                                            .green()
+                                            .bold()
+                                            .to_string()],
+                                            false,
+                                        )?;
                                     }
                                     Err(e) => {
-                                        show_modal_message("BACKUP FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                        show_modal_message(
+                                            "BACKUP FAILED",
+                                            &[format!("[ERROR] {}", e)],
+                                            true,
+                                        )?;
                                     }
                                 }
                             }
@@ -1685,16 +1918,20 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                                 MenuEntry::new("0", "Back").with_aliases(&["b"]),
                             ];
                             let mut act_sel = 0;
-                            if let Some(act) = run_menu(&action_header, &action_entries, &mut act_sel)? {
+                            if let Some(act) =
+                                run_menu(&action_header, &action_entries, &mut act_sel)?
+                            {
                                 match act {
                                     0 => {
                                         // Restore
                                         if craft_core::is_server_locked(&server.path)
-                                            || craft_core::get_server_running_pid(&server.path).is_some()
+                                            || craft_core::get_server_running_pid(&server.path)
+                                                .is_some()
                                         {
-                                            let pid_info = craft_core::get_server_running_pid(&server.path)
-                                                .map(|p| format!(" (PID: {})", p))
-                                                .unwrap_or_default();
+                                            let pid_info =
+                                                craft_core::get_server_running_pid(&server.path)
+                                                    .map(|p| format!(" (PID: {})", p))
+                                                    .unwrap_or_default();
                                             show_modal_message(
                                                 "RESTORE BLOCKED: SERVER IS RUNNING",
                                                 &[
@@ -1721,15 +1958,25 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                                         );
                                         let confirm_entries = vec![
                                             MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
-                                            MenuEntry::new("2", format!("Confirm Restore of '{}'", backup.filename)),
+                                            MenuEntry::new(
+                                                "2",
+                                                format!("Confirm Restore of '{}'", backup.filename),
+                                            ),
                                         ];
                                         let mut c_sel = 0;
-                                        if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
+                                        if let Some(1) =
+                                            run_menu(&confirm_header, &confirm_entries, &mut c_sel)?
+                                        {
                                             let _ = print_in_place_status(
                                                 "RESTORING SERVER",
-                                                &[format!("Unpacking backup '{}' into '{}'...", backup.filename, server.path.display())],
+                                                &[format!(
+                                                    "Unpacking backup '{}' into '{}'...",
+                                                    backup.filename,
+                                                    server.path.display()
+                                                )],
                                             );
-                                            match engine.restore_backup(&backup.path, &server.path) {
+                                            match engine.restore_backup(&backup.path, &server.path)
+                                            {
                                                 Ok(_) => {
                                                     show_modal_message(
                                                         "RESTORE COMPLETE",
@@ -1741,7 +1988,11 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                                                     )?;
                                                 }
                                                 Err(e) => {
-                                                    show_modal_message("RESTORE FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                                    show_modal_message(
+                                                        "RESTORE FAILED",
+                                                        &[format!("[ERROR] {}", e)],
+                                                        true,
+                                                    )?;
                                                 }
                                             }
                                         }
@@ -1760,16 +2011,23 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                                         );
                                         let confirm_entries = vec![
                                             MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
-                                            MenuEntry::new("2", format!("Move '{}' to Trash", backup.filename)),
+                                            MenuEntry::new(
+                                                "2",
+                                                format!("Move '{}' to Trash", backup.filename),
+                                            ),
                                         ];
                                         let mut c_sel = 0;
-                                        if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
+                                        if let Some(1) =
+                                            run_menu(&confirm_header, &confirm_entries, &mut c_sel)?
+                                        {
                                             let _ = print_in_place_status(
                                                 "MOVING TO TRASH",
                                                 &[format!("Calculating SHA-256 hash and moving '{}' to trash...", backup.filename)],
                                             );
                                             let manager = TrashManager::new(paths);
-                                            match manager.trash_file(&backup.path, Some(&server.name)) {
+                                            match manager
+                                                .trash_file(&backup.path, Some(&server.name))
+                                            {
                                                 Ok(item) => {
                                                     show_modal_message(
                                                         "MOVED TO TRASH",
@@ -1782,7 +2040,11 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                                                     )?;
                                                 }
                                                 Err(e) => {
-                                                    show_modal_message("TRASH ERROR", &[format!("[ERROR] {}", e)], true)?;
+                                                    show_modal_message(
+                                                        "TRASH ERROR",
+                                                        &[format!("[ERROR] {}", e)],
+                                                        true,
+                                                    )?;
                                                 }
                                             }
                                         }
@@ -1798,8 +2060,12 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
             }
             Some(2) => {
                 // Restore server from backup
-                if craft_core::is_server_locked(&server.path) || craft_core::get_server_running_pid(&server.path).is_some() {
-                    let pid_info = craft_core::get_server_running_pid(&server.path).map(|p| format!(" (PID: {})", p)).unwrap_or_default();
+                if craft_core::is_server_locked(&server.path)
+                    || craft_core::get_server_running_pid(&server.path).is_some()
+                {
+                    let pid_info = craft_core::get_server_running_pid(&server.path)
+                        .map(|p| format!(" (PID: {})", p))
+                        .unwrap_or_default();
                     show_modal_message(
                         "RESTORE BLOCKED: SERVER IS RUNNING",
                         &[
@@ -1816,9 +2082,7 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                 let list = engine.list_backups(&server.name);
                 let mut b_page = 0;
                 let page_size = 7;
-                let action_entries = vec![
-                    MenuEntry::new("c", "Custom Archive"),
-                ];
+                let action_entries = vec![MenuEntry::new("c", "Custom Archive")];
                 let width = get_content_width(80);
 
                 let target_archive = loop {
@@ -1828,7 +2092,9 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                         page_size,
                         |page, total_pages, total_count| {
                             let page_info = if total_pages > 1 {
-                                format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                                format!(" | Page {} of {}", page, total_pages)
+                                    .cyan()
+                                    .to_string()
                             } else {
                                 "".to_string()
                             };
@@ -1856,8 +2122,14 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                             break Some(list[global_idx].path.clone());
                         }
                         PagedMenuAction::Action(act) if act == "c" => {
-                            match run_input_prompt("CUSTOM ARCHIVE", "Enter path to archive (.tar.gz / .zip):", None)? {
-                                Some(p) if !p.trim().is_empty() => break Some(std::path::PathBuf::from(p.trim())),
+                            match run_input_prompt(
+                                "CUSTOM ARCHIVE",
+                                "Enter path to archive (.tar.gz / .zip):",
+                                None,
+                            )? {
+                                Some(p) if !p.trim().is_empty() => {
+                                    break Some(std::path::PathBuf::from(p.trim()))
+                                }
                                 _ => continue,
                             }
                         }
@@ -1890,23 +2162,32 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                 if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
                     let _ = print_in_place_status(
                         "RESTORING SERVER",
-                        &[format!("Unpacking backup '{}' into '{}'...", target_archive.display(), server.path.display())],
+                        &[format!(
+                            "Unpacking backup '{}' into '{}'...",
+                            target_archive.display(),
+                            server.path.display()
+                        )],
                     );
                     match engine.restore_backup(&target_archive, &server.path) {
                         Ok(_) => {
                             show_modal_message(
                                 "RESTORE COMPLETE",
-                                &[
-                                    format!("[OK] Successfully restored server '{}' from backup!", server.name)
-                                        .green()
-                                        .bold()
-                                        .to_string(),
-                                ],
+                                &[format!(
+                                    "[OK] Successfully restored server '{}' from backup!",
+                                    server.name
+                                )
+                                .green()
+                                .bold()
+                                .to_string()],
                                 false,
                             )?;
                         }
                         Err(e) => {
-                            show_modal_message("RESTORE FAILED", &[format!("[ERROR] {}", e)], true)?;
+                            show_modal_message(
+                                "RESTORE FAILED",
+                                &[format!("[ERROR] {}", e)],
+                                true,
+                            )?;
                         }
                     }
                 }
@@ -1917,20 +2198,24 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
             }
             Some(4) => {
                 // Select active backup method
-                if let Some(new_method) = super::cloud_backups::pick_server_backup_method(paths, &server.name).await? {
+                if let Some(new_method) =
+                    super::cloud_backups::pick_server_backup_method(paths, &server.name).await?
+                {
                     let mut reg = ServersRegistry::load(paths)?;
                     if let Some(s) = reg.servers.iter_mut().find(|s| s.name == server.name) {
                         s.backup_method = Some(new_method.clone());
                         reg.save(paths)?;
-                        let display = GlobalBackupRegistry::load(paths)?.format_method_display(Some(&new_method));
+                        let display = GlobalBackupRegistry::load(paths)?
+                            .format_method_display(Some(&new_method));
                         show_modal_message(
                             "BACKUP METHOD UPDATED",
-                            &[
-                                format!("[OK] Server '{}' backup system updated: {}", server.name, display)
-                                    .green()
-                                    .bold()
-                                    .to_string(),
-                            ],
+                            &[format!(
+                                "[OK] Server '{}' backup system updated: {}",
+                                server.name, display
+                            )
+                            .green()
+                            .bold()
+                            .to_string()],
                             false,
                         )?;
                     }
@@ -1969,10 +2254,15 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
             show_modal_message(
                 "PLUGINS NOT SUPPORTED",
                 &[
-                    format!("Server '{}' (software: {}) does not support plugins.", server.name, server.software),
+                    format!(
+                        "Server '{}' (software: {}) does not support plugins.",
+                        server.name, server.software
+                    ),
                     "".to_string(),
                     if caps.mods {
-                        "This server is a modded server; use Mods instead.".yellow().to_string()
+                        "This server is a modded server; use Mods instead."
+                            .yellow()
+                            .to_string()
                     } else {
                         "Plugins only exist in non-vanilla server softwares (e.g. Paper, Purpur, Spigot).".yellow().to_string()
                     },
@@ -2020,7 +2310,10 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
 
                 let _ = print_in_place_status(
                     "SEARCHING PLUGINS",
-                    &[format!("Searching Modrinth, Hangar, and Poggit for '{}'...", query)],
+                    &[format!(
+                        "Searching Modrinth, Hangar, and Poggit for '{}'...",
+                        query
+                    )],
                 );
                 let pm = craft_plugins::PluginManager::new();
                 let results = pm.search(&query).await;
@@ -2049,28 +2342,48 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
                     }
                     p_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
-                    let p_header = format!(" Search results for '{}' - select to install directly into '{}':", query, server.name);
+                    let p_header = format!(
+                        " Search results for '{}' - select to install directly into '{}':",
+                        query, server.name
+                    );
                     let mut p_sel = 0;
                     if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
                         if p_idx < results.len() {
                             let chosen = &results[p_idx];
                             let _ = print_in_place_status(
                                 "DOWNLOADING PLUGIN",
-                                &[format!("Downloading '{}' into '{}'...", chosen.name, plugins_dir.display())],
+                                &[format!(
+                                    "Downloading '{}' into '{}'...",
+                                    chosen.name,
+                                    plugins_dir.display()
+                                )],
                             );
-                            match pm.install_from_modrinth(&server.path, &chosen.id_or_slug).await {
+                            match pm
+                                .install_from_modrinth(&server.path, &chosen.id_or_slug)
+                                .await
+                            {
                                 Ok(dest) => {
                                     show_modal_message(
                                         "PLUGIN INSTALLED",
                                         &[
-                                            format!("[OK] Successfully installed '{}'!", chosen.name).green().bold().to_string(),
+                                            format!(
+                                                "[OK] Successfully installed '{}'!",
+                                                chosen.name
+                                            )
+                                            .green()
+                                            .bold()
+                                            .to_string(),
                                             format!("File: {}", dest.display()),
                                         ],
                                         false,
                                     )?;
                                 }
                                 Err(e) => {
-                                    show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                    show_modal_message(
+                                        "INSTALLATION FAILED",
+                                        &[format!("[ERROR] {}", e)],
+                                        true,
+                                    )?;
                                 }
                             }
                         }
@@ -2090,7 +2403,11 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
 
                 let _ = print_in_place_status(
                     "DOWNLOADING PLUGIN",
-                    &[format!("Downloading '{}' into '{}'...", slug, plugins_dir.display())],
+                    &[format!(
+                        "Downloading '{}' into '{}'...",
+                        slug,
+                        plugins_dir.display()
+                    )],
                 );
                 let pm = craft_plugins::PluginManager::new();
                 match pm.install_from_modrinth(&server.path, &slug).await {
@@ -2098,14 +2415,21 @@ pub(crate) async fn server_plugins_panel(server_name: &str, paths: &CraftPaths) 
                         show_modal_message(
                             "PLUGIN INSTALLED",
                             &[
-                                format!("[OK] Successfully installed plugin '{}'!", slug).green().bold().to_string(),
+                                format!("[OK] Successfully installed plugin '{}'!", slug)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
                                 format!("File: {}", dest.display()),
                             ],
                             false,
                         )?;
                     }
                     Err(e) => {
-                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                        show_modal_message(
+                            "INSTALLATION FAILED",
+                            &[format!("[ERROR] {}", e)],
+                            true,
+                        )?;
                     }
                 }
             }
@@ -2158,7 +2482,10 @@ pub(crate) fn list_server_plugins(plugins_dir: &std::path::Path) -> Vec<Installe
     list
 }
 
-async fn manage_installed_plugins_menu(server_name: &str, plugins_dir: &std::path::Path) -> Result<()> {
+async fn manage_installed_plugins_menu(
+    server_name: &str,
+    plugins_dir: &std::path::Path,
+) -> Result<()> {
     let mut selected = 0;
 
     loop {
@@ -2166,7 +2493,10 @@ async fn manage_installed_plugins_menu(server_name: &str, plugins_dir: &std::pat
         if plugins.is_empty() {
             show_modal_message(
                 "NO PLUGINS INSTALLED",
-                &[format!("No plugin jars found in '{}'.", plugins_dir.display())],
+                &[format!(
+                    "No plugin jars found in '{}'.",
+                    plugins_dir.display()
+                )],
                 false,
             )?;
             return Ok(());
@@ -2220,7 +2550,11 @@ async fn manage_installed_plugins_menu(server_name: &str, plugins_dir: &std::pat
             super::screen::MenuAction::Select(idx) if idx < plugins.len() => {
                 let chosen = &plugins[idx];
                 let item_header = format!(" Plugin: {}\r\n Choose action:", chosen.filename);
-                let toggle_label = if chosen.is_enabled { "Disable Plugin" } else { "Enable Plugin" };
+                let toggle_label = if chosen.is_enabled {
+                    "Disable Plugin"
+                } else {
+                    "Enable Plugin"
+                };
                 let item_entries = vec![
                     MenuEntry::new("1", toggle_label),
                     MenuEntry::new("2", "Delete Plugin"),
@@ -2243,7 +2577,10 @@ async fn manage_installed_plugins_menu(server_name: &str, plugins_dir: &std::pat
                         let _ = std::fs::remove_file(&chosen.path);
                         show_modal_message(
                             "PLUGIN DELETED",
-                            &[format!("[OK] Removed '{}' from plugins directory.", chosen.filename)],
+                            &[format!(
+                                "[OK] Removed '{}' from plugins directory.",
+                                chosen.filename
+                            )],
                             false,
                         )?;
                     }
@@ -2283,9 +2620,14 @@ pub(crate) async fn server_mods_panel(server_name: &str, paths: &CraftPaths) -> 
             show_modal_message(
                 "MODS NOT SUPPORTED",
                 &[
-                    format!("Server '{}' (software: {}) does not support mods.", server.name, server.software),
+                    format!(
+                        "Server '{}' (software: {}) does not support mods.",
+                        server.name, server.software
+                    ),
                     "".to_string(),
-                    "Mods only exist in modded server softwares (e.g. Fabric, Quilt, NeoForge).".yellow().to_string(),
+                    "Mods only exist in modded server softwares (e.g. Fabric, Quilt, NeoForge)."
+                        .yellow()
+                        .to_string(),
                 ],
                 true,
             )?;
@@ -2360,28 +2702,48 @@ pub(crate) async fn server_mods_panel(server_name: &str, paths: &CraftPaths) -> 
                     }
                     p_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
-                    let p_header = format!(" Search results for '{}' - select to install directly into '{}':", query, server.name);
+                    let p_header = format!(
+                        " Search results for '{}' - select to install directly into '{}':",
+                        query, server.name
+                    );
                     let mut p_sel = 0;
                     if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
                         if p_idx < results.len() {
                             let chosen = &results[p_idx];
                             let _ = print_in_place_status(
                                 "DOWNLOADING MOD",
-                                &[format!("Downloading '{}' into '{}'...", chosen.name, mods_dir.display())],
+                                &[format!(
+                                    "Downloading '{}' into '{}'...",
+                                    chosen.name,
+                                    mods_dir.display()
+                                )],
                             );
-                            match pm.install_mod_from_modrinth(&server.path, &chosen.id_or_slug).await {
+                            match pm
+                                .install_mod_from_modrinth(&server.path, &chosen.id_or_slug)
+                                .await
+                            {
                                 Ok(dest) => {
                                     show_modal_message(
                                         "MOD INSTALLED",
                                         &[
-                                            format!("[OK] Successfully installed '{}'!", chosen.name).green().bold().to_string(),
+                                            format!(
+                                                "[OK] Successfully installed '{}'!",
+                                                chosen.name
+                                            )
+                                            .green()
+                                            .bold()
+                                            .to_string(),
                                             format!("File: {}", dest.display()),
                                         ],
                                         false,
                                     )?;
                                 }
                                 Err(e) => {
-                                    show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                    show_modal_message(
+                                        "INSTALLATION FAILED",
+                                        &[format!("[ERROR] {}", e)],
+                                        true,
+                                    )?;
                                 }
                             }
                         }
@@ -2401,7 +2763,11 @@ pub(crate) async fn server_mods_panel(server_name: &str, paths: &CraftPaths) -> 
 
                 let _ = print_in_place_status(
                     "DOWNLOADING MOD",
-                    &[format!("Downloading '{}' into '{}'...", slug, mods_dir.display())],
+                    &[format!(
+                        "Downloading '{}' into '{}'...",
+                        slug,
+                        mods_dir.display()
+                    )],
                 );
                 let pm = craft_plugins::PluginManager::new();
                 match pm.install_mod_from_modrinth(&server.path, &slug).await {
@@ -2409,14 +2775,21 @@ pub(crate) async fn server_mods_panel(server_name: &str, paths: &CraftPaths) -> 
                         show_modal_message(
                             "MOD INSTALLED",
                             &[
-                                format!("[OK] Successfully installed mod '{}'!", slug).green().bold().to_string(),
+                                format!("[OK] Successfully installed mod '{}'!", slug)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
                                 format!("File: {}", dest.display()),
                             ],
                             false,
                         )?;
                     }
                     Err(e) => {
-                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                        show_modal_message(
+                            "INSTALLATION FAILED",
+                            &[format!("[ERROR] {}", e)],
+                            true,
+                        )?;
                     }
                 }
             }
@@ -2523,7 +2896,11 @@ async fn manage_installed_mods_menu(server_name: &str, mods_dir: &std::path::Pat
             super::screen::MenuAction::Select(idx) if idx < mods.len() => {
                 let chosen = &mods[idx];
                 let item_header = format!(" Mod: {}\r\n Choose action:", chosen.filename);
-                let toggle_label = if chosen.is_enabled { "Disable Mod" } else { "Enable Mod" };
+                let toggle_label = if chosen.is_enabled {
+                    "Disable Mod"
+                } else {
+                    "Enable Mod"
+                };
                 let item_entries = vec![
                     MenuEntry::new("1", toggle_label),
                     MenuEntry::new("2", "Delete Mod"),
@@ -2546,7 +2923,10 @@ async fn manage_installed_mods_menu(server_name: &str, mods_dir: &std::path::Pat
                         let _ = std::fs::remove_file(&chosen.path);
                         show_modal_message(
                             "MOD DELETED",
-                            &[format!("[OK] Removed '{}' from mods directory.", chosen.filename)],
+                            &[format!(
+                                "[OK] Removed '{}' from mods directory.",
+                                chosen.filename
+                            )],
                             false,
                         )?;
                     }
@@ -2635,9 +3015,14 @@ pub(crate) async fn server_datapacks_panel(server_name: &str, paths: &CraftPaths
             show_modal_message(
                 "DATAPACKS NOT SUPPORTED",
                 &[
-                    format!("Server '{}' (software: {}) does not support datapacks.", server.name, server.software),
+                    format!(
+                        "Server '{}' (software: {}) does not support datapacks.",
+                        server.name, server.software
+                    ),
                     "".to_string(),
-                    "Datapacks are only supported on Minecraft Java world servers.".yellow().to_string(),
+                    "Datapacks are only supported on Minecraft Java world servers."
+                        .yellow()
+                        .to_string(),
                 ],
                 true,
             )?;
@@ -2721,21 +3106,42 @@ pub(crate) async fn server_datapacks_panel(server_name: &str, paths: &CraftPaths
                             let chosen = &results[p_idx];
                             let _ = print_in_place_status(
                                 "DOWNLOADING DATAPACK",
-                                &[format!("Downloading '{}' into '{}'...", chosen.name, datapacks_dir.display())],
+                                &[format!(
+                                    "Downloading '{}' into '{}'...",
+                                    chosen.name,
+                                    datapacks_dir.display()
+                                )],
                             );
-                            match pm.install_datapack_from_modrinth(&server.path, &chosen.id_or_slug, &default_world).await {
+                            match pm
+                                .install_datapack_from_modrinth(
+                                    &server.path,
+                                    &chosen.id_or_slug,
+                                    &default_world,
+                                )
+                                .await
+                            {
                                 Ok(dest) => {
                                     show_modal_message(
                                         "DATAPACK INSTALLED",
                                         &[
-                                            format!("[OK] Successfully installed '{}'!", chosen.name).green().bold().to_string(),
+                                            format!(
+                                                "[OK] Successfully installed '{}'!",
+                                                chosen.name
+                                            )
+                                            .green()
+                                            .bold()
+                                            .to_string(),
                                             format!("File: {}", dest.display()),
                                         ],
                                         false,
                                     )?;
                                 }
                                 Err(e) => {
-                                    show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                                    show_modal_message(
+                                        "INSTALLATION FAILED",
+                                        &[format!("[ERROR] {}", e)],
+                                        true,
+                                    )?;
                                 }
                             }
                         }
@@ -2755,22 +3161,36 @@ pub(crate) async fn server_datapacks_panel(server_name: &str, paths: &CraftPaths
 
                 let _ = print_in_place_status(
                     "DOWNLOADING DATAPACK",
-                    &[format!("Downloading '{}' into '{}'...", slug, datapacks_dir.display())],
+                    &[format!(
+                        "Downloading '{}' into '{}'...",
+                        slug,
+                        datapacks_dir.display()
+                    )],
                 );
                 let pm = craft_plugins::PluginManager::new();
-                match pm.install_datapack_from_modrinth(&server.path, &slug, &default_world).await {
+                match pm
+                    .install_datapack_from_modrinth(&server.path, &slug, &default_world)
+                    .await
+                {
                     Ok(dest) => {
                         show_modal_message(
                             "DATAPACK INSTALLED",
                             &[
-                                format!("[OK] Successfully installed datapack '{}'!", slug).green().bold().to_string(),
+                                format!("[OK] Successfully installed datapack '{}'!", slug)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
                                 format!("File: {}", dest.display()),
                             ],
                             false,
                         )?;
                     }
                     Err(e) => {
-                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                        show_modal_message(
+                            "INSTALLATION FAILED",
+                            &[format!("[ERROR] {}", e)],
+                            true,
+                        )?;
                     }
                 }
             }
@@ -2782,7 +3202,10 @@ pub(crate) async fn server_datapacks_panel(server_name: &str, paths: &CraftPaths
     }
 }
 
-async fn manage_installed_datapacks_menu(server_name: &str, datapacks_dir: &std::path::Path) -> Result<()> {
+async fn manage_installed_datapacks_menu(
+    server_name: &str,
+    datapacks_dir: &std::path::Path,
+) -> Result<()> {
     let mut selected = 0;
 
     loop {
@@ -2790,7 +3213,10 @@ async fn manage_installed_datapacks_menu(server_name: &str, datapacks_dir: &std:
         if datapacks.is_empty() {
             show_modal_message(
                 "NO DATAPACKS INSTALLED",
-                &[format!("No datapacks found in '{}'.", datapacks_dir.display())],
+                &[format!(
+                    "No datapacks found in '{}'.",
+                    datapacks_dir.display()
+                )],
                 false,
             )?;
             return Ok(());
@@ -2832,7 +3258,10 @@ async fn manage_installed_datapacks_menu(server_name: &str, datapacks_dir: &std:
             super::screen::MenuAction::Space(idx) if idx < datapacks.len() => {
                 let chosen = &datapacks[idx];
                 if chosen.is_enabled {
-                    let new_name = format!("{}.disabled", chosen.path.file_name().unwrap().to_string_lossy());
+                    let new_name = format!(
+                        "{}.disabled",
+                        chosen.path.file_name().unwrap().to_string_lossy()
+                    );
                     let new_path = chosen.path.with_file_name(new_name);
                     let _ = std::fs::rename(&chosen.path, new_path);
                 } else {
@@ -2846,7 +3275,11 @@ async fn manage_installed_datapacks_menu(server_name: &str, datapacks_dir: &std:
             super::screen::MenuAction::Select(idx) if idx < datapacks.len() => {
                 let chosen = &datapacks[idx];
                 let item_header = format!(" Datapack: {}\r\n Choose action:", chosen.filename);
-                let toggle_label = if chosen.is_enabled { "Disable Datapack" } else { "Enable Datapack" };
+                let toggle_label = if chosen.is_enabled {
+                    "Disable Datapack"
+                } else {
+                    "Enable Datapack"
+                };
                 let item_entries = vec![
                     MenuEntry::new("1", toggle_label),
                     MenuEntry::new("2", "Delete Datapack"),
@@ -2856,7 +3289,10 @@ async fn manage_installed_datapacks_menu(server_name: &str, datapacks_dir: &std:
                 match run_menu(&item_header, &item_entries, &mut item_sel)? {
                     Some(0) => {
                         if chosen.is_enabled {
-                            let new_name = format!("{}.disabled", chosen.path.file_name().unwrap().to_string_lossy());
+                            let new_name = format!(
+                                "{}.disabled",
+                                chosen.path.file_name().unwrap().to_string_lossy()
+                            );
                             let new_path = chosen.path.with_file_name(new_name);
                             let _ = std::fs::rename(&chosen.path, new_path);
                         } else {
@@ -2875,7 +3311,10 @@ async fn manage_installed_datapacks_menu(server_name: &str, datapacks_dir: &std:
                         }
                         show_modal_message(
                             "DATAPACK DELETED",
-                            &[format!("[OK] Removed '{}' from datapacks directory.", chosen.filename)],
+                            &[format!(
+                                "[OK] Removed '{}' from datapacks directory.",
+                                chosen.filename
+                            )],
                             false,
                         )?;
                     }
@@ -2907,4 +3346,3 @@ pub(crate) async fn server_worlds_panel(server_name: &str, paths: &CraftPaths) -
     };
     super::worlds_tui::manage_installed_worlds_menu(&server).await
 }
-

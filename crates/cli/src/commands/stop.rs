@@ -1,9 +1,9 @@
-use std::io::IsTerminal;
-use std::path::PathBuf;
 use colored::Colorize;
-use dialoguer::{theme::ColorfulTheme, Select};
 use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
 use craft_daemon::DaemonClient;
+use dialoguer::{theme::ColorfulTheme, Select};
+use std::io::IsTerminal;
+use std::path::PathBuf;
 
 pub async fn handle_stop(
     name_arg: &str,
@@ -14,18 +14,27 @@ pub async fn handle_stop(
 ) -> Result<()> {
     if !DaemonClient::is_daemon_running(paths) {
         let server_path_opt = if !name_arg.is_empty() || custom_path.is_some() {
-            paths.resolve_server_path(
-                custom_path.as_deref(),
-                if name_arg.is_empty() { None } else { Some(name_arg) },
-                true,
-            ).ok()
+            paths
+                .resolve_server_path(
+                    custom_path.as_deref(),
+                    if name_arg.is_empty() {
+                        None
+                    } else {
+                        Some(name_arg)
+                    },
+                    true,
+                )
+                .ok()
         } else {
             None
         };
 
         if let Some(ref sp) = server_path_opt {
             if let Some(pid) = craft_core::get_server_running_pid(sp) {
-                println!("{}", format!("Stopping server at '{}' (PID: {})...", sp.display(), pid).yellow());
+                println!(
+                    "{}",
+                    format!("Stopping server at '{}' (PID: {})...", sp.display(), pid).yellow()
+                );
                 craft_core::kill_process(pid, force)?;
                 for _ in 0..10 {
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -36,12 +45,18 @@ pub async fn handle_stop(
                 if !craft_core::is_process_running(pid) {
                     craft_core::remove_pid_file(sp.join(".server.pid"));
                 }
-                println!("{}", format!("Server '{}' stopped successfully.", sp.display()).green());
+                println!(
+                    "{}",
+                    format!("Server '{}' stopped successfully.", sp.display()).green()
+                );
                 return Ok(());
             }
         }
 
-        println!("{}", "Craft daemon is not running. No background servers active.".yellow());
+        println!(
+            "{}",
+            "Craft daemon is not running. No background servers active.".yellow()
+        );
         return Ok(());
     }
 
@@ -67,8 +82,16 @@ pub async fn handle_stop(
     if resolved_name.is_empty() && custom_path.is_none() && std::io::stdin().is_terminal() {
         let registry = ServersRegistry::load(paths)?;
         let running_paths = client.get_running().await.unwrap_or_default();
-        let running_servers: Vec<_> = registry.servers.iter()
-            .filter(|s| running_paths.contains(&s.path) || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false))
+        let running_servers: Vec<_> = registry
+            .servers
+            .iter()
+            .filter(|s| {
+                running_paths.contains(&s.path)
+                    || s.path
+                        .canonicalize()
+                        .map(|p| running_paths.contains(&p))
+                        .unwrap_or(false)
+            })
             .collect();
 
         if running_servers.is_empty() {
@@ -76,7 +99,8 @@ pub async fn handle_stop(
             return Ok(());
         }
 
-        let mut options: Vec<String> = running_servers.iter()
+        let mut options: Vec<String> = running_servers
+            .iter()
             .map(|s| format!("{:<20} [RUNNING - {} {}]", s.name, s.software, s.version))
             .collect();
         options.push("[Stop All Running Servers]".to_string());
@@ -101,12 +125,18 @@ pub async fn handle_stop(
 
     let server_path = paths.resolve_server_path(
         custom_path.as_deref(),
-        if resolved_name.is_empty() { None } else { Some(&resolved_name) },
+        if resolved_name.is_empty() {
+            None
+        } else {
+            Some(&resolved_name)
+        },
         true,
     )?;
 
     if !server_path.exists() {
-        return Err(CraftError::InvalidPath(server_path.to_string_lossy().to_string()));
+        return Err(CraftError::InvalidPath(
+            server_path.to_string_lossy().to_string(),
+        ));
     }
 
     let registry = ServersRegistry::load(paths)?;
@@ -117,8 +147,14 @@ pub async fn handle_stop(
         )));
     }
 
-    println!("{}", format!("Stopping server '{}'...", server_path.display()).yellow());
+    println!(
+        "{}",
+        format!("Stopping server '{}'...", server_path.display()).yellow()
+    );
     client.stop_server(&server_path, force).await?;
-    println!("{}", format!("Server '{}' stopped successfully.", server_path.display()).green());
+    println!(
+        "{}",
+        format!("Server '{}' stopped successfully.", server_path.display()).green()
+    );
     Ok(())
 }

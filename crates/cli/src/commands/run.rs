@@ -1,14 +1,14 @@
+use colored::Colorize;
+use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
+use craft_daemon::DaemonClient;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use colored::Colorize;
 use tokio::process::Command;
-use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
-use craft_daemon::DaemonClient;
 
-use std::io::IsTerminal;
 use dialoguer::{theme::ColorfulTheme, Select};
+use std::io::IsTerminal;
 
 pub async fn handle_run(
     name_arg: &str,
@@ -21,12 +21,17 @@ pub async fn handle_run(
     if resolved_name.is_empty() && custom_path.is_none() && std::io::stdin().is_terminal() {
         let registry = ServersRegistry::load(paths)?;
         if registry.servers.is_empty() {
-            println!("{}", "No servers registered. Use 'craft new' to create one.".yellow());
+            println!(
+                "{}",
+                "No servers registered. Use 'craft new' to create one.".yellow()
+            );
             return Ok(());
         }
 
         // Check if current directory is a server
-        let in_server_dir = std::env::current_dir().ok().and_then(|cwd| registry.find_by_path(&cwd).map(|s| s.name.clone()));
+        let in_server_dir = std::env::current_dir()
+            .ok()
+            .and_then(|cwd| registry.find_by_path(&cwd).map(|s| s.name.clone()));
         if let Some(cur_name) = in_server_dir {
             resolved_name = cur_name;
         } else {
@@ -41,17 +46,27 @@ pub async fn handle_run(
                 Vec::new()
             };
 
-            let server_items: Vec<String> = registry.servers.iter().map(|s| {
-                let is_running = running_paths.contains(&s.path)
-                    || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false)
-                    || craft_core::is_server_locked(&s.path);
-                let status = if is_running {
-                    "[ALREADY RUNNING]"
-                } else {
-                    "[STOPPED]"
-                };
-                format!("{:<20} {:<18} ({} {})", s.name, status, s.software, s.version)
-            }).collect();
+            let server_items: Vec<String> = registry
+                .servers
+                .iter()
+                .map(|s| {
+                    let is_running = running_paths.contains(&s.path)
+                        || s.path
+                            .canonicalize()
+                            .map(|p| running_paths.contains(&p))
+                            .unwrap_or(false)
+                        || craft_core::is_server_locked(&s.path);
+                    let status = if is_running {
+                        "[ALREADY RUNNING]"
+                    } else {
+                        "[STOPPED]"
+                    };
+                    format!(
+                        "{:<20} {:<18} ({} {})",
+                        s.name, status, s.software, s.version
+                    )
+                })
+                .collect();
 
             let idx = Select::with_theme(&ColorfulTheme::default())
                 .with_prompt("Select server")
@@ -65,12 +80,18 @@ pub async fn handle_run(
 
     let server_path = paths.resolve_server_path(
         custom_path.as_deref(),
-        if resolved_name.is_empty() { None } else { Some(&resolved_name) },
+        if resolved_name.is_empty() {
+            None
+        } else {
+            Some(&resolved_name)
+        },
         true,
     )?;
 
     if !server_path.exists() {
-        return Err(CraftError::InvalidPath(server_path.to_string_lossy().to_string()));
+        return Err(CraftError::InvalidPath(
+            server_path.to_string_lossy().to_string(),
+        ));
     }
 
     let registry = ServersRegistry::load(paths)?;
@@ -85,7 +106,8 @@ pub async fn handle_run(
         run_foreground_server(&server_path).await
     } else {
         let registry = ServersRegistry::load(paths).ok();
-        let expected_file = registry.as_ref()
+        let expected_file = registry
+            .as_ref()
             .and_then(|r| r.find_by_path(&server_path))
             .and_then(|s| craft_providers::find_software(&s.software))
             .map(|sw| sw.default_server_file())
@@ -95,32 +117,61 @@ pub async fn handle_run(
         DaemonClient::ensure_daemon_started(paths).await?;
         let mut client = DaemonClient::connect(paths).await?;
         client.start_server(&server_path).await?;
-        println!("{}", format!("Server at '{}' started successfully in the background!", server_path.display()).green());
-        println!("{}", format!("Use 'craft view {}' to attach to its live console.", server_path.file_name().unwrap_or_default().to_string_lossy()).dimmed());
+        println!(
+            "{}",
+            format!(
+                "Server at '{}' started successfully in the background!",
+                server_path.display()
+            )
+            .green()
+        );
+        println!(
+            "{}",
+            format!(
+                "Use 'craft view {}' to attach to its live console.",
+                server_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+            )
+            .dimmed()
+        );
         Ok(())
     }
 }
 
 pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
-    let canonical = server_path.canonicalize().unwrap_or_else(|_| server_path.to_path_buf());
+    let canonical = server_path
+        .canonicalize()
+        .unwrap_or_else(|_| server_path.to_path_buf());
     let lock_guard = craft_core::ServerLockGuard::acquire(&canonical)?;
 
     // Self-healing: ensure server jar / binary is in place
     let paths = CraftPaths::new();
-    let expected_file = paths.as_ref().ok().and_then(|p| {
-        ServersRegistry::load(p).ok().and_then(|r| {
-            r.find_by_path(server_path).and_then(|s| {
-                craft_providers::find_software(&s.software).map(|sw| sw.default_server_file())
+    let expected_file = paths
+        .as_ref()
+        .ok()
+        .and_then(|p| {
+            ServersRegistry::load(p).ok().and_then(|r| {
+                r.find_by_path(server_path).and_then(|s| {
+                    craft_providers::find_software(&s.software).map(|sw| sw.default_server_file())
+                })
             })
         })
-    }).unwrap_or("server.jar");
+        .unwrap_or("server.jar");
 
     if let Some(source) = craft_core::auto_heal_server_file(server_path, expected_file) {
-        println!("{}", format!("Self-healing: Restored {} from '{}'", expected_file, source).yellow());
+        println!(
+            "{}",
+            format!("Self-healing: Restored {} from '{}'", expected_file, source).yellow()
+        );
     }
     if expected_file != "server.jar" && !server_path.join(expected_file).exists() {
         if let Some(source) = craft_core::auto_heal_server_jar(server_path) {
-            println!("{}", format!("Self-healing: Restored server.jar from '{}'", source).yellow());
+            println!(
+                "{}",
+                format!("Self-healing: Restored server.jar from '{}'", source).yellow()
+            );
         }
     }
 
@@ -174,7 +225,8 @@ pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
-    let mut child = cmd.spawn()
+    let mut child = cmd
+        .spawn()
         .map_err(|e| CraftError::Process(format!("Failed to start server: {}", e)))?;
 
     if let Some(pid) = child.id() {
@@ -231,8 +283,16 @@ pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
     if eula_file.exists() {
         if let Ok(content) = fs::read_to_string(&eula_file) {
             if content.contains("eula=false") {
-                println!("\n{}", "You need to accept the Mojang EULA to run this server.".yellow().bold());
-                print!("{}", "Type 'agree' to accept the EULA and restart the server: ".yellow());
+                println!(
+                    "\n{}",
+                    "You need to accept the Mojang EULA to run this server."
+                        .yellow()
+                        .bold()
+                );
+                print!(
+                    "{}",
+                    "Type 'agree' to accept the EULA and restart the server: ".yellow()
+                );
                 let _ = io::stdout().flush();
 
                 let mut input = String::new();
@@ -252,8 +312,16 @@ pub async fn run_foreground_server(server_path: &Path) -> Result<()> {
         }
     }
 
-    println!("{}", format!("\nServer process exited with code {:?}", status.code()).dimmed());
-    println!("{}", "[Craft] Returning to Server Control menu...".cyan().dimmed());
+    println!(
+        "{}",
+        format!("\nServer process exited with code {:?}", status.code()).dimmed()
+    );
+    println!(
+        "{}",
+        "[Craft] Returning to Server Control menu..."
+            .cyan()
+            .dimmed()
+    );
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     Ok(())
 }

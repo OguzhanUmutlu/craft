@@ -1,19 +1,19 @@
-use std::fs::{self, File};
-use std::path::{Path, PathBuf};
-use colored::Colorize;
-use craft_core::{
-    get_dimension_worlds, set_default_world, set_end_world, set_nether_world, CraftError,
-    NbtFile, NbtTag, Result, ServerConfig,
-};
-use craft_plugins::world::{
-    inspect_world_metadata, install_world_from_url, install_world_from_zip,
-    list_installed_worlds, list_world_advancements, list_world_data_storages,
-    list_world_player_data, search_curated_maps, get_curated_maps, InstalledWorldItem,
-};
 use super::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
     run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
 };
+use colored::Colorize;
+use craft_core::{
+    get_dimension_worlds, set_default_world, set_end_world, set_nether_world, CraftError, NbtFile,
+    NbtTag, Result, ServerConfig,
+};
+use craft_plugins::world::{
+    get_curated_maps, inspect_world_metadata, install_world_from_url, install_world_from_zip,
+    list_installed_worlds, list_world_advancements, list_world_data_storages,
+    list_world_player_data, search_curated_maps, InstalledWorldItem,
+};
+use std::fs::{self, File};
+use std::path::{Path, PathBuf};
 
 pub async fn manage_installed_worlds_menu(server: &ServerConfig) -> Result<()> {
     if server.game != "minecraft" {
@@ -103,7 +103,10 @@ pub async fn manage_installed_worlds_menu(server: &ServerConfig) -> Result<()> {
                     _ => None,
                 };
 
-                let _ = print_in_place_status("IMPORTING WORLD", &[format!("Processing '{}'...", target)]);
+                let _ = print_in_place_status(
+                    "IMPORTING WORLD",
+                    &[format!("Processing '{}'...", target)],
+                );
 
                 let res = if target.starts_with("http://") || target.starts_with("https://") {
                     install_world_from_url(&server.path, &target, custom_name.as_deref()).await
@@ -117,7 +120,10 @@ pub async fn manage_installed_worlds_menu(server: &ServerConfig) -> Result<()> {
                         show_modal_message(
                             "WORLD IMPORTED",
                             &[
-                                format!("[OK] Successfully imported world '{}'!", installed_name).green().bold().to_string(),
+                                format!("[OK] Successfully imported world '{}'!", installed_name)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
                                 format!("Path: {}", dest.display()),
                             ],
                             false,
@@ -145,17 +151,31 @@ async fn world_detail_menu(server: &ServerConfig, world: &InstalledWorldItem) ->
     loop {
         let (default_world, nether_world, end_world) = get_dimension_worlds(&server.path);
         let is_def = world.name.eq_ignore_ascii_case(&default_world);
-        let is_neth = nether_world.as_deref().map(|n| n.eq_ignore_ascii_case(&world.name)).unwrap_or(false);
-        let is_the_end = end_world.as_deref().map(|e| e.eq_ignore_ascii_case(&world.name)).unwrap_or(false);
+        let is_neth = nether_world
+            .as_deref()
+            .map(|n| n.eq_ignore_ascii_case(&world.name))
+            .unwrap_or(false);
+        let is_the_end = end_world
+            .as_deref()
+            .map(|e| e.eq_ignore_ascii_case(&world.name))
+            .unwrap_or(false);
 
         let width = get_content_width(80);
         let mb = (world.size_bytes as f64) / (1024.0 * 1024.0);
 
         let mut role_tags = Vec::new();
-        if is_def { role_tags.push("[OVERWORLD]".green().bold().to_string()); }
-        if is_neth { role_tags.push("[NETHER]".red().bold().to_string()); }
-        if is_the_end { role_tags.push("[THE END]".magenta().bold().to_string()); }
-        if role_tags.is_empty() { role_tags.push("[AVAILABLE]".dimmed().to_string()); }
+        if is_def {
+            role_tags.push("[OVERWORLD]".green().bold().to_string());
+        }
+        if is_neth {
+            role_tags.push("[NETHER]".red().bold().to_string());
+        }
+        if is_the_end {
+            role_tags.push("[THE END]".magenta().bold().to_string());
+        }
+        if role_tags.is_empty() {
+            role_tags.push("[AVAILABLE]".dimmed().to_string());
+        }
 
         let header = format!(
             "{}\r\n{}\r\n{}\r\n World:     {:<18} | Size: {:.1} MB\r\n Roles:     {}\r\n Location:  {}\r\n{}",
@@ -190,16 +210,43 @@ async fn world_detail_menu(server: &ServerConfig, world: &InstalledWorldItem) ->
                             format!("Level Name:     {}", meta.level_name.white().bold()),
                             format!("Game Mode:      {}", meta.game_type.green()),
                             format!("Difficulty:     {}", meta.difficulty.yellow()),
-                            format!("Hardcore:       {}", if meta.hardcore { "Yes".red().bold() } else { "No".dimmed() }),
-                            format!("Spawn Location: X={}, Y={}, Z={}", meta.spawn_x, meta.spawn_y, meta.spawn_z),
-                            format!("World Seed:     {}", meta.seed.map(|s| s.to_string()).unwrap_or_else(|| "Unknown".to_string()).cyan()),
-                            format!("Version:        {}", meta.version_name.as_deref().unwrap_or("Unknown").dimmed()),
-                            format!("World Age:      {} ticks (Day: {})", meta.time, meta.day_time / 24000),
+                            format!(
+                                "Hardcore:       {}",
+                                if meta.hardcore {
+                                    "Yes".red().bold()
+                                } else {
+                                    "No".dimmed()
+                                }
+                            ),
+                            format!(
+                                "Spawn Location: X={}, Y={}, Z={}",
+                                meta.spawn_x, meta.spawn_y, meta.spawn_z
+                            ),
+                            format!(
+                                "World Seed:     {}",
+                                meta.seed
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| "Unknown".to_string())
+                                    .cyan()
+                            ),
+                            format!(
+                                "Version:        {}",
+                                meta.version_name.as_deref().unwrap_or("Unknown").dimmed()
+                            ),
+                            format!(
+                                "World Age:      {} ticks (Day: {})",
+                                meta.time,
+                                meta.day_time / 24000
+                            ),
                         ];
                         show_modal_message(&format!("METADATA: {}", world.name), &lines, false)?;
                     }
                     Err(e) => {
-                        show_modal_message("ERROR", &[format!("Failed to read level.dat: {}", e)], true)?;
+                        show_modal_message(
+                            "ERROR",
+                            &[format!("Failed to read level.dat: {}", e)],
+                            true,
+                        )?;
                     }
                 }
             }
@@ -225,7 +272,11 @@ async fn world_detail_menu(server: &ServerConfig, world: &InstalledWorldItem) ->
                 if level_dat.exists() {
                     nbt_explorer_menu(&level_dat).await?;
                 } else {
-                    show_modal_message("ERROR", &[format!("level.dat not found in '{}'", world.path.display())], true)?;
+                    show_modal_message(
+                        "ERROR",
+                        &[format!("level.dat not found in '{}'", world.path.display())],
+                        true,
+                    )?;
                 }
             }
             Some(6) => {
@@ -235,7 +286,14 @@ async fn world_detail_menu(server: &ServerConfig, world: &InstalledWorldItem) ->
                 let zip_name = format!("{}_{}_export.zip", server.name, world.name);
                 let zip_dest = backup_dir.join(&zip_name);
 
-                let _ = print_in_place_status("EXPORTING WORLD", &[format!("Compressing '{}' into '{}'...", world.name, zip_dest.display())]);
+                let _ = print_in_place_status(
+                    "EXPORTING WORLD",
+                    &[format!(
+                        "Compressing '{}' into '{}'...",
+                        world.name,
+                        zip_dest.display()
+                    )],
+                );
                 match compress_folder_to_zip(&world.path, &zip_dest) {
                     Ok(_) => {
                         show_modal_message(
@@ -264,7 +322,11 @@ async fn world_detail_menu(server: &ServerConfig, world: &InstalledWorldItem) ->
                 )?;
                 if confirm == Some(1) {
                     let _ = fs::remove_dir_all(&world.path);
-                    show_modal_message("WORLD DELETED", &[format!("[OK] Removed world '{}'.", world.name)], false)?;
+                    show_modal_message(
+                        "WORLD DELETED",
+                        &[format!("[OK] Removed world '{}'.", world.name)],
+                        false,
+                    )?;
                     return Ok(());
                 }
             }
@@ -280,14 +342,19 @@ async fn dimension_roles_menu(server: &ServerConfig, world_name: &str) -> Result
     let header = format!(
         "{}\r\n{}\r\n{}\r\n Configure which Minecraft dimension role '{}' serves:\r\n{}",
         box_top(width).cyan().bold(),
-        box_title(&format!("DIMENSION ROLES: {}", world_name), width, false).cyan().bold(),
+        box_title(&format!("DIMENSION ROLES: {}", world_name), width, false)
+            .cyan()
+            .bold(),
         box_divider(width).cyan().bold(),
         world_name.white().bold(),
         box_divider(width).dimmed(),
     );
 
     let entries = vec![
-        MenuEntry::new("1", "Set as Default Overworld (level-name in server.properties)"),
+        MenuEntry::new(
+            "1",
+            "Set as Default Overworld (level-name in server.properties)",
+        ),
         MenuEntry::new("2", "Set as Active Nether Dimension World"),
         MenuEntry::new("3", "Set as Active The End Dimension World"),
         MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]),
@@ -296,15 +363,30 @@ async fn dimension_roles_menu(server: &ServerConfig, world_name: &str) -> Result
     match run_menu(&header, &entries, &mut selected)? {
         Some(0) => {
             set_default_world(&server.path, world_name)?;
-            show_modal_message("OVERWORLD UPDATED", &[format!("[OK] Set '{}' as default Overworld!", world_name)], false)?;
+            show_modal_message(
+                "OVERWORLD UPDATED",
+                &[format!("[OK] Set '{}' as default Overworld!", world_name)],
+                false,
+            )?;
         }
         Some(1) => {
             set_nether_world(&server.path, world_name)?;
-            show_modal_message("NETHER UPDATED", &[format!("[OK] Set '{}' as active Nether world!", world_name)], false)?;
+            show_modal_message(
+                "NETHER UPDATED",
+                &[format!("[OK] Set '{}' as active Nether world!", world_name)],
+                false,
+            )?;
         }
         Some(2) => {
             set_end_world(&server.path, world_name)?;
-            show_modal_message("THE END UPDATED", &[format!("[OK] Set '{}' as active The End world!", world_name)], false)?;
+            show_modal_message(
+                "THE END UPDATED",
+                &[format!(
+                    "[OK] Set '{}' as active The End world!",
+                    world_name
+                )],
+                false,
+            )?;
         }
         _ => {}
     }
@@ -316,7 +398,10 @@ async fn player_data_inspector_menu(server: &ServerConfig, world_path: &Path) ->
     if players.is_empty() {
         show_modal_message(
             "NO PLAYER DATA",
-            &[format!("No playerdata (*.dat) files found in '{}/playerdata'.", world_path.display())],
+            &[format!(
+                "No playerdata (*.dat) files found in '{}/playerdata'.",
+                world_path.display()
+            )],
             false,
         )?;
         return Ok(());
@@ -337,11 +422,18 @@ async fn player_data_inspector_menu(server: &ServerConfig, world_path: &Path) ->
 
         let mut entries = Vec::new();
         for (i, p) in players.iter().enumerate() {
-            let hotkey = if i < 9 { (i + 1).to_string() } else { ((b'a' + (i - 9) as u8) as char).to_string() };
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            };
             let coords = format!("({:.0}, {:.0}, {:.0})", p.pos.0, p.pos.1, p.pos.2);
             entries.push(MenuEntry::new(
                 hotkey,
-                format!("{:<20} HP: {:<4.0} XP: {:<3} Pos: {:<16} [{}]", p.name, p.health, p.xp_level, coords, p.gamemode),
+                format!(
+                    "{:<20} HP: {:<4.0} XP: {:<3} Pos: {:<16} [{}]",
+                    p.name, p.health, p.xp_level, coords, p.gamemode
+                ),
             ));
         }
         entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
@@ -352,7 +444,10 @@ async fn player_data_inspector_menu(server: &ServerConfig, world_path: &Path) ->
                 let lines = vec![
                     format!("Player Name:    {}", p.name.white().bold()),
                     format!("Player UUID:    {}", p.uuid.dimmed()),
-                    format!("Coordinates:    X={:.2}, Y={:.2}, Z={:.2}", p.pos.0, p.pos.1, p.pos.2),
+                    format!(
+                        "Coordinates:    X={:.2}, Y={:.2}, Z={:.2}",
+                        p.pos.0, p.pos.1, p.pos.2
+                    ),
                     format!("Dimension:      {}", p.dimension.cyan()),
                     format!("Health:         {:.1} / 20.0", p.health),
                     format!("Food Level:     {} / 20", p.food_level),
@@ -370,7 +465,11 @@ async fn player_data_inspector_menu(server: &ServerConfig, world_path: &Path) ->
 async fn advancements_viewer_menu(server: &ServerConfig, world_path: &Path) -> Result<()> {
     let players = list_world_player_data(world_path, &server.path)?;
     if players.is_empty() {
-        show_modal_message("NO PLAYERS", &["No player records found to check advancements.".to_string()], false)?;
+        show_modal_message(
+            "NO PLAYERS",
+            &["No player records found to check advancements.".to_string()],
+            false,
+        )?;
         return Ok(());
     }
 
@@ -379,7 +478,9 @@ async fn advancements_viewer_menu(server: &ServerConfig, world_path: &Path) -> R
     let p_header = format!(
         "{}\r\n{}\r\n{}\r\n Select a player to view unlocked advancements:\r\n{}",
         box_top(width).cyan().bold(),
-        box_title("SELECT PLAYER FOR ADVANCEMENTS", width, false).cyan().bold(),
+        box_title("SELECT PLAYER FOR ADVANCEMENTS", width, false)
+            .cyan()
+            .bold(),
         box_divider(width).cyan().bold(),
         box_divider(width).dimmed(),
     );
@@ -395,13 +496,21 @@ async fn advancements_viewer_menu(server: &ServerConfig, world_path: &Path) -> R
             let p = &players[idx];
             let advs = list_world_advancements(world_path, &p.uuid)?;
             if advs.is_empty() {
-                show_modal_message("ADVANCEMENTS", &[format!("No advancements recorded yet for '{}'.", p.name)], false)?;
+                show_modal_message(
+                    "ADVANCEMENTS",
+                    &[format!("No advancements recorded yet for '{}'.", p.name)],
+                    false,
+                )?;
                 return Ok(());
             }
 
             let mut lines = Vec::new();
             for a in advs.iter().take(25) {
-                let status = if a.completed { "[DONE]".green().bold() } else { "[IN PROGRESS]".yellow() };
+                let status = if a.completed {
+                    "[DONE]".green().bold()
+                } else {
+                    "[IN PROGRESS]".yellow()
+                };
                 let short_id = a.id.strip_prefix("minecraft:").unwrap_or(&a.id);
                 lines.push(format!("{:<30} {}", short_id, status));
             }
@@ -414,7 +523,11 @@ async fn advancements_viewer_menu(server: &ServerConfig, world_path: &Path) -> R
 async fn data_storages_menu(world_path: &Path) -> Result<()> {
     let files = list_world_data_storages(world_path);
     if files.is_empty() {
-        show_modal_message("NO DATA STORAGES", &["No .dat files found in world data/ directory.".to_string()], false)?;
+        show_modal_message(
+            "NO DATA STORAGES",
+            &["No .dat files found in world data/ directory.".to_string()],
+            false,
+        )?;
         return Ok(());
     }
 
@@ -432,11 +545,20 @@ async fn data_storages_menu(world_path: &Path) -> Result<()> {
 
         let mut entries = Vec::new();
         for (i, f) in files.iter().enumerate() {
-            let hotkey = if i < 9 { (i + 1).to_string() } else { ((b'a' + (i - 9) as u8) as char).to_string() };
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            };
             let kb = f.size_bytes as f64 / 1024.0;
             entries.push(MenuEntry::new(
                 hotkey,
-                format!("{:<20} ({:>5.1} KB) - {}", f.filename, kb, f.description.dimmed()),
+                format!(
+                    "{:<20} ({:>5.1} KB) - {}",
+                    f.filename,
+                    kb,
+                    f.description.dimmed()
+                ),
             ));
         }
         entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
@@ -453,13 +575,24 @@ async fn data_storages_menu(world_path: &Path) -> Result<()> {
 }
 
 pub async fn nbt_explorer_menu(file_path: &Path) -> Result<()> {
-    let _nav = NavGuard::enter(format!("NBT: {}", file_path.file_name().unwrap_or_default().to_string_lossy()));
-    let file_name = file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let _nav = NavGuard::enter(format!(
+        "NBT: {}",
+        file_path.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    let file_name = file_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
 
     let mut nbt_file = match NbtFile::read(file_path) {
         Ok(f) => f,
         Err(e) => {
-            show_modal_message("NBT READ ERROR", &[format!("Failed to parse NBT file: {}", e)], true)?;
+            show_modal_message(
+                "NBT READ ERROR",
+                &[format!("Failed to parse NBT file: {}", e)],
+                true,
+            )?;
             return Ok(());
         }
     };
@@ -515,7 +648,11 @@ pub async fn nbt_explorer_menu(file_path: &Path) -> Result<()> {
                 let mut entries = Vec::new();
 
                 for (i, k) in keys.iter().enumerate() {
-                    let hotkey = if i < 9 { (i + 1).to_string() } else { ((b'a' + (i - 9) as u8) as char).to_string() };
+                    let hotkey = if i < 9 {
+                        (i + 1).to_string()
+                    } else {
+                        ((b'a' + (i - 9) as u8) as char).to_string()
+                    };
                     let val = &map[k];
                     let brief = val.format_value_brief();
                     let type_label = format!("[{}]", val.type_name()).cyan();
@@ -539,62 +676,152 @@ pub async fn nbt_explorer_menu(file_path: &Path) -> Result<()> {
                                 current_path.push(chosen_key.clone());
                             }
                             NbtTag::String(s) => {
-                                if let Some(new_val) = run_input_prompt("EDIT STRING TAG", &format!("{}:", chosen_key), Some(s))? {
+                                if let Some(new_val) = run_input_prompt(
+                                    "EDIT STRING TAG",
+                                    &format!("{}:", chosen_key),
+                                    Some(s),
+                                )? {
                                     backup_nbt_file(file_path)?;
-                                    mutate_nested_tag(&mut nbt_file.root, &current_path, chosen_key, NbtTag::String(new_val.clone()));
+                                    mutate_nested_tag(
+                                        &mut nbt_file.root,
+                                        &current_path,
+                                        chosen_key,
+                                        NbtTag::String(new_val.clone()),
+                                    );
                                     nbt_file.write(file_path)?;
-                                    flash_msg = Some(format!("[OK] Set '{}' = '{}' (Backup created)", chosen_key, new_val).green().bold().to_string());
+                                    flash_msg = Some(
+                                        format!(
+                                            "[OK] Set '{}' = '{}' (Backup created)",
+                                            chosen_key, new_val
+                                        )
+                                        .green()
+                                        .bold()
+                                        .to_string(),
+                                    );
                                 }
                             }
                             NbtTag::Int(i) => {
-                                if let Some(new_val) = run_input_prompt("EDIT INT TAG", &format!("{}:", chosen_key), Some(&i.to_string()))? {
+                                if let Some(new_val) = run_input_prompt(
+                                    "EDIT INT TAG",
+                                    &format!("{}:", chosen_key),
+                                    Some(&i.to_string()),
+                                )? {
                                     if let Ok(num) = new_val.trim().parse::<i32>() {
                                         backup_nbt_file(file_path)?;
-                                        mutate_nested_tag(&mut nbt_file.root, &current_path, chosen_key, NbtTag::Int(num));
+                                        mutate_nested_tag(
+                                            &mut nbt_file.root,
+                                            &current_path,
+                                            chosen_key,
+                                            NbtTag::Int(num),
+                                        );
                                         nbt_file.write(file_path)?;
-                                        flash_msg = Some(format!("[OK] Set '{}' = {} (Backup created)", chosen_key, num).green().bold().to_string());
+                                        flash_msg = Some(
+                                            format!(
+                                                "[OK] Set '{}' = {} (Backup created)",
+                                                chosen_key, num
+                                            )
+                                            .green()
+                                            .bold()
+                                            .to_string(),
+                                        );
                                     }
                                 }
                             }
                             NbtTag::Byte(b) => {
                                 let new_b = if *b == 0 { 1 } else { 0 };
                                 backup_nbt_file(file_path)?;
-                                mutate_nested_tag(&mut nbt_file.root, &current_path, chosen_key, NbtTag::Byte(new_b));
+                                mutate_nested_tag(
+                                    &mut nbt_file.root,
+                                    &current_path,
+                                    chosen_key,
+                                    NbtTag::Byte(new_b),
+                                );
                                 nbt_file.write(file_path)?;
-                                flash_msg = Some(format!("[OK] Toggled '{}' = {}b", chosen_key, new_b).green().bold().to_string());
+                                flash_msg = Some(
+                                    format!("[OK] Toggled '{}' = {}b", chosen_key, new_b)
+                                        .green()
+                                        .bold()
+                                        .to_string(),
+                                );
                             }
                             NbtTag::Long(l) => {
-                                if let Some(new_val) = run_input_prompt("EDIT LONG TAG", &format!("{}:", chosen_key), Some(&l.to_string()))? {
+                                if let Some(new_val) = run_input_prompt(
+                                    "EDIT LONG TAG",
+                                    &format!("{}:", chosen_key),
+                                    Some(&l.to_string()),
+                                )? {
                                     if let Ok(num) = new_val.trim().parse::<i64>() {
                                         backup_nbt_file(file_path)?;
-                                        mutate_nested_tag(&mut nbt_file.root, &current_path, chosen_key, NbtTag::Long(num));
+                                        mutate_nested_tag(
+                                            &mut nbt_file.root,
+                                            &current_path,
+                                            chosen_key,
+                                            NbtTag::Long(num),
+                                        );
                                         nbt_file.write(file_path)?;
-                                        flash_msg = Some(format!("[OK] Set '{}' = {}L", chosen_key, num).green().bold().to_string());
+                                        flash_msg = Some(
+                                            format!("[OK] Set '{}' = {}L", chosen_key, num)
+                                                .green()
+                                                .bold()
+                                                .to_string(),
+                                        );
                                     }
                                 }
                             }
                             NbtTag::Float(f) => {
-                                if let Some(new_val) = run_input_prompt("EDIT FLOAT TAG", &format!("{}:", chosen_key), Some(&f.to_string()))? {
+                                if let Some(new_val) = run_input_prompt(
+                                    "EDIT FLOAT TAG",
+                                    &format!("{}:", chosen_key),
+                                    Some(&f.to_string()),
+                                )? {
                                     if let Ok(num) = new_val.trim().parse::<f32>() {
                                         backup_nbt_file(file_path)?;
-                                        mutate_nested_tag(&mut nbt_file.root, &current_path, chosen_key, NbtTag::Float(num));
+                                        mutate_nested_tag(
+                                            &mut nbt_file.root,
+                                            &current_path,
+                                            chosen_key,
+                                            NbtTag::Float(num),
+                                        );
                                         nbt_file.write(file_path)?;
-                                        flash_msg = Some(format!("[OK] Set '{}' = {}f", chosen_key, num).green().bold().to_string());
+                                        flash_msg = Some(
+                                            format!("[OK] Set '{}' = {}f", chosen_key, num)
+                                                .green()
+                                                .bold()
+                                                .to_string(),
+                                        );
                                     }
                                 }
                             }
                             NbtTag::Double(d) => {
-                                if let Some(new_val) = run_input_prompt("EDIT DOUBLE TAG", &format!("{}:", chosen_key), Some(&d.to_string()))? {
+                                if let Some(new_val) = run_input_prompt(
+                                    "EDIT DOUBLE TAG",
+                                    &format!("{}:", chosen_key),
+                                    Some(&d.to_string()),
+                                )? {
                                     if let Ok(num) = new_val.trim().parse::<f64>() {
                                         backup_nbt_file(file_path)?;
-                                        mutate_nested_tag(&mut nbt_file.root, &current_path, chosen_key, NbtTag::Double(num));
+                                        mutate_nested_tag(
+                                            &mut nbt_file.root,
+                                            &current_path,
+                                            chosen_key,
+                                            NbtTag::Double(num),
+                                        );
                                         nbt_file.write(file_path)?;
-                                        flash_msg = Some(format!("[OK] Set '{}' = {}d", chosen_key, num).green().bold().to_string());
+                                        flash_msg = Some(
+                                            format!("[OK] Set '{}' = {}d", chosen_key, num)
+                                                .green()
+                                                .bold()
+                                                .to_string(),
+                                        );
                                     }
                                 }
                             }
                             _ => {
-                                show_modal_message("TAG VALUE", &[format!("{}: {}", chosen_key, child.format_value_brief())], false)?;
+                                show_modal_message(
+                                    "TAG VALUE",
+                                    &[format!("{}: {}", chosen_key, child.format_value_brief())],
+                                    false,
+                                )?;
                             }
                         }
                     }
@@ -650,19 +877,24 @@ fn compress_folder_to_zip(src_dir: &Path, dest_zip: &Path) -> Result<()> {
 
     for entry in walkdir(src_dir).map_err(CraftError::Io)? {
         let path = entry.as_path();
-        let rel_path = path.strip_prefix(prefix).map_err(|e| CraftError::Other(format!("{}", e)))?;
+        let rel_path = path
+            .strip_prefix(prefix)
+            .map_err(|e| CraftError::Other(format!("{}", e)))?;
         let name = rel_path.to_string_lossy().replace('\\', "/");
 
         if path.is_file() {
-            zip.start_file(name, options).map_err(|e| CraftError::Other(format!("{}", e)))?;
+            zip.start_file(name, options)
+                .map_err(|e| CraftError::Other(format!("{}", e)))?;
             let mut f = File::open(path).map_err(CraftError::Io)?;
             std::io::copy(&mut f, &mut zip).map_err(CraftError::Io)?;
         } else if !name.is_empty() {
-            zip.add_directory(format!("{}/", name), options).map_err(|e| CraftError::Other(format!("{}", e)))?;
+            zip.add_directory(format!("{}/", name), options)
+                .map_err(|e| CraftError::Other(format!("{}", e)))?;
         }
     }
 
-    zip.finish().map_err(|e| CraftError::Other(format!("{}", e)))?;
+    zip.finish()
+        .map_err(|e| CraftError::Other(format!("{}", e)))?;
     Ok(())
 }
 
@@ -690,7 +922,10 @@ fn prompt_set_as_default_world(server_path: &Path, world_name: &str) -> Result<(
     ];
     let mut sel = 0;
     if let Some(0) = run_menu(
-        &format!(" Would you like to set '{}' as the active default Overworld in server.properties?", world_name),
+        &format!(
+            " Would you like to set '{}' as the active default Overworld in server.properties?",
+            world_name
+        ),
         &entries,
         &mut sel,
     )? {
@@ -735,12 +970,21 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
                         format!("Source URL: {}", chosen.download_url),
                     ],
                 );
-                match install_world_from_url(server_path, chosen.download_url, Some(chosen.default_folder)).await {
+                match install_world_from_url(
+                    server_path,
+                    chosen.download_url,
+                    Some(chosen.default_folder),
+                )
+                .await
+                {
                     Ok((dest, installed_name)) => {
                         show_modal_message(
                             "MAP INSTALLED",
                             &[
-                                format!("[OK] Successfully installed map '{}'!", chosen.name).green().bold().to_string(),
+                                format!("[OK] Successfully installed map '{}'!", chosen.name)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
                                 format!("Path: {}", dest.display()),
                             ],
                             false,
@@ -749,7 +993,11 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
                         return Ok(());
                     }
                     Err(e) => {
-                        show_modal_message("INSTALLATION FAILED", &[format!("[ERROR] {}", e)], true)?;
+                        show_modal_message(
+                            "INSTALLATION FAILED",
+                            &[format!("[ERROR] {}", e)],
+                            true,
+                        )?;
                     }
                 }
             }
@@ -761,20 +1009,41 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
                 )? {
                     let results = search_curated_maps(query.trim());
                     if results.is_empty() {
-                        show_modal_message("NO MAPS FOUND", &[format!("No maps found matching '{}'.", query)], false)?;
+                        show_modal_message(
+                            "NO MAPS FOUND",
+                            &[format!("No maps found matching '{}'.", query)],
+                            false,
+                        )?;
                     } else {
                         let mut s_entries = Vec::new();
                         for (i, m) in results.iter().enumerate() {
-                            s_entries.push(MenuEntry::new((i + 1).to_string(), format!("{:<20} [{}]", m.name, m.category)));
+                            s_entries.push(MenuEntry::new(
+                                (i + 1).to_string(),
+                                format!("{:<20} [{}]", m.name, m.category),
+                            ));
                         }
                         s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
                         let mut s_sel = 0;
-                        if let Some(s_idx) = run_menu(&format!(" Results for '{}':", query), &s_entries, &mut s_sel)? {
+                        if let Some(s_idx) = run_menu(
+                            &format!(" Results for '{}':", query),
+                            &s_entries,
+                            &mut s_sel,
+                        )? {
                             if s_idx < results.len() {
                                 let chosen = &results[s_idx];
-                                match install_world_from_url(server_path, chosen.download_url, Some(chosen.default_folder)).await {
+                                match install_world_from_url(
+                                    server_path,
+                                    chosen.download_url,
+                                    Some(chosen.default_folder),
+                                )
+                                .await
+                                {
                                     Ok((_dest, installed_name)) => {
-                                        show_modal_message("MAP INSTALLED", &[format!("[OK] Installed '{}'", chosen.name)], false)?;
+                                        show_modal_message(
+                                            "MAP INSTALLED",
+                                            &[format!("[OK] Installed '{}'", chosen.name)],
+                                            false,
+                                        )?;
                                         prompt_set_as_default_world(server_path, &installed_name)?;
                                         return Ok(());
                                     }
@@ -828,7 +1097,10 @@ async fn manage_non_minecraft_saves_menu(server: &ServerConfig) -> Result<()> {
         }
 
         if saves.is_empty() {
-            entries.push(MenuEntry::new("!", "No saves detected yet (run server to generate initial world)"));
+            entries.push(MenuEntry::new(
+                "!",
+                "No saves detected yet (run server to generate initial world)",
+            ));
         }
 
         entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));

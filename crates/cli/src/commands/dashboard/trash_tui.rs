@@ -2,8 +2,8 @@ use colored::Colorize;
 use craft_core::{CraftPaths, Result, TrashManager};
 
 use super::screen::{
-    box_divider, box_title, box_top, get_content_width, print_in_place_status,
-    run_menu, run_paged_list_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard, PagedMenuAction,
+    box_divider, box_title, box_top, get_content_width, print_in_place_status, run_menu,
+    run_paged_list_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard, PagedMenuAction,
 };
 
 pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
@@ -50,7 +50,9 @@ pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
                         .to_string()
                 };
                 let page_info = if total_pages > 1 {
-                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                    format!(" | Page {} of {}", page, total_pages)
+                        .cyan()
+                        .to_string()
                 } else {
                     "".to_string()
                 };
@@ -123,7 +125,10 @@ pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
                             let _ = print_in_place_status(
                                 "VERIFYING & RESTORING ARCHIVE",
                                 &[
-                                    format!("Verifying SHA-256 hash for '{}'...", item.original_name),
+                                    format!(
+                                        "Verifying SHA-256 hash for '{}'...",
+                                        item.original_name
+                                    ),
                                     format!("Restoring to '{}'...", item.original_path.display()),
                                 ],
                             );
@@ -132,12 +137,20 @@ pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
                                     show_modal_message(
                                         "RESTORE SUCCESSFUL",
                                         &[
-                                            format!("[OK] Successfully verified and restored '{}'!", item.original_name)
-                                                .green()
-                                                .bold()
-                                                .to_string(),
+                                            format!(
+                                                "[OK] Successfully verified and restored '{}'!",
+                                                item.original_name
+                                            )
+                                            .green()
+                                            .bold()
+                                            .to_string(),
                                             format!("Restored to: {}", dest.display()),
-                                            format!("Integrity hash verified: {}", item.content_hash).dimmed().to_string(),
+                                            format!(
+                                                "Integrity hash verified: {}",
+                                                item.content_hash
+                                            )
+                                            .dimmed()
+                                            .to_string(),
                                         ],
                                         false,
                                     )?;
@@ -145,9 +158,7 @@ pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
                                 Err(e) => {
                                     show_modal_message(
                                         "RESTORE FAILED",
-                                        &[
-                                            format!("[ERROR] Failed to restore archive: {}", e),
-                                        ],
+                                        &[format!("[ERROR] Failed to restore archive: {}", e)],
                                         true,
                                     )?;
                                 }
@@ -165,15 +176,26 @@ pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
                             );
                             let confirm_entries = vec![
                                 MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
-                                MenuEntry::new("2", format!("Confirm Delete of '{}'", item.original_name)),
+                                MenuEntry::new(
+                                    "2",
+                                    format!("Confirm Delete of '{}'", item.original_name),
+                                ),
                             ];
                             let mut c_sel = 0;
-                            if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
+                            if let Some(1) =
+                                run_menu(&confirm_header, &confirm_entries, &mut c_sel)?
+                            {
                                 match manager.delete_permanently(&item.id) {
                                     Ok(_) => {
                                         show_modal_message(
                                             "ITEM DELETED",
-                                            &[format!("[OK] Permanently deleted '{}'.", item.original_name).green().bold().to_string()],
+                                            &[format!(
+                                                "[OK] Permanently deleted '{}'.",
+                                                item.original_name
+                                            )
+                                            .green()
+                                            .bold()
+                                            .to_string()],
                                             false,
                                         )?;
                                     }
@@ -212,12 +234,22 @@ pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
                         Ok(count) => {
                             show_modal_message(
                                 "TRASH EMPTIED",
-                                &[format!("[OK] Permanently deleted {} items from the trash bin.", count).green().bold().to_string()],
+                                &[format!(
+                                    "[OK] Permanently deleted {} items from the trash bin.",
+                                    count
+                                )
+                                .green()
+                                .bold()
+                                .to_string()],
                                 false,
                             )?;
                         }
                         Err(e) => {
-                            show_modal_message("ERROR", &[format!("[ERROR] Failed to empty trash: {}", e)], true)?;
+                            show_modal_message(
+                                "ERROR",
+                                &[format!("[ERROR] Failed to empty trash: {}", e)],
+                                true,
+                            )?;
                         }
                     }
                 }

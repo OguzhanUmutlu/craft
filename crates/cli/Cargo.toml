@@ -17,6 +17,7 @@ craft-plugins.workspace = true
 craft-daemon.workspace = true
 craft-backup.workspace = true
 craft-remote.workspace = true
+modal-tui.workspace = true
 
 clap.workspace = true
 colored.workspace = true

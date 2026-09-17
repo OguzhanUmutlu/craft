@@ -1,27 +1,27 @@
+pub mod cloud_backups;
+pub mod developer_tui;
+pub mod properties_tui;
+pub mod remote_tui;
 pub mod screen;
 pub mod server_control;
 pub mod tools;
-pub mod wizard;
-pub mod remote_tui;
-pub mod cloud_backups;
 pub mod trash_tui;
-pub mod properties_tui;
+pub mod wizard;
 pub mod worlds_tui;
-pub mod developer_tui;
 
-use std::io::{self, IsTerminal};
 use colored::Colorize;
+use std::io::{self, IsTerminal};
 use sysinfo::System;
 
 use craft_core::{CraftPaths, Result, ServersRegistry};
 use craft_daemon::DaemonClient;
 
+pub use remote_tui::remote_servers_menu;
 pub use screen::*;
 pub use server_control::*;
 pub use tools::*;
-pub use wizard::*;
-pub use remote_tui::remote_servers_menu;
 pub use trash_tui::*;
+pub use wizard::*;
 
 pub(crate) fn get_system_summary() -> (String, f64, f64, f64) {
     let mut sys = System::new();
@@ -65,18 +65,26 @@ pub(crate) fn build_dashboard_header(
     };
 
     let width = get_content_width(80);
-    format!(
-        "{}\r\n{}\r\n{}\r\n Host: {:<16} | RAM: {:.1} / {:.1} GB ({:.1}%) | Daemon: {}\r\n Registered Servers: {:<4} | Active Running: {:<4}\r\n{}",
-        box_top(width).cyan().bold(),
-        box_title(&title, width, false).cyan().bold(),
-        box_divider(width).cyan().bold(),
+    let row1 = format!(
+        "Host: {} | RAM: {:.1} / {:.1} GB ({:.1}%) | Daemon: {}",
         host_label.white().bold(),
         used_ram,
         total_ram,
         ram_pct,
         daemon_badge,
+    );
+    let row2 = format!(
+        "Registered Servers: {} | Active Running: {}",
         registered_count.to_string().cyan().bold(),
         running_count.to_string().green().bold(),
+    );
+    format!(
+        "{}\r\n{}\r\n{}\r\n {}\r\n {}\r\n{}",
+        box_top(width).cyan().bold(),
+        box_title(&title, width, false).cyan().bold(),
+        box_divider(width).cyan().bold(),
+        row1,
+        row2,
         box_divider(width).dimmed(),
     )
 }
@@ -222,12 +230,22 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                                 let freed_mb = (freed as f64) / (1024.0 * 1024.0);
                                 show_modal_message(
                                     "CACHE PURGED",
-                                    &[format!("[OK] Cleared {:.2} MB of downloaded caches.", freed_mb).green().bold().to_string()],
+                                    &[format!(
+                                        "[OK] Cleared {:.2} MB of downloaded caches.",
+                                        freed_mb
+                                    )
+                                    .green()
+                                    .bold()
+                                    .to_string()],
                                     false,
                                 )?;
                             }
                             Err(e) => {
-                                show_modal_message("ERROR", &[format!("[ERROR] Failed to purge cache: {}", e)], true)?;
+                                show_modal_message(
+                                    "ERROR",
+                                    &[format!("[ERROR] Failed to purge cache: {}", e)],
+                                    true,
+                                )?;
                             }
                         }
                     }
@@ -276,12 +294,22 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
                                 let freed_mb = (freed as f64) / (1024.0 * 1024.0);
                                 show_modal_message(
                                     "CACHE PURGED",
-                                    &[format!("[OK] Cleared {:.2} MB of downloaded caches.", freed_mb).green().bold().to_string()],
+                                    &[format!(
+                                        "[OK] Cleared {:.2} MB of downloaded caches.",
+                                        freed_mb
+                                    )
+                                    .green()
+                                    .bold()
+                                    .to_string()],
                                     false,
                                 )?;
                             }
                             Err(e) => {
-                                show_modal_message("ERROR", &[format!("[ERROR] Failed to purge cache: {}", e)], true)?;
+                                show_modal_message(
+                                    "ERROR",
+                                    &[format!("[ERROR] Failed to purge cache: {}", e)],
+                                    true,
+                                )?;
                             }
                         }
                     }
@@ -296,4 +324,3 @@ pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
 
     Ok(())
 }
-

@@ -317,6 +317,7 @@ dependencies = [
  "dialoguer",
  "directories",
  "indicatif",
+ "modal-tui",
  "serde",
  "serde_json",
  "sysinfo",
@@ -357,6 +358,7 @@ dependencies = [
  "fs2",
  "hex",
  "libc",
+ "modal-tui",
  "serde",
  "serde_json",
  "sha2",
@@ -1230,6 +1232,15 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "modal-tui"
+version = "1.0.0"
+dependencies = [
+ "colored",
+ "crossterm",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

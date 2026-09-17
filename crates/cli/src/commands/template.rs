@@ -1,8 +1,8 @@
-use std::fs;
-use std::path::Path;
+use crate::cli::TemplateCommands;
 use colored::Colorize;
 use craft_core::Result;
-use crate::cli::TemplateCommands;
+use std::fs;
+use std::path::Path;
 
 pub fn handle_template(action: TemplateCommands) -> Result<()> {
     match action {
@@ -34,19 +34,28 @@ java {
 }
 "#;
             fs::write(target_dir.join("build.gradle.kts"), gradle_content)?;
-            fs::write(target_dir.join("settings.gradle.kts"), format!("rootProject.name = \"{}\"\n", name))?;
+            fs::write(
+                target_dir.join("settings.gradle.kts"),
+                format!("rootProject.name = \"{}\"\n", name),
+            )?;
 
             // paper-plugin.yml
-            let plugin_yml = format!(r#"name: {name}
+            let plugin_yml = format!(
+                r#"name: {name}
 version: '1.0.0'
 main: com.example.{name}Plugin
 api-version: '1.21'
 author: CraftDeveloper
-"#);
-            fs::write(target_dir.join("src/main/resources/paper-plugin.yml"), plugin_yml)?;
+"#
+            );
+            fs::write(
+                target_dir.join("src/main/resources/paper-plugin.yml"),
+                plugin_yml,
+            )?;
 
             // Main class
-            let main_java = format!(r#"package com.example;
+            let main_java = format!(
+                r#"package com.example;
 
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -61,8 +70,12 @@ public final class {name}Plugin extends JavaPlugin {{
         getLogger().info("{name} has been disabled.");
     }}
 }}
-"#);
-            fs::write(target_dir.join(format!("src/main/java/com/example/{}Plugin.java", name)), main_java)?;
+"#
+            );
+            fs::write(
+                target_dir.join(format!("src/main/java/com/example/{}Plugin.java", name)),
+                main_java,
+            )?;
 
             // VSCode launch.json for remote JVM debugging
             let vscode_launch = r#"{
@@ -79,7 +92,15 @@ public final class {name}Plugin extends JavaPlugin {{
 }"#;
             fs::write(target_dir.join(".vscode/launch.json"), vscode_launch)?;
 
-            println!("{}", format!("[OK] Scaffolded {} plugin template in '{}'!", platform, name).green().bold());
+            println!(
+                "{}",
+                format!(
+                    "[OK] Scaffolded {} plugin template in '{}'!",
+                    platform, name
+                )
+                .green()
+                .bold()
+            );
             println!("Open with VS Code or IntelliJ and run './gradlew build' to build.");
         }
         TemplateCommands::Datapack { name } => {
@@ -96,17 +117,30 @@ public final class {name}Plugin extends JavaPlugin {{
 }"#;
             fs::write(target_dir.join("pack.mcmeta"), pack_mcmeta)?;
 
-            let load_tag = format!(r#"{{
+            let load_tag = format!(
+                r#"{{
     "values": [
         "{name}:load"
     ]
-}}"#);
-            fs::write(target_dir.join("data/minecraft/tags/function/load.json"), load_tag)?;
+}}"#
+            );
+            fs::write(
+                target_dir.join("data/minecraft/tags/function/load.json"),
+                load_tag,
+            )?;
 
             let load_mc = format!("tellraw @a [\"\",{{\"text\":\"[{name}] Datapack loaded!\",\"color\":\"green\"}}]\n");
-            fs::write(target_dir.join(format!("data/{}/function/load.mcfunction", name)), load_mc)?;
+            fs::write(
+                target_dir.join(format!("data/{}/function/load.mcfunction", name)),
+                load_mc,
+            )?;
 
-            println!("{}", format!("[OK] Scaffolded Minecraft datapack in '{}'!", name).green().bold());
+            println!(
+                "{}",
+                format!("[OK] Scaffolded Minecraft datapack in '{}'!", name)
+                    .green()
+                    .bold()
+            );
         }
     }
 

@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use colored::Colorize;
 use craft_core::{CraftError, CraftPaths, Result, ServerConfig, ServersRegistry};
 use craft_providers::find_software;
+use std::path::PathBuf;
 
 pub async fn handle_load(
     server_path: PathBuf,
@@ -11,18 +11,23 @@ pub async fn handle_load(
     paths: &CraftPaths,
 ) -> Result<()> {
     if !server_path.exists() || !server_path.is_dir() {
-        return Err(CraftError::InvalidPath(server_path.to_string_lossy().to_string()));
+        return Err(CraftError::InvalidPath(
+            server_path.to_string_lossy().to_string(),
+        ));
     }
 
-    let software = find_software(software_id).ok_or_else(|| {
-        CraftError::UnknownSoftware(software_id.to_string())
-    })?;
+    let software = find_software(software_id)
+        .ok_or_else(|| CraftError::UnknownSoftware(software_id.to_string()))?;
 
-    let canonical = server_path.canonicalize().unwrap_or_else(|_| server_path.clone());
+    let canonical = server_path
+        .canonicalize()
+        .unwrap_or_else(|_| server_path.clone());
     let mut registry = ServersRegistry::load(paths)?;
 
     if registry.find_by_path(&canonical).is_some() {
-        return Err(CraftError::ServerAlreadyExists(canonical.to_string_lossy().to_string()));
+        return Err(CraftError::ServerAlreadyExists(
+            canonical.to_string_lossy().to_string(),
+        ));
     }
 
     let name = if !name_arg.is_empty() {
@@ -58,6 +63,15 @@ pub async fn handle_load(
     registry.add(server_config)?;
     registry.save(paths)?;
 
-    println!("{}", format!("Successfully loaded existing server '{}' ({}) into Craft!", name, canonical.display()).green().bold());
+    println!(
+        "{}",
+        format!(
+            "Successfully loaded existing server '{}' ({}) into Craft!",
+            name,
+            canonical.display()
+        )
+        .green()
+        .bold()
+    );
     Ok(())
 }

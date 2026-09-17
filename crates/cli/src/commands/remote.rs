@@ -1,14 +1,22 @@
+use crate::cli::RemoteCommands;
 use colored::Colorize;
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, Row, Table};
-use craft_core::{CraftError, CraftPaths, RemoteAuthType, RemoteHostConfig, RemotesRegistry, Result};
+use craft_core::{
+    CraftError, CraftPaths, RemoteAuthType, RemoteHostConfig, RemotesRegistry, Result,
+};
 use craft_remote::{run_bootstrap, run_remote_pty_session, sync_local_to_remote, RemoteSession};
-use crate::cli::RemoteCommands;
 
 pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result<()> {
     match action {
-        RemoteCommands::Add { alias, connection, key, password, dir } => {
+        RemoteCommands::Add {
+            alias,
+            connection,
+            key,
+            password,
+            dir,
+        } => {
             let (user, host, port) = parse_connection_string(&connection)?;
             let mut registry = RemotesRegistry::load(paths)?;
 
@@ -33,7 +41,12 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
             registry.add(remote_config)?;
             registry.save(paths)?;
 
-            println!("{}", format!("[OK] Successfully added remote host '{}'!", alias).green().bold());
+            println!(
+                "{}",
+                format!("[OK] Successfully added remote host '{}'!", alias)
+                    .green()
+                    .bold()
+            );
             println!("Test connection with: craft remote test {}", alias);
             println!("Bootstrap host with:   craft remote setup {}", alias);
         }
@@ -45,7 +58,9 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
             }
 
             let mut table = Table::new();
-            table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
+            table
+                .load_preset(UTF8_FULL)
+                .apply_modifier(UTF8_ROUND_CORNERS);
             table.set_header(vec![
                 Cell::new("Alias").fg(Color::Cyan),
                 Cell::new("User").fg(Color::Cyan),
@@ -62,7 +77,11 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
                     Cell::new(r.host),
                     Cell::new(r.port.to_string()),
                     Cell::new(format!("{:?}", r.auth_type)),
-                    Cell::new(r.os_type.map(|o| o.to_string()).unwrap_or_else(|| "Auto".to_string())),
+                    Cell::new(
+                        r.os_type
+                            .map(|o| o.to_string())
+                            .unwrap_or_else(|| "Auto".to_string()),
+                    ),
                 ]));
             }
 
@@ -71,43 +90,78 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
         RemoteCommands::Rm { alias } => {
             let mut registry = RemotesRegistry::load(paths)?;
             if registry.remove(&alias).is_none() {
-                return Err(CraftError::Other(format!("Remote host '{}' not found", alias)));
+                return Err(CraftError::Other(format!(
+                    "Remote host '{}' not found",
+                    alias
+                )));
             }
             registry.save(paths)?;
-            println!("{}", format!("[OK] Removed remote host '{}'.", alias).green());
+            println!(
+                "{}",
+                format!("[OK] Removed remote host '{}'.", alias).green()
+            );
         }
         RemoteCommands::Test { alias } => {
             let registry = RemotesRegistry::load(paths)?;
             let config = registry.find(&alias).ok_or_else(|| {
-                CraftError::Other(format!("Remote host '{}' not found. Use 'craft remote ls' to list remotes.", alias))
+                CraftError::Other(format!(
+                    "Remote host '{}' not found. Use 'craft remote ls' to list remotes.",
+                    alias
+                ))
             })?;
 
-            println!("{}", format!("Testing SSH connection to '{}' ({}@{}:{})...", alias, config.user, config.host, config.port).cyan());
+            println!(
+                "{}",
+                format!(
+                    "Testing SSH connection to '{}' ({}@{}:{})...",
+                    alias, config.user, config.host, config.port
+                )
+                .cyan()
+            );
             let session = RemoteSession::connect(config)?;
             let os = session.probe_os()?;
 
             let (_, echo_out, _) = session.exec("echo connection-verified")?;
             if echo_out.trim() == "connection-verified" {
-                println!("{}", format!("[OK] Connection successful! Remote OS: {}", os).green().bold());
+                println!(
+                    "{}",
+                    format!("[OK] Connection successful! Remote OS: {}", os)
+                        .green()
+                        .bold()
+                );
             } else {
-                println!("{}", "Connection established but command output differed.".yellow());
+                println!(
+                    "{}",
+                    "Connection established but command output differed.".yellow()
+                );
             }
         }
         RemoteCommands::Setup { alias } => {
             let registry = RemotesRegistry::load(paths)?;
-            let config = registry.find(&alias).ok_or_else(|| {
-                CraftError::Other(format!("Remote host '{}' not found", alias))
-            })?;
+            let config = registry
+                .find(&alias)
+                .ok_or_else(|| CraftError::Other(format!("Remote host '{}' not found", alias)))?;
 
-            println!("{}", format!("Connecting to remote host '{}' for automated bootstrapping...", alias).cyan());
+            println!(
+                "{}",
+                format!(
+                    "Connecting to remote host '{}' for automated bootstrapping...",
+                    alias
+                )
+                .cyan()
+            );
             let session = RemoteSession::connect(config)?;
             run_bootstrap(&session)?;
         }
-        RemoteCommands::Sync { alias, local_dir, remote_dir } => {
+        RemoteCommands::Sync {
+            alias,
+            local_dir,
+            remote_dir,
+        } => {
             let registry = RemotesRegistry::load(paths)?;
-            let config = registry.find(&alias).ok_or_else(|| {
-                CraftError::Other(format!("Remote host '{}' not found", alias))
-            })?;
+            let config = registry
+                .find(&alias)
+                .ok_or_else(|| CraftError::Other(format!("Remote host '{}' not found", alias)))?;
 
             let session = RemoteSession::connect(config)?;
             sync_local_to_remote(&session, &local_dir, &remote_dir)?;
@@ -115,18 +169,40 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
         RemoteCommands::Deploy { alias } => {
             let registry = RemotesRegistry::load(paths)?;
             let config = registry.find(&alias).ok_or_else(|| {
-                CraftError::Other(format!("Remote host '{}' not found. Use 'craft remote add' to configure it.", alias))
+                CraftError::Other(format!(
+                    "Remote host '{}' not found. Use 'craft remote add' to configure it.",
+                    alias
+                ))
             })?;
 
-            println!("{}", format!("Connecting to remote host '{}' ({}:{})...", config.alias, config.host, config.port).cyan());
+            println!(
+                "{}",
+                format!(
+                    "Connecting to remote host '{}' ({}:{})...",
+                    config.alias, config.host, config.port
+                )
+                .cyan()
+            );
             let session = RemoteSession::connect(config)?;
 
-            println!("{}", "Checking remote Docker and Docker Compose installation...".cyan());
-            let (code, stdout, _) = session.exec("docker compose version 2>/dev/null || docker-compose --version 2>/dev/null")?;
+            println!(
+                "{}",
+                "Checking remote Docker and Docker Compose installation...".cyan()
+            );
+            let (code, stdout, _) = session.exec(
+                "docker compose version 2>/dev/null || docker-compose --version 2>/dev/null",
+            )?;
             if code != 0 {
-                println!("{}", "Docker or Docker Compose not detected on remote host.".yellow());
-                println!("{}", "Attempting automated Docker installation on remote Linux host...".yellow());
-                let (inst_code, inst_out, inst_err) = session.exec("curl -fsSL https://get.docker.com | sh")?;
+                println!(
+                    "{}",
+                    "Docker or Docker Compose not detected on remote host.".yellow()
+                );
+                println!(
+                    "{}",
+                    "Attempting automated Docker installation on remote Linux host...".yellow()
+                );
+                let (inst_code, inst_out, inst_err) =
+                    session.exec("curl -fsSL https://get.docker.com | sh")?;
                 if inst_code != 0 {
                     return Err(CraftError::Other(format!(
                         "Failed to auto-install Docker on remote: {}. Please install Docker manually on host.",
@@ -135,11 +211,24 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
                 }
                 println!("{}", inst_out);
             } else {
-                println!("{}", format!("[OK] Found remote Docker: {}", stdout.trim()).green());
+                println!(
+                    "{}",
+                    format!("[OK] Found remote Docker: {}", stdout.trim()).green()
+                );
             }
 
-            let remote_dir = config.remote_dir.clone().unwrap_or_else(|| std::path::PathBuf::from("craft-deploy"));
-            println!("{}", format!("Preparing remote deployment directory '{}'...", remote_dir.display()).cyan());
+            let remote_dir = config
+                .remote_dir
+                .clone()
+                .unwrap_or_else(|| std::path::PathBuf::from("craft-deploy"));
+            println!(
+                "{}",
+                format!(
+                    "Preparing remote deployment directory '{}'...",
+                    remote_dir.display()
+                )
+                .cyan()
+            );
             session.exec(&format!("mkdir -p {}", remote_dir.display()))?;
 
             // Generate or read docker-compose.yml
@@ -163,7 +252,8 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
     environment:
       - CRAFT_HOME=/craft
       - TZ=UTC
-"#.to_string()
+"#
+                .to_string()
             };
 
             let temp_compose = paths.home.join(".remote-compose.tmp");
@@ -173,17 +263,33 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
             sftp.upload_file(&temp_compose, &remote_compose_path)?;
             let _ = std::fs::remove_file(&temp_compose);
 
-            println!("{}", "Launching Craft container stack on remote host via 'docker compose up -d'...".cyan().bold());
+            println!(
+                "{}",
+                "Launching Craft container stack on remote host via 'docker compose up -d'..."
+                    .cyan()
+                    .bold()
+            );
             let launch_cmd = format!("cd {} && docker compose up -d", remote_dir.display());
             let (up_code, up_stdout, up_stderr) = session.exec(&launch_cmd)?;
             if up_code != 0 {
-                return Err(CraftError::Other(format!("Failed to start containers on remote host: {}", up_stderr)));
+                return Err(CraftError::Other(format!(
+                    "Failed to start containers on remote host: {}",
+                    up_stderr
+                )));
             }
             if !up_stdout.is_empty() {
                 println!("{}", up_stdout);
             }
 
-            println!("{}", format!("[OK] Craft successfully deployed to remote host '{}'!", alias).green().bold());
+            println!(
+                "{}",
+                format!(
+                    "[OK] Craft successfully deployed to remote host '{}'!",
+                    alias
+                )
+                .green()
+                .bold()
+            );
             println!("Check remote status: craft remote test {}", alias);
         }
     }
@@ -200,7 +306,10 @@ pub fn execute_remote(
 ) -> Result<()> {
     let registry = RemotesRegistry::load(paths)?;
     let config = registry.find(alias).ok_or_else(|| {
-        CraftError::Other(format!("Remote host '{}' not found. Use 'craft remote add' to configure it.", alias))
+        CraftError::Other(format!(
+            "Remote host '{}' not found. Use 'craft remote add' to configure it.",
+            alias
+        ))
     })?;
 
     let session = RemoteSession::connect(config)?;
@@ -208,7 +317,10 @@ pub fn execute_remote(
     if is_interactive {
         run_remote_pty_session(&session, remote_command)
     } else {
-        println!("{}", format!("Executing on remote '{}': {}", alias, remote_command).dimmed());
+        println!(
+            "{}",
+            format!("Executing on remote '{}': {}", alias, remote_command).dimmed()
+        );
         let (code, stdout, stderr) = session.exec(remote_command)?;
         if !stdout.is_empty() {
             print!("{}", stdout);
@@ -217,7 +329,10 @@ pub fn execute_remote(
             eprint!("{}", stderr);
         }
         if code != 0 {
-            return Err(CraftError::Other(format!("Remote command exited with status code {}", code)));
+            return Err(CraftError::Other(format!(
+                "Remote command exited with status code {}",
+                code
+            )));
         }
         Ok(())
     }
@@ -237,9 +352,9 @@ pub fn parse_connection_string(conn: &str) -> Result<(String, String, u16)> {
 
     if let Some(colon) = host_port.find(':') {
         let host = host_port[..colon].to_string();
-        let port: u16 = host_port[colon + 1..].parse().map_err(|_| {
-            CraftError::Other("Invalid SSH port number".to_string())
-        })?;
+        let port: u16 = host_port[colon + 1..]
+            .parse()
+            .map_err(|_| CraftError::Other("Invalid SSH port number".to_string()))?;
         Ok((user, host, port))
     } else {
         Ok((user, host_port.to_string(), 22))
@@ -266,4 +381,3 @@ mod tests {
         assert!(parse_connection_string("root@host:not_a_port").is_err());
     }
 }
-

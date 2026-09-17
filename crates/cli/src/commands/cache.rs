@@ -1,7 +1,7 @@
+use crate::cli::CacheCommands;
 use colored::Colorize;
 use craft_core::{format_size, parse_size, CraftError, CraftPaths, GlobalSettings, Result};
 use craft_providers::CacheManager;
-use crate::cli::CacheCommands;
 
 pub fn handle_cache(action: Option<CacheCommands>, paths: &CraftPaths) -> Result<()> {
     let mut cache = CacheManager::new(paths);
@@ -18,14 +18,19 @@ pub fn handle_cache(action: Option<CacheCommands>, paths: &CraftPaths) -> Result
             let bar = render_bar(stats.total_bytes, stats.max_bytes, 24);
 
             println!("{}", "Craft Cache Status:".bold().cyan());
-            println!("  Directory:       {}", cache.cache_dir().display().to_string().yellow());
-            println!("  Usage:           {} {} / {} ({:.1}%)",
+            println!(
+                "  Directory:       {}",
+                cache.cache_dir().display().to_string().yellow()
+            );
+            println!(
+                "  Usage:           {} {} / {} ({:.1}%)",
                 bar.cyan(),
                 format_size(stats.total_bytes).bold(),
                 format_size(stats.max_bytes),
                 pct
             );
-            println!("  Limits:          High (Limit): {} | Low Watermark: {}",
+            println!(
+                "  Limits:          High (Limit): {} | Low Watermark: {}",
                 format_size(stats.max_bytes),
                 format_size(stats.low_watermark_bytes)
             );
@@ -37,9 +42,16 @@ pub fn handle_cache(action: Option<CacheCommands>, paths: &CraftPaths) -> Result
             println!("    Note:          Deduplicated across servers via zero-copy OS hardlinks.");
             println!("  Compressed Metadata (API Manifests, Search Queries):");
             println!("    Count:         {}", stats.metadata_count);
-            println!("    Compressed:    {} (Zstandard level 3)", format_size(stats.metadata_compressed_bytes));
-            println!("    Uncompressed:  {}", format_size(stats.metadata_uncompressed_bytes));
-            println!("    Savings:       {} ({:.1}% reduction)",
+            println!(
+                "    Compressed:    {} (Zstandard level 3)",
+                format_size(stats.metadata_compressed_bytes)
+            );
+            println!(
+                "    Uncompressed:  {}",
+                format_size(stats.metadata_uncompressed_bytes)
+            );
+            println!(
+                "    Savings:       {} ({:.1}% reduction)",
                 format_size(stats.savings_bytes).green(),
                 stats.savings_ratio_pct
             );
@@ -47,7 +59,14 @@ pub fn handle_cache(action: Option<CacheCommands>, paths: &CraftPaths) -> Result
         Some(CacheCommands::Clean { force, expired }) => {
             if expired {
                 let cleaned = cache.clean_expired()?;
-                println!("{}", format!("Cleared {} of expired metadata cache.", format_size(cleaned)).green());
+                println!(
+                    "{}",
+                    format!(
+                        "Cleared {} of expired metadata cache.",
+                        format_size(cleaned)
+                    )
+                    .green()
+                );
             } else {
                 if !force {
                     return Err(CraftError::Other(
@@ -55,19 +74,34 @@ pub fn handle_cache(action: Option<CacheCommands>, paths: &CraftPaths) -> Result
                     ));
                 }
                 let cleaned = cache.clean_cache()?;
-                println!("{}", format!("Cleared {} of download cache.", format_size(cleaned)).green());
+                println!(
+                    "{}",
+                    format!("Cleared {} of download cache.", format_size(cleaned)).green()
+                );
             }
         }
         Some(CacheCommands::Prune) => {
             let freed = cache.prune()?;
             let stats = cache.get_stats();
             if freed > 0 {
-                println!("{}", format!("Pruned {} from cache (evicted oldest items to low watermark).", format_size(freed)).green());
+                println!(
+                    "{}",
+                    format!(
+                        "Pruned {} from cache (evicted oldest items to low watermark).",
+                        format_size(freed)
+                    )
+                    .green()
+                );
             } else {
-                println!("{}", format!("Cache is already within optimal limits ({} <= {}).",
-                    format_size(stats.total_bytes),
-                    format_size(stats.low_watermark_bytes)
-                ).cyan());
+                println!(
+                    "{}",
+                    format!(
+                        "Cache is already within optimal limits ({} <= {}).",
+                        format_size(stats.total_bytes),
+                        format_size(stats.low_watermark_bytes)
+                    )
+                    .cyan()
+                );
             }
         }
         Some(CacheCommands::SetLimit { limit }) => {
@@ -79,7 +113,9 @@ pub fn handle_cache(action: Option<CacheCommands>, paths: &CraftPaths) -> Result
             })?;
 
             if max_bytes == 0 {
-                return Err(CraftError::Other("Cache limit must be greater than zero.".to_string()));
+                return Err(CraftError::Other(
+                    "Cache limit must be greater than zero.".to_string(),
+                ));
             }
 
             let mut settings = GlobalSettings::load(paths).unwrap_or_default();
@@ -91,13 +127,25 @@ pub fn handle_cache(action: Option<CacheCommands>, paths: &CraftPaths) -> Result
             let freed = cache.prune()?;
             let stats = cache.get_stats();
 
-            println!("{}", format!("Cache limit set to {} (low watermark: {}).",
-                format_size(max_bytes).bold(),
-                format_size(stats.low_watermark_bytes)
-            ).green());
+            println!(
+                "{}",
+                format!(
+                    "Cache limit set to {} (low watermark: {}).",
+                    format_size(max_bytes).bold(),
+                    format_size(stats.low_watermark_bytes)
+                )
+                .green()
+            );
 
             if freed > 0 {
-                println!("{}", format!("Automatically pruned {} to respect new capacity limit.", format_size(freed)).yellow());
+                println!(
+                    "{}",
+                    format!(
+                        "Automatically pruned {} to respect new capacity limit.",
+                        format_size(freed)
+                    )
+                    .yellow()
+                );
             }
         }
     }
@@ -114,4 +162,3 @@ fn render_bar(used: u64, total: u64, width: usize) -> String {
     let empty = width.saturating_sub(filled);
     format!("[{}{}]", "#".repeat(filled), "-".repeat(empty))
 }
-

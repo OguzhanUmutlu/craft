@@ -52,13 +52,28 @@ pub async fn handle_prop(
 
     let mut props = ServerProperties::load(&props_path)?;
 
-    match action.unwrap_or(PropAction::Ls { category: None, search: None }) {
+    match action.unwrap_or(PropAction::Ls {
+        category: None,
+        search: None,
+    }) {
         PropAction::Get { key } => {
             if let Some(val) = props.get(&key) {
-                println!("{}: {} = {}", "Property".cyan().bold(), key.white().bold(), val.green());
-                println!("  Description: {}", ServerProperties::property_description(&key).dimmed());
+                println!(
+                    "{}: {} = {}",
+                    "Property".cyan().bold(),
+                    key.white().bold(),
+                    val.green()
+                );
+                println!(
+                    "  Description: {}",
+                    ServerProperties::property_description(&key).dimmed()
+                );
             } else {
-                println!("{}: Property '{}' is not set.", "Notice".yellow().bold(), key);
+                println!(
+                    "{}: Property '{}' is not set.",
+                    "Notice".yellow().bold(),
+                    key
+                );
             }
             Ok(())
         }
@@ -84,21 +99,27 @@ pub async fn handle_prop(
                     props_path.display().to_string().dimmed()
                 );
             } else {
-                println!("{}: Property '{}' was not found.", "Notice".yellow().bold(), key);
+                println!(
+                    "{}: Property '{}' was not found.",
+                    "Notice".yellow().bold(),
+                    key
+                );
             }
             Ok(())
         }
         PropAction::Ls { category, search } => {
-            let cat_filter = category.as_deref().and_then(|c| match c.to_lowercase().as_str() {
-                "net" | "network" => Some(PropertyCategory::Network),
-                "game" | "gameplay" => Some(PropertyCategory::Gameplay),
-                "world" => Some(PropertyCategory::World),
-                "sec" | "security" => Some(PropertyCategory::Security),
-                "perf" | "performance" => Some(PropertyCategory::Performance),
-                "rcon" => Some(PropertyCategory::Rcon),
-                "gen" | "general" => Some(PropertyCategory::General),
-                _ => None,
-            });
+            let cat_filter = category
+                .as_deref()
+                .and_then(|c| match c.to_lowercase().as_str() {
+                    "net" | "network" => Some(PropertyCategory::Network),
+                    "game" | "gameplay" => Some(PropertyCategory::Gameplay),
+                    "world" => Some(PropertyCategory::World),
+                    "sec" | "security" => Some(PropertyCategory::Security),
+                    "perf" | "performance" => Some(PropertyCategory::Performance),
+                    "rcon" => Some(PropertyCategory::Rcon),
+                    "gen" | "general" => Some(PropertyCategory::General),
+                    _ => None,
+                });
 
             let search_term = search.map(|s| s.to_lowercase());
 
@@ -144,7 +165,15 @@ pub async fn handle_prop(
                 count += 1;
             }
 
-            println!("\n{}", format!("=== Server Properties: {} ({} entries) ===", server_name, count).cyan().bold());
+            println!(
+                "\n{}",
+                format!(
+                    "=== Server Properties: {} ({} entries) ===",
+                    server_name, count
+                )
+                .cyan()
+                .bold()
+            );
             println!("{table}\n");
             Ok(())
         }

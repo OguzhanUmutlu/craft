@@ -15,13 +15,27 @@ pub async fn handle_update(softwares_arg: Vec<String>) -> Result<()> {
     };
 
     for software in targets {
-        println!("{}", format!("Updating versions for {}...", software.name()).cyan());
+        println!(
+            "{}",
+            format!("Updating versions for {}...", software.name()).cyan()
+        );
         match software.fetch_versions().await {
             Ok(versions) => {
-                println!("{}", format!("[OK] {} updated ({} versions available)", software.name(), versions.len()).green());
+                println!(
+                    "{}",
+                    format!(
+                        "[OK] {} updated ({} versions available)",
+                        software.name(),
+                        versions.len()
+                    )
+                    .green()
+                );
             }
             Err(e) => {
-                println!("{}", format!("[FAIL] Failed to update {}: {}", software.name(), e).red());
+                println!(
+                    "{}",
+                    format!("[FAIL] Failed to update {}: {}", software.name(), e).red()
+                );
             }
         }
     }

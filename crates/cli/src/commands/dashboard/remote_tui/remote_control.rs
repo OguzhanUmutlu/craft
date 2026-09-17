@@ -1,11 +1,11 @@
+use super::remote_backups::manage_remote_backups;
+use crate::commands::dashboard::screen::{
+    box_divider, box_title, box_top, exec_console_action, get_content_width, print_in_place_status,
+    run_menu, show_modal_message, MenuEntry, NavGuard,
+};
 use colored::Colorize;
 use craft_core::{CraftPaths, Result};
 use craft_remote::{RemoteCraftClient, RemoteServerInfo};
-use crate::commands::dashboard::screen::{
-    box_divider, box_title, box_top, exec_console_action, get_content_width,
-    print_in_place_status, run_menu, show_modal_message, MenuEntry, NavGuard,
-};
-use super::remote_backups::manage_remote_backups;
 
 enum RemoteControlAction {
     ToggleStart,
@@ -92,7 +92,10 @@ pub async fn remote_server_control_panel(
             RemoteControlAction::ToggleStart => {
                 print_in_place_status(
                     "STARTING REMOTE SERVER",
-                    &[format!("Starting '{}' on remote host in background...", server.name)],
+                    &[format!(
+                        "Starting '{}' on remote host in background...",
+                        server.name
+                    )],
                 )?;
 
                 match client.start_server(&server.name) {
@@ -100,18 +103,17 @@ pub async fn remote_server_control_panel(
                         tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
                     }
                     Err(e) => {
-                        show_modal_message(
-                            "START FAILED",
-                            &[format!("[ERROR] {}", e)],
-                            true,
-                        )?;
+                        show_modal_message("START FAILED", &[format!("[ERROR] {}", e)], true)?;
                     }
                 }
             }
             RemoteControlAction::ToggleStop => {
                 print_in_place_status(
                     "STOPPING REMOTE SERVER",
-                    &[format!("Sending graceful stop command to '{}' on remote host...", server.name)],
+                    &[format!(
+                        "Sending graceful stop command to '{}' on remote host...",
+                        server.name
+                    )],
                 )?;
 
                 match client.stop_server(&server.name) {
@@ -119,11 +121,7 @@ pub async fn remote_server_control_panel(
                         tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
                     }
                     Err(e) => {
-                        show_modal_message(
-                            "STOP FAILED",
-                            &[format!("[ERROR] {}", e)],
-                            true,
-                        )?;
+                        show_modal_message("STOP FAILED", &[format!("[ERROR] {}", e)], true)?;
                     }
                 }
             }
@@ -138,11 +136,7 @@ pub async fn remote_server_control_panel(
                         tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
                     }
                     Err(e) => {
-                        show_modal_message(
-                            "RESTART FAILED",
-                            &[format!("[ERROR] {}", e)],
-                            true,
-                        )?;
+                        show_modal_message("RESTART FAILED", &[format!("[ERROR] {}", e)], true)?;
                     }
                 }
             }
@@ -151,8 +145,8 @@ pub async fn remote_server_control_panel(
                 let _ = exec_console_action(|| async {
                     let _ = craft_remote::run_remote_pty_session(&client.session, &cmd);
                     Ok(())
-                }).await;
-
+                })
+                .await;
             }
             RemoteControlAction::Backups => {
                 manage_remote_backups(paths, client, server).await?;

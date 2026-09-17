@@ -1,27 +1,30 @@
 #![allow(dead_code)]
 
-use std::io::{self, Write};
+use super::remote_backups::manage_remote_backups;
+use super::remote_control::remote_server_control_panel;
+use crate::commands::dashboard::screen::{
+    box_divider, box_title, box_top, clean_exit, get_content_width, print_in_place_status,
+    run_input_prompt, run_menu, run_paged_list_menu, show_modal_message, AltScreenGuard, BoxFrame,
+    MenuEntry, NavGuard, PagedMenuAction,
+};
+use colored::Colorize;
+use craft_core::{CraftPaths, RemoteHostConfig, Result};
+use craft_remote::{RemoteCraftClient, RemoteServerInfo};
+use crossterm::{
+    cursor::Hide,
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
+    execute,
+    terminal::enable_raw_mode,
+};
+use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use colored::Colorize;
-use crossterm::{
-    cursor::{Hide, MoveTo, Show},
-    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
-};
-use craft_core::{CraftPaths, RemoteHostConfig, Result};
-use craft_remote::{RemoteCraftClient, RemoteServerInfo};
-use crate::commands::dashboard::screen::{
-    box_bottom, box_divider, box_title, box_title_simple, box_top, clean_exit,
-    get_content_width, print_in_place_status, run_input_prompt, run_menu,
-    run_paged_list_menu, show_modal_message, MenuEntry, NavGuard, PagedMenuAction,
-};
-use super::remote_control::remote_server_control_panel;
-use super::remote_backups::manage_remote_backups;
 
-pub async fn connect_with_cancellation(host_config: &RemoteHostConfig) -> Result<Option<RemoteCraftClient>> {
+pub async fn connect_with_cancellation(
+    host_config: &RemoteHostConfig,
+) -> Result<Option<RemoteCraftClient>> {
+    let _alt = AltScreenGuard::enter();
     let (tx, rx) = mpsc::channel();
     let cfg_clone = host_config.clone();
     thread::spawn(move || {
@@ -42,8 +45,6 @@ pub async fn connect_with_cancellation(host_config: &RemoteHostConfig) -> Result
             match rx.try_recv() {
                 Ok(Ok(client)) => return Ok(Some(client)),
                 Ok(Err(e)) => {
-                    let _ = disable_raw_mode();
-                    let _ = execute!(io::stdout(), Show);
                     show_modal_message(
                         "SSH CONNECTION FAILED",
                         &[
@@ -57,13 +58,12 @@ pub async fn connect_with_cancellation(host_config: &RemoteHostConfig) -> Result
                     return Ok(None);
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    let _ = disable_raw_mode();
-                    let _ = execute!(io::stdout(), Show);
                     show_modal_message(
                         "SSH CONNECTION FAILED",
-                        &[
-                            format!("Failed to connect to host '{}': connection dropped.", host_config.alias),
-                        ],
+                        &[format!(
+                            "Failed to connect to host '{}': connection dropped.",
+                            host_config.alias
+                        )],
                         true,
                     )?;
                     return Ok(None);
@@ -73,42 +73,46 @@ pub async fn connect_with_cancellation(host_config: &RemoteHostConfig) -> Result
 
             // Render connecting status
             let width = get_content_width(80);
-            execute!(stdout, MoveTo(0, 0))?;
-            print!("{}\x1B[K\r\n", box_top(width));
-            print!("{}\x1B[K\r\n", box_title_simple("CONNECTING TO REMOTE HOST", width, false));
-            print!("{}\x1B[K\r\n", box_divider(width));
-            print!("\x1B[K\r\n");
-            print!(
-                "  Establishing SSH connection to '{}' ({}@{}:{}) {}\x1B[K\r\n",
-                host_config.alias, host_config.user, host_config.host, host_config.port, frames[frame_idx % frames.len()]
-            );
-            print!("  Press Esc, q, Backspace, or Left arrow to cancel.\x1B[K\r\n");
-            print!("\x1B[K\r\n{}\x1B[K\r\n", box_bottom(width));
-            execute!(stdout, Clear(ClearType::FromCursorDown))?;
-            stdout.flush()?;
+            let mut frame = BoxFrame::new(width);
+            frame.title = Some(("CONNECTING TO REMOTE HOST".to_string(), false));
+            frame.empty_row();
+            frame.row(format!(
+                "Establishing SSH connection to '{}' ({}@{}:{}) {}",
+                host_config.alias,
+                host_config.user,
+                host_config.host,
+                host_config.port,
+                frames[frame_idx % frames.len()]
+            ));
+            frame.empty_row();
+            frame.footer("Press Esc to cancel.");
+            frame.render(&mut stdout)?;
 
             frame_idx = (frame_idx + 1) % frames.len();
 
-            // Poll for cancellation keys
+            // Poll for cancellation keys and drain all available events
             if event::poll(Duration::from_millis(120))? {
-                if let Event::Key(key) = event::read()? {
-                    if key.kind == KeyEventKind::Press {
-                        if (key.modifiers.contains(KeyModifiers::CONTROL)
-                            && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('C')))
-                            || key.code == KeyCode::Char('\x03')
-                        {
-                            clean_exit();
-                        }
-
-                        match key.code {
-                            KeyCode::Esc
-                            | KeyCode::Char('q')
-                            | KeyCode::Char('Q')
-                            | KeyCode::Left
-                            | KeyCode::Backspace => {
-                                return Ok(None);
+                while event::poll(Duration::from_millis(0))? {
+                    if let Event::Key(key) = event::read()? {
+                        if key.kind == KeyEventKind::Press {
+                            if (key.modifiers.contains(KeyModifiers::CONTROL)
+                                && (key.code == KeyCode::Char('c')
+                                    || key.code == KeyCode::Char('C')))
+                                || key.code == KeyCode::Char('\x03')
+                            {
+                                clean_exit();
                             }
-                            _ => {}
+
+                            match key.code {
+                                KeyCode::Esc
+                                | KeyCode::Char('q')
+                                | KeyCode::Char('Q')
+                                | KeyCode::Left
+                                | KeyCode::Backspace => {
+                                    return Ok(None);
+                                }
+                                _ => {}
+                            }
                         }
                     }
                 }
@@ -116,8 +120,11 @@ pub async fn connect_with_cancellation(host_config: &RemoteHostConfig) -> Result
         }
     })();
 
-    let _ = disable_raw_mode();
-    let _ = execute!(io::stdout(), Show);
+    // Drain any remaining events before returning
+    while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+        let _ = event::read();
+    }
+
     result
 }
 
@@ -125,6 +132,7 @@ pub async fn manage_host_servers(
     _paths: &CraftPaths,
     host_config: &RemoteHostConfig,
 ) -> Result<()> {
+    let _alt = AltScreenGuard::enter();
     let client = match connect_with_cancellation(host_config).await? {
         Some(c) => c,
         None => return Ok(()),
@@ -156,7 +164,10 @@ pub async fn manage_host_servers(
             Some(0) => {
                 print_in_place_status(
                     "BOOTSTRAPPING REMOTE HOST",
-                    &[format!("Installing Craft daemon and CLI on '{}'...", host_config.alias)],
+                    &[format!(
+                        "Installing Craft daemon and CLI on '{}'...",
+                        host_config.alias
+                    )],
                 )?;
 
                 match craft_remote::run_bootstrap(&client.session) {
@@ -164,11 +175,7 @@ pub async fn manage_host_servers(
                         // Immediately transition into the remote host menu without blocking modal
                     }
                     Err(e) => {
-                        show_modal_message(
-                            "BOOTSTRAP FAILED",
-                            &[format!("[ERROR] {}", e)],
-                            true,
-                        )?;
+                        show_modal_message("BOOTSTRAP FAILED", &[format!("[ERROR] {}", e)], true)?;
                         return Ok(());
                     }
                 }
@@ -184,7 +191,10 @@ pub async fn manage_host_servers(
         show_modal_message(
             "CRAFT NOT INSTALLED",
             &[
-                format!("Craft CLI is required to manage servers on '{}'.", host_config.alias),
+                format!(
+                    "Craft CLI is required to manage servers on '{}'.",
+                    host_config.alias
+                ),
                 "Please run bootstrap to install Craft.".to_string(),
             ],
             true,
@@ -226,8 +236,10 @@ pub async fn manage_host_servers(
             );
 
             let update_entries = vec![
-                MenuEntry::new("1", "Update Remote Craft Now").with_aliases(&["u", "update", "y", "yes"]),
-                MenuEntry::new("2", "Continue Without Updating").with_aliases(&["c", "continue", "n", "no"]),
+                MenuEntry::new("1", "Update Remote Craft Now")
+                    .with_aliases(&["u", "update", "y", "yes"]),
+                MenuEntry::new("2", "Continue Without Updating")
+                    .with_aliases(&["c", "continue", "n", "no"]),
                 MenuEntry::new("0", "Cancel").with_aliases(&["q"]),
             ];
 
@@ -236,7 +248,10 @@ pub async fn manage_host_servers(
                 Some(0) => {
                     print_in_place_status(
                         "UPDATING REMOTE CRAFT",
-                        &[format!("Updating Craft binary on '{}' to v{}...", host_config.alias, local_version)],
+                        &[format!(
+                            "Updating Craft binary on '{}' to v{}...",
+                            host_config.alias, local_version
+                        )],
                     )?;
 
                     match craft_remote::run_bootstrap(&client.session) {
@@ -286,7 +301,8 @@ pub async fn manage_host_servers(
             );
 
             let adv_entries = vec![
-                MenuEntry::new("1", "Continue Connecting to Remote Host").with_aliases(&["c", "continue", "y"]),
+                MenuEntry::new("1", "Continue Connecting to Remote Host")
+                    .with_aliases(&["c", "continue", "y"]),
                 MenuEntry::new("0", "Cancel").with_aliases(&["q"]),
             ];
 
@@ -312,7 +328,10 @@ pub async fn manage_host_servers(
         show_modal_message(
             "REMOTE TUI ERROR",
             &[
-                format!("Failed to run remote TUI session on '{}':", host_config.alias),
+                format!(
+                    "Failed to run remote TUI session on '{}':",
+                    host_config.alias
+                ),
                 format!("[ERROR] {}", e),
             ],
             true,
@@ -338,7 +357,10 @@ async fn remote_manage_servers_menu(
             Err(e) => {
                 show_modal_message(
                     "REMOTE SERVERS ERROR",
-                    &[format!("Failed to retrieve servers from remote host: {}", e)],
+                    &[format!(
+                        "Failed to retrieve servers from remote host: {}",
+                        e
+                    )],
                     true,
                 )?;
                 return Ok(());
@@ -370,9 +392,8 @@ async fn remote_manage_servers_menu(
             continue;
         }
 
-        let action_entries = vec![
-            MenuEntry::new("n", "New Server").with_aliases(&["c", "create", "new"]),
-        ];
+        let action_entries =
+            vec![MenuEntry::new("n", "New Server").with_aliases(&["c", "create", "new"])];
 
         let action = run_paged_list_menu(
             &servers,
@@ -380,7 +401,9 @@ async fn remote_manage_servers_menu(
             page_size,
             |page, total_pages, total_count| {
                 let page_info = if total_pages > 1 {
-                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                    format!(" | Page {} of {}", page, total_pages)
+                        .cyan()
+                        .to_string()
                 } else {
                     "".to_string()
                 };
@@ -462,7 +485,11 @@ async fn remote_create_server_wizard(client: &RemoteCraftClient) -> Result<()> {
         return Ok(());
     }
 
-    let name = match run_input_prompt("NEW REMOTE SERVER", "Enter server name (e.g. survival):", None)? {
+    let name = match run_input_prompt(
+        "NEW REMOTE SERVER",
+        "Enter server name (e.g. survival):",
+        None,
+    )? {
         Some(n) if !n.trim().is_empty() => n.trim().to_string(),
         _ => return Ok(()),
     };
@@ -486,7 +513,11 @@ async fn remote_create_server_wizard(client: &RemoteCraftClient) -> Result<()> {
         _ => return Ok(()),
     };
 
-    let version = match run_input_prompt("VERSION", "Enter Minecraft version (e.g. 1.21.4):", Some("1.21.4"))? {
+    let version = match run_input_prompt(
+        "VERSION",
+        "Enter Minecraft version (e.g. 1.21.4):",
+        Some("1.21.4"),
+    )? {
         Some(v) if !v.trim().is_empty() => v.trim().to_string(),
         _ => "1.21.4".to_string(),
     };
@@ -498,23 +529,27 @@ async fn remote_create_server_wizard(client: &RemoteCraftClient) -> Result<()> {
 
     let _ = print_in_place_status(
         "CREATING REMOTE SERVER",
-        &[format!("Creating server '{}' ({}:{}) on remote host...", name, software, version)],
+        &[format!(
+            "Creating server '{}' ({}:{}) on remote host...",
+            name, software, version
+        )],
     );
 
     match client.create_server(&name, software, &version, port) {
         Ok(_) => {
             show_modal_message(
                 "SERVER CREATED",
-                &[format!("[OK] Successfully created remote server '{}'!", name).green().bold().to_string()],
+                &[
+                    format!("[OK] Successfully created remote server '{}'!", name)
+                        .green()
+                        .bold()
+                        .to_string(),
+                ],
                 false,
             )?;
         }
         Err(e) => {
-            show_modal_message(
-                "CREATION FAILED",
-                &[format!("[ERROR] {}", e)],
-                true,
-            )?;
+            show_modal_message("CREATION FAILED", &[format!("[ERROR] {}", e)], true)?;
         }
     }
 
@@ -529,7 +564,10 @@ async fn remote_ping_host(
     let _nav = NavGuard::enter("Ping Host");
     let _ = print_in_place_status(
         "PINGING REMOTE HOST",
-        &[format!("Checking network latency to '{}' ({}:{})...", host.alias, host.host, host.port)],
+        &[format!(
+            "Checking network latency to '{}' ({}:{})...",
+            host.alias, host.host, host.port
+        )],
     );
 
     let start = std::time::Instant::now();
@@ -537,9 +575,24 @@ async fn remote_ping_host(
     let elapsed = start.elapsed().as_millis();
 
     let mut lines = vec![
-        format!("Host:         {} ({}:{})", host.alias.white().bold(), host.host, host.port),
-        format!("SSH Latency:  {} ms", elapsed).green().bold().to_string(),
-        format!("Craft CLI:    {}", if is_connected { "[FOUND]".green() } else { "[NOT FOUND]".red() }),
+        format!(
+            "Host:         {} ({}:{})",
+            host.alias.white().bold(),
+            host.host,
+            host.port
+        ),
+        format!("SSH Latency:  {} ms", elapsed)
+            .green()
+            .bold()
+            .to_string(),
+        format!(
+            "Craft CLI:    {}",
+            if is_connected {
+                "[FOUND]".green()
+            } else {
+                "[NOT FOUND]".red()
+            }
+        ),
         "".to_string(),
         "Registered Servers & Port Status:".to_string(),
     ];
@@ -577,7 +630,9 @@ async fn remote_daemon_control_menu(client: &RemoteCraftClient, host_alias: &str
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Remote Host:   {}\r\n Daemon Status: {}\r\n{}",
             box_top(width).cyan().bold(),
-            box_title(&format!("REMOTE DAEMON: {}", host_alias), width, false).cyan().bold(),
+            box_title(&format!("REMOTE DAEMON: {}", host_alias), width, false)
+                .cyan()
+                .bold(),
             box_divider(width).cyan().bold(),
             host_alias.white().bold(),
             status_badge,
@@ -598,15 +653,32 @@ async fn remote_daemon_control_menu(client: &RemoteCraftClient, host_alias: &str
                 let status = client.daemon_status().unwrap_or(false);
                 show_modal_message(
                     "REMOTE DAEMON STATUS",
-                    &[format!("Remote service daemon is currently: {}", if status { "[ONLINE]".green() } else { "[OFFLINE]".yellow() })],
+                    &[format!(
+                        "Remote service daemon is currently: {}",
+                        if status {
+                            "[ONLINE]".green()
+                        } else {
+                            "[OFFLINE]".yellow()
+                        }
+                    )],
                     false,
                 )?;
             }
             Some(1) => {
-                let _ = print_in_place_status("STARTING DAEMON", &[format!("Starting daemon on '{}'...", host_alias)]);
+                let _ = print_in_place_status(
+                    "STARTING DAEMON",
+                    &[format!("Starting daemon on '{}'...", host_alias)],
+                );
                 match client.daemon_start() {
                     Ok(_) => {
-                        show_modal_message("DAEMON STARTED", &[format!("[OK] Remote daemon started on '{}'.", host_alias).green().bold().to_string()], false)?;
+                        show_modal_message(
+                            "DAEMON STARTED",
+                            &[format!("[OK] Remote daemon started on '{}'.", host_alias)
+                                .green()
+                                .bold()
+                                .to_string()],
+                            false,
+                        )?;
                     }
                     Err(e) => {
                         show_modal_message("ERROR", &[format!("[ERROR] {}", e)], true)?;
@@ -614,10 +686,20 @@ async fn remote_daemon_control_menu(client: &RemoteCraftClient, host_alias: &str
                 }
             }
             Some(2) => {
-                let _ = print_in_place_status("STOPPING DAEMON", &[format!("Stopping daemon on '{}'...", host_alias)]);
+                let _ = print_in_place_status(
+                    "STOPPING DAEMON",
+                    &[format!("Stopping daemon on '{}'...", host_alias)],
+                );
                 match client.daemon_stop() {
                     Ok(_) => {
-                        show_modal_message("DAEMON STOPPED", &[format!("[OK] Remote daemon stopped on '{}'.", host_alias).green().bold().to_string()], false)?;
+                        show_modal_message(
+                            "DAEMON STOPPED",
+                            &[format!("[OK] Remote daemon stopped on '{}'.", host_alias)
+                                .green()
+                                .bold()
+                                .to_string()],
+                            false,
+                        )?;
                     }
                     Err(e) => {
                         show_modal_message("ERROR", &[format!("[ERROR] {}", e)], true)?;
@@ -625,10 +707,20 @@ async fn remote_daemon_control_menu(client: &RemoteCraftClient, host_alias: &str
                 }
             }
             Some(3) => {
-                let _ = print_in_place_status("RESTARTING DAEMON", &[format!("Restarting daemon on '{}'...", host_alias)]);
+                let _ = print_in_place_status(
+                    "RESTARTING DAEMON",
+                    &[format!("Restarting daemon on '{}'...", host_alias)],
+                );
                 match client.daemon_restart() {
                     Ok(_) => {
-                        show_modal_message("DAEMON RESTARTED", &[format!("[OK] Remote daemon restarted on '{}'.", host_alias).green().bold().to_string()], false)?;
+                        show_modal_message(
+                            "DAEMON RESTARTED",
+                            &[format!("[OK] Remote daemon restarted on '{}'.", host_alias)
+                                .green()
+                                .bold()
+                                .to_string()],
+                            false,
+                        )?;
                     }
                     Err(e) => {
                         show_modal_message("ERROR", &[format!("[ERROR] {}", e)], true)?;
@@ -663,17 +755,30 @@ async fn remote_purge_cache_action(client: &RemoteCraftClient, host_alias: &str)
 
     let mut sel = 0;
     if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut sel)? {
-        let _ = print_in_place_status("PURGING CACHE", &[format!("Cleaning cache on '{}'...", host_alias)]);
+        let _ = print_in_place_status(
+            "PURGING CACHE",
+            &[format!("Cleaning cache on '{}'...", host_alias)],
+        );
         match client.clean_cache() {
             Ok(_) => {
                 show_modal_message(
                     "CACHE PURGED",
-                    &[format!("[OK] Cleared downloaded cache on remote host '{}'.", host_alias).green().bold().to_string()],
+                    &[format!(
+                        "[OK] Cleared downloaded cache on remote host '{}'.",
+                        host_alias
+                    )
+                    .green()
+                    .bold()
+                    .to_string()],
                     false,
                 )?;
             }
             Err(e) => {
-                show_modal_message("ERROR", &[format!("[ERROR] Failed to clean remote cache: {}", e)], true)?;
+                show_modal_message(
+                    "ERROR",
+                    &[format!("[ERROR] Failed to clean remote cache: {}", e)],
+                    true,
+                )?;
             }
         }
     }
@@ -710,7 +815,9 @@ async fn remote_manage_all_backups_picker(
             page_size,
             |page, total_pages, total_count| {
                 let page_info = if total_pages > 1 {
-                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                    format!(" | Page {} of {}", page, total_pages)
+                        .cyan()
+                        .to_string()
                 } else {
                     "".to_string()
                 };
@@ -764,10 +871,15 @@ async fn remote_trash_menu(
                 let count_str = if total_count == 0 {
                     "Remote trash bin is empty.".dimmed().to_string()
                 } else {
-                    format!("Total Trashed Archives: {}", total_count).white().bold().to_string()
+                    format!("Total Trashed Archives: {}", total_count)
+                        .white()
+                        .bold()
+                        .to_string()
                 };
                 let page_info = if total_pages > 1 {
-                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                    format!(" | Page {} of {}", page, total_pages)
+                        .cyan()
+                        .to_string()
                 } else {
                     "".to_string()
                 };
@@ -775,7 +887,9 @@ async fn remote_trash_menu(
                 format!(
                     "{}\r\n{}\r\n{}\r\n Host: {}\r\n Directory: ~/.craft/trash/\r\n {}{}\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title(&format!("REMOTE TRASH BIN: {}", host_alias), width, false).cyan().bold(),
+                    box_title(&format!("REMOTE TRASH BIN: {}", host_alias), width, false)
+                        .cyan()
+                        .bold(),
                     box_divider(width).cyan().bold(),
                     host_alias.white().bold(),
                     count_str,
@@ -783,9 +897,7 @@ async fn remote_trash_menu(
                     box_divider(width).dimmed(),
                 )
             },
-            |_local_idx, _global_idx, item| {
-                format!("{:<40}  {}", item.filename, item.created_at)
-            },
+            |_local_idx, _global_idx, item| format!("{:<40}  {}", item.filename, item.created_at),
             &action_entries,
             false,
         )?;
@@ -796,7 +908,9 @@ async fn remote_trash_menu(
                 let detail_header = format!(
                     "{}\r\n{}\r\n{}\r\n Archive:  {}\r\n Location: {}\r\n Select action:\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("REMOTE TRASHED ARCHIVE", width, false).cyan().bold(),
+                    box_title("REMOTE TRASHED ARCHIVE", width, false)
+                        .cyan()
+                        .bold(),
                     box_divider(width).cyan().bold(),
                     item.filename.white().bold(),
                     item.remote_path,
@@ -814,10 +928,23 @@ async fn remote_trash_menu(
                     match act {
                         0 => {
                             // Restore
-                            let default_server = servers.first().map(|s| s.name.as_str()).unwrap_or("my-server");
-                            if let Some(target_srv) = run_input_prompt("RESTORE TARGET", "Enter destination server name:", Some(default_server))? {
+                            let default_server = servers
+                                .first()
+                                .map(|s| s.name.as_str())
+                                .unwrap_or("my-server");
+                            if let Some(target_srv) = run_input_prompt(
+                                "RESTORE TARGET",
+                                "Enter destination server name:",
+                                Some(default_server),
+                            )? {
                                 if !target_srv.trim().is_empty() {
-                                    let _ = print_in_place_status("RESTORING ARCHIVE", &[format!("Restoring '{}' on remote host...", item.filename)]);
+                                    let _ = print_in_place_status(
+                                        "RESTORING ARCHIVE",
+                                        &[format!(
+                                            "Restoring '{}' on remote host...",
+                                            item.filename
+                                        )],
+                                    );
                                     match client.restore_trash(&item.filename, target_srv.trim()) {
                                         Ok(_) => {
                                             show_modal_message(
@@ -827,7 +954,14 @@ async fn remote_trash_menu(
                                             )?;
                                         }
                                         Err(e) => {
-                                            show_modal_message("ERROR", &[format!("[ERROR] Failed to restore remote archive: {}", e)], true)?;
+                                            show_modal_message(
+                                                "ERROR",
+                                                &[format!(
+                                                    "[ERROR] Failed to restore remote archive: {}",
+                                                    e
+                                                )],
+                                                true,
+                                            )?;
                                         }
                                     }
                                 }
@@ -845,16 +979,35 @@ async fn remote_trash_menu(
                             );
                             let confirm_entries = vec![
                                 MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
-                                MenuEntry::new("2", format!("Confirm Delete of '{}'", item.filename)),
+                                MenuEntry::new(
+                                    "2",
+                                    format!("Confirm Delete of '{}'", item.filename),
+                                ),
                             ];
                             let mut c_sel = 0;
-                            if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
+                            if let Some(1) =
+                                run_menu(&confirm_header, &confirm_entries, &mut c_sel)?
+                            {
                                 match client.delete_trash_item(&item.filename) {
                                     Ok(_) => {
-                                        show_modal_message("DELETED", &[format!("[OK] Permanently deleted '{}'.", item.filename).green().bold().to_string()], false)?;
+                                        show_modal_message(
+                                            "DELETED",
+                                            &[format!(
+                                                "[OK] Permanently deleted '{}'.",
+                                                item.filename
+                                            )
+                                            .green()
+                                            .bold()
+                                            .to_string()],
+                                            false,
+                                        )?;
                                     }
                                     Err(e) => {
-                                        show_modal_message("ERROR", &[format!("[ERROR] {}", e)], true)?;
+                                        show_modal_message(
+                                            "ERROR",
+                                            &[format!("[ERROR] {}", e)],
+                                            true,
+                                        )?;
                                     }
                                 }
                             }
@@ -879,7 +1032,11 @@ async fn remote_trash_menu(
                 if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
                     match client.empty_trash() {
                         Ok(_) => {
-                            show_modal_message("TRASH EMPTIED", &["[OK] Remote trash bin emptied.".green().bold().to_string()], false)?;
+                            show_modal_message(
+                                "TRASH EMPTIED",
+                                &["[OK] Remote trash bin emptied.".green().bold().to_string()],
+                                false,
+                            )?;
                         }
                         Err(e) => {
                             show_modal_message("ERROR", &[format!("[ERROR] {}", e)], true)?;
@@ -892,7 +1049,10 @@ async fn remote_trash_menu(
     }
 }
 
-pub async fn remote_uninstall_craft_wizard(client: &RemoteCraftClient, host_alias: &str) -> Result<bool> {
+pub async fn remote_uninstall_craft_wizard(
+    client: &RemoteCraftClient,
+    host_alias: &str,
+) -> Result<bool> {
     let _nav = NavGuard::enter("Uninstall Craft");
     let width = get_content_width(80);
 
@@ -929,13 +1089,22 @@ pub async fn remote_uninstall_craft_wizard(client: &RemoteCraftClient, host_alia
 
     let prompt2_entries = vec![
         MenuEntry::new("1", "Cancel (Keep Craft Installed)").with_aliases(&["0", "b", "q"]),
-        MenuEntry::new("2", format!("Confirm and Uninstall Craft from '{}'", host_alias)),
+        MenuEntry::new(
+            "2",
+            format!("Confirm and Uninstall Craft from '{}'", host_alias),
+        ),
     ];
 
     let mut sel2 = 0;
     match run_menu(&prompt2_header, &prompt2_entries, &mut sel2)? {
         Some(1) => {
-            let _ = print_in_place_status("UNINSTALLING CRAFT", &[format!("Uninstalling Craft and daemon from '{}'...", host_alias)]);
+            let _ = print_in_place_status(
+                "UNINSTALLING CRAFT",
+                &[format!(
+                    "Uninstalling Craft and daemon from '{}'...",
+                    host_alias
+                )],
+            );
             match client.uninstall_craft() {
                 Ok(_) => {
                     show_modal_message(
@@ -949,7 +1118,11 @@ pub async fn remote_uninstall_craft_wizard(client: &RemoteCraftClient, host_alia
                     Ok(true)
                 }
                 Err(e) => {
-                    show_modal_message("ERROR", &[format!("[ERROR] Failed to uninstall Craft: {}", e)], true)?;
+                    show_modal_message(
+                        "ERROR",
+                        &[format!("[ERROR] Failed to uninstall Craft: {}", e)],
+                        true,
+                    )?;
                     Ok(false)
                 }
             }
@@ -957,4 +1130,3 @@ pub async fn remote_uninstall_craft_wizard(client: &RemoteCraftClient, host_alia
         _ => Ok(false),
     }
 }
-

@@ -1,10 +1,10 @@
-use std::path::Path;
+use super::screen::{
+    box_divider, box_title, box_top, get_content_width, run_input_prompt, run_menu,
+    show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
+};
 use colored::Colorize;
 use craft_core::{PropertyCategory, Result, ServerProperties};
-use super::screen::{
-    box_divider, box_title, box_top, get_content_width, run_input_prompt,
-    run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
-};
+use std::path::Path;
 
 pub async fn server_properties_editor(server_path: &Path, server_name: &str) -> Result<()> {
     let _guard = AltScreenGuard::enter();
@@ -102,7 +102,12 @@ pub async fn server_properties_editor(server_path: &Path, server_name: &str) -> 
                         )? {
                             props.set(&key, val.trim());
                             props.save(&props_path)?;
-                            flash_msg = Some(format!("[OK] Set '{}' = '{}'", key, val.trim()).green().bold().to_string());
+                            flash_msg = Some(
+                                format!("[OK] Set '{}' = '{}'", key, val.trim())
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            );
                         }
                     }
                 }
@@ -110,7 +115,8 @@ pub async fn server_properties_editor(server_path: &Path, server_name: &str) -> 
             Some(idx) if idx == categories.len() + 2 => {
                 // View Raw File Content
                 if let Ok(raw) = std::fs::read_to_string(&props_path) {
-                    let raw_lines: Vec<String> = raw.lines().take(30).map(|s| s.to_string()).collect();
+                    let raw_lines: Vec<String> =
+                        raw.lines().take(30).map(|s| s.to_string()).collect();
                     show_modal_message("RAW SERVER.PROPERTIES", &raw_lines, false)?;
                 }
             }
@@ -160,7 +166,12 @@ async fn category_properties_menu(
                     if let Some(val) = run_input_prompt("PROPERTY VALUE", "Enter value:", None)? {
                         props.set(key.trim(), val.trim());
                         props.save(props_path)?;
-                        flash_msg = Some(format!("[OK] Added '{}'", key.trim()).green().bold().to_string());
+                        flash_msg = Some(
+                            format!("[OK] Added '{}'", key.trim())
+                                .green()
+                                .bold()
+                                .to_string(),
+                        );
                     }
                 }
                 continue;
@@ -206,7 +217,12 @@ async fn category_properties_menu(
                     let new_val = if val_str == "true" { "false" } else { "true" };
                     props.set(&key_str, new_val);
                     props.save(props_path)?;
-                    flash_msg = Some(format!("[OK] Toggled '{}' -> {}", key_str, new_val).green().bold().to_string());
+                    flash_msg = Some(
+                        format!("[OK] Toggled '{}' -> {}", key_str, new_val)
+                            .green()
+                            .bold()
+                            .to_string(),
+                    );
                 } else if key_str == "gamemode" {
                     let modes = vec![
                         MenuEntry::new("1", "survival"),
@@ -216,12 +232,23 @@ async fn category_properties_menu(
                         MenuEntry::new("0", "Cancel"),
                     ];
                     let mut gm_sel = 0;
-                    if let Some(m_idx) = run_menu("Select Default Game Mode:", &modes, &mut gm_sel)? {
+                    if let Some(m_idx) = run_menu("Select Default Game Mode:", &modes, &mut gm_sel)?
+                    {
                         if m_idx < 4 {
-                            let chosen = match m_idx { 0 => "survival", 1 => "creative", 2 => "adventure", _ => "spectator" };
+                            let chosen = match m_idx {
+                                0 => "survival",
+                                1 => "creative",
+                                2 => "adventure",
+                                _ => "spectator",
+                            };
                             props.set("gamemode", chosen);
                             props.save(props_path)?;
-                            flash_msg = Some(format!("[OK] Set gamemode = {}", chosen).green().bold().to_string());
+                            flash_msg = Some(
+                                format!("[OK] Set gamemode = {}", chosen)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            );
                         }
                     }
                 } else if key_str == "difficulty" {
@@ -233,12 +260,23 @@ async fn category_properties_menu(
                         MenuEntry::new("0", "Cancel"),
                     ];
                     let mut d_sel = 0;
-                    if let Some(d_idx) = run_menu("Select Server Difficulty:", &diffs, &mut d_sel)? {
+                    if let Some(d_idx) = run_menu("Select Server Difficulty:", &diffs, &mut d_sel)?
+                    {
                         if d_idx < 4 {
-                            let chosen = match d_idx { 0 => "peaceful", 1 => "easy", 2 => "normal", _ => "hard" };
+                            let chosen = match d_idx {
+                                0 => "peaceful",
+                                1 => "easy",
+                                2 => "normal",
+                                _ => "hard",
+                            };
                             props.set("difficulty", chosen);
                             props.save(props_path)?;
-                            flash_msg = Some(format!("[OK] Set difficulty = {}", chosen).green().bold().to_string());
+                            flash_msg = Some(
+                                format!("[OK] Set difficulty = {}", chosen)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            );
                         }
                     }
                 } else {
@@ -251,7 +289,12 @@ async fn category_properties_menu(
                     )? {
                         props.set(&key_str, new_val.trim());
                         props.save(props_path)?;
-                        flash_msg = Some(format!("[OK] Updated '{}' = '{}'", key_str, new_val.trim()).green().bold().to_string());
+                        flash_msg = Some(
+                            format!("[OK] Updated '{}' = '{}'", key_str, new_val.trim())
+                                .green()
+                                .bold()
+                                .to_string(),
+                        );
                     }
                 }
             }
@@ -260,11 +303,7 @@ async fn category_properties_menu(
     }
 }
 
-async fn search_properties_menu(
-    props_path: &Path,
-    server_name: &str,
-    query: &str,
-) -> Result<()> {
+async fn search_properties_menu(props_path: &Path, server_name: &str, query: &str) -> Result<()> {
     let _nav = NavGuard::enter(format!("Search: {}", query));
     let mut selected = 0;
 
@@ -278,7 +317,9 @@ async fn search_properties_menu(
             .filter(|(k, v)| {
                 k.to_lowercase().contains(&q)
                     || v.to_lowercase().contains(&q)
-                    || ServerProperties::property_description(k).to_lowercase().contains(&q)
+                    || ServerProperties::property_description(k)
+                        .to_lowercase()
+                        .contains(&q)
             })
             .collect();
 
@@ -304,7 +345,11 @@ async fn search_properties_menu(
 
         let mut entries = Vec::new();
         for (i, (k, v)) in matches.iter().enumerate() {
-            let hotkey = if i < 9 { (i + 1).to_string() } else { ((b'a' + (i - 9) as u8) as char).to_string() };
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            };
             let val_display = if *v == "true" {
                 "[ON]".green().bold().to_string()
             } else if *v == "false" {

@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use colored::Colorize;
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
@@ -10,6 +9,7 @@ use craft_plugins::world::{
     inspect_world_metadata, install_world_from_url, install_world_from_zip, list_installed_worlds,
     list_world_player_data,
 };
+use std::path::PathBuf;
 
 #[derive(clap::Subcommand, Debug, Clone)]
 pub enum WorldAction {
@@ -71,7 +71,10 @@ pub async fn handle_world(
         WorldAction::Ls => {
             let worlds = list_installed_worlds(&server_path);
             if worlds.is_empty() {
-                println!("{}", format!("No worlds found in '{}'.", server_path.display()).yellow());
+                println!(
+                    "{}",
+                    format!("No worlds found in '{}'.", server_path.display()).yellow()
+                );
                 return Ok(());
             }
 
@@ -113,43 +116,92 @@ pub async fn handle_world(
                 ]);
             }
 
-            println!("\n{}", format!("=== Installed Worlds: {} ({} worlds) ===", server_name, worlds.len()).cyan().bold());
+            println!(
+                "\n{}",
+                format!(
+                    "=== Installed Worlds: {} ({} worlds) ===",
+                    server_name,
+                    worlds.len()
+                )
+                .cyan()
+                .bold()
+            );
             println!("{table}\n");
             Ok(())
         }
         WorldAction::Info { world } => {
             let worlds = list_installed_worlds(&server_path);
             let target_name = world.unwrap_or_else(|| {
-                worlds.iter().find(|w| w.is_default).map(|w| w.name.clone()).unwrap_or_else(|| "world".to_string())
+                worlds
+                    .iter()
+                    .find(|w| w.is_default)
+                    .map(|w| w.name.clone())
+                    .unwrap_or_else(|| "world".to_string())
             });
 
             let world_path = server_path.join(&target_name);
             let meta = inspect_world_metadata(&world_path)?;
 
-            println!("\n{}", format!("=== World Metadata: {}/{} ===", server_name, target_name).cyan().bold());
+            println!(
+                "\n{}",
+                format!("=== World Metadata: {}/{} ===", server_name, target_name)
+                    .cyan()
+                    .bold()
+            );
             println!("  Level Name:     {}", meta.level_name.white().bold());
             println!("  Game Mode:      {}", meta.game_type.green());
             println!("  Difficulty:     {}", meta.difficulty.yellow());
-            println!("  Hardcore:       {}", if meta.hardcore { "Yes".red().bold() } else { "No".dimmed() });
-            println!("  Spawn Location: X={}, Y={}, Z={}", meta.spawn_x, meta.spawn_y, meta.spawn_z);
-            println!("  Seed:           {}", meta.seed.map(|s| s.to_string()).unwrap_or_else(|| "Unknown".to_string()).cyan());
+            println!(
+                "  Hardcore:       {}",
+                if meta.hardcore {
+                    "Yes".red().bold()
+                } else {
+                    "No".dimmed()
+                }
+            );
+            println!(
+                "  Spawn Location: X={}, Y={}, Z={}",
+                meta.spawn_x, meta.spawn_y, meta.spawn_z
+            );
+            println!(
+                "  Seed:           {}",
+                meta.seed
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "Unknown".to_string())
+                    .cyan()
+            );
             if let Some(ref ver) = meta.version_name {
                 println!("  Version:        {}", ver.dimmed());
             }
-            println!("  World Time:     {} ticks (Day: {})\n", meta.time, meta.day_time / 24000);
+            println!(
+                "  World Time:     {} ticks (Day: {})\n",
+                meta.time,
+                meta.day_time / 24000
+            );
             Ok(())
         }
         WorldAction::Players { world } => {
             let worlds = list_installed_worlds(&server_path);
             let target_name = world.unwrap_or_else(|| {
-                worlds.iter().find(|w| w.is_default).map(|w| w.name.clone()).unwrap_or_else(|| "world".to_string())
+                worlds
+                    .iter()
+                    .find(|w| w.is_default)
+                    .map(|w| w.name.clone())
+                    .unwrap_or_else(|| "world".to_string())
             });
 
             let world_path = server_path.join(&target_name);
             let players = list_world_player_data(&world_path, &server_path)?;
 
             if players.is_empty() {
-                println!("{}", format!("No player data files found in '{}/playerdata'.", target_name).yellow());
+                println!(
+                    "{}",
+                    format!(
+                        "No player data files found in '{}/playerdata'.",
+                        target_name
+                    )
+                    .yellow()
+                );
                 return Ok(());
             }
 
@@ -185,68 +237,126 @@ pub async fn handle_world(
                 ]);
             }
 
-            println!("\n{}", format!("=== Player Data: {}/{} ({} players) ===", server_name, target_name, players.len()).cyan().bold());
+            println!(
+                "\n{}",
+                format!(
+                    "=== Player Data: {}/{} ({} players) ===",
+                    server_name,
+                    target_name,
+                    players.len()
+                )
+                .cyan()
+                .bold()
+            );
             println!("{table}\n");
             Ok(())
         }
         WorldAction::SetDefault { world } => {
             let world_path = server_path.join(&world);
             if !world_path.exists() {
-                return Err(CraftError::Other(format!("World directory '{}' does not exist.", world_path.display())));
+                return Err(CraftError::Other(format!(
+                    "World directory '{}' does not exist.",
+                    world_path.display()
+                )));
             }
             set_default_world(&server_path, &world)?;
-            println!("{}: Set '{}' as active default Overworld in server.properties!", "Success".green().bold(), world.white().bold());
+            println!(
+                "{}: Set '{}' as active default Overworld in server.properties!",
+                "Success".green().bold(),
+                world.white().bold()
+            );
             Ok(())
         }
         WorldAction::SetNether { world } => {
             let world_path = server_path.join(&world);
             if !world_path.exists() {
-                return Err(CraftError::Other(format!("World directory '{}' does not exist.", world_path.display())));
+                return Err(CraftError::Other(format!(
+                    "World directory '{}' does not exist.",
+                    world_path.display()
+                )));
             }
             set_nether_world(&server_path, &world)?;
-            println!("{}: Set '{}' as active Nether dimension world!", "Success".green().bold(), world.white().bold());
+            println!(
+                "{}: Set '{}' as active Nether dimension world!",
+                "Success".green().bold(),
+                world.white().bold()
+            );
             Ok(())
         }
         WorldAction::SetEnd { world } => {
             let world_path = server_path.join(&world);
             if !world_path.exists() {
-                return Err(CraftError::Other(format!("World directory '{}' does not exist.", world_path.display())));
+                return Err(CraftError::Other(format!(
+                    "World directory '{}' does not exist.",
+                    world_path.display()
+                )));
             }
             set_end_world(&server_path, &world)?;
-            println!("{}: Set '{}' as active The End dimension world!", "Success".green().bold(), world.white().bold());
+            println!(
+                "{}: Set '{}' as active The End dimension world!",
+                "Success".green().bold(),
+                world.white().bold()
+            );
             Ok(())
         }
         WorldAction::Import { path_or_url, name } => {
-            println!("{}: Importing world into '{}'...", "Craft".cyan().bold(), server_name);
-            let (dest, installed_name) = if path_or_url.starts_with("http://") || path_or_url.starts_with("https://") {
-                install_world_from_url(&server_path, &path_or_url, name.as_deref()).await?
-            } else {
-                let zip_path = PathBuf::from(&path_or_url);
-                if !zip_path.exists() {
-                    return Err(CraftError::Other(format!("File '{}' does not exist.", path_or_url)));
-                }
-                install_world_from_zip(&server_path, &zip_path, name.as_deref())?
-            };
+            println!(
+                "{}: Importing world into '{}'...",
+                "Craft".cyan().bold(),
+                server_name
+            );
+            let (dest, installed_name) =
+                if path_or_url.starts_with("http://") || path_or_url.starts_with("https://") {
+                    install_world_from_url(&server_path, &path_or_url, name.as_deref()).await?
+                } else {
+                    let zip_path = PathBuf::from(&path_or_url);
+                    if !zip_path.exists() {
+                        return Err(CraftError::Other(format!(
+                            "File '{}' does not exist.",
+                            path_or_url
+                        )));
+                    }
+                    install_world_from_zip(&server_path, &zip_path, name.as_deref())?
+                };
 
-            println!("{}: Imported world as '{}' at {}", "Success".green().bold(), installed_name.white().bold(), dest.display());
+            println!(
+                "{}: Imported world as '{}' at {}",
+                "Success".green().bold(),
+                installed_name.white().bold(),
+                dest.display()
+            );
             Ok(())
         }
         WorldAction::Rm { world, force } => {
             let world_path = server_path.join(&world);
             if !world_path.exists() {
-                return Err(CraftError::Other(format!("World directory '{}' not found.", world_path.display())));
+                return Err(CraftError::Other(format!(
+                    "World directory '{}' not found.",
+                    world_path.display()
+                )));
             }
 
             if !force {
-                let prompt = format!("Are you sure you want to permanently delete world '{}'?", world);
-                if !dialoguer::Confirm::new().with_prompt(prompt).default(false).interact()? {
+                let prompt = format!(
+                    "Are you sure you want to permanently delete world '{}'?",
+                    world
+                );
+                if !dialoguer::Confirm::new()
+                    .with_prompt(prompt)
+                    .default(false)
+                    .interact()?
+                {
                     println!("{}", "Deletion cancelled.".yellow());
                     return Ok(());
                 }
             }
 
             std::fs::remove_dir_all(&world_path)?;
-            println!("{}: Removed world directory '{}'.", "Success".green().bold(), world_path.display());
+            println!(
+                "{}: Removed world directory '{}'.",
+                "Success".green().bold(),
+                world_path.display()
+            );
             Ok(())
         }
     }

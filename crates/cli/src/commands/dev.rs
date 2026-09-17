@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use colored::Colorize;
 use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
 use craft_net::RconClient;
+use std::path::PathBuf;
 
 #[derive(clap::Subcommand, Debug, Clone)]
 pub enum DevAction {
@@ -30,11 +30,7 @@ pub enum DevAction {
     },
 }
 
-pub async fn handle_dev(
-    server_name: &str,
-    action: DevAction,
-    paths: &CraftPaths,
-) -> Result<()> {
+pub async fn handle_dev(server_name: &str, action: DevAction, paths: &CraftPaths) -> Result<()> {
     let server_path = paths.resolve_server_path(None, Some(server_name), true)?;
     let mut registry = ServersRegistry::load(paths)?;
 
@@ -117,8 +113,9 @@ pub async fn handle_dev(
             #[cfg(windows)]
             {
                 if let Err(_) = std::os::windows::fs::symlink_file(&canonical_jar, &dest_link) {
-                    std::fs::copy(&canonical_jar, &dest_link)
-                        .map_err(|e| CraftError::Other(format!("Failed to link/copy JAR: {}", e)))?;
+                    std::fs::copy(&canonical_jar, &dest_link).map_err(|e| {
+                        CraftError::Other(format!("Failed to link/copy JAR: {}", e))
+                    })?;
                 }
             }
 
@@ -163,9 +160,18 @@ pub async fn handle_dev(
             regenerate_server_script(&target_server_config, target_jvm_args.as_deref())?;
 
             if disable {
-                println!("{}: Disabled remote JDWP debugging for '{}'.", "Success".green().bold(), server_name);
+                println!(
+                    "{}: Disabled remote JDWP debugging for '{}'.",
+                    "Success".green().bold(),
+                    server_name
+                );
             } else {
-                println!("{}: Enabled JDWP remote debugging on port {} for '{}'!", "Success".green().bold(), port.to_string().cyan().bold(), server_name);
+                println!(
+                    "{}: Enabled JDWP remote debugging on port {} for '{}'!",
+                    "Success".green().bold(),
+                    port.to_string().cyan().bold(),
+                    server_name
+                );
                 println!("\n{}", "=== IDE Debugger Configuration ===".cyan().bold());
                 println!("  Port:      {}", port.to_string().yellow().bold());
                 println!("  Host:      {}", "localhost / 127.0.0.1".yellow());
@@ -182,7 +188,10 @@ pub async fn handle_dev(
                     server_name, port
                 );
                 println!("\n{}", "--- IntelliJ IDEA Remote JVM Debug ---".dimmed());
-                println!("  Run -> Edit Configurations -> '+' -> Remote JVM Debug -> Port: {}\n", port);
+                println!(
+                    "  Run -> Edit Configurations -> '+' -> Remote JVM Debug -> Port: {}\n",
+                    port
+                );
             }
             Ok(())
         }
@@ -203,7 +212,11 @@ pub async fn handle_dev(
 
             let mut client = RconClient::connect("127.0.0.1", rcon_port, rcon_pass).await?;
             let resp = client.send_command(&cmd).await?;
-            println!("{}: Dispatched '{}' over RCON.", "Craft".cyan().bold(), cmd.white().bold());
+            println!(
+                "{}: Dispatched '{}' over RCON.",
+                "Craft".cyan().bold(),
+                cmd.white().bold()
+            );
             if !resp.trim().is_empty() {
                 println!("Response: {}", resp.green());
             }
@@ -212,7 +225,10 @@ pub async fn handle_dev(
     }
 }
 
-fn regenerate_server_script(server: &craft_core::ServerConfig, jvm_args: Option<&[String]>) -> Result<()> {
+fn regenerate_server_script(
+    server: &craft_core::ServerConfig,
+    jvm_args: Option<&[String]>,
+) -> Result<()> {
     if let Some(software) = craft_providers::find_software(&server.software) {
         let memory = server.memory.as_deref().unwrap_or("2G");
         software.generate_start_script_with_flags(

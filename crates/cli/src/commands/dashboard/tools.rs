@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use colored::Colorize;
+use std::path::PathBuf;
 
 use craft_backup::BackupEngine;
 use craft_core::{
@@ -10,12 +10,12 @@ use craft_daemon::DaemonClient;
 use craft_plugins::PluginManager;
 use craft_providers::CacheManager;
 
-use crate::commands::remote::parse_connection_string;
 use super::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
     run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
 };
 use super::server_control::show_empty_servers_modal;
+use crate::commands::remote::parse_connection_string;
 
 pub async fn ping_menu() -> Result<()> {
     let _guard = AltScreenGuard::enter();
@@ -34,7 +34,9 @@ pub async fn ping_menu() -> Result<()> {
     let proto_header = format!(
         "{}\r\n{}\r\n{}\r\n Target: {}\r\n Select protocol query mode:\r\n{}",
         box_top(width).cyan().bold(),
-        box_title("SELECT PING PROTOCOL", width, false).cyan().bold(),
+        box_title("SELECT PING PROTOCOL", width, false)
+            .cyan()
+            .bold(),
         box_divider(width).cyan().bold(),
         target,
         box_divider(width).dimmed(),
@@ -52,16 +54,17 @@ pub async fn ping_menu() -> Result<()> {
     let (proto_hint, default_port) = match choice {
         Some(0) => (None, 25565),
         Some(1) => (Some(craft_core::QueryProtocolKind::MinecraftJavaSlp), 25565),
-        Some(2) => (Some(craft_core::QueryProtocolKind::MinecraftBedrockRakNet), 19132),
+        Some(2) => (
+            Some(craft_core::QueryProtocolKind::MinecraftBedrockRakNet),
+            19132,
+        ),
         Some(3) => (Some(craft_core::QueryProtocolKind::ValveA2S), 27015),
         _ => return Ok(()),
     };
 
     let (host, port) = if let Some(idx) = target.find(':') {
         let (h, p) = target.split_at(idx);
-        let port_num: u16 = p[1..]
-            .parse()
-            .unwrap_or(default_port);
+        let port_num: u16 = p[1..].parse().unwrap_or(default_port);
         (h.to_string(), port_num)
     } else {
         (target.clone(), default_port)
@@ -109,16 +112,29 @@ pub async fn ping_menu() -> Result<()> {
                 "STEAM / VALVE A2S ONLINE",
                 &[
                     format!("Server Name: {}", res.server_name),
-                    format!("Game / Map:  {} ({}) / {}", res.game_name, res.game_folder, res.map_name),
-                    format!("Players:     {}/{} (Bots: {})", res.online_players, res.max_players, res.bots),
+                    format!(
+                        "Game / Map:  {} ({}) / {}",
+                        res.game_name, res.game_folder, res.map_name
+                    ),
+                    format!(
+                        "Players:     {}/{} (Bots: {})",
+                        res.online_players, res.max_players, res.bots
+                    ),
                     format!("Server Type: {} [{}]", res.server_type, res.environment),
-                    format!("VAC Secured: {}", if res.vac_secured { "Yes" } else { "No" }),
+                    format!(
+                        "VAC Secured: {}",
+                        if res.vac_secured { "Yes" } else { "No" }
+                    ),
                     format!("Latency:     {} ms", res.latency_ms),
                 ],
                 false,
             )?;
         }
-        Ok(craft_net::UniversalPingStatus::PortProbe { latency_ms, transport, .. }) => {
+        Ok(craft_net::UniversalPingStatus::PortProbe {
+            latency_ms,
+            transport,
+            ..
+        }) => {
             show_modal_message(
                 "SERVER PORT OPEN",
                 &[
@@ -155,7 +171,10 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
             "[S3: OFF]".dimmed().to_string()
         };
         let gd_status = if let Some(ref gd) = bk_reg.gdrive {
-            format!("[GDrive: {}]", gd.folder_id).green().bold().to_string()
+            format!("[GDrive: {}]", gd.folder_id)
+                .green()
+                .bold()
+                .to_string()
         } else {
             "[GDrive: OFF]".dimmed().to_string()
         };
@@ -172,7 +191,11 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
         );
 
         let entries = vec![
-            MenuEntry::new("1", "Setup Backup Systems (Local, S3 / R2 / MinIO, Google Drive)").with_aliases(&["s", "c"]),
+            MenuEntry::new(
+                "1",
+                "Setup Backup Systems (Local, S3 / R2 / MinIO, Google Drive)",
+            )
+            .with_aliases(&["s", "c"]),
             MenuEntry::new("2", "Automated Backup Policies & Retention").with_aliases(&["p", "a"]),
             MenuEntry::new("3", "Create Server Snapshot").with_aliases(&["n"]),
             MenuEntry::new("4", "List Existing Backups").with_aliases(&["l"]),
@@ -329,8 +352,12 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                     if idx < registry.servers.len() {
                         let server = &registry.servers[idx];
 
-                        if craft_core::is_server_locked(&server.path) || craft_core::get_server_running_pid(&server.path).is_some() {
-                            let pid_info = craft_core::get_server_running_pid(&server.path).map(|p| format!(" (PID: {})", p)).unwrap_or_default();
+                        if craft_core::is_server_locked(&server.path)
+                            || craft_core::get_server_running_pid(&server.path).is_some()
+                        {
+                            let pid_info = craft_core::get_server_running_pid(&server.path)
+                                .map(|p| format!(" (PID: {})", p))
+                                .unwrap_or_default();
                             show_modal_message(
                                 "RESTORE BLOCKED: SERVER IS RUNNING",
                                 &[
@@ -425,7 +452,6 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
     }
 }
 
-
 pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
     let _guard = AltScreenGuard::enter();
     let mut selected = 0;
@@ -491,8 +517,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                     }
                     p_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
-                    let p_header =
-                        format!(" Search results for '{}' - select to install:", query);
+                    let p_header = format!(" Search results for '{}' - select to install:", query);
                     let mut p_sel = 0;
                     if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
                         if p_idx < results.len() {
@@ -501,7 +526,9 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             let compatible: Vec<_> = registry
                                 .servers
                                 .iter()
-                                .filter(|s| craft_providers::get_content_capabilities(&s.software).plugins)
+                                .filter(|s| {
+                                    craft_providers::get_content_capabilities(&s.software).plugins
+                                })
                                 .collect();
                             if compatible.is_empty() {
                                 show_modal_message(
@@ -527,10 +554,8 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             }
                             s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
-                            let s_header = format!(
-                                " Install '{}' to which server?",
-                                chosen_plugin.name
-                            );
+                            let s_header =
+                                format!(" Install '{}' to which server?", chosen_plugin.name);
                             let mut s_sel = 0;
                             if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
                                 if s_idx < compatible.len() {
@@ -704,8 +729,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                     }
                     p_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
-                    let p_header =
-                        format!(" Search results for '{}' - select to install:", query);
+                    let p_header = format!(" Search results for '{}' - select to install:", query);
                     let mut p_sel = 0;
                     if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
                         if p_idx < results.len() {
@@ -715,7 +739,9 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             let compatible: Vec<_> = registry
                                 .servers
                                 .iter()
-                                .filter(|s| craft_providers::get_content_capabilities(&s.software).mods)
+                                .filter(|s| {
+                                    craft_providers::get_content_capabilities(&s.software).mods
+                                })
                                 .collect();
                             if compatible.is_empty() {
                                 show_modal_message(
@@ -741,10 +767,8 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             }
                             s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
-                            let s_header = format!(
-                                " Select server to install mod '{}':",
-                                chosen.name
-                            );
+                            let s_header =
+                                format!(" Select server to install mod '{}':", chosen.name);
                             let mut s_sel = 0;
                             if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
                                 if s_idx < compatible.len() {
@@ -758,10 +782,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                                     )?;
 
                                     match pm
-                                        .install_mod_from_modrinth(
-                                            &server.path,
-                                            &chosen.id_or_slug,
-                                        )
+                                        .install_mod_from_modrinth(&server.path, &chosen.id_or_slug)
                                         .await
                                     {
                                         Ok(dest) => {
@@ -836,8 +857,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                     }
                     p_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
-                    let p_header =
-                        format!(" Search results for '{}' - select to install:", query);
+                    let p_header = format!(" Search results for '{}' - select to install:", query);
                     let mut p_sel = 0;
                     if let Some(p_idx) = run_menu(&p_header, &p_entries, &mut p_sel)? {
                         if p_idx < results.len() {
@@ -847,7 +867,9 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             let compatible: Vec<_> = registry
                                 .servers
                                 .iter()
-                                .filter(|s| craft_providers::get_content_capabilities(&s.software).datapacks)
+                                .filter(|s| {
+                                    craft_providers::get_content_capabilities(&s.software).datapacks
+                                })
                                 .collect();
                             if compatible.is_empty() {
                                 show_modal_message(
@@ -873,10 +895,8 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                             }
                             s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
-                            let s_header = format!(
-                                " Select server to install datapack '{}':",
-                                chosen.name
-                            );
+                            let s_header =
+                                format!(" Select server to install datapack '{}':", chosen.name);
                             let mut s_sel = 0;
                             if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
                                 if s_idx < compatible.len() {
@@ -972,10 +992,7 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                         }
                         s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
-                        let s_header = format!(
-                            " Select server to install map '{}':",
-                            chosen.name
-                        );
+                        let s_header = format!(" Select server to install map '{}':", chosen.name);
                         let mut s_sel = 0;
                         if let Some(s_idx) = run_menu(&s_header, &s_entries, &mut s_sel)? {
                             if s_idx < registry.servers.len() {
@@ -1012,19 +1029,27 @@ pub async fn plugins_menu(paths: &CraftPaths) -> Result<()> {
                                         )?;
 
                                         // Prompt whether to set as default world - No by default
-                                        let cur_default = craft_core::get_default_world(&server.path);
+                                        let cur_default =
+                                            craft_core::get_default_world(&server.path);
                                         let p_header = format!(
                                             " World '{}' has been installed into '{}'.\r\n Current default world (level-name): '{}'\r\n\r\n Set '{}' as the default world in server.properties?",
                                             installed_name, server.name, cur_default, installed_name
                                         );
                                         let p_opts = vec![
-                                            MenuEntry::new("1", "No (Keep current)").with_aliases(&["n", "no"]),
-                                            MenuEntry::new("2", "Yes (Set as default)").with_aliases(&["y", "yes"]),
+                                            MenuEntry::new("1", "No (Keep current)")
+                                                .with_aliases(&["n", "no"]),
+                                            MenuEntry::new("2", "Yes (Set as default)")
+                                                .with_aliases(&["y", "yes"]),
                                         ];
                                         let mut p_choice = 0;
-                                        if let Some(c) = run_menu(&p_header, &p_opts, &mut p_choice)? {
+                                        if let Some(c) =
+                                            run_menu(&p_header, &p_opts, &mut p_choice)?
+                                        {
                                             if c == 1 {
-                                                craft_core::set_default_world(&server.path, &installed_name)?;
+                                                craft_core::set_default_world(
+                                                    &server.path,
+                                                    &installed_name,
+                                                )?;
                                                 show_modal_message(
                                                     "DEFAULT WORLD UPDATED",
                                                     &[
@@ -1092,9 +1117,7 @@ pub async fn remotes_menu(paths: &CraftPaths) -> Result<()> {
                     let lines: Vec<String> = reg
                         .remotes
                         .iter()
-                        .map(|r| {
-                            format!("{:<16} {}@{}:{}", r.alias, r.user, r.host, r.port)
-                        })
+                        .map(|r| format!("{:<16} {}@{}:{}", r.alias, r.user, r.host, r.port))
                         .collect();
                     show_modal_message("CONFIGURED REMOTE HOSTS", &lines, false)?;
                 }
@@ -1122,9 +1145,11 @@ pub async fn remotes_menu(paths: &CraftPaths) -> Result<()> {
                 r_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
 
                 let mut r_sel = 0;
-                if let Some(r_idx) =
-                    run_menu(" Select remote host to test connection:", &r_entries, &mut r_sel)?
-                {
+                if let Some(r_idx) = run_menu(
+                    " Select remote host to test connection:",
+                    &r_entries,
+                    &mut r_sel,
+                )? {
                     if r_idx < reg.remotes.len() {
                         let remote = &reg.remotes[r_idx];
                         print_in_place_status(
@@ -1210,13 +1235,12 @@ pub async fn remotes_menu(paths: &CraftPaths) -> Result<()> {
                         reg.save(paths)?;
                         show_modal_message(
                             "REMOTE HOST ADDED",
-                            &[format!(
-                                "[OK] Remote host '{}' configured successfully!",
-                                alias
-                            )
-                            .green()
-                            .bold()
-                            .to_string()],
+                            &[
+                                format!("[OK] Remote host '{}' configured successfully!", alias)
+                                    .green()
+                                    .bold()
+                                    .to_string(),
+                            ],
                             false,
                         )?;
                     }
@@ -1407,11 +1431,9 @@ pub async fn daemon_menu(paths: &CraftPaths) -> Result<()> {
                             .to_string()],
                         false,
                     )?,
-                    Err(e) => show_modal_message(
-                        "RESTART FAILED",
-                        &[format!("[ERROR] {}", e)],
-                        true,
-                    )?,
+                    Err(e) => {
+                        show_modal_message("RESTART FAILED", &[format!("[ERROR] {}", e)], true)?
+                    }
                 }
             }
             _ => return Ok(()),
@@ -1477,22 +1499,17 @@ pub fn cache_menu(paths: &CraftPaths) -> Result<()> {
                             let cl_mb = (cleaned as f64) / (1024.0 * 1024.0);
                             show_modal_message(
                                 "CACHE PURGED",
-                                &[format!(
-                                    "[OK] Cleared {:.2} MB of downloaded caches.",
-                                    cl_mb
-                                )
-                                .green()
-                                .bold()
-                                .to_string()],
+                                &[
+                                    format!("[OK] Cleared {:.2} MB of downloaded caches.", cl_mb)
+                                        .green()
+                                        .bold()
+                                        .to_string(),
+                                ],
                                 false,
                             )?;
                         }
                         Err(e) => {
-                            show_modal_message(
-                                "PURGE FAILED",
-                                &[format!("[ERROR] {}", e)],
-                                true,
-                            )?;
+                            show_modal_message("PURGE FAILED", &[format!("[ERROR] {}", e)], true)?;
                         }
                     }
                 }
@@ -1527,21 +1544,31 @@ pub async fn firewall_menu(paths: &CraftPaths) -> Result<()> {
             Some(0) => {
                 let reg = ServersRegistry::load(paths)?;
                 if reg.servers.is_empty() {
-                    show_modal_message("NO SERVERS", &["No registered servers found to configure.".to_string()], true)?;
+                    show_modal_message(
+                        "NO SERVERS",
+                        &["No registered servers found to configure.".to_string()],
+                        true,
+                    )?;
                     continue;
                 }
                 let mut s_entries = Vec::new();
                 for (i, s) in reg.servers.iter().enumerate() {
                     let hotkey = (i + 1).to_string();
                     let port = s.port.unwrap_or(25565);
-                    s_entries.push(MenuEntry::new(hotkey, format!("{:<20} Port: {:<6} Software: {}", s.name, port, s.software)));
+                    s_entries.push(MenuEntry::new(
+                        hotkey,
+                        format!("{:<20} Port: {:<6} Software: {}", s.name, port, s.software),
+                    ));
                 }
                 s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
                 let mut s_sel = 0;
-                if let Some(idx) = run_menu(" Select Server for Firewall Rule:", &s_entries, &mut s_sel)? {
+                if let Some(idx) =
+                    run_menu(" Select Server for Firewall Rule:", &s_entries, &mut s_sel)?
+                {
                     if idx < reg.servers.len() {
                         let s = &reg.servers[idx];
-                        let is_bedrock = s.software.contains("bedrock") || s.software.contains("pocketmine");
+                        let is_bedrock =
+                            s.software.contains("bedrock") || s.software.contains("pocketmine");
                         let port = s.port.unwrap_or(if is_bedrock { 19132 } else { 25565 });
                         let ip_prompt = run_input_prompt(
                             "ALLOWED IP ADDRESS",
@@ -1551,13 +1578,24 @@ pub async fn firewall_menu(paths: &CraftPaths) -> Result<()> {
                         if let Some(ip) = ip_prompt {
                             let ip = ip.trim();
                             if !ip.is_empty() {
-                                let _ = print_in_place_status("APPLYING FIREWALL RULE", &[format!("Adding rule for port {} ({})...", port, if is_bedrock { "UDP" } else { "TCP" })]);
+                                let _ = print_in_place_status(
+                                    "APPLYING FIREWALL RULE",
+                                    &[format!(
+                                        "Adding rule for port {} ({})...",
+                                        port,
+                                        if is_bedrock { "UDP" } else { "TCP" }
+                                    )],
+                                );
                                 match craft_net::allow_ip_port(ip, port, is_bedrock) {
                                     Ok(_) => {
                                         show_modal_message("FIREWALL RULE ADDED", &[format!("[OK] Allowed incoming connections from '{}' on port {}.", ip, port).green().bold().to_string()], false)?;
                                     }
                                     Err(e) => {
-                                        show_modal_message("FIREWALL ERROR", &[format!("[ERROR] {}", e)], true)?;
+                                        show_modal_message(
+                                            "FIREWALL ERROR",
+                                            &[format!("[ERROR] {}", e)],
+                                            true,
+                                        )?;
                                     }
                                 }
                             }
@@ -1566,27 +1604,61 @@ pub async fn firewall_menu(paths: &CraftPaths) -> Result<()> {
                 }
             }
             Some(1) => {
-                let ip_str = match run_input_prompt("ALLOWED IP", "Enter IP to allow (or 0.0.0.0/0 for any):", Some("0.0.0.0/0"))? {
+                let ip_str = match run_input_prompt(
+                    "ALLOWED IP",
+                    "Enter IP to allow (or 0.0.0.0/0 for any):",
+                    Some("0.0.0.0/0"),
+                )? {
                     Some(i) if !i.trim().is_empty() => i.trim().to_string(),
                     _ => continue,
                 };
-                let port_str = match run_input_prompt("PORT", "Enter port number to allow (e.g. 25565):", Some("25565"))? {
+                let port_str = match run_input_prompt(
+                    "PORT",
+                    "Enter port number to allow (e.g. 25565):",
+                    Some("25565"),
+                )? {
                     Some(p) if !p.trim().is_empty() => p.trim().to_string(),
                     _ => continue,
                 };
                 let port: u16 = match port_str.parse() {
                     Ok(p) => p,
                     Err(_) => {
-                        show_modal_message("INVALID PORT", &["Port must be a number between 1 and 65535.".to_string()], true)?;
+                        show_modal_message(
+                            "INVALID PORT",
+                            &["Port must be a number between 1 and 65535.".to_string()],
+                            true,
+                        )?;
                         continue;
                     }
                 };
-                let proto_sel = run_menu(" Select Protocol:", &[MenuEntry::new("1", "TCP (Java)"), MenuEntry::new("2", "UDP (Bedrock)")], &mut 0)?;
+                let proto_sel = run_menu(
+                    " Select Protocol:",
+                    &[
+                        MenuEntry::new("1", "TCP (Java)"),
+                        MenuEntry::new("2", "UDP (Bedrock)"),
+                    ],
+                    &mut 0,
+                )?;
                 let is_udp = proto_sel == Some(1);
-                let _ = print_in_place_status("APPLYING FIREWALL RULE", &[format!("Adding rule for {}:{}...", ip_str, port)]);
+                let _ = print_in_place_status(
+                    "APPLYING FIREWALL RULE",
+                    &[format!("Adding rule for {}:{}...", ip_str, port)],
+                );
                 match craft_net::allow_ip_port(&ip_str, port, is_udp) {
                     Ok(_) => {
-                        show_modal_message("FIREWALL RULE ADDED", &[format!("[OK] Successfully allowed {}:{} ({})!", ip_str, port, if is_udp { "UDP" } else { "TCP" }).green().bold().to_string()], false)?;
+                        show_modal_message(
+                            "FIREWALL RULE ADDED",
+                            &[format!(
+                                "[OK] Successfully allowed {}:{} ({})!",
+                                ip_str,
+                                port,
+                                if is_udp { "UDP" } else { "TCP" }
+                            )
+                            .green()
+                            .bold()
+                            .to_string()],
+                            false,
+                        )?;
                     }
                     Err(e) => {
                         show_modal_message("FIREWALL ERROR", &[format!("[ERROR] {}", e)], true)?;
@@ -1622,21 +1694,37 @@ pub async fn loopback_menu() -> Result<()> {
         );
 
         let entries = vec![
-            MenuEntry::new("1", if status { "Re-enable / Refresh Loopback Exemption" } else { "Enable Loopback Exemption" }),
+            MenuEntry::new(
+                "1",
+                if status {
+                    "Re-enable / Refresh Loopback Exemption"
+                } else {
+                    "Enable Loopback Exemption"
+                },
+            ),
             MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
 
         match run_menu(&header, &entries, &mut selected)? {
-            Some(0) => {
-                match craft_net::enable_bedrock_loopback() {
-                    Ok(_) => {
-                        show_modal_message("LOOPBACK EXEMPTION APPLIED", &["[OK] Windows UWP Loopback exemption enabled successfully!".green().bold().to_string()], false)?;
-                    }
-                    Err(e) => {
-                        show_modal_message("LOOPBACK ERROR", &[format!("[ERROR] Failed to enable loopback: {}", e)], true)?;
-                    }
+            Some(0) => match craft_net::enable_bedrock_loopback() {
+                Ok(_) => {
+                    show_modal_message(
+                        "LOOPBACK EXEMPTION APPLIED",
+                        &["[OK] Windows UWP Loopback exemption enabled successfully!"
+                            .green()
+                            .bold()
+                            .to_string()],
+                        false,
+                    )?;
                 }
-            }
+                Err(e) => {
+                    show_modal_message(
+                        "LOOPBACK ERROR",
+                        &[format!("[ERROR] Failed to enable loopback: {}", e)],
+                        true,
+                    )?;
+                }
+            },
             _ => break,
         }
     }
@@ -1666,8 +1754,10 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         let entries = vec![
             MenuEntry::new("1", "Server Network Ping").with_aliases(&["p", "ping"]),
             MenuEntry::new("2", "Daemon Control").with_aliases(&["d", "daemon"]),
-            MenuEntry::new("3", "Firewall Manager (Port/IP Rules)").with_aliases(&["f", "firewall"]),
-            MenuEntry::new("4", "Windows Bedrock Loopback Exemption").with_aliases(&["l", "loopback"]),
+            MenuEntry::new("3", "Firewall Manager (Port/IP Rules)")
+                .with_aliases(&["f", "firewall"]),
+            MenuEntry::new("4", "Windows Bedrock Loopback Exemption")
+                .with_aliases(&["l", "loopback"]),
             MenuEntry::new("5", purge_label).with_aliases(&["c", "cache"]),
             MenuEntry::new("0", "Back").with_aliases(&["b", "q"]),
         ];
@@ -1706,22 +1796,17 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                             let cl_mb = (cleaned as f64) / (1024.0 * 1024.0);
                             show_modal_message(
                                 "CACHE PURGED",
-                                &[format!(
-                                    "[OK] Cleared {:.2} MB of downloaded caches.",
-                                    cl_mb
-                                )
-                                .green()
-                                .bold()
-                                .to_string()],
+                                &[
+                                    format!("[OK] Cleared {:.2} MB of downloaded caches.", cl_mb)
+                                        .green()
+                                        .bold()
+                                        .to_string(),
+                                ],
                                 false,
                             )?;
                         }
                         Err(e) => {
-                            show_modal_message(
-                                "PURGE FAILED",
-                                &[format!("[ERROR] {}", e)],
-                                true,
-                            )?;
+                            show_modal_message("PURGE FAILED", &[format!("[ERROR] {}", e)], true)?;
                         }
                     }
                 }
@@ -1730,4 +1815,3 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         }
     }
 }
-

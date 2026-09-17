@@ -1,12 +1,11 @@
-use std::path::PathBuf;
+use crate::commands::dashboard::screen::{
+    box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
+    run_menu, run_paged_list_menu, show_modal_message, MenuEntry, NavGuard, PagedMenuAction,
+};
 use colored::Colorize;
 use craft_core::{CraftPaths, Result};
 use craft_remote::{RemoteCraftClient, RemoteServerInfo};
-use crate::commands::dashboard::screen::{
-    box_divider, box_title, box_top, get_content_width, print_in_place_status,
-    run_input_prompt, run_menu, run_paged_list_menu, show_modal_message,
-    MenuEntry, NavGuard, PagedMenuAction,
-};
+use std::path::PathBuf;
 
 pub async fn manage_remote_backups(
     paths: &CraftPaths,
@@ -42,9 +41,8 @@ pub async fn manage_remote_backups(
         };
 
         let width = get_content_width(80);
-        let action_entries = vec![
-            MenuEntry::new("n", "New Backup").with_aliases(&["c", "create", "new"]),
-        ];
+        let action_entries =
+            vec![MenuEntry::new("n", "New Backup").with_aliases(&["c", "create", "new"])];
 
         let action = run_paged_list_menu(
             &backups,
@@ -54,10 +52,15 @@ pub async fn manage_remote_backups(
                 let count_str = if total_count == 0 {
                     "No backups found for this server.".dimmed().to_string()
                 } else {
-                    format!("Total Archives: {}", total_count).white().bold().to_string()
+                    format!("Total Archives: {}", total_count)
+                        .white()
+                        .bold()
+                        .to_string()
                 };
                 let page_info = if total_pages > 1 {
-                    format!(" | Page {} of {}", page, total_pages).cyan().to_string()
+                    format!(" | Page {} of {}", page, total_pages)
+                        .cyan()
+                        .to_string()
                 } else {
                     "".to_string()
                 };
@@ -102,7 +105,10 @@ pub async fn manage_remote_backups(
 
                     print_in_place_status(
                         "CREATING REMOTE BACKUP",
-                        &[format!("Creating snapshot for '{}' on remote host...", server.name)],
+                        &[format!(
+                            "Creating snapshot for '{}' on remote host...",
+                            server.name
+                        )],
                     )?;
 
                     match client.create_backup(&server.name, world_only) {
@@ -120,11 +126,7 @@ pub async fn manage_remote_backups(
                             )?;
                         }
                         Err(e) => {
-                            show_modal_message(
-                                "BACKUP FAILED",
-                                &[format!("[ERROR] {}", e)],
-                                true,
-                            )?;
+                            show_modal_message("BACKUP FAILED", &[format!("[ERROR] {}", e)], true)?;
                         }
                     }
                 }
@@ -151,9 +153,12 @@ pub async fn manage_remote_backups(
                     match act {
                         0 => {
                             // Restore
-                            let (running_now, cur_pid) = client.check_server_running(&server.name, &server.path);
+                            let (running_now, cur_pid) =
+                                client.check_server_running(&server.name, &server.path);
                             if running_now {
-                                let pid_info = cur_pid.map(|p| format!(" (PID: {})", p)).unwrap_or_default();
+                                let pid_info = cur_pid
+                                    .map(|p| format!(" (PID: {})", p))
+                                    .unwrap_or_default();
                                 show_modal_message(
                                     "RESTORE BLOCKED: SERVER IS RUNNING",
                                     &[
@@ -185,17 +190,29 @@ pub async fn manage_remote_backups(
 
                             let confirm_entries = vec![
                                 MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
-                                MenuEntry::new("2", format!("Confirm Restore of '{}'", backup.filename)),
+                                MenuEntry::new(
+                                    "2",
+                                    format!("Confirm Restore of '{}'", backup.filename),
+                                ),
                             ];
 
                             let mut c_sel = 0;
-                            if let Some(1) = run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
+                            if let Some(1) =
+                                run_menu(&confirm_header, &confirm_entries, &mut c_sel)?
+                            {
                                 let _ = print_in_place_status(
                                     "RESTORING REMOTE BACKUP",
-                                    &[format!("Restoring '{}' on remote server...", backup.filename)],
+                                    &[format!(
+                                        "Restoring '{}' on remote server...",
+                                        backup.filename
+                                    )],
                                 );
 
-                                match client.restore_backup(&server.name, &server.path, &backup.filename) {
+                                match client.restore_backup(
+                                    &server.name,
+                                    &server.path,
+                                    &backup.filename,
+                                ) {
                                     Ok(_) => {
                                         show_modal_message(
                                             "RESTORE COMPLETE",
@@ -230,40 +247,54 @@ pub async fn manage_remote_backups(
                             ];
 
                             let mut dest_sel = 0;
-                            let target_dir = match run_menu(dest_header, &dest_entries, &mut dest_sel)? {
-                                Some(0) => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-                                Some(1) => {
-                                    let p = paths.home.join("downloads");
-                                    let _ = std::fs::create_dir_all(&p);
-                                    p
-                                }
-                                Some(2) => {
-                                    match run_input_prompt(
-                                        "CUSTOM DESTINATION",
-                                        "Enter local directory to save backup:",
-                                        None,
-                                    )? {
-                                        Some(d) if !d.trim().is_empty() => PathBuf::from(d.trim()),
-                                        _ => continue,
+                            let target_dir =
+                                match run_menu(dest_header, &dest_entries, &mut dest_sel)? {
+                                    Some(0) => std::env::current_dir()
+                                        .unwrap_or_else(|_| PathBuf::from(".")),
+                                    Some(1) => {
+                                        let p = paths.home.join("downloads");
+                                        let _ = std::fs::create_dir_all(&p);
+                                        p
                                     }
-                                }
-                                _ => continue,
-                            };
+                                    Some(2) => {
+                                        match run_input_prompt(
+                                            "CUSTOM DESTINATION",
+                                            "Enter local directory to save backup:",
+                                            None,
+                                        )? {
+                                            Some(d) if !d.trim().is_empty() => {
+                                                PathBuf::from(d.trim())
+                                            }
+                                            _ => continue,
+                                        }
+                                    }
+                                    _ => continue,
+                                };
 
                             print_in_place_status(
                                 "DOWNLOADING BACKUP",
                                 &[
-                                    format!("Downloading '{}' from remote host via SFTP...", backup.filename),
+                                    format!(
+                                        "Downloading '{}' from remote host via SFTP...",
+                                        backup.filename
+                                    ),
                                     format!("Destination directory: {}", target_dir.display()),
                                 ],
                             )?;
 
-                            match client.download_backup(&server.name, &backup.filename, &target_dir) {
+                            match client.download_backup(
+                                &server.name,
+                                &backup.filename,
+                                &target_dir,
+                            ) {
                                 Ok(dest_file) => {
                                     show_modal_message(
                                         "DOWNLOAD COMPLETE",
                                         &[
-                                            "[OK] Backup archive downloaded successfully!".green().bold().to_string(),
+                                            "[OK] Backup archive downloaded successfully!"
+                                                .green()
+                                                .bold()
+                                                .to_string(),
                                             format!("Saved to: {}", dest_file.display()),
                                         ],
                                         false,
@@ -293,7 +324,11 @@ pub async fn manage_remote_backups(
                                     )?;
                                 }
                                 Err(e) => {
-                                    show_modal_message("ERROR", &[format!("[ERROR] Failed to trash backup: {}", e)], true)?;
+                                    show_modal_message(
+                                        "ERROR",
+                                        &[format!("[ERROR] Failed to trash backup: {}", e)],
+                                        true,
+                                    )?;
                                 }
                             }
                         }

@@ -1,9 +1,9 @@
-use std::io::IsTerminal;
-use std::path::PathBuf;
 use colored::Colorize;
-use dialoguer::{theme::ColorfulTheme, Select};
 use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
 use craft_daemon::DaemonClient;
+use dialoguer::{theme::ColorfulTheme, Select};
+use std::io::IsTerminal;
+use std::path::PathBuf;
 
 pub async fn handle_restart(
     name_arg: &str,
@@ -16,7 +16,10 @@ pub async fn handle_restart(
     if resolved_name.is_empty() && custom_path.is_none() && std::io::stdin().is_terminal() {
         let registry = ServersRegistry::load(paths)?;
         if registry.servers.is_empty() {
-            println!("{}", "No servers registered. Use 'craft new' to create one.".yellow());
+            println!(
+                "{}",
+                "No servers registered. Use 'craft new' to create one.".yellow()
+            );
             return Ok(());
         }
 
@@ -30,16 +33,25 @@ pub async fn handle_restart(
             Vec::new()
         };
 
-        let running_servers: Vec<_> = registry.servers.iter()
-            .filter(|s| running_paths.contains(&s.path)
-                || s.path.canonicalize().map(|p| running_paths.contains(&p)).unwrap_or(false)
-                || craft_core::is_server_locked(&s.path))
+        let running_servers: Vec<_> = registry
+            .servers
+            .iter()
+            .filter(|s| {
+                running_paths.contains(&s.path)
+                    || s.path
+                        .canonicalize()
+                        .map(|p| running_paths.contains(&p))
+                        .unwrap_or(false)
+                    || craft_core::is_server_locked(&s.path)
+            })
             .collect();
 
         if running_servers.is_empty() {
             println!("{}", "No running servers found to restart.".yellow());
             println!("Select a registered server to start:");
-            let server_names: Vec<String> = registry.servers.iter()
+            let server_names: Vec<String> = registry
+                .servers
+                .iter()
                 .map(|s| format!("{} [STOPPED - {} {}]", s.name, s.software, s.version))
                 .collect();
             let idx = Select::with_theme(&ColorfulTheme::default())
@@ -49,7 +61,8 @@ pub async fn handle_restart(
                 .interact()?;
             resolved_name = registry.servers[idx].name.clone();
         } else {
-            let server_names: Vec<String> = running_servers.iter()
+            let server_names: Vec<String> = running_servers
+                .iter()
                 .map(|s| format!("{} [RUNNING - {} {}]", s.name, s.software, s.version))
                 .collect();
             let idx = Select::with_theme(&ColorfulTheme::default())
@@ -63,12 +76,18 @@ pub async fn handle_restart(
 
     let server_path = paths.resolve_server_path(
         custom_path.as_deref(),
-        if resolved_name.is_empty() { None } else { Some(&resolved_name) },
+        if resolved_name.is_empty() {
+            None
+        } else {
+            Some(&resolved_name)
+        },
         true,
     )?;
 
     if !server_path.exists() {
-        return Err(CraftError::InvalidPath(server_path.to_string_lossy().to_string()));
+        return Err(CraftError::InvalidPath(
+            server_path.to_string_lossy().to_string(),
+        ));
     }
 
     let registry = ServersRegistry::load(paths)?;
@@ -82,17 +101,38 @@ pub async fn handle_restart(
     DaemonClient::ensure_daemon_started(paths).await?;
     let mut client = DaemonClient::connect(paths).await?;
 
-    println!("{}", format!("Stopping server '{}'...", server_entry.name).yellow());
+    println!(
+        "{}",
+        format!("Stopping server '{}'...", server_entry.name).yellow()
+    );
     let _ = client.stop_server(&server_path, force).await;
 
     // Small pause to allow socket and port release
     tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
 
-    println!("{}", format!("Starting server '{}'...", server_entry.name).cyan());
+    println!(
+        "{}",
+        format!("Starting server '{}'...", server_entry.name).cyan()
+    );
     client.start_server(&server_path).await?;
 
-    println!("{}", format!("Server '{}' restarted successfully in the background.", server_entry.name).green().bold());
-    println!("{}", format!("Use 'craft view {}' to attach to its live console.", server_entry.name).dimmed());
+    println!(
+        "{}",
+        format!(
+            "Server '{}' restarted successfully in the background.",
+            server_entry.name
+        )
+        .green()
+        .bold()
+    );
+    println!(
+        "{}",
+        format!(
+            "Use 'craft view {}' to attach to its live console.",
+            server_entry.name
+        )
+        .dimmed()
+    );
 
     Ok(())
 }

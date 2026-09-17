@@ -1,0 +1,16 @@
+[package]
+name = "modal-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A responsive, declarative, box-encapsulated Terminal User Interface (TUI) and modal dialog engine for Rust."
+readme = "README.md"
+keywords = ["tui", "terminal", "modal", "crossterm", "cli"]
+categories = ["command-line-interface", "user-interfaces"]
+
+[dependencies]
+crossterm.workspace = true
+colored.workspace = true
+thiserror.workspace = true

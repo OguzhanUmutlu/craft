@@ -1,7 +1,7 @@
-use std::io::IsTerminal;
 use clap::Parser;
 use colored::Colorize;
 use craft_core::{CraftPaths, Result};
+use std::io::IsTerminal;
 use tracing_subscriber::EnvFilter;
 
 mod cli;
@@ -13,21 +13,21 @@ use commands::{
     backup::handle_backup,
     cache::handle_cache,
     dashboard::{
-        backups_menu, cache_menu, daemon_menu,
-        gui_create_server_wizard_with_name, handle_dashboard, ping_menu,
-        plugins_menu, quick_start_menu, remotes_menu, restart_servers_menu,
-        rm_servers_menu, stop_servers_menu, view_servers_menu,
+        backups_menu, cache_menu, daemon_menu, gui_create_server_wizard_with_name,
+        handle_dashboard, ping_menu, plugins_menu, quick_start_menu, remotes_menu,
+        restart_servers_menu, rm_servers_menu, stop_servers_menu, view_servers_menu,
     },
+    datapack::handle_datapack,
     deploy::handle_deploy,
+    dev::handle_dev,
     dockerize::handle_dockerize,
     fix::handle_fix,
     load::handle_load,
     ls::handle_ls,
+    mod_cmd::handle_mod,
     net::{handle_firewall, handle_loopback, handle_ping, handle_rcon},
     new::handle_new,
     plugin::handle_plugin,
-    mod_cmd::handle_mod,
-    datapack::handle_datapack,
     prop::handle_prop,
     remote::{execute_remote, handle_remote},
     restart::handle_restart,
@@ -41,17 +41,13 @@ use commands::{
     ver::handle_ver,
     view::handle_view,
     world::handle_world,
-    dev::handle_dev,
 };
 
 #[tokio::main]
 async fn main() {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("warn"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
 
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .init();
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     let cli = Cli::parse();
     let paths = match CraftPaths::new() {
@@ -71,7 +67,10 @@ async fn main() {
                 Ok(())
             }
         }
-        Some(Commands::Manage { remote_node, remote }) => {
+        Some(Commands::Manage {
+            remote_node,
+            remote,
+        }) => {
             if let Some(alias) = remote {
                 let registry = match craft_core::RemotesRegistry::load(&paths) {
                     Ok(r) => r,
@@ -88,7 +87,11 @@ async fn main() {
             } else {
                 if let Some(ref node) = remote_node {
                     crate::commands::dashboard::screen::set_remote_node(Some(node.clone()));
-                    crate::commands::dashboard::screen::set_root_breadcrumbs(&["Dashboard", "Remote Hosts", node]);
+                    crate::commands::dashboard::screen::set_root_breadcrumbs(&[
+                        "Dashboard",
+                        "Remote Hosts",
+                        node,
+                    ]);
                 }
                 handle_dashboard(&paths).await
             }
@@ -155,7 +158,10 @@ async fn main() {
                     remote_cmd.push_str(&format!(" --jvm-flags \"{}\"", flags.join(" ")));
                 }
                 execute_remote(&alias, &remote_cmd, false, &paths)
-            } else if (server_name.is_empty() || sw.is_none()) && std::io::stdin().is_terminal() && !yes {
+            } else if (server_name.is_empty() || sw.is_none())
+                && std::io::stdin().is_terminal()
+                && !yes
+            {
                 gui_create_server_wizard_with_name(&server_name, &paths).await
             } else {
                 handle_new(
@@ -174,10 +180,17 @@ async fn main() {
                     shenandoah,
                     jvm_flags,
                     &paths,
-                ).await
+                )
+                .await
             }
         }
-        Some(Commands::Run { name, path, here, daemon: _, remote }) => {
+        Some(Commands::Run {
+            name,
+            path,
+            here,
+            daemon: _,
+            remote,
+        }) => {
             if let Some(alias) = remote {
                 let remote_cmd = format!("craft run {}{}", name, if here { " --here" } else { "" });
                 execute_remote(&alias, &remote_cmd, here, &paths)
@@ -187,7 +200,13 @@ async fn main() {
                 handle_run(&name, path, here, &paths).await
             }
         }
-        Some(Commands::Stop { name, path, force, all, remote }) => {
+        Some(Commands::Stop {
+            name,
+            path,
+            force,
+            all,
+            remote,
+        }) => {
             if let Some(alias) = remote {
                 let remote_cmd = format!(
                     "craft stop {}{}{}",
@@ -196,17 +215,32 @@ async fn main() {
                     if all { " --all" } else { "" }
                 );
                 execute_remote(&alias, &remote_cmd, false, &paths)
-            } else if name.is_empty() && path.is_none() && !force && !all && std::io::stdin().is_terminal() {
+            } else if name.is_empty()
+                && path.is_none()
+                && !force
+                && !all
+                && std::io::stdin().is_terminal()
+            {
                 stop_servers_menu(&paths).await
             } else {
                 handle_stop(&name, path, force, all, &paths).await
             }
         }
-        Some(Commands::Restart { name, path, force, remote }) => {
+        Some(Commands::Restart {
+            name,
+            path,
+            force,
+            remote,
+        }) => {
             if let Some(alias) = remote {
-                let remote_cmd = format!("craft restart {}{}", name, if force { " --force" } else { "" });
+                let remote_cmd = format!(
+                    "craft restart {}{}",
+                    name,
+                    if force { " --force" } else { "" }
+                );
                 execute_remote(&alias, &remote_cmd, false, &paths)
-            } else if name.is_empty() && path.is_none() && !force && std::io::stdin().is_terminal() {
+            } else if name.is_empty() && path.is_none() && !force && std::io::stdin().is_terminal()
+            {
                 restart_servers_menu(&paths).await
             } else {
                 handle_restart(&name, path, force, &paths).await
@@ -229,7 +263,12 @@ async fn main() {
                 handle_ls(&paths).await
             }
         }
-        Some(Commands::Rm { name, path, rf, remote }) => {
+        Some(Commands::Rm {
+            name,
+            path,
+            rf,
+            remote,
+        }) => {
             if let Some(alias) = remote {
                 let remote_cmd = format!("craft rm {}{}", name, if rf { " -rf" } else { "" });
                 execute_remote(&alias, &remote_cmd, false, &paths)
@@ -239,15 +278,14 @@ async fn main() {
                 handle_rm(&name, path, rf, &paths).await
             }
         }
-        Some(Commands::Load { path, software, version, name }) => {
-            handle_load(path, &software, &version, &name, &paths).await
-        }
-        Some(Commands::Ver { software }) => {
-            handle_ver(software).await
-        }
-        Some(Commands::Update { softwares }) => {
-            handle_update(softwares).await
-        }
+        Some(Commands::Load {
+            path,
+            software,
+            version,
+            name,
+        }) => handle_load(path, &software, &version, &name, &paths).await,
+        Some(Commands::Ver { software }) => handle_ver(software).await,
+        Some(Commands::Update { softwares }) => handle_update(softwares).await,
         Some(Commands::Cache { action }) => {
             if action.is_none() && std::io::stdin().is_terminal() {
                 cache_menu(&paths)
@@ -264,19 +302,18 @@ async fn main() {
                 handle_service(crate::cli::ServiceCommands::Status, &paths).await
             }
         }
-        Some(Commands::Auto { action }) => {
-            handle_auto(action, &paths).await
-        }
-        Some(Commands::Fix { name, path }) => {
-            handle_fix(&name, path, &paths).await
-        }
+        Some(Commands::Auto { action }) => handle_auto(action, &paths).await,
+        Some(Commands::Fix { name, path }) => handle_fix(&name, path, &paths).await,
         Some(Commands::Plugin { action }) => {
             if let Some(act) = action {
                 handle_plugin(act, &paths).await
             } else if std::io::stdin().is_terminal() {
                 plugins_menu(&paths).await
             } else {
-                eprintln!("{}: Specify a plugin action or run interactively in a TTY.", "Error".red().bold());
+                eprintln!(
+                    "{}: Specify a plugin action or run interactively in a TTY.",
+                    "Error".red().bold()
+                );
                 Ok(())
             }
         }
@@ -286,7 +323,10 @@ async fn main() {
             } else if std::io::stdin().is_terminal() {
                 plugins_menu(&paths).await
             } else {
-                eprintln!("{}: Specify a mod action or run interactively in a TTY.", "Error".red().bold());
+                eprintln!(
+                    "{}: Specify a mod action or run interactively in a TTY.",
+                    "Error".red().bold()
+                );
                 Ok(())
             }
         }
@@ -296,46 +336,48 @@ async fn main() {
             } else if std::io::stdin().is_terminal() {
                 plugins_menu(&paths).await
             } else {
-                eprintln!("{}: Specify a datapack action or run interactively in a TTY.", "Error".red().bold());
+                eprintln!(
+                    "{}: Specify a datapack action or run interactively in a TTY.",
+                    "Error".red().bold()
+                );
                 Ok(())
             }
         }
-        Some(Commands::Ping { target, bedrock, a2s }) => {
+        Some(Commands::Ping {
+            target,
+            bedrock,
+            a2s,
+        }) => {
             if target.is_empty() && std::io::stdin().is_terminal() {
                 ping_menu().await
             } else {
                 handle_ping(&target, bedrock, a2s).await
             }
         }
-        Some(Commands::Rcon { server, password, command }) => {
-            handle_rcon(&server, password, &command, &paths).await
-        }
+        Some(Commands::Rcon {
+            server,
+            password,
+            command,
+        }) => handle_rcon(&server, password, &command, &paths).await,
         Some(Commands::Backup { action }) => {
             if let Some(act) = action {
                 handle_backup(act, &paths).await
             } else if std::io::stdin().is_terminal() {
                 backups_menu(&paths).await
             } else {
-                eprintln!("{}: Specify a backup action or run interactively in a TTY.", "Error".red().bold());
+                eprintln!(
+                    "{}: Specify a backup action or run interactively in a TTY.",
+                    "Error".red().bold()
+                );
                 Ok(())
             }
         }
-        Some(Commands::Firewall { action }) => {
-            match action {
-                cli::FirewallCommands::Allow { server, ip } => {
-                    handle_firewall(&server, &ip, &paths)
-                }
-            }
-        }
-        Some(Commands::Loopback { action }) => {
-            handle_loopback(action)
-        }
-        Some(Commands::Template { action }) => {
-            handle_template(action)
-        }
-        Some(Commands::Dockerize { server }) => {
-            handle_dockerize(&server, &paths)
-        }
+        Some(Commands::Firewall { action }) => match action {
+            cli::FirewallCommands::Allow { server, ip } => handle_firewall(&server, &ip, &paths),
+        },
+        Some(Commands::Loopback { action }) => handle_loopback(action),
+        Some(Commands::Template { action }) => handle_template(action),
+        Some(Commands::Dockerize { server }) => handle_dockerize(&server, &paths),
         Some(Commands::Remote { action }) => {
             if let Some(act) = action {
                 handle_remote(act, &paths).await
@@ -345,21 +387,11 @@ async fn main() {
                 handle_remote(crate::cli::RemoteCommands::Ls, &paths).await
             }
         }
-        Some(Commands::Deploy { action }) => {
-            handle_deploy(action, &paths)
-        }
-        Some(Commands::Prop { server, action }) => {
-            handle_prop(&server, action, &paths).await
-        }
-        Some(Commands::World { server, action }) => {
-            handle_world(&server, action, &paths).await
-        }
-        Some(Commands::Dev { server, action }) => {
-            handle_dev(&server, action, &paths).await
-        }
-        Some(Commands::Trash { action }) => {
-            handle_trash(action, &paths).await
-        }
+        Some(Commands::Deploy { action }) => handle_deploy(action, &paths),
+        Some(Commands::Prop { server, action }) => handle_prop(&server, action, &paths).await,
+        Some(Commands::World { server, action }) => handle_world(&server, action, &paths).await,
+        Some(Commands::Dev { server, action }) => handle_dev(&server, action, &paths).await,
+        Some(Commands::Trash { action }) => handle_trash(action, &paths).await,
     };
 
     if let Err(e) = result {
@@ -370,15 +402,23 @@ async fn main() {
 
 fn print_banner() {
     println!("{}", "Craft - Minecraft Server Toolchain".cyan().bold());
-    println!("{}", "High-performance Minecraft server management CLI, interactive dashboard, and daemon.\n".dimmed());
+    println!(
+        "{}",
+        "High-performance Minecraft server management CLI, interactive dashboard, and daemon.\n"
+            .dimmed()
+    );
     println!("Usage: craft [COMMAND] [OPTIONS]\n");
     println!("Commands:");
     println!("  manage                            Open interactive Server Manager Dashboard");
-    println!("  new [name] [software] [version]   Set up a new server (interactive wizard if omitted)");
+    println!(
+        "  new [name] [software] [version]   Set up a new server (interactive wizard if omitted)"
+    );
     println!("  run [name] [--here]               Run an existing server (interactive selector if omitted)");
     println!("  stop [name] [--all]               Stop running servers");
     println!("  restart [name]                    Restart a running server");
-    println!("  view [name]                       Attach to server live console (logs/interactive)");
+    println!(
+        "  view [name]                       Attach to server live console (logs/interactive)"
+    );
     println!("  ls                                List all registered servers and status");
     println!("  rm [name] [-rf]                   Unregister or delete a server");
     println!("  load <path> <software> <version>  Load an existing server directory");
@@ -403,4 +443,3 @@ fn print_banner() {
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");
 }
-

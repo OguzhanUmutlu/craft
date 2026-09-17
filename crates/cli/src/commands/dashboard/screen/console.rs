@@ -1,14 +1,14 @@
-use std::io::{self, Write};
-use std::path::Path;
 use colored::Colorize;
+use craft_core::{CraftPaths, Result};
+use craft_daemon::DaemonClient;
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
     event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode},
 };
-use craft_core::{CraftPaths, Result};
-use craft_daemon::DaemonClient;
+use std::io::{self, Write};
+use std::path::Path;
 
 use super::terminal::get_terminal_size;
 use super::theme::strip_ansi;
@@ -33,7 +33,8 @@ pub async fn run_virtual_console(
     }
 
     let client = DaemonClient::connect(paths).await?;
-    let (backlog, tx_to_daemon, mut rx_from_daemon) = client.attach_console_stream(server_path).await?;
+    let (backlog, tx_to_daemon, mut rx_from_daemon) =
+        client.attach_console_stream(server_path).await?;
 
     let _alt = AltScreenGuard::enter();
     enable_raw_mode()?;
@@ -374,7 +375,12 @@ fn render<W: Write>(
     // Row 0: Header top
     let title = format!(" LIVE CONSOLE: {} ", server_name);
     let dash_count = inner_width.saturating_sub(title.len());
-    let top_border = format!("╭{}{}{}╮\x1B[K\r\n", "─".repeat(2), title.cyan().bold(), "─".repeat(dash_count.saturating_sub(2)));
+    let top_border = format!(
+        "╭{}{}{}╮\x1B[K\r\n",
+        "─".repeat(2),
+        title.cyan().bold(),
+        "─".repeat(dash_count.saturating_sub(2))
+    );
     out.write_all(top_border.as_bytes())?;
 
     // Row 1: Subtitle
@@ -408,7 +414,11 @@ fn render<W: Write>(
                 log_line.clone()
             };
             let pad = inner_width.saturating_sub(strip_ansi(&truncated).chars().count());
-            let row = format!("│ {}{} │\x1B[K\r\n", truncated, " ".repeat(pad.saturating_sub(2)));
+            let row = format!(
+                "│ {}{} │\x1B[K\r\n",
+                truncated,
+                " ".repeat(pad.saturating_sub(2))
+            );
             out.write_all(row.as_bytes())?;
         } else {
             let row = format!("│{}│\x1B[K\r\n", " ".repeat(inner_width));
@@ -418,10 +428,18 @@ fn render<W: Write>(
 
     // Row term_h - 2: Bottom border / scroll indicator
     let bottom_line = if scroll_offset > 0 {
-        let badge = format!(" [▲ SCROLLED +{} LINES | PRESS END TO RETURN] ", scroll_offset);
+        let badge = format!(
+            " [▲ SCROLLED +{} LINES | PRESS END TO RETURN] ",
+            scroll_offset
+        );
         let badge_len = strip_ansi(&badge).chars().count();
         let b_pad = inner_width.saturating_sub(badge_len);
-        format!("├{}{}{}┤\x1B[K\r\n", "─".repeat(2), badge.yellow().bold(), "─".repeat(b_pad.saturating_sub(2)))
+        format!(
+            "├{}{}{}┤\x1B[K\r\n",
+            "─".repeat(2),
+            badge.yellow().bold(),
+            "─".repeat(b_pad.saturating_sub(2))
+        )
     } else {
         format!("╰{}╯\x1B[K\r\n", "─".repeat(inner_width))
     };
@@ -441,7 +459,10 @@ fn render<W: Write>(
         let offset = char_cursor.saturating_sub(start);
         (disp, offset)
     } else {
-        (input_buffer.to_string(), input_buffer[..cursor_pos].chars().count())
+        (
+            input_buffer.to_string(),
+            input_buffer[..cursor_pos].chars().count(),
+        )
     };
 
     let prompt_row = format!("{}{}\x1B[K", prefix.cyan().bold(), display_str);

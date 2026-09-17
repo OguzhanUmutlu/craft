@@ -1,7 +1,7 @@
+use crate::cli::ServiceCommands;
 use colored::Colorize;
 use craft_core::{kill_process, read_pid_file, CraftError, CraftPaths, Result};
 use craft_daemon::{DaemonClient, DaemonServer};
-use crate::cli::ServiceCommands;
 
 pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Result<()> {
     match action {
@@ -17,7 +17,10 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
                 server.run().await?;
             } else {
                 DaemonClient::ensure_daemon_started(paths).await?;
-                println!("{}", "Craft service daemon started successfully in the background.".green());
+                println!(
+                    "{}",
+                    "Craft service daemon started successfully in the background.".green()
+                );
             }
         }
         ServiceCommands::Stop => {
@@ -30,7 +33,9 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
                 kill_process(pid, false)?;
                 println!("{}", "Craft service daemon stopped successfully.".green());
             } else {
-                return Err(CraftError::Other("Could not read daemon PID file".to_string()));
+                return Err(CraftError::Other(
+                    "Could not read daemon PID file".to_string(),
+                ));
             }
         }
         ServiceCommands::Restart => {
@@ -46,7 +51,12 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
         ServiceCommands::Status => {
             if DaemonClient::is_daemon_running(paths) {
                 let pid = read_pid_file(&paths.pid_file).unwrap_or(0);
-                println!("{}", format!("Craft service daemon is RUNNING (PID: {})", pid).green().bold());
+                println!(
+                    "{}",
+                    format!("Craft service daemon is RUNNING (PID: {})", pid)
+                        .green()
+                        .bold()
+                );
                 if let Ok(mut client) = DaemonClient::connect(paths).await {
                     let running = client.get_running().await.unwrap_or_default();
                     println!("Active servers managed: {}", running.len());
@@ -59,15 +69,24 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
             }
         }
         ServiceCommands::Install => {
-            let current_exe = std::env::current_exe()
-                .map_err(|e| CraftError::Other(format!("Failed to determine current executable path: {}", e)))?;
+            let current_exe = std::env::current_exe().map_err(|e| {
+                CraftError::Other(format!(
+                    "Failed to determine current executable path: {}",
+                    e
+                ))
+            })?;
             let exe_path = current_exe.to_string_lossy().to_string();
 
             #[cfg(target_os = "linux")]
             {
-                let user_dirs = directories::UserDirs::new()
-                    .ok_or_else(|| CraftError::Config("Unable to locate user home directory".to_string()))?;
-                let service_dir = user_dirs.home_dir().join(".config").join("systemd").join("user");
+                let user_dirs = directories::UserDirs::new().ok_or_else(|| {
+                    CraftError::Config("Unable to locate user home directory".to_string())
+                })?;
+                let service_dir = user_dirs
+                    .home_dir()
+                    .join(".config")
+                    .join("systemd")
+                    .join("user");
                 std::fs::create_dir_all(&service_dir)?;
 
                 let service_path = service_dir.join("craft.service");
@@ -86,17 +105,31 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
                 );
                 std::fs::write(&service_path, unit)?;
 
-                println!("{}", format!("Wrote systemd user service to {}", service_path.display()).cyan());
+                println!(
+                    "{}",
+                    format!("Wrote systemd user service to {}", service_path.display()).cyan()
+                );
 
-                let _ = std::process::Command::new("systemctl").args(["--user", "daemon-reload"]).status();
-                let enable = std::process::Command::new("systemctl").args(["--user", "enable", "--now", "craft.service"]).status();
+                let _ = std::process::Command::new("systemctl")
+                    .args(["--user", "daemon-reload"])
+                    .status();
+                let enable = std::process::Command::new("systemctl")
+                    .args(["--user", "enable", "--now", "craft.service"])
+                    .status();
 
                 if let Ok(user) = std::env::var("USER") {
-                    let _ = std::process::Command::new("loginctl").args(["enable-linger", &user]).status();
+                    let _ = std::process::Command::new("loginctl")
+                        .args(["enable-linger", &user])
+                        .status();
                 }
 
                 if enable.map(|s| s.success()).unwrap_or(false) {
-                    println!("{}", "Craft service successfully installed and started via systemd user unit.".green().bold());
+                    println!(
+                        "{}",
+                        "Craft service successfully installed and started via systemd user unit."
+                            .green()
+                            .bold()
+                    );
                 } else {
                     println!("{}", "Created systemd unit. Run 'systemctl --user enable --now craft.service' to start.".yellow());
                 }
@@ -104,8 +137,9 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
 
             #[cfg(target_os = "macos")]
             {
-                let user_dirs = directories::UserDirs::new()
-                    .ok_or_else(|| CraftError::Config("Unable to locate user home directory".to_string()))?;
+                let user_dirs = directories::UserDirs::new().ok_or_else(|| {
+                    CraftError::Config("Unable to locate user home directory".to_string())
+                })?;
                 let agents_dir = user_dirs.home_dir().join("Library").join("LaunchAgents");
                 std::fs::create_dir_all(&agents_dir)?;
 
@@ -133,14 +167,22 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
                     exe_path
                 );
                 std::fs::write(&plist_path, plist)?;
-                println!("{}", format!("Wrote LaunchAgent to {}", plist_path.display()).cyan());
+                println!(
+                    "{}",
+                    format!("Wrote LaunchAgent to {}", plist_path.display()).cyan()
+                );
 
                 let load = std::process::Command::new("launchctl")
                     .args(["load", "-w", &plist_path.to_string_lossy()])
                     .status();
 
                 if load.map(|s| s.success()).unwrap_or(false) {
-                    println!("{}", "Craft service successfully registered with macOS launchd.".green().bold());
+                    println!(
+                        "{}",
+                        "Craft service successfully registered with macOS launchd."
+                            .green()
+                            .bold()
+                    );
                 } else {
                     println!("{}", "Created LaunchAgent. Run 'launchctl load -w ~/Library/LaunchAgents/com.craft.daemon.plist' to start.".yellow());
                 }
@@ -150,7 +192,16 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
             {
                 let task_cmd = format!("\"{}\" service start --foreground", exe_path);
                 let status = std::process::Command::new("schtasks")
-                    .args(["/Create", "/SC", "ONLOGON", "/TN", "CraftDaemon", "/TR", &task_cmd, "/F"])
+                    .args([
+                        "/Create",
+                        "/SC",
+                        "ONLOGON",
+                        "/TN",
+                        "CraftDaemon",
+                        "/TR",
+                        &task_cmd,
+                        "/F",
+                    ])
                     .status();
 
                 if status.map(|s| s.success()).unwrap_or(false) {
@@ -163,28 +214,53 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
         ServiceCommands::Uninstall => {
             #[cfg(target_os = "linux")]
             {
-                let _ = std::process::Command::new("systemctl").args(["--user", "disable", "--now", "craft.service"]).status();
+                let _ = std::process::Command::new("systemctl")
+                    .args(["--user", "disable", "--now", "craft.service"])
+                    .status();
 
                 if let Some(user_dirs) = directories::UserDirs::new() {
-                    let service_path = user_dirs.home_dir().join(".config").join("systemd").join("user").join("craft.service");
+                    let service_path = user_dirs
+                        .home_dir()
+                        .join(".config")
+                        .join("systemd")
+                        .join("user")
+                        .join("craft.service");
                     if service_path.exists() {
                         let _ = std::fs::remove_file(&service_path);
                     }
                 }
-                let _ = std::process::Command::new("systemctl").args(["--user", "daemon-reload"]).status();
-                println!("{}", "Craft systemd user service uninstalled successfully.".green().bold());
+                let _ = std::process::Command::new("systemctl")
+                    .args(["--user", "daemon-reload"])
+                    .status();
+                println!(
+                    "{}",
+                    "Craft systemd user service uninstalled successfully."
+                        .green()
+                        .bold()
+                );
             }
 
             #[cfg(target_os = "macos")]
             {
                 if let Some(user_dirs) = directories::UserDirs::new() {
-                    let plist_path = user_dirs.home_dir().join("Library").join("LaunchAgents").join("com.craft.daemon.plist");
+                    let plist_path = user_dirs
+                        .home_dir()
+                        .join("Library")
+                        .join("LaunchAgents")
+                        .join("com.craft.daemon.plist");
                     if plist_path.exists() {
-                        let _ = std::process::Command::new("launchctl").args(["unload", "-w", &plist_path.to_string_lossy()]).status();
+                        let _ = std::process::Command::new("launchctl")
+                            .args(["unload", "-w", &plist_path.to_string_lossy()])
+                            .status();
                         let _ = std::fs::remove_file(&plist_path);
                     }
                 }
-                println!("{}", "Craft macOS LaunchAgent uninstalled successfully.".green().bold());
+                println!(
+                    "{}",
+                    "Craft macOS LaunchAgent uninstalled successfully."
+                        .green()
+                        .bold()
+                );
             }
 
             #[cfg(target_os = "windows")]
@@ -194,9 +270,17 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
                     .status();
 
                 if status.map(|s| s.success()).unwrap_or(false) {
-                    println!("{}", "Craft service scheduled task 'CraftDaemon' uninstalled successfully.".green().bold());
+                    println!(
+                        "{}",
+                        "Craft service scheduled task 'CraftDaemon' uninstalled successfully."
+                            .green()
+                            .bold()
+                    );
                 } else {
-                    println!("{}", "Scheduled task was either not found or failed to delete.".yellow());
+                    println!(
+                        "{}",
+                        "Scheduled task was either not found or failed to delete.".yellow()
+                    );
                 }
             }
         }

@@ -1,8 +1,11 @@
+use colored::Colorize;
+use craft_core::{
+    auto_heal_server_file, find_best_java, get_jar_java_version, CraftError, CraftPaths, Result,
+    ServersRegistry,
+};
+use craft_providers::find_software;
 use std::fs;
 use std::path::PathBuf;
-use colored::Colorize;
-use craft_core::{auto_heal_server_file, find_best_java, get_jar_java_version, CraftError, CraftPaths, Result, ServersRegistry};
-use craft_providers::find_software;
 
 pub async fn handle_fix(
     name_arg: &str,
@@ -11,24 +14,42 @@ pub async fn handle_fix(
 ) -> Result<()> {
     let server_path = paths.resolve_server_path(
         custom_path.as_deref(),
-        if name_arg.is_empty() { None } else { Some(name_arg) },
+        if name_arg.is_empty() {
+            None
+        } else {
+            Some(name_arg)
+        },
         true,
     )?;
 
     if !server_path.exists() {
-        return Err(CraftError::InvalidPath(server_path.to_string_lossy().to_string()));
+        return Err(CraftError::InvalidPath(
+            server_path.to_string_lossy().to_string(),
+        ));
     }
 
     let mut registry = ServersRegistry::load(paths)?;
-    let server_config = registry.find_by_path(&server_path).cloned().ok_or_else(|| {
-        CraftError::ServerNotFound(format!("Server at '{}' is not registered.", server_path.display()))
-    })?;
+    let server_config = registry
+        .find_by_path(&server_path)
+        .cloned()
+        .ok_or_else(|| {
+            CraftError::ServerNotFound(format!(
+                "Server at '{}' is not registered.",
+                server_path.display()
+            ))
+        })?;
 
-    println!("{}", format!("Diagnosing and repairing server '{}'...", server_path.display()).cyan());
+    println!(
+        "{}",
+        format!(
+            "Diagnosing and repairing server '{}'...",
+            server_path.display()
+        )
+        .cyan()
+    );
 
-    let software = find_software(&server_config.software).ok_or_else(|| {
-        CraftError::UnknownSoftware(server_config.software.clone())
-    })?;
+    let software = find_software(&server_config.software)
+        .ok_or_else(|| CraftError::UnknownSoftware(server_config.software.clone()))?;
 
     let mut fixed_items = Vec::new();
 
@@ -63,7 +84,11 @@ pub async fn handle_fix(
     }
 
     // 2. Regenerate start script if missing or Java runtime updated
-    let script_name = if cfg!(windows) { "start.cmd" } else { "start.sh" };
+    let script_name = if cfg!(windows) {
+        "start.cmd"
+    } else {
+        "start.sh"
+    };
     let script_path = server_path.join(script_name);
     let mut script_needs_regen = !script_path.exists();
     if resolved_java != server_config.java_path {
@@ -108,7 +133,10 @@ pub async fn handle_fix(
     registry.save(paths)?;
 
     if fixed_items.is_empty() {
-        println!("{}", "No issues found. Server configuration is healthy.".green());
+        println!(
+            "{}",
+            "No issues found. Server configuration is healthy.".green()
+        );
     } else {
         println!("{}", "Server repaired successfully:".green().bold());
         for item in fixed_items {

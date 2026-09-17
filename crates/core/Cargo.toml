@@ -21,6 +21,7 @@ sha2.workspace = true
 hex.workspace = true
 zstd = { workspace = true }
 flate2.workspace = true
+modal-tui.workspace = true
 
 [target.'cfg(not(windows))'.dependencies]
 libc = "0.2"

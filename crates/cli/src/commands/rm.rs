@@ -1,10 +1,10 @@
+use colored::Colorize;
+use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
+use craft_daemon::DaemonClient;
+use dialoguer::{theme::ColorfulTheme, Confirm, Select};
 use std::fs;
 use std::io::IsTerminal;
 use std::path::PathBuf;
-use colored::Colorize;
-use dialoguer::{theme::ColorfulTheme, Confirm, Select};
-use craft_core::{CraftError, CraftPaths, Result, ServersRegistry};
-use craft_daemon::DaemonClient;
 
 pub async fn handle_rm(
     name_arg: &str,
@@ -20,7 +20,8 @@ pub async fn handle_rm(
     if resolved_name.is_empty() && custom_path.is_none() {
         if !is_tty {
             return Err(CraftError::Other(
-                "Please specify a server name to remove, or run interactively in a terminal.".to_string(),
+                "Please specify a server name to remove, or run interactively in a terminal."
+                    .to_string(),
             ));
         }
 
@@ -33,7 +34,15 @@ pub async fn handle_rm(
         let items: Vec<String> = registry
             .servers
             .iter()
-            .map(|s| format!("{:<20} [{} {}] ({})", s.name, s.software, s.version, s.path.display()))
+            .map(|s| {
+                format!(
+                    "{:<20} [{} {}] ({})",
+                    s.name,
+                    s.software,
+                    s.version,
+                    s.path.display()
+                )
+            })
             .collect();
 
         let idx = Select::with_theme(&theme)
@@ -73,7 +82,11 @@ pub async fn handle_rm(
 
     let server_path = paths.resolve_server_path(
         custom_path.as_deref(),
-        if resolved_name.is_empty() { None } else { Some(&resolved_name) },
+        if resolved_name.is_empty() {
+            None
+        } else {
+            Some(&resolved_name)
+        },
         false,
     )?;
 
@@ -88,7 +101,9 @@ pub async fn handle_rm(
     if DaemonClient::is_daemon_running(paths) {
         if let Ok(mut client) = DaemonClient::connect(paths).await {
             let running = client.get_running().await.unwrap_or_default();
-            if running.iter().any(|p| p == &server_path || p.canonicalize().ok() == server_path.canonicalize().ok()) {
+            if running.iter().any(|p| {
+                p == &server_path || p.canonicalize().ok() == server_path.canonicalize().ok()
+            }) {
                 return Err(CraftError::Other(
                     "Server is currently running! Please stop it with 'craft stop' before removing.".to_string(),
                 ));
@@ -107,7 +122,10 @@ pub async fn handle_rm(
                 .interact()?;
 
             if !confirmed {
-                println!("{}", "Operation cancelled. Files have NOT been deleted.".cyan());
+                println!(
+                    "{}",
+                    "Operation cancelled. Files have NOT been deleted.".cyan()
+                );
                 return Ok(());
             }
 
@@ -120,19 +138,36 @@ pub async fn handle_rm(
                 .interact()?;
 
             if !double_confirmed {
-                println!("{}", "Operation cancelled on final confirmation. Files have NOT been deleted.".cyan());
+                println!(
+                    "{}",
+                    "Operation cancelled on final confirmation. Files have NOT been deleted."
+                        .cyan()
+                );
                 return Ok(());
             }
         }
 
         fs::remove_dir_all(&server_path)?;
-        println!("{}", format!("All files in '{}' have been deleted.", server_path.display()).yellow());
+        println!(
+            "{}",
+            format!(
+                "All files in '{}' have been deleted.",
+                server_path.display()
+            )
+            .yellow()
+        );
     }
 
     registry.remove(&server_path);
     registry.save(paths)?;
 
-    println!("{}", format!("Server '{}' unregistered successfully.", server_path.display()).green());
+    println!(
+        "{}",
+        format!(
+            "Server '{}' unregistered successfully.",
+            server_path.display()
+        )
+        .green()
+    );
     Ok(())
 }
-
