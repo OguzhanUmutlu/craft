@@ -103,7 +103,7 @@ publish-tui: fmt-check clippy test
 	cargo publish -p modalx
 	@echo "[OK] Successfully published modalx to crates.io!"
 
-# --- Docker & Stack Management Targets ---
+# --- Documentation Portal (GitHub Pages & Actions) ---
 
 deploy-docs:
 	@./scripts/deploy_docs.sh deploy

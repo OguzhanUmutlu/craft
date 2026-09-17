@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/sync-static.js",
     "build": "vite build",
-    "preview": "vite preview",
-    "deploy": "npm run build && wrangler deploy"
+    "postbuild": "node scripts/postbuild.js",
+    "preview": "vite preview"
   },
   "dependencies": {
     "clsx": "^2.1.1",

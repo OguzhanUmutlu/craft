@@ -2,7 +2,7 @@
 set -e
 
 # ==============================================================================
-# Craft Documentation & Portal Deployment Tool (Cloudflare Workers)
+# Craft Documentation & Portal Build & Deployment Tool (GitHub Pages)
 # ==============================================================================
 
 BOLD='\033[1m'
@@ -17,28 +17,16 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCS_DIR="${ROOT_DIR}/docs"
 
 DRY_RUN=false
-CI_MODE=false
 SUBCOMMAND="deploy"
 
 # Parse arguments
-ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)
             DRY_RUN=true
             shift
             ;;
-        --ci)
-            CI_MODE=true
-            shift
-            ;;
-        --skip-build)
-            shift
-            ;;
-        --version)
-            shift 2
-            ;;
-        build|preview|dev|whoami|status|login|help|--help|-h)
+        build|preview|dev|status|trigger|help|--help|-h)
             SUBCOMMAND="$1"
             shift
             ;;
@@ -47,7 +35,6 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            ARGS+=("$1")
             shift
             ;;
     esac
@@ -60,7 +47,7 @@ banner() {
     echo "| |   | '__/ _\` | |_| __|| | | |/ _ \ / __/ __|"
     echo "| |___| | | (_| |  _| |_ | |_| | (_) | (__\__ \\"
     echo " \____|_|  \__,_|_|  \__||____/ \___/ \___|___/"
-    echo "  Documentation Portal Deployment Tool         "
+    echo "  Documentation Portal (GitHub Pages)          "
     echo -e "${NC}"
 }
 
@@ -82,47 +69,8 @@ check_prereqs() {
     fi
 }
 
-cmd_whoami() {
-    check_prereqs
-    echo -e "${BLUE}==> Checking Cloudflare Wrangler authentication...${NC}"
-    cd "${DOCS_DIR}" && npx wrangler whoami
-}
-
-cmd_login() {
-    check_prereqs
-    echo -e "${BLUE}==> Initiating Cloudflare Wrangler login...${NC}"
-    cd "${DOCS_DIR}" && npx wrangler login
-}
-
-sync_static_assets() {
-    echo -e "${BLUE}==> Synchronizing static scripts and compose manifests into docs/public...${NC}"
-    mkdir -p "${DOCS_DIR}/public"
-    
-    # Keep docs bundle lightweight: clean legacy heavy binary blobs
-    rm -rf "${DOCS_DIR}/public/downloads"
-
-    # Sync docker-compose.yml
-    if [ -f "${ROOT_DIR}/docker-compose.yml" ]; then
-        cp -f "${ROOT_DIR}/docker-compose.yml" "${DOCS_DIR}/public/docker-compose.yml"
-        echo -e "${GREEN}[OK] Synced docker-compose.yml to docs/public/${NC}"
-    fi
-
-    # Sync installer scripts
-    if [ -f "${ROOT_DIR}/docs/public/install.sh" ]; then
-        chmod +x "${ROOT_DIR}/docs/public/install.sh"
-    fi
-
-    # Sync VDS automated setup script
-    if [ -f "${ROOT_DIR}/scripts/setup-vds.sh" ]; then
-        cp -f "${ROOT_DIR}/scripts/setup-vds.sh" "${DOCS_DIR}/public/setup-vds.sh"
-        chmod +x "${DOCS_DIR}/public/setup-vds.sh"
-        echo -e "${GREEN}[OK] Synced setup-vds.sh to docs/public/${NC}"
-    fi
-}
-
 cmd_build() {
     check_prereqs
-    sync_static_assets
     echo -e "${BLUE}==> Building production static bundle (Vite + React + PostCSS)...${NC}"
     cd "${DOCS_DIR}" && npm run build
     echo -e "${GREEN}[OK] Build completed successfully! Assets located in docs/dist/${NC}"
@@ -131,41 +79,56 @@ cmd_build() {
 cmd_preview() {
     check_prereqs
     cmd_build
-    echo -e "${BLUE}==> Starting local edge preview server via Wrangler...${NC}"
-    cd "${DOCS_DIR}" && npx wrangler dev
+    echo -e "${BLUE}==> Starting local preview server...${NC}"
+    cd "${DOCS_DIR}" && npm run preview
+}
+
+cmd_status() {
+    if command -v gh &> /dev/null; then
+        echo -e "${BLUE}==> Checking latest GitHub Actions deployment runs...${NC}"
+        gh run list --workflow=deploy-docs.yml --limit 5
+    else
+        echo -e "${YELLOW}GitHub CLI (gh) is not installed.${NC}"
+        echo "You can check workflow status online at:"
+        echo -e "${CYAN}https://github.com/OguzhanUmutlu/craft/actions/workflows/deploy-docs.yml${NC}"
+    fi
 }
 
 cmd_deploy() {
     banner
     check_prereqs
-
-    if [ "$CI_MODE" = false ] && [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-        echo -e "${BLUE}==> Verifying Cloudflare credentials...${NC}"
-        if ! cd "${DOCS_DIR}" && npx wrangler whoami &> /dev/null; then
-            echo -e "${YELLOW}Wrangler is not logged in. Launching login flow...${NC}"
-            cd "${DOCS_DIR}" && npx wrangler login
-        fi
-    fi
-
     cmd_build
 
     if [ "$DRY_RUN" = true ]; then
-        echo -e "${YELLOW}[DRY RUN] Docs build verified. Skipping deployment.${NC}"
+        echo -e "${YELLOW}[DRY RUN] Docs build verified. Skipping deployment trigger.${NC}"
         exit 0
     fi
 
     echo ""
-    echo -e "${BLUE}==> Deploying static assets to Cloudflare Workers...${NC}"
-    cd "${DOCS_DIR}" && npx wrangler deploy "${ARGS[@]}"
-
+    echo -e "${GREEN}${BOLD}==================================================================${NC}"
+    echo -e "${GREEN}${BOLD}[OK] Documentation static bundle compiled and verified!${NC}"
+    echo -e "${GREEN}${BOLD}==================================================================${NC}"
+    echo -e " Target domain: ${CYAN}${BOLD}https://craft.oguzhanumutlu.com${NC}"
+    echo -e " Assets source: ${YELLOW}${DOCS_DIR}/dist${NC}"
+    echo -e " CI/CD Engine:  ${BLUE}GitHub Actions (deploy-docs.yml)${NC}"
+    echo -e "${GREEN}${BOLD}==================================================================${NC}"
     echo ""
-    echo -e "${GREEN}${BOLD}==================================================================${NC}"
-    echo -e "${GREEN}${BOLD}[OK] Craft Portal successfully deployed to Cloudflare Workers!${NC}"
-    echo -e "${GREEN}${BOLD}==================================================================${NC}"
-    echo -e " Live URL:      ${CYAN}${BOLD}https://craft.oguzhanumutlu.com${NC}"
-    echo -e " Assets Source: ${YELLOW}${DOCS_DIR}/dist${NC}"
-    echo -e " Config:        ${YELLOW}${DOCS_DIR}/wrangler.jsonc${NC}"
-    echo -e "${GREEN}${BOLD}==================================================================${NC}"
+
+    if command -v gh &> /dev/null; then
+        echo -e "${BLUE}==> Triggering GitHub Pages deployment workflow via GitHub CLI...${NC}"
+        if gh workflow run deploy-docs.yml 2>/dev/null; then
+            echo -e "${GREEN}[OK] GitHub Actions workflow dispatched successfully!${NC}"
+            echo -e "View live run: ${CYAN}gh run watch${NC}"
+            return 0
+        fi
+    fi
+
+    echo -e "${BLUE}==> Notice: Deployments are automated via GitHub Actions on push to main.${NC}"
+    echo -e "To deploy to production, simply commit and push your changes:"
+    echo -e "  ${CYAN}git add docs/ && git commit -m \"Update docs\" && git push origin main${NC}"
+    echo ""
+    echo -e "Monitor live workflow runs at:"
+    echo -e "  ${CYAN}https://github.com/OguzhanUmutlu/craft/actions/workflows/deploy-docs.yml${NC}"
 }
 
 cmd_help() {
@@ -173,22 +136,20 @@ cmd_help() {
     echo -e "${BOLD}Usage:${NC} ./scripts/deploy_docs.sh [COMMAND] [OPTIONS]"
     echo ""
     echo -e "${BOLD}Commands:${NC}"
-    echo -e "  ${GREEN}deploy${NC}    Build production assets and deploy to Cloudflare Workers (default)"
+    echo -e "  ${GREEN}deploy${NC}    Build production assets and trigger/guide GitHub Pages deployment (default)"
     echo -e "  ${GREEN}build${NC}     Run Vite build and compile static assets to docs/dist"
-    echo -e "  ${GREEN}preview${NC}   Build and run local Cloudflare edge preview on localhost:8787"
-    echo -e "  ${GREEN}whoami${NC}    Check authenticated Cloudflare account status"
-    echo -e "  ${GREEN}login${NC}     Log in to Cloudflare via Wrangler OAuth"
+    echo -e "  ${GREEN}preview${NC}   Build and run local preview server on localhost:4173"
+    echo -e "  ${GREEN}status${NC}    Check GitHub Actions deployment run status"
     echo -e "  ${GREEN}help${NC}      Show this help message"
     echo ""
     echo -e "${BOLD}Options:${NC}"
-    echo -e "  --dry-run   Build and verify static bundle without publishing to Cloudflare"
-    echo -e "  --ci        Run in non-interactive CI mode"
+    echo -e "  --dry-run   Build and verify static bundle without triggering deployment"
     echo ""
     echo -e "Target domain: ${CYAN}https://craft.oguzhanumutlu.com${NC}"
 }
 
 case "$SUBCOMMAND" in
-    deploy)
+    deploy|trigger)
         cmd_deploy
         ;;
     build)
@@ -197,11 +158,8 @@ case "$SUBCOMMAND" in
     preview|dev)
         cmd_preview
         ;;
-    whoami|status)
-        cmd_whoami
-        ;;
-    login)
-        cmd_login
+    status)
+        cmd_status
         ;;
     help|--help|-h)
         cmd_help

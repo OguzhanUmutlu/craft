@@ -30,5 +30,5 @@ echo -e "${BLUE}==> [2/2] Deploying Documentation Portal...${NC}"
 
 echo ""
 echo -e "${GREEN}${BOLD}==================================================================${NC}"
-echo -e "${GREEN}${BOLD}[OK] All Craft Cloudflare Workers successfully built and deployed!${NC}"
+echo -e "${GREEN}${BOLD}[OK] All Craft release assets and documentation successfully prepared!${NC}"
 echo -e "${GREEN}${BOLD}==================================================================${NC}"
