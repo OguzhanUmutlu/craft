@@ -1,23 +1,24 @@
-use std::path::{Path, PathBuf};
 use craft_core::{CraftError, Result};
+use std::path::{Path, PathBuf};
 
-pub mod modrinth;
 pub mod hangar;
+pub mod map_resolver;
+pub mod modrinth;
 pub mod poggit;
-pub mod world;
 pub mod saves;
+pub mod world;
 
-pub use modrinth::{ModrinthClient, ModrinthHit, ModrinthFile};
 pub use hangar::{HangarClient, HangarProject};
+pub use map_resolver::resolve_map_download_url;
+pub use modrinth::{ModrinthClient, ModrinthFile, ModrinthHit};
 pub use poggit::{PoggitClient, PoggitPlugin};
+pub use saves::{list_saves_for_server, SaveItem};
 pub use world::{
-    CuratedMap, InstalledWorldItem, WorldMetadataSummary, PlayerDataSummary,
-    AdvancementEntry, DataStorageEntry, get_curated_maps, search_curated_maps,
-    list_installed_worlds, install_world_from_url, install_world_from_zip,
-    inspect_world_metadata, list_world_player_data, list_world_advancements,
-    list_world_data_storages, resolve_usercache_name,
+    get_curated_maps, inspect_world_metadata, install_world_from_url, install_world_from_zip,
+    list_installed_worlds, list_world_advancements, list_world_data_storages,
+    list_world_player_data, resolve_usercache_name, search_curated_maps, AdvancementEntry,
+    CuratedMap, DataStorageEntry, InstalledWorldItem, PlayerDataSummary, WorldMetadataSummary,
 };
-pub use saves::{SaveItem, list_saves_for_server};
 
 #[derive(Debug, Clone)]
 pub struct UnifiedPluginHit {
@@ -42,12 +43,10 @@ impl Default for PluginManager {
 
 impl PluginManager {
     pub fn new() -> Self {
-        let store = craft_core::CraftPaths::new()
-            .ok()
-            .and_then(|paths| {
-                let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
-                craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes).ok()
-            });
+        let store = craft_core::CraftPaths::new().ok().and_then(|paths| {
+            let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
+            craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes).ok()
+        });
 
         Self {
             modrinth: ModrinthClient::new(),
@@ -153,10 +152,12 @@ impl PluginManager {
             let cached_path = match store.get_artifact(&rel_subpath) {
                 Some(path) => path,
                 None => {
-                    let resp = reqwest::get(url).await
+                    let resp = reqwest::get(url)
+                        .await
                         .map_err(|e| CraftError::Download(format!("Download failed: {}", e)))?;
-                    let bytes = resp.bytes().await
-                        .map_err(|e| CraftError::Download(format!("Failed to read bytes: {}", e)))?;
+                    let bytes = resp.bytes().await.map_err(|e| {
+                        CraftError::Download(format!("Failed to read bytes: {}", e))
+                    })?;
                     let (path, _) = store.put_artifact(&rel_subpath, &bytes, None)?;
                     path
                 }
@@ -164,31 +165,55 @@ impl PluginManager {
             store.link_or_copy(&cached_path, &dest)?;
             Ok(dest)
         } else {
-            let resp = reqwest::get(url).await
+            let resp = reqwest::get(url)
+                .await
                 .map_err(|e| CraftError::Download(format!("Download failed: {}", e)))?;
-            let bytes = resp.bytes().await
+            let bytes = resp
+                .bytes()
+                .await
                 .map_err(|e| CraftError::Download(format!("Failed to read bytes: {}", e)))?;
             std::fs::write(&dest, &bytes)?;
             Ok(dest)
         }
     }
 
-    pub async fn install_from_modrinth(&self, server_path: &Path, project_id: &str) -> Result<PathBuf> {
+    pub async fn install_from_modrinth(
+        &self,
+        server_path: &Path,
+        project_id: &str,
+    ) -> Result<PathBuf> {
         let file_info = self.modrinth.get_latest_file(project_id).await?;
         let plugins_dir = server_path.join("plugins");
-        self.install_artifact_cached("plugins", &file_info.filename, &file_info.url, &plugins_dir).await
+        self.install_artifact_cached("plugins", &file_info.filename, &file_info.url, &plugins_dir)
+            .await
     }
 
-    pub async fn install_mod_from_modrinth(&self, server_path: &Path, project_id: &str) -> Result<PathBuf> {
+    pub async fn install_mod_from_modrinth(
+        &self,
+        server_path: &Path,
+        project_id: &str,
+    ) -> Result<PathBuf> {
         let file_info = self.modrinth.get_latest_file(project_id).await?;
         let mods_dir = server_path.join("mods");
-        self.install_artifact_cached("mods", &file_info.filename, &file_info.url, &mods_dir).await
+        self.install_artifact_cached("mods", &file_info.filename, &file_info.url, &mods_dir)
+            .await
     }
 
-    pub async fn install_datapack_from_modrinth(&self, server_path: &Path, project_id: &str, target_world: &str) -> Result<PathBuf> {
+    pub async fn install_datapack_from_modrinth(
+        &self,
+        server_path: &Path,
+        project_id: &str,
+        target_world: &str,
+    ) -> Result<PathBuf> {
         let file_info = self.modrinth.get_latest_file(project_id).await?;
         let datapacks_dir = server_path.join(target_world).join("datapacks");
-        self.install_artifact_cached("datapacks", &file_info.filename, &file_info.url, &datapacks_dir).await
+        self.install_artifact_cached(
+            "datapacks",
+            &file_info.filename,
+            &file_info.url,
+            &datapacks_dir,
+        )
+        .await
     }
 }
 
@@ -206,19 +231,25 @@ mod tests {
 
         // Pre-populate cache with a mock plugin
         let fake_plugin_data = b"dummy-plugin-bytes";
-        pm.store.as_ref().unwrap().put_artifact("plugins/TestPlugin.jar", fake_plugin_data, None).unwrap();
+        pm.store
+            .as_ref()
+            .unwrap()
+            .put_artifact("plugins/TestPlugin.jar", fake_plugin_data, None)
+            .unwrap();
 
         // Calling install_artifact_cached directly should hit cache without network
         let plugins_dir = server_dir.join("plugins");
-        let installed = pm.install_artifact_cached(
-            "plugins",
-            "TestPlugin.jar",
-            "http://invalid.url.that.should.not.be.called",
-            &plugins_dir,
-        ).await.unwrap();
+        let installed = pm
+            .install_artifact_cached(
+                "plugins",
+                "TestPlugin.jar",
+                "http://invalid.url.that.should.not.be.called",
+                &plugins_dir,
+            )
+            .await
+            .unwrap();
 
         assert!(installed.exists());
         assert_eq!(std::fs::read(installed).unwrap(), fake_plugin_data);
     }
 }
-

@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use craft_core::{CraftError, Result};
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct HangarResponse {
@@ -50,10 +50,16 @@ impl HangarClient {
             query
         );
 
-        let resp = self.client.get(&url).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| CraftError::Download(format!("Hangar search error: {}", e)))?;
 
-        let data: HangarResponse = resp.json().await
+        let data: HangarResponse = resp
+            .json()
+            .await
             .map_err(|e| CraftError::Download(format!("Invalid Hangar response: {}", e)))?;
 
         Ok(data.result)

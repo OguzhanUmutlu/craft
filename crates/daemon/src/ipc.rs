@@ -1,9 +1,12 @@
+use crate::protocol::{IpcRequest, IpcResponse};
+use crate::supervisor::Supervisor;
+use craft_core::{
+    is_process_running, read_pid_file, remove_pid_file, write_pid_file, CraftError, CraftPaths,
+    Result,
+};
 use std::path::{Path, PathBuf};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tracing::{error, info, warn};
-use craft_core::{is_process_running, read_pid_file, write_pid_file, remove_pid_file, CraftError, CraftPaths, Result};
-use crate::protocol::{IpcRequest, IpcResponse};
-use crate::supervisor::Supervisor;
 
 pub const DAEMON_PORT: u16 = 8123;
 
@@ -32,7 +35,10 @@ impl DaemonServer {
             }
             let listener = tokio::net::UnixListener::bind(&self.paths.socket_file)
                 .map_err(|e| CraftError::Ipc(format!("Failed to bind UNIX socket: {}", e)))?;
-            info!("Craft daemon listening on UNIX socket: {}", self.paths.socket_file.display());
+            info!(
+                "Craft daemon listening on UNIX socket: {}",
+                self.paths.socket_file.display()
+            );
 
             let supervisor = self.supervisor.clone();
             loop {
@@ -56,7 +62,10 @@ impl DaemonServer {
         {
             use tokio::net::windows::named_pipe::ServerOptions;
             let pipe_name = r"\\.\pipe\craft-daemon";
-            info!("Craft daemon listening on Windows Named Pipe: {}", pipe_name);
+            info!(
+                "Craft daemon listening on Windows Named Pipe: {}",
+                pipe_name
+            );
 
             let mut server = ServerOptions::new()
                 .first_pipe_instance(true)
@@ -70,9 +79,9 @@ impl DaemonServer {
                     continue;
                 }
                 let client = server;
-                server = ServerOptions::new()
-                    .create(pipe_name)
-                    .map_err(|e| CraftError::Ipc(format!("Failed to create next pipe instance: {}", e)))?;
+                server = ServerOptions::new().create(pipe_name).map_err(|e| {
+                    CraftError::Ipc(format!("Failed to create next pipe instance: {}", e))
+                })?;
 
                 let sup = supervisor.clone();
                 tokio::spawn(async move {
@@ -153,14 +162,24 @@ where
             IpcRequest::AttachConsole { path } => {
                 match supervisor.get_console_stream(&path).await {
                     Ok((backlog, mut rx)) => {
-                        write_frame(&mut stream, &IpcResponse::LogBacklog { path: path.clone(), data: backlog }).await?;
+                        write_frame(
+                            &mut stream,
+                            &IpcResponse::LogBacklog {
+                                path: path.clone(),
+                                data: backlog,
+                            },
+                        )
+                        .await?;
 
                         // Streaming loop
                         let (mut reader, mut writer) = tokio::io::split(stream);
 
                         let write_task = tokio::spawn(async move {
                             while let Ok(line) = rx.recv().await {
-                                let resp = IpcResponse::LogChunk { path: path.clone(), data: line };
+                                let resp = IpcResponse::LogChunk {
+                                    path: path.clone(),
+                                    data: line,
+                                };
                                 if write_frame(&mut writer, &resp).await.is_err() {
                                     break;
                                 }
@@ -169,7 +188,8 @@ where
 
                         let sup = supervisor.clone();
                         let read_task = tokio::spawn(async move {
-                            while let Ok(Some(req)) = read_frame::<_, IpcRequest>(&mut reader).await {
+                            while let Ok(Some(req)) = read_frame::<_, IpcRequest>(&mut reader).await
+                            {
                                 match req {
                                     IpcRequest::SendInput { path, input } => {
                                         let _ = sup.send_input(&path, &input).await;
@@ -187,13 +207,25 @@ where
                         return Ok(());
                     }
                     Err(e) => {
-                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?;
+                        write_frame(
+                            &mut stream,
+                            &IpcResponse::Error {
+                                error: e.to_string(),
+                            },
+                        )
+                        .await?;
                     }
                 }
             }
             IpcRequest::DetachConsole { .. } => {}
             IpcRequest::ShutdownDaemon => {
-                write_frame(&mut stream, &IpcResponse::Success { message: "Shutting down daemon".to_string() }).await?;
+                write_frame(
+                    &mut stream,
+                    &IpcResponse::Success {
+                        message: "Shutting down daemon".to_string(),
+                    },
+                )
+                .await?;
                 std::process::exit(0);
             }
         }
@@ -217,7 +249,9 @@ where
 
     let length = u32::from_be_bytes(len_bytes) as usize;
     if length > 16 * 1024 * 1024 {
-        return Err(CraftError::Ipc("Frame length exceeds 16MB threshold".to_string()));
+        return Err(CraftError::Ipc(
+            "Frame length exceeds 16MB threshold".to_string(),
+        ));
     }
 
     let mut buf = vec![0u8; length];
@@ -252,8 +286,11 @@ impl DaemonClient {
     pub async fn connect(paths: &CraftPaths) -> Result<Self> {
         #[cfg(not(target_os = "windows"))]
         {
-            let stream = tokio::net::UnixStream::connect(&paths.socket_file).await
-                .map_err(|e| CraftError::Ipc(format!("Could not connect to daemon socket: {}", e)))?;
+            let stream = tokio::net::UnixStream::connect(&paths.socket_file)
+                .await
+                .map_err(|e| {
+                    CraftError::Ipc(format!("Could not connect to daemon socket: {}", e))
+                })?;
             Ok(Self { stream })
         }
 
@@ -261,8 +298,12 @@ impl DaemonClient {
         {
             use tokio::net::windows::named_pipe::ClientOptions;
             let pipe_name = r"\\.\pipe\craft-daemon";
-            let client = ClientOptions::new().open(pipe_name)
-                .map_err(|e| CraftError::Ipc(format!("Could not connect to daemon named pipe {}: {}", pipe_name, e)))?;
+            let client = ClientOptions::new().open(pipe_name).map_err(|e| {
+                CraftError::Ipc(format!(
+                    "Could not connect to daemon named pipe {}: {}",
+                    pipe_name, e
+                ))
+            })?;
             Ok(Self { stream: client })
         }
     }
@@ -271,7 +312,9 @@ impl DaemonClient {
         write_frame(&mut self.stream, &req).await?;
         match read_frame(&mut self.stream).await? {
             Some(resp) => Ok(resp),
-            None => Err(CraftError::Ipc("Daemon closed connection unexpectedly".to_string())),
+            None => Err(CraftError::Ipc(
+                "Daemon closed connection unexpectedly".to_string(),
+            )),
         }
     }
 
@@ -279,38 +322,72 @@ impl DaemonClient {
         match self.request(IpcRequest::GetRunning).await? {
             IpcResponse::RunningList { paths } => Ok(paths),
             IpcResponse::Error { error } => Err(CraftError::Ipc(error)),
-            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+            _ => Err(CraftError::Ipc(
+                "Unexpected response from daemon".to_string(),
+            )),
         }
     }
 
     pub async fn start_server(&mut self, path: &Path) -> Result<()> {
-        match self.request(IpcRequest::StartServer { path: path.to_path_buf() }).await? {
+        match self
+            .request(IpcRequest::StartServer {
+                path: path.to_path_buf(),
+            })
+            .await?
+        {
             IpcResponse::Success { .. } => Ok(()),
-            IpcResponse::AlreadyRunning { .. } => Err(CraftError::Other(format!("Server '{}' is already running", path.display()))),
+            IpcResponse::AlreadyRunning { .. } => Err(CraftError::Other(format!(
+                "Server '{}' is already running",
+                path.display()
+            ))),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
-            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+            _ => Err(CraftError::Ipc(
+                "Unexpected response from daemon".to_string(),
+            )),
         }
     }
 
     pub async fn stop_server(&mut self, path: &Path, force: bool) -> Result<()> {
-        match self.request(IpcRequest::StopServer { path: path.to_path_buf(), force }).await? {
+        match self
+            .request(IpcRequest::StopServer {
+                path: path.to_path_buf(),
+                force,
+            })
+            .await?
+        {
             IpcResponse::Success { .. } => Ok(()),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
-            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+            _ => Err(CraftError::Ipc(
+                "Unexpected response from daemon".to_string(),
+            )),
         }
     }
 
     pub async fn attach_console_stream(
         mut self,
         path: &Path,
-    ) -> Result<(String, tokio::sync::mpsc::Sender<String>, tokio::sync::mpsc::Receiver<String>)> {
-        write_frame(&mut self.stream, &IpcRequest::AttachConsole { path: path.to_path_buf() }).await?;
+    ) -> Result<(
+        String,
+        tokio::sync::mpsc::Sender<String>,
+        tokio::sync::mpsc::Receiver<String>,
+    )> {
+        write_frame(
+            &mut self.stream,
+            &IpcRequest::AttachConsole {
+                path: path.to_path_buf(),
+            },
+        )
+        .await?;
 
         // Read initial response (should be LogBacklog)
         let initial_data = match read_frame::<_, IpcResponse>(&mut self.stream).await? {
             Some(IpcResponse::LogBacklog { data, .. }) => data,
             Some(IpcResponse::Error { error }) => return Err(CraftError::Other(error)),
-            _ => return Err(CraftError::Ipc("Expected log backlog from daemon".to_string())),
+            _ => {
+                return Err(CraftError::Ipc(
+                    "Expected log backlog from daemon".to_string(),
+                ))
+            }
         };
 
         let (mut reader, mut writer) = tokio::io::split(self.stream);
@@ -331,8 +408,15 @@ impl DaemonClient {
 
         tokio::spawn(async move {
             while let Some(line) = rx_from_client.recv().await {
-                let input = if line.ends_with('\n') { line } else { format!("{}\n", line) };
-                let req = IpcRequest::SendInput { path: path_clone.clone(), input };
+                let input = if line.ends_with('\n') {
+                    line
+                } else {
+                    format!("{}\n", line)
+                };
+                let req = IpcRequest::SendInput {
+                    path: path_clone.clone(),
+                    input,
+                };
                 if write_frame(&mut writer, &req).await.is_err() {
                     break;
                 }

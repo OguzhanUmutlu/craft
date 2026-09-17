@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
-use craft_core::Result;
 use crate::world::list_installed_worlds;
+use craft_core::Result;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SaveItem {
@@ -43,7 +43,11 @@ pub fn list_saves_for_server(server_path: &Path, game_id: &str) -> Result<Vec<Sa
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("wld") {
-                        let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("world").to_string();
+                        let name = path
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("world")
+                            .to_string();
                         let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
                         saves.push(SaveItem {
                             name,
@@ -89,7 +93,11 @@ pub fn list_saves_for_server(server_path: &Path, game_id: &str) -> Result<Vec<Sa
                     for entry in entries.flatten() {
                         let p = entry.path();
                         if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("zip") {
-                            let name = p.file_stem().and_then(|s| s.to_str()).unwrap_or("save").to_string();
+                            let name = p
+                                .file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("save")
+                                .to_string();
                             let size = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
                             saves.push(SaveItem {
                                 name,

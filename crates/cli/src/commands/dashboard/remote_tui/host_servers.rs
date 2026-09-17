@@ -36,7 +36,10 @@ fn run_boxed_bootstrap(
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
 
-    let initial_msg = format!("Connecting and preparing environment on '{}'...", host_alias);
+    let initial_msg = format!(
+        "Connecting and preparing environment on '{}'...",
+        host_alias
+    );
     let state = Arc::new(Mutex::new(BootstrapProgressState {
         current: initial_msg,
         steps: Vec::new(),
@@ -58,8 +61,8 @@ fn run_boxed_bootstrap(
             {
                 if let Ok(mut s) = state_clone.lock() {
                     s.spinner_idx = s.spinner_idx.wrapping_add(1);
-                    let mut modal = modalx::modals::WaitingModal::new(&s.title, &s.current)
-                        .with_max_width(84);
+                    let mut modal =
+                        modalx::modals::WaitingModal::new(&s.title, &s.current).with_max_width(84);
                     for (step_label, completed) in &s.steps {
                         modal = modal.with_step(step_label.clone(), *completed);
                     }
@@ -89,8 +92,11 @@ fn run_boxed_bootstrap(
                 last.1 = true;
             }
             s.spinner_idx = s.spinner_idx.wrapping_add(1);
-            let mut modal = modalx::modals::WaitingModal::new(&s.title, "Host bootstrap completed successfully!")
-                .with_max_width(84);
+            let mut modal = modalx::modals::WaitingModal::new(
+                &s.title,
+                "Host bootstrap completed successfully!",
+            )
+            .with_max_width(84);
             for (step_label, completed) in &s.steps {
                 modal = modal.with_step(step_label.clone(), *completed);
             }

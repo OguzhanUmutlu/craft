@@ -1,3 +1,8 @@
+use crate::ring_buffer::RingBuffer;
+use craft_core::{
+    auto_heal_server_file, auto_heal_server_jar, CraftError, CraftPaths, Result, ServerLockGuard,
+    ServersRegistry,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -7,8 +12,6 @@ use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{broadcast, Mutex};
 use tokio::time::{sleep, Duration};
 use tracing::{error, info, warn};
-use craft_core::{auto_heal_server_file, auto_heal_server_jar, CraftError, CraftPaths, Result, ServerLockGuard, ServersRegistry};
-use crate::ring_buffer::RingBuffer;
 
 struct ActiveServer {
     child: Arc<Mutex<Child>>,
@@ -92,7 +95,10 @@ impl Supervisor {
         // Also check registry for servers running externally (e.g. foreground)
         if let Ok(registry) = ServersRegistry::load(&self.paths) {
             for server in registry.servers {
-                let canonical = server.path.canonicalize().unwrap_or_else(|_| server.path.clone());
+                let canonical = server
+                    .path
+                    .canonicalize()
+                    .unwrap_or_else(|_| server.path.clone());
                 if !result.contains(&canonical) && craft_core::is_server_locked(&canonical) {
                     result.push(canonical);
                 }
@@ -103,7 +109,9 @@ impl Supervisor {
     }
 
     pub async fn start_server(&self, server_path: &Path) -> Result<()> {
-        let canonical = server_path.canonicalize().unwrap_or_else(|_| server_path.to_path_buf());
+        let canonical = server_path
+            .canonicalize()
+            .unwrap_or_else(|_| server_path.to_path_buf());
 
         if self.is_running(&canonical).await {
             let pid_info = craft_core::get_server_running_pid(&canonical)
@@ -125,9 +133,9 @@ impl Supervisor {
         };
 
         // Self-healing: ensure server jar / binary is in place
-        let server_entry = ServersRegistry::load(&self.paths).ok().and_then(|r| {
-            r.find_by_path(&canonical).cloned()
-        });
+        let server_entry = ServersRegistry::load(&self.paths)
+            .ok()
+            .and_then(|r| r.find_by_path(&canonical).cloned());
 
         let expected_file = server_entry
             .as_ref()
@@ -136,11 +144,20 @@ impl Supervisor {
             .unwrap_or("server.jar");
 
         if let Some(source) = auto_heal_server_file(&canonical, expected_file) {
-            info!("Self-healing: Restored {} from '{}' in '{}'", expected_file, source, canonical.display());
+            info!(
+                "Self-healing: Restored {} from '{}' in '{}'",
+                expected_file,
+                source,
+                canonical.display()
+            );
         }
         if expected_file != "server.jar" && !canonical.join(expected_file).exists() {
             if let Some(source) = auto_heal_server_jar(&canonical) {
-                info!("Self-healing: Restored server.jar from '{}' in '{}'", source, canonical.display());
+                info!(
+                    "Self-healing: Restored server.jar from '{}' in '{}'",
+                    source,
+                    canonical.display()
+                );
             }
         }
 
@@ -164,7 +181,10 @@ impl Supervisor {
         }
 
         // Delegate pre-start checks (EULA, binary permissions, config validation) to software provider
-        if let Some(sw) = server_entry.as_ref().and_then(|s| craft_providers::find_software(&s.software)) {
+        if let Some(sw) = server_entry
+            .as_ref()
+            .and_then(|s| craft_providers::find_software(&s.software))
+        {
             sw.pre_start_check(&canonical)?;
         } else {
             // Fallback for custom or unrecognised Minecraft servers
@@ -202,7 +222,8 @@ impl Supervisor {
             cmd.process_group(0);
         }
 
-        let mut child = cmd.spawn()
+        let mut child = cmd
+            .spawn()
             .map_err(|e| CraftError::Process(format!("Failed to spawn server process: {}", e)))?;
 
         if let Some(pid) = child.id() {
@@ -216,19 +237,36 @@ impl Supervisor {
         let ring_buffer = Arc::new(Mutex::new(RingBuffer::new(50000)));
         let (log_broadcaster, _) = broadcast::channel(1000);
 
+        let logs_dir = canonical.join("logs");
+        let _ = std::fs::create_dir_all(&logs_dir);
+        let console_log_path = logs_dir.join("console.log");
+
         // Spawn stdout reader
         if let Some(out) = stdout {
             let rb = ring_buffer.clone();
             let bc = log_broadcaster.clone();
+            let log_file = console_log_path.clone();
             tokio::spawn(async move {
                 let mut reader = BufReader::new(out).lines();
                 while let Ok(Some(line)) = reader.next_line().await {
-                    let text = format!("{}\n", line);
+                    let trimmed = line.trim_end_matches('\r');
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    let text = format!("{}\n", trimmed);
                     {
                         let mut b = rb.lock().await;
                         b.push(text.clone());
                     }
                     let _ = bc.send(text);
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&log_file)
+                    {
+                        use std::io::Write;
+                        let _ = writeln!(f, "{}", trimmed);
+                    }
                 }
             });
         }
@@ -237,15 +275,28 @@ impl Supervisor {
         if let Some(err) = stderr {
             let rb = ring_buffer.clone();
             let bc = log_broadcaster.clone();
+            let log_file = console_log_path.clone();
             tokio::spawn(async move {
                 let mut reader = BufReader::new(err).lines();
                 while let Ok(Some(line)) = reader.next_line().await {
-                    let text = format!("{}\n", line);
+                    let trimmed = line.trim_end_matches('\r');
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    let text = format!("{}\n", trimmed);
                     {
                         let mut b = rb.lock().await;
                         b.push(text.clone());
                     }
                     let _ = bc.send(text);
+                    if let Ok(mut f) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&log_file)
+                    {
+                        use std::io::Write;
+                        let _ = writeln!(f, "{}", trimmed);
+                    }
                 }
             });
         }
@@ -265,7 +316,9 @@ impl Supervisor {
     }
 
     pub async fn stop_server(&self, server_path: &Path, force: bool) -> Result<()> {
-        let canonical = server_path.canonicalize().unwrap_or_else(|_| server_path.to_path_buf());
+        let canonical = server_path
+            .canonicalize()
+            .unwrap_or_else(|_| server_path.to_path_buf());
 
         let (child, stdin) = {
             let servers = self.servers.lock().await;
@@ -322,7 +375,11 @@ impl Supervisor {
 
             Ok(())
         } else if let Some(pid) = craft_core::get_server_running_pid(&canonical) {
-            info!("Stopping externally running server at '{}' (PID: {})", canonical.display(), pid);
+            info!(
+                "Stopping externally running server at '{}' (PID: {})",
+                canonical.display(),
+                pid
+            );
             craft_core::kill_process(pid, force)?;
             // Wait up to 5 seconds for process to exit
             for _ in 0..10 {
@@ -344,15 +401,21 @@ impl Supervisor {
     }
 
     pub async fn send_input(&self, server_path: &Path, input: &str) -> Result<()> {
-        let canonical = server_path.canonicalize().unwrap_or_else(|_| server_path.to_path_buf());
+        let canonical = server_path
+            .canonicalize()
+            .unwrap_or_else(|_| server_path.to_path_buf());
         let servers = self.servers.lock().await;
 
         if let Some(active) = servers.get(&canonical) {
             let mut stdin_guard = active.stdin.lock().await;
             if let Some(ref mut stdin) = *stdin_guard {
-                stdin.write_all(input.as_bytes()).await
+                stdin
+                    .write_all(input.as_bytes())
+                    .await
                     .map_err(|e| CraftError::Ipc(format!("Failed to write to stdin: {}", e)))?;
-                stdin.flush().await
+                stdin
+                    .flush()
+                    .await
                     .map_err(|e| CraftError::Ipc(format!("Failed to flush stdin: {}", e)))?;
                 return Ok(());
             }
@@ -368,7 +431,9 @@ impl Supervisor {
         &self,
         server_path: &Path,
     ) -> Result<(String, broadcast::Receiver<String>)> {
-        let canonical = server_path.canonicalize().unwrap_or_else(|_| server_path.to_path_buf());
+        let canonical = server_path
+            .canonicalize()
+            .unwrap_or_else(|_| server_path.to_path_buf());
         let servers = self.servers.lock().await;
 
         if let Some(active) = servers.get(&canonical) {

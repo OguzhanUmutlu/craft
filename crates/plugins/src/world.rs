@@ -1,7 +1,7 @@
+use craft_core::{get_dimension_worlds, CraftError, NbtFile, NbtTag, Result};
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use craft_core::{get_dimension_worlds, CraftError, NbtFile, NbtTag, Result};
 use zip::ZipArchive;
 
 #[derive(Debug, Clone)]
@@ -39,16 +39,58 @@ pub fn get_curated_maps() -> Vec<CuratedMap> {
         CuratedMap {
             name: "Diversity 3",
             category: "Adventure",
-            description: "Multi-genre adventure map featuring Escape, Trivia, Survival, Puzzle, and Boss.",
+            description:
+                "Multi-genre adventure map featuring Escape, Trivia, Survival, Puzzle, and Boss.",
             download_url: "https://media.forgecdn.net/files/2908/333/Diversity_3.zip",
             default_folder: "Diversity3",
         },
         CuratedMap {
             name: "Medieval Village Spawn",
             category: "Build / Spawn",
-            description: "High-detail starter village with castle, market, and houses for server lobby.",
+            description:
+                "High-detail starter village with castle, market, and houses for server lobby.",
             download_url: "https://media.forgecdn.net/files/3321/102/MedievalVillage.zip",
             default_folder: "MedievalVillage",
+        },
+        CuratedMap {
+            name: "Herobrine's Mansion",
+            category: "Adventure / RPG",
+            description:
+                "Legendary gothic adventure map with custom bosses, shops, and elite mobs.",
+            download_url: "https://media.forgecdn.net/files/2218/956/Herobrines_Mansion.zip",
+            default_folder: "HerobrinesMansion",
+        },
+        CuratedMap {
+            name: "Terra Swoop Force",
+            category: "Elytra / Arcade",
+            description:
+                "Fast-paced thermal glide arcade flight journey into the center of the Earth.",
+            download_url: "https://media.forgecdn.net/files/2347/662/Terra_Swoop_Force.zip",
+            default_folder: "TerraSwoopForce",
+        },
+        CuratedMap {
+            name: "Castaway Island",
+            category: "Survival / Island",
+            description:
+                "Shipwrecked on a tropical island with custom caves, dungeons, and monuments.",
+            download_url: "https://media.forgecdn.net/files/2253/117/Castaway.zip",
+            default_folder: "CastawayIsland",
+        },
+        CuratedMap {
+            name: "Super Hostile: Sea of Flame",
+            category: "CTM / Hardcore",
+            description:
+                "Vechs' iconic Complete the Monument map set in a perilous subterranean underworld.",
+            download_url: "https://media.forgecdn.net/files/2242/881/SeaOfFlameII.zip",
+            default_folder: "SeaOfFlame",
+        },
+        CuratedMap {
+            name: "Futuristic Lobby Spawn",
+            category: "Build / Spawn",
+            description:
+                "High-tech cyberpunk sci-fi portal hub and spawn structure for server networks.",
+            download_url: "https://media.forgecdn.net/files/3421/980/FuturisticLobby.zip",
+            default_folder: "FuturisticLobby",
         },
     ]
 }
@@ -127,8 +169,14 @@ pub fn list_installed_worlds(server_path: &Path) -> Vec<InstalledWorldItem> {
             if path.is_dir() && path.join("level.dat").exists() {
                 let name = entry.file_name().to_string_lossy().to_string();
                 let is_default = name.eq_ignore_ascii_case(&default_world);
-                let is_nether = nether_world.as_deref().map(|n| n.eq_ignore_ascii_case(&name)).unwrap_or(false);
-                let is_end = end_world.as_deref().map(|e| e.eq_ignore_ascii_case(&name)).unwrap_or(false);
+                let is_nether = nether_world
+                    .as_deref()
+                    .map(|n| n.eq_ignore_ascii_case(&name))
+                    .unwrap_or(false);
+                let is_end = end_world
+                    .as_deref()
+                    .map(|e| e.eq_ignore_ascii_case(&name))
+                    .unwrap_or(false);
                 let size_bytes = dir_size(&path).unwrap_or(0);
                 worlds.push(InstalledWorldItem {
                     name,
@@ -144,7 +192,8 @@ pub fn list_installed_worlds(server_path: &Path) -> Vec<InstalledWorldItem> {
 
     worlds.sort_by(|a, b| {
         // Active default world first, then nether, then end, then alphabetically
-        b.is_default.cmp(&a.is_default)
+        b.is_default
+            .cmp(&a.is_default)
             .then_with(|| b.is_nether.cmp(&a.is_nether))
             .then_with(|| b.is_end.cmp(&a.is_end))
             .then_with(|| a.name.cmp(&b.name))
@@ -156,7 +205,10 @@ pub fn list_installed_worlds(server_path: &Path) -> Vec<InstalledWorldItem> {
 pub fn inspect_world_metadata(world_path: &Path) -> Result<WorldMetadataSummary> {
     let level_dat = world_path.join("level.dat");
     if !level_dat.exists() {
-        return Err(CraftError::Other(format!("level.dat not found in '{}'", world_path.display())));
+        return Err(CraftError::Other(format!(
+            "level.dat not found in '{}'",
+            world_path.display()
+        )));
     }
 
     let nbt_file = NbtFile::read(&level_dat)?;
@@ -172,7 +224,8 @@ pub fn inspect_world_metadata(world_path: &Path) -> Result<WorldMetadataSummary>
         2 => "Adventure",
         3 => "Spectator",
         _ => "Custom",
-    }.to_string();
+    }
+    .to_string();
 
     let diff_num = data.get_i8("Difficulty").unwrap_or(1);
     let difficulty = match diff_num {
@@ -181,7 +234,8 @@ pub fn inspect_world_metadata(world_path: &Path) -> Result<WorldMetadataSummary>
         2 => "Normal",
         3 => "Hard",
         _ => "Normal",
-    }.to_string();
+    }
+    .to_string();
 
     let hardcore = data.get_i8("hardcore").map(|b| b != 0).unwrap_or(false);
     let spawn_x = data.get_i32("SpawnX").unwrap_or(0);
@@ -192,7 +246,8 @@ pub fn inspect_world_metadata(world_path: &Path) -> Result<WorldMetadataSummary>
 
     let seed = data.get_i64("RandomSeed");
 
-    let version_name = data.get("Version")
+    let version_name = data
+        .get("Version")
         .and_then(|v| v.get_str("Name"))
         .map(|s| s.to_string());
 
@@ -235,7 +290,10 @@ pub fn resolve_usercache_name(server_root: &Path, uuid_str: &str) -> Option<Stri
 }
 
 /// Lists playerdata files inside world_path/playerdata/*.dat
-pub fn list_world_player_data(world_path: &Path, server_root: &Path) -> Result<Vec<PlayerDataSummary>> {
+pub fn list_world_player_data(
+    world_path: &Path,
+    server_root: &Path,
+) -> Result<Vec<PlayerDataSummary>> {
     let playerdata_dir = world_path.join("playerdata");
     let mut list = Vec::new();
 
@@ -249,8 +307,8 @@ pub fn list_world_player_data(world_path: &Path, server_root: &Path) -> Result<V
             if path.is_file() && path.extension().map(|e| e == "dat").unwrap_or(false) {
                 let filename = entry.file_name().to_string_lossy().to_string();
                 let uuid = filename.trim_end_matches(".dat").to_string();
-                let name = resolve_usercache_name(server_root, &uuid)
-                    .unwrap_or_else(|| uuid.clone());
+                let name =
+                    resolve_usercache_name(server_root, &uuid).unwrap_or_else(|| uuid.clone());
 
                 // Attempt to read NBT player info
                 if let Ok(nbt) = NbtFile::read(&path) {
@@ -264,17 +322,29 @@ pub fn list_world_player_data(world_path: &Path, server_root: &Path) -> Result<V
                         2 => "Adventure",
                         3 => "Spectator",
                         _ => "Survival",
-                    }.to_string();
+                    }
+                    .to_string();
 
-                    let dimension = nbt.root.get_str("Dimension")
+                    let dimension = nbt
+                        .root
+                        .get_str("Dimension")
                         .unwrap_or("minecraft:overworld")
                         .to_string();
 
                     let pos = if let Some(coords) = nbt.root.get_list("Pos") {
                         if coords.len() >= 3 {
-                            let x = match coords[0] { NbtTag::Double(v) => v, _ => 0.0 };
-                            let y = match coords[1] { NbtTag::Double(v) => v, _ => 0.0 };
-                            let z = match coords[2] { NbtTag::Double(v) => v, _ => 0.0 };
+                            let x = match coords[0] {
+                                NbtTag::Double(v) => v,
+                                _ => 0.0,
+                            };
+                            let y = match coords[1] {
+                                NbtTag::Double(v) => v,
+                                _ => 0.0,
+                            };
+                            let z = match coords[2] {
+                                NbtTag::Double(v) => v,
+                                _ => 0.0,
+                            };
                             (x, y, z)
                         } else {
                             (0.0, 0.0, 0.0)
@@ -283,9 +353,8 @@ pub fn list_world_player_data(world_path: &Path, server_root: &Path) -> Result<V
                         (0.0, 0.0, 0.0)
                     };
 
-                    let inventory_count = nbt.root.get_list("Inventory")
-                        .map(|l| l.len())
-                        .unwrap_or(0);
+                    let inventory_count =
+                        nbt.root.get_list("Inventory").map(|l| l.len()).unwrap_or(0);
 
                     list.push(PlayerDataSummary {
                         uuid,
@@ -355,7 +424,8 @@ pub fn list_world_advancements(world_path: &Path, uuid: &str) -> Result<Vec<Adva
                 continue;
             }
             let completed = val.get("done").and_then(|d| d.as_bool()).unwrap_or(false);
-            let criteria_count = val.get("criteria")
+            let criteria_count = val
+                .get("criteria")
                 .and_then(|c| c.as_object())
                 .map(|m| m.len())
                 .unwrap_or(0);
@@ -428,7 +498,8 @@ pub fn extract_zip(zip_path: &Path, extract_to: &Path) -> Result<()> {
         .map_err(|e| CraftError::Other(format!("Failed to open zip archive: {}", e)))?;
 
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)
+        let mut entry = archive
+            .by_index(i)
             .map_err(|e| CraftError::Other(format!("Failed to read zip entry: {}", e)))?;
 
         let enclosed = match entry.enclosed_name() {
@@ -496,18 +567,18 @@ pub async fn install_world_from_url(
     url: &str,
     world_name: Option<&str>,
 ) -> Result<(PathBuf, String)> {
-    let store = craft_core::CraftPaths::new()
-        .ok()
-        .and_then(|paths| {
-            let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
-            craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes).ok()
-        });
+    let resolved_url = crate::map_resolver::resolve_map_download_url(url).await?;
+
+    let store = craft_core::CraftPaths::new().ok().and_then(|paths| {
+        let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
+        craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes).ok()
+    });
 
     let (zip_path, _temp_dir) = if let Some(store) = store {
         let hash = {
             use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
-            hasher.update(url.as_bytes());
+            hasher.update(resolved_url.as_bytes());
             hex::encode(hasher.finalize())
         };
         let rel_subpath = format!("worlds/{}.zip", &hash[..24]);
@@ -515,19 +586,24 @@ pub async fn install_world_from_url(
         let path = match store.get_artifact(&rel_subpath) {
             Some(p) => p,
             None => {
-                let resp = reqwest::get(url).await
-                    .map_err(|e| CraftError::Download(format!("Failed to download world archive: {}", e)))?;
-                let bytes = resp.bytes().await
-                    .map_err(|e| CraftError::Download(format!("Failed to read world bytes: {}", e)))?;
+                let resp = reqwest::get(&resolved_url).await.map_err(|e| {
+                    CraftError::Download(format!("Failed to download world archive: {}", e))
+                })?;
+                let bytes = resp.bytes().await.map_err(|e| {
+                    CraftError::Download(format!("Failed to read world bytes: {}", e))
+                })?;
                 let (p, _) = store.put_artifact(&rel_subpath, &bytes, None)?;
                 p
             }
         };
         (path, None)
     } else {
-        let resp = reqwest::get(url).await
-            .map_err(|e| CraftError::Download(format!("Failed to download world archive: {}", e)))?;
-        let bytes = resp.bytes().await
+        let resp = reqwest::get(&resolved_url).await.map_err(|e| {
+            CraftError::Download(format!("Failed to download world archive: {}", e))
+        })?;
+        let bytes = resp
+            .bytes()
+            .await
             .map_err(|e| CraftError::Download(format!("Failed to read world bytes: {}", e)))?;
         let temp_dir = tempfile::tempdir()?;
         let temp_zip = temp_dir.path().join("world_archive.zip");
@@ -546,8 +622,9 @@ pub fn install_world_from_zip(
     let temp_extract = tempfile::tempdir()?;
     extract_zip(zip_path, temp_extract.path())?;
 
-    let world_root = find_world_root(temp_extract.path())
-        .ok_or_else(|| CraftError::Other("Invalid Minecraft world archive: level.dat was not found.".to_string()))?;
+    let world_root = find_world_root(temp_extract.path()).ok_or_else(|| {
+        CraftError::Other("Invalid Minecraft world archive: level.dat was not found.".to_string())
+    })?;
 
     let target_name = match world_name {
         Some(name) if !name.trim().is_empty() => sanitize_world_name(name),
@@ -556,7 +633,9 @@ pub fn install_world_from_zip(
                 .file_name()
                 .map(|f| f.to_string_lossy().to_string())
                 .unwrap_or_else(|| "custom_world".to_string());
-            if folder_name.is_empty() || folder_name == temp_extract.path().file_name().unwrap().to_string_lossy() {
+            if folder_name.is_empty()
+                || folder_name == temp_extract.path().file_name().unwrap().to_string_lossy()
+            {
                 "custom_world".to_string()
             } else {
                 sanitize_world_name(&folder_name)
@@ -615,7 +694,13 @@ pub fn install_world_from_folder(
 fn sanitize_world_name(raw: &str) -> String {
     let cleaned: String = raw
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     let trimmed = cleaned.trim_matches('_');
     if trimmed.is_empty() {
@@ -647,9 +732,9 @@ mod tests {
 
     #[test]
     fn test_extract_and_find_world_root() {
+        use std::io::Write;
         use zip::write::SimpleFileOptions;
         use zip::ZipWriter;
-        use std::io::Write;
 
         let tmp = tempfile::tempdir().unwrap();
         let zip_path = tmp.path().join("test_map.zip");
@@ -658,10 +743,12 @@ mod tests {
         {
             let file = File::create(&zip_path).unwrap();
             let mut zip = ZipWriter::new(file);
-            let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            let options =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
             zip.start_file("TestWorld/level.dat", options).unwrap();
             zip.write_all(b"dummy level data").unwrap();
-            zip.start_file("TestWorld/region/r.0.0.mca", options).unwrap();
+            zip.start_file("TestWorld/region/r.0.0.mca", options)
+                .unwrap();
             zip.write_all(b"dummy chunk data").unwrap();
             zip.finish().unwrap();
         }
@@ -669,7 +756,8 @@ mod tests {
         let server_dir = tmp.path().join("server");
         fs::create_dir_all(&server_dir).unwrap();
 
-        let (installed_path, world_name) = install_world_from_zip(&server_dir, &zip_path, Some("MyCoolMap")).unwrap();
+        let (installed_path, world_name) =
+            install_world_from_zip(&server_dir, &zip_path, Some("MyCoolMap")).unwrap();
         assert_eq!(world_name, "MyCoolMap");
         assert!(installed_path.exists());
         assert!(installed_path.join("level.dat").exists());
@@ -690,7 +778,8 @@ mod tests {
         let server_dir = tmp.path().join("server");
         fs::create_dir_all(&server_dir).unwrap();
 
-        let (installed_path, world_name) = install_world_from_folder(&server_dir, &src_world, Some("Lobby World")).unwrap();
+        let (installed_path, world_name) =
+            install_world_from_folder(&server_dir, &src_world, Some("Lobby World")).unwrap();
         assert_eq!(world_name, "Lobby_World");
         assert!(installed_path.join("level.dat").exists());
     }
@@ -706,7 +795,10 @@ mod tests {
 
         // Create mock level.dat
         let mut data = BTreeMap::new();
-        data.insert("LevelName".to_string(), NbtTag::String("AlphaWorld".to_string()));
+        data.insert(
+            "LevelName".to_string(),
+            NbtTag::String("AlphaWorld".to_string()),
+        );
         data.insert("GameType".to_string(), NbtTag::Int(1)); // Creative
         data.insert("Difficulty".to_string(), NbtTag::Byte(3)); // Hard
         data.insert("hardcore".to_string(), NbtTag::Byte(0));
@@ -734,18 +826,23 @@ mod tests {
         p_root.insert("foodLevel".to_string(), NbtTag::Int(19));
         p_root.insert("XpLevel".to_string(), NbtTag::Int(30));
         p_root.insert("playerGameType".to_string(), NbtTag::Int(0));
-        p_root.insert("Pos".to_string(), NbtTag::List(vec![
-            NbtTag::Double(100.0),
-            NbtTag::Double(70.0),
-            NbtTag::Double(-200.0),
-        ]));
+        p_root.insert(
+            "Pos".to_string(),
+            NbtTag::List(vec![
+                NbtTag::Double(100.0),
+                NbtTag::Double(70.0),
+                NbtTag::Double(-200.0),
+            ]),
+        );
 
         let p_nbt = NbtFile {
             root_name: "".to_string(),
             root: NbtTag::Compound(p_root),
             is_compressed: true,
         };
-        p_nbt.write(pdata_dir.join("069a79f4-44e9-4726-a5be-fca90e38aaf5.dat")).unwrap();
+        p_nbt
+            .write(pdata_dir.join("069a79f4-44e9-4726-a5be-fca90e38aaf5.dat"))
+            .unwrap();
 
         // Create mock usercache.json
         fs::write(server_dir.join("usercache.json"), r#"[{"name":"Notch","uuid":"069a79f4-44e9-4726-a5be-fca90e38aaf5","expiresOn":"2030-01-01"}]"#).unwrap();

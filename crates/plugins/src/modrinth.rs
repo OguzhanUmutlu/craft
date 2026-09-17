@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use craft_core::{CraftError, Result};
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ModrinthSearchResponse {
@@ -54,14 +54,20 @@ impl ModrinthClient {
         Self { client }
     }
 
-    pub async fn search(&self, query: &str, project_type: Option<&str>) -> Result<Vec<ModrinthHit>> {
+    pub async fn search(
+        &self,
+        query: &str,
+        project_type: Option<&str>,
+    ) -> Result<Vec<ModrinthHit>> {
         let pt_str = project_type.unwrap_or("all");
         let cache_key = format!("modrinth_search_{}_{}", pt_str, query);
 
         // Check cache (30 min TTL)
         if let Ok(paths) = craft_core::CraftPaths::new() {
             let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
-            if let Ok(store) = craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes) {
+            if let Ok(store) =
+                craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes)
+            {
                 if let Ok(Some(bytes)) = store.get_metadata(&cache_key) {
                     if let Ok(data) = serde_json::from_slice::<ModrinthSearchResponse>(&bytes) {
                         return Ok(data.hits);
@@ -80,10 +86,16 @@ impl ModrinthClient {
             url.push_str(&format!("&facets={}", urlencoding(&facet)));
         }
 
-        let resp = self.client.get(&url).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| CraftError::Download(format!("Modrinth search error: {}", e)))?;
 
-        let bytes = resp.bytes().await
+        let bytes = resp
+            .bytes()
+            .await
             .map_err(|e| CraftError::Download(format!("Modrinth response read error: {}", e)))?;
 
         let data: ModrinthSearchResponse = serde_json::from_slice(&bytes)
@@ -91,8 +103,14 @@ impl ModrinthClient {
 
         if let Ok(paths) = craft_core::CraftPaths::new() {
             let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
-            if let Ok(store) = craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes) {
-                let _ = store.put_metadata(&cache_key, &bytes, Some(std::time::Duration::from_secs(30 * 60)));
+            if let Ok(store) =
+                craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes)
+            {
+                let _ = store.put_metadata(
+                    &cache_key,
+                    &bytes,
+                    Some(std::time::Duration::from_secs(30 * 60)),
+                );
             }
         }
 
@@ -103,7 +121,9 @@ impl ModrinthClient {
         let cache_key = format!("modrinth_version_{}", project_id);
         if let Ok(paths) = craft_core::CraftPaths::new() {
             let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
-            if let Ok(store) = craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes) {
+            if let Ok(store) =
+                craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes)
+            {
                 if let Ok(Some(bytes)) = store.get_metadata(&cache_key) {
                     if let Ok(versions) = serde_json::from_slice::<Vec<ModrinthVersion>>(&bytes) {
                         if let Some(first) = versions.into_iter().next() {
@@ -117,28 +137,41 @@ impl ModrinthClient {
         }
 
         let url = format!("https://api.modrinth.com/v2/project/{}/version", project_id);
-        let resp = self.client.get(&url).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| CraftError::Download(format!("Modrinth versions error: {}", e)))?;
 
-        let bytes = resp.bytes().await
-            .map_err(|e| CraftError::Download(format!("Failed to read versions response: {}", e)))?;
+        let bytes = resp.bytes().await.map_err(|e| {
+            CraftError::Download(format!("Failed to read versions response: {}", e))
+        })?;
 
         let versions: Vec<ModrinthVersion> = serde_json::from_slice(&bytes)
             .map_err(|e| CraftError::Download(format!("Invalid versions response: {}", e)))?;
 
         if let Ok(paths) = craft_core::CraftPaths::new() {
             let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
-            if let Ok(store) = craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes) {
-                let _ = store.put_metadata(&cache_key, &bytes, Some(std::time::Duration::from_secs(30 * 60)));
+            if let Ok(store) =
+                craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes)
+            {
+                let _ = store.put_metadata(
+                    &cache_key,
+                    &bytes,
+                    Some(std::time::Duration::from_secs(30 * 60)),
+                );
             }
         }
 
-        let first = versions.into_iter().next()
+        let first = versions
+            .into_iter()
+            .next()
             .ok_or_else(|| CraftError::Other("No releases found for this project".to_string()))?;
 
-        let primary_file = first.files.into_iter()
-            .find(|f| f.primary)
-            .ok_or_else(|| CraftError::Other("No downloadable files found in release".to_string()))?;
+        let primary_file = first.files.into_iter().find(|f| f.primary).ok_or_else(|| {
+            CraftError::Other("No downloadable files found in release".to_string())
+        })?;
 
         Ok(primary_file)
     }

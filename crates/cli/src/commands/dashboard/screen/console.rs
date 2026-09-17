@@ -7,8 +7,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode},
 };
-use std::io::{self, Write};
-use std::path::Path;
+use std::fs::File;
+use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 
 use super::terminal::get_terminal_size;
 use super::theme::strip_ansi;
@@ -18,8 +19,8 @@ use super::AltScreenGuard;
 /// - Keeps a persistent `> ` command prompt at the bottom.
 /// - Redraws incoming logs smoothly without clobbering or shifting user input.
 /// - Supports readline editing (Ctrl+Backspace, Ctrl+W, Ctrl+A/E/U/K, Backspace, Delete).
-/// - Supports history navigation via Up/Down arrows.
-/// - Supports virtual scrollback via PageUp/PageDown, Home, End, and Mouse Wheel.
+/// - Supports history navigation and scrolling via Up/Down and PageUp/PageDown.
+/// - Supports chunked seek-based log file reading for virtual scrolling without RAM buildup.
 /// - Cleanly detaches on Ctrl+C or Esc.
 pub async fn run_virtual_console(
     server_name: &str,
@@ -40,11 +41,14 @@ pub async fn run_virtual_console(
     enable_raw_mode()?;
     let mut stdout = io::stdout();
 
-    let mut lines: Vec<String> = Vec::with_capacity(2000);
+    let mut lines: Vec<String> = Vec::with_capacity(200);
     for raw_line in backlog.split('\n') {
         let trimmed = raw_line.trim_end_matches('\r');
-        if !trimmed.is_empty() {
+        if !trimmed.trim().is_empty() {
             lines.push(trimmed.to_string());
+            if lines.len() > 200 {
+                lines.remove(0);
+            }
         }
     }
 
@@ -70,6 +74,7 @@ pub async fn run_virtual_console(
     render(
         &mut stdout,
         server_name,
+        server_path,
         &lines,
         scroll_offset,
         &input_buffer,
@@ -83,14 +88,17 @@ pub async fn run_virtual_console(
                 while let Some(idx) = partial_chunk.find('\n') {
                     let line = partial_chunk[..idx].trim_end_matches('\r').to_string();
                     partial_chunk = partial_chunk[idx + 1..].to_string();
-                    lines.push(line);
-                    if lines.len() > 2000 {
-                        lines.remove(0);
+                    if !line.trim().is_empty() {
+                        lines.push(line);
+                        if lines.len() > 200 {
+                            lines.remove(0);
+                        }
                     }
                 }
                 render(
                     &mut stdout,
                     server_name,
+                    server_path,
                     &lines,
                     scroll_offset,
                     &input_buffer,
@@ -139,7 +147,7 @@ pub async fn run_virtual_console(
                                         let _ = tx_to_daemon.send(format!("{}\n", trimmed)).await;
                                         history.push(trimmed.clone());
                                         lines.push(format!("> {}", trimmed));
-                                        if lines.len() > 2000 {
+                                        if lines.len() > 200 {
                                             lines.remove(0);
                                         }
                                         input_buffer.clear();
@@ -182,8 +190,8 @@ pub async fn run_virtual_console(
 
                                 KeyCode::Home => {
                                     if input_buffer.is_empty() {
-                                        // Scroll to top of log buffer
-                                        scroll_offset = lines.len().saturating_sub(log_area_height);
+                                        // Scroll backward into history
+                                        scroll_offset = scroll_offset.saturating_add(200);
                                     } else {
                                         cursor_pos = 0;
                                     }
@@ -199,9 +207,8 @@ pub async fn run_virtual_console(
                                 }
 
                                 KeyCode::PageUp => {
-                                    let max_scroll = lines.len().saturating_sub(log_area_height);
                                     let step = (log_area_height / 2).max(1);
-                                    scroll_offset = (scroll_offset + step).min(max_scroll);
+                                    scroll_offset = scroll_offset.saturating_add(step);
                                 }
 
                                 KeyCode::PageDown => {
@@ -210,8 +217,12 @@ pub async fn run_virtual_console(
                                 }
 
                                 KeyCode::Up => {
-                                    // Command history up
-                                    if !history.is_empty() {
+                                    let is_nav_mod = key.modifiers.contains(KeyModifiers::SHIFT)
+                                        || key.modifiers.contains(KeyModifiers::CONTROL)
+                                        || key.modifiers.contains(KeyModifiers::ALT);
+                                    if is_nav_mod || scroll_offset > 0 || (input_buffer.is_empty() && history.is_empty()) {
+                                        scroll_offset = scroll_offset.saturating_add(1);
+                                    } else if !history.is_empty() {
                                         let next_idx = match history_idx {
                                             None => history.len() - 1,
                                             Some(idx) => idx.saturating_sub(1),
@@ -223,8 +234,12 @@ pub async fn run_virtual_console(
                                 }
 
                                 KeyCode::Down => {
-                                    // Command history down
-                                    if let Some(idx) = history_idx {
+                                    let is_nav_mod = key.modifiers.contains(KeyModifiers::SHIFT)
+                                        || key.modifiers.contains(KeyModifiers::CONTROL)
+                                        || key.modifiers.contains(KeyModifiers::ALT);
+                                    if is_nav_mod || scroll_offset > 0 {
+                                        scroll_offset = scroll_offset.saturating_sub(1);
+                                    } else if let Some(idx) = history_idx {
                                         if idx + 1 < history.len() {
                                             let next_idx = idx + 1;
                                             history_idx = Some(next_idx);
@@ -267,6 +282,7 @@ pub async fn run_virtual_console(
                         render(
                             &mut stdout,
                             server_name,
+                            server_path,
                             &lines,
                             scroll_offset,
                             &input_buffer,
@@ -275,16 +291,13 @@ pub async fn run_virtual_console(
                     }
 
                     Event::Mouse(MouseEvent { kind, .. }) => {
-                        let (_, term_h) = get_terminal_size();
-                        let log_area_height = (term_h.saturating_sub(5)).max(1) as usize;
-                        let max_scroll = lines.len().saturating_sub(log_area_height);
-
                         match kind {
                             MouseEventKind::ScrollUp => {
-                                scroll_offset = (scroll_offset + 3).min(max_scroll);
+                                scroll_offset = scroll_offset.saturating_add(3);
                                 render(
                                     &mut stdout,
                                     server_name,
+                                    server_path,
                                     &lines,
                                     scroll_offset,
                                     &input_buffer,
@@ -296,6 +309,7 @@ pub async fn run_virtual_console(
                                 render(
                                     &mut stdout,
                                     server_name,
+                                    server_path,
                                     &lines,
                                     scroll_offset,
                                     &input_buffer,
@@ -310,6 +324,7 @@ pub async fn run_virtual_console(
                         render(
                             &mut stdout,
                             server_name,
+                            server_path,
                             &lines,
                             scroll_offset,
                             &input_buffer,
@@ -327,6 +342,7 @@ pub async fn run_virtual_console(
                         render(
                             &mut stdout,
                             server_name,
+                            server_path,
                             &lines,
                             scroll_offset,
                             &input_buffer,
@@ -357,9 +373,70 @@ fn delete_word_backward(buffer: &mut String, cursor_pos: &mut usize) {
     *cursor_pos = word_start;
 }
 
+fn find_log_file(server_path: &Path) -> Option<PathBuf> {
+    let candidates = [
+        server_path.join("logs").join("latest.log"),
+        server_path.join("logs").join("console.log"),
+        server_path.join("server.log"),
+    ];
+    candidates.into_iter().find(|c| c.exists() && c.is_file())
+}
+
+/// Reads a window of lines from the end of the log file using backward chunks.
+/// Never loads the entire file into memory.
+fn read_log_window_from_file(
+    file_path: &Path,
+    scroll_offset: usize,
+    count: usize,
+) -> io::Result<Vec<String>> {
+    let mut file = File::open(file_path)?;
+    let file_len = file.metadata()?.len();
+    if file_len == 0 {
+        return Ok(Vec::new());
+    }
+
+    const CHUNK_SIZE: usize = 16 * 1024;
+    let mut current_pos = file_len;
+    let mut buffer = Vec::new();
+    let target_lines = scroll_offset + count;
+
+    while current_pos > 0 {
+        let read_pos = current_pos.saturating_sub(CHUNK_SIZE as u64);
+        let bytes_to_read = (current_pos - read_pos) as usize;
+        file.seek(SeekFrom::Start(read_pos))?;
+
+        let mut chunk = vec![0u8; bytes_to_read];
+        file.read_exact(&mut chunk)?;
+
+        chunk.extend_from_slice(&buffer);
+        buffer = chunk;
+        current_pos = read_pos;
+
+        let newline_count = buffer.iter().filter(|&&b| b == b'\n').count();
+        if newline_count >= target_lines + 20 {
+            break;
+        }
+    }
+
+    let text = String::from_utf8_lossy(&buffer);
+    let mut lines: Vec<String> = Vec::new();
+    for line in text.split('\n') {
+        let trimmed = line.trim_end_matches('\r').to_string();
+        if !trimmed.trim().is_empty() {
+            lines.push(trimmed);
+        }
+    }
+
+    let total = lines.len();
+    let end = total.saturating_sub(scroll_offset);
+    let start = end.saturating_sub(count);
+    Ok(lines[start..end].to_vec())
+}
+
 fn render<W: Write>(
     out: &mut W,
     server_name: &str,
+    server_path: &Path,
     lines: &[String],
     scroll_offset: usize,
     input_buffer: &str,
@@ -384,7 +461,7 @@ fn render<W: Write>(
     out.write_all(top_border.as_bytes())?;
 
     // Row 1: Subtitle
-    let sub = " [PgUp/PgDn] Scroll  |  [Ctrl+Backspace] Delete Word  |  [Ctrl+C/Esc] Detach ";
+    let sub = " [↑/↓/PgUp/PgDn] Scroll  |  [Ctrl+Backspace] Delete Word  |  [Ctrl+C/Esc] Detach ";
     let sub_len = strip_ansi(sub).len();
     let sub_pad = inner_width.saturating_sub(sub_len);
     let sub_line = format!("│{}{}{}│\x1B[K\r\n", sub.dimmed(), " ".repeat(sub_pad), "");
@@ -395,13 +472,32 @@ fn render<W: Write>(
     out.write_all(div_line.as_bytes())?;
 
     // Rows 3 .. (term_h - 2): Log viewport
-    let total_lines = lines.len();
-    let end_idx = total_lines.saturating_sub(scroll_offset);
-    let start_idx = end_idx.saturating_sub(log_area_height);
-    let visible_lines = if total_lines == 0 {
-        &[]
+    let visible_lines: Vec<String> = if scroll_offset == 0 {
+        let total = lines.len();
+        let start = total.saturating_sub(log_area_height);
+        lines[start..total].to_vec()
+    } else if let Some(log_file) = find_log_file(server_path) {
+        if let Ok(file_lines) = read_log_window_from_file(&log_file, scroll_offset, log_area_height)
+        {
+            if !file_lines.is_empty() {
+                file_lines
+            } else {
+                let total = lines.len();
+                let end = total.saturating_sub(scroll_offset);
+                let start = end.saturating_sub(log_area_height);
+                lines[start..end].to_vec()
+            }
+        } else {
+            let total = lines.len();
+            let end = total.saturating_sub(scroll_offset);
+            let start = end.saturating_sub(log_area_height);
+            lines[start..end].to_vec()
+        }
     } else {
-        &lines[start_idx..end_idx]
+        let total = lines.len();
+        let end = total.saturating_sub(scroll_offset);
+        let start = end.saturating_sub(log_area_height);
+        lines[start..end].to_vec()
     };
 
     for i in 0..log_area_height {
@@ -492,5 +588,24 @@ mod tests {
         delete_word_backward(&mut buf, &mut pos);
         assert_eq!(buf, "stop ");
         assert_eq!(pos, 5);
+    }
+
+    #[test]
+    fn test_read_log_window_from_file() {
+        let temp_dir = std::env::temp_dir().join(format!("craft_test_log_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let log_file = temp_dir.join("latest.log");
+        let sample = "\n\nline 1\n\nline 2\nline 3\n\nline 4\nline 5\n";
+        std::fs::write(&log_file, sample).unwrap();
+
+        // Reading last 3 lines (offset 0)
+        let lines = read_log_window_from_file(&log_file, 0, 3).unwrap();
+        assert_eq!(lines, vec!["line 3", "line 4", "line 5"]);
+
+        // Reading with offset 2
+        let lines_offset = read_log_window_from_file(&log_file, 2, 3).unwrap();
+        assert_eq!(lines_offset, vec!["line 1", "line 2", "line 3"]);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

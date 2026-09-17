@@ -941,7 +941,7 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
         let maps = get_curated_maps();
         let width = get_content_width(80);
         let header = format!(
-            "{}\r\n{}\r\n{}\r\n Select a popular community map to install or search by keyword:\r\n{}",
+            "{}\r\n{}\r\n{}\r\n Select a popular community map to install, search, or provide a URL:\r\n{}",
             box_top(width).cyan().bold(),
             box_title("CURATED COMMUNITY MAPS", width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
@@ -950,14 +950,22 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
 
         let mut entries = Vec::new();
         for (i, m) in maps.iter().enumerate() {
-            let hotkey = (i + 1).to_string();
-            let desc = craft_core::truncate_ellipsis(m.description, 40);
-            entries.push(MenuEntry::new(
-                hotkey,
-                format!("{:<20} [{}] - {}", m.name, m.category, desc),
-            ));
+            let hotkey = if i < 9 {
+                (i + 1).to_string()
+            } else {
+                ((b'a' + (i - 9) as u8) as char).to_string()
+            };
+            let prefix = format!("{:<28} [{:<12}] - ", m.name, m.category);
+            let overhead = 10 + prefix.chars().count();
+            let available_desc = width.saturating_sub(overhead).max(20);
+            let desc = craft_core::truncate_ellipsis(m.description, available_desc);
+            entries.push(MenuEntry::new(hotkey, format!("{}{}", prefix, desc)));
         }
-        entries.push(MenuEntry::new("s", "Search Maps").with_aliases(&["search"]));
+        entries.push(
+            MenuEntry::new("u", "Install Map from Direct Link or Website URL")
+                .with_aliases(&["url", "link"]),
+        );
+        entries.push(MenuEntry::new("s", "Search Maps").with_aliases(&["search", "find"]));
         entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
 
         match run_menu(&header, &entries, &mut selected)? {
@@ -1002,6 +1010,59 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
                 }
             }
             Some(idx) if idx == maps.len() => {
+                if let Some(url_input) = run_input_prompt(
+                    "INSTALL MAP FROM URL",
+                    "Enter map direct link or website URL (Zip, MediaFire, Drive, Dropbox, GitHub):",
+                    None,
+                )? {
+                    let trimmed_url = url_input.trim();
+                    if !trimmed_url.is_empty() {
+                        let folder_prompt = run_input_prompt(
+                            "WORLD FOLDER NAME",
+                            "Enter world folder name (leave blank to auto-detect from archive):",
+                            None,
+                        )?;
+                        let custom_name = folder_prompt
+                            .as_ref()
+                            .map(|s| s.trim())
+                            .filter(|s| !s.is_empty());
+
+                        let _ = print_in_place_status(
+                            "RESOLVING & DOWNLOADING MAP",
+                            &[
+                                format!("Target URL: {}", trimmed_url),
+                                "Resolving map download and extracting world files...".to_string(),
+                            ],
+                        );
+
+                        match install_world_from_url(server_path, trimmed_url, custom_name).await {
+                            Ok((dest, installed_name)) => {
+                                show_modal_message(
+                                    "MAP INSTALLED",
+                                    &[
+                                        format!("[OK] Successfully installed map to '{}'!", installed_name)
+                                            .green()
+                                            .bold()
+                                            .to_string(),
+                                        format!("Path: {}", dest.display()),
+                                    ],
+                                    false,
+                                )?;
+                                prompt_set_as_default_world(server_path, &installed_name)?;
+                                return Ok(());
+                            }
+                            Err(e) => {
+                                show_modal_message(
+                                    "INSTALLATION FAILED",
+                                    &[format!("[ERROR] {}", e)],
+                                    true,
+                                )?;
+                            }
+                        }
+                    }
+                }
+            }
+            Some(idx) if idx == maps.len() + 1 => {
                 if let Some(query) = run_input_prompt(
                     "SEARCH MAPS",
                     "Enter map search keyword (e.g. skyblock, parkour, dropper, adventure):",
@@ -1017,12 +1078,18 @@ async fn curated_maps_menu(server_path: &Path) -> Result<()> {
                     } else {
                         let mut s_entries = Vec::new();
                         for (i, m) in results.iter().enumerate() {
-                            s_entries.push(MenuEntry::new(
-                                (i + 1).to_string(),
-                                format!("{:<20} [{}]", m.name, m.category),
-                            ));
+                            let hotkey = if i < 9 {
+                                (i + 1).to_string()
+                            } else {
+                                ((b'a' + (i - 9) as u8) as char).to_string()
+                            };
+                            let prefix = format!("{:<28} [{:<12}] - ", m.name, m.category);
+                            let overhead = 10 + prefix.chars().count();
+                            let available_desc = width.saturating_sub(overhead).max(20);
+                            let desc = craft_core::truncate_ellipsis(m.description, available_desc);
+                            s_entries.push(MenuEntry::new(hotkey, format!("{}{}", prefix, desc)));
                         }
-                        s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
+                        s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
                         let mut s_sel = 0;
                         if let Some(s_idx) = run_menu(
                             &format!(" Results for '{}':", query),

@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use craft_core::{CraftError, Result};
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PoggitPlugin {
@@ -30,10 +30,16 @@ impl PoggitClient {
 
     pub async fn search(&self, query: &str) -> Result<Vec<PoggitPlugin>> {
         let url = format!("https://poggit.pmmp.io/releases.json?name={}", query);
-        let resp = self.client.get(&url).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| CraftError::Download(format!("Poggit search error: {}", e)))?;
 
-        let list: Vec<PoggitPlugin> = resp.json().await
+        let list: Vec<PoggitPlugin> = resp
+            .json()
+            .await
             .map_err(|e| CraftError::Download(format!("Invalid Poggit response: {}", e)))?;
 
         Ok(list)
