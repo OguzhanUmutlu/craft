@@ -49,7 +49,7 @@ async fn handle_build(output: PathBuf) -> Result<()> {
     println!("  Total Versions:   {}", total_versions);
     println!("  Elapsed Time:     {:.2?}", elapsed);
     println!();
-    println!("Ready for deployment to Cloudflare Workers or static asset host.");
+    println!("Ready for release publishing or static asset hosting.");
 
     Ok(())
 }
