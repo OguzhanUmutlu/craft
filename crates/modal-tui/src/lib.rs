@@ -46,6 +46,7 @@ pub mod keys;
 pub mod modals;
 pub mod nav;
 pub mod section;
+pub mod shortcuts;
 pub mod terminal;
 pub mod text_flow;
 pub mod theme;
@@ -62,6 +63,7 @@ pub use section::{
     FieldSection, FooterSection, MenuEntry, MenuSection, ModalSection, SelectItem, TextSection,
     TitleSection,
 };
+pub use shortcuts::{Shortcut, ShortcutBar, Shortcuts};
 pub use terminal::{
     clean_exit, get_content_width, get_terminal_size, init_terminal_panic_hook,
     is_terminal_too_small, restore_terminal, wait_for_constraints, wait_for_valid_size,
@@ -95,6 +97,7 @@ pub mod prelude {
         FieldSection, FooterSection, MenuEntry, MenuSection, ModalSection, SelectItem, TextSection,
         TitleSection,
     };
+    pub use crate::shortcuts::{Shortcut, ShortcutBar, Shortcuts};
     pub use crate::terminal::{
         clean_exit, get_content_width, get_terminal_size, restore_terminal, wait_for_valid_size,
         AltScreenGuard, TerminalConstraints, TerminalGuard,

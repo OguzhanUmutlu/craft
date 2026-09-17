@@ -9,7 +9,7 @@ use std::io;
 
 use crate::error::Result;
 use crate::frame::BoxFrame;
-use crate::keys::{KeyAction, KeyHelpMode, KeyMap};
+use crate::keys::{KeyAction, KeyMap};
 use crate::terminal::{
     clean_exit, get_content_width, get_terminal_size, is_terminal_too_small, wait_for_valid_size,
 };
@@ -76,6 +76,7 @@ pub struct TableModal {
     pub keymap: KeyMap,
     pub max_width: u16,
     pub footer_help: Option<String>,
+    pub shortcuts: Option<crate::shortcuts::Shortcuts>,
 }
 
 impl TableModal {
@@ -89,6 +90,7 @@ impl TableModal {
             keymap: KeyMap::default(),
             max_width: 0,
             footer_help: None,
+            shortcuts: None,
         }
     }
 
@@ -131,6 +133,12 @@ impl TableModal {
     /// Sets custom bottom footer help text.
     pub fn with_footer_help(mut self, help: impl Into<String>) -> Self {
         self.footer_help = Some(help.into());
+        self
+    }
+
+    /// Sets custom bottom footer shortcuts.
+    pub fn with_shortcuts(mut self, shortcuts: impl Into<crate::shortcuts::Shortcuts>) -> Self {
+        self.shortcuts = Some(shortcuts.into());
         self
     }
 
@@ -264,11 +272,25 @@ impl TableModal {
                     );
                 }
 
-                let help = self
-                    .footer_help
-                    .clone()
-                    .unwrap_or_else(|| self.keymap.footer_help_text(KeyHelpMode::Table));
-                frame.footer(help);
+                let shortcuts = self.shortcuts.clone().unwrap_or_else(|| {
+                    if let Some(ref custom_footer) = self.footer_help {
+                        crate::shortcuts::Shortcuts::from(custom_footer.as_str())
+                    } else {
+                        let mut sc = crate::shortcuts::Shortcuts::new();
+                        if self.selectable {
+                            sc = sc.add("↑/↓", "Select Row");
+                        }
+                        if self.rows.len() > viewport_size {
+                            sc = sc.page();
+                        }
+                        if self.selectable {
+                            sc = sc.add("Enter", "Open");
+                        }
+                        sc = sc.back();
+                        sc.exit_if(self.keymap.allow_quit_on_q)
+                    }
+                });
+                frame.shortcuts(&shortcuts);
                 frame.render(&mut stdout)?;
 
                 match event::read()? {

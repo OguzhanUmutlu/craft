@@ -9,7 +9,7 @@ use std::io;
 
 use crate::error::Result;
 use crate::frame::BoxFrame;
-use crate::keys::{KeyAction, KeyHelpMode, KeyMap};
+use crate::keys::{KeyAction, KeyMap};
 use crate::section::{FieldSection, ModalSection, SelectItem};
 use crate::terminal::{
     clean_exit, get_content_width, get_terminal_size, is_terminal_too_small, wait_for_valid_size,
@@ -43,6 +43,7 @@ pub struct SelectModal {
     pub keymap: KeyMap,
     pub item_actions: Vec<char>,
     pub footer_help: Option<String>,
+    pub shortcuts: Option<crate::shortcuts::Shortcuts>,
     pub max_width: u16,
 }
 
@@ -67,6 +68,7 @@ impl SelectModal {
             keymap: KeyMap::menu_default(true),
             item_actions: Vec::new(),
             footer_help: None,
+            shortcuts: None,
             max_width: 0,
         }
     }
@@ -204,6 +206,12 @@ impl SelectModal {
     /// Sets custom bottom footer help text.
     pub fn with_footer_help(mut self, help: impl Into<String>) -> Self {
         self.footer_help = Some(help.into());
+        self
+    }
+
+    /// Sets custom bottom footer shortcuts.
+    pub fn with_shortcuts(mut self, shortcuts: impl Into<crate::shortcuts::Shortcuts>) -> Self {
+        self.shortcuts = Some(shortcuts.into());
         self
     }
 
@@ -370,15 +378,20 @@ impl SelectModal {
                 );
             }
 
-            let help = self.footer_help.clone().unwrap_or_else(|| {
-                let mode = if self.allow_toggle {
-                    KeyHelpMode::MenuWithToggle
+            let shortcuts = self.shortcuts.clone().unwrap_or_else(|| {
+                if let Some(ref custom_footer) = self.footer_help {
+                    crate::shortcuts::Shortcuts::from(custom_footer.as_str())
                 } else {
-                    KeyHelpMode::Menu
-                };
-                self.keymap.footer_help_text(mode)
+                    let mut sc = crate::shortcuts::Shortcuts::new().move_selection();
+                    if self.allow_toggle {
+                        sc = sc.toggle().confirm().cancel();
+                    } else {
+                        sc = sc.select().back();
+                    }
+                    sc.exit_if(self.allow_quit_on_q)
+                }
             });
-            frame.footer(help);
+            frame.shortcuts(&shortcuts);
 
             frame.render(&mut stdout)?;
 

@@ -9,7 +9,7 @@ use std::io;
 
 use crate::error::Result;
 use crate::frame::BoxFrame;
-use crate::keys::{KeyAction, KeyHelpMode, KeyMap};
+use crate::keys::{KeyAction, KeyMap};
 use crate::terminal::{clean_exit, get_content_width, is_terminal_too_small, wait_for_valid_size};
 use crate::text_flow::wrap_words;
 
@@ -33,6 +33,7 @@ pub struct ConfirmModal {
     pub default_yes: bool,
     pub keymap: KeyMap,
     pub max_width: u16,
+    pub shortcuts: Option<crate::shortcuts::Shortcuts>,
 }
 
 impl ConfirmModal {
@@ -49,6 +50,7 @@ impl ConfirmModal {
             default_yes: false,
             keymap: KeyMap::default(),
             max_width: 0,
+            shortcuts: None,
         }
     }
 
@@ -101,6 +103,12 @@ impl ConfirmModal {
     /// Sets maximum desired box content width.
     pub fn with_max_width(mut self, width: u16) -> Self {
         self.max_width = width;
+        self
+    }
+
+    /// Sets custom bottom footer shortcuts.
+    pub fn with_shortcuts(mut self, shortcuts: impl Into<crate::shortcuts::Shortcuts>) -> Self {
+        self.shortcuts = Some(shortcuts.into());
         self
     }
 
@@ -171,7 +179,13 @@ impl ConfirmModal {
                 let raw_combined = format!("{}      {}", yes_btn, no_btn);
                 frame.centered_row(raw_combined);
 
-                frame.footer(self.keymap.footer_help_text(KeyHelpMode::Confirm));
+                let shortcuts = self.shortcuts.clone().unwrap_or_else(|| {
+                    crate::shortcuts::Shortcuts::new()
+                        .add("←/→/Tab", "Select")
+                        .add("Enter/y/n", "Confirm")
+                        .cancel()
+                });
+                frame.shortcuts(&shortcuts);
                 frame.render(&mut stdout)?;
 
                 match event::read()? {

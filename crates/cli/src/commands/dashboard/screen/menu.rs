@@ -11,6 +11,7 @@ pub enum MenuAction {
 }
 
 /// Runs a high-level titled menu modal with automatic navigation bar and metadata header rows.
+#[allow(dead_code)]
 pub fn run_titled_menu(
     title: impl Into<String>,
     header_rows: &[impl AsRef<str>],
@@ -20,6 +21,31 @@ pub fn run_titled_menu(
     let mut modal = super::modals::SelectModal::menu(title)
         .with_allow_quit_on_q(super::NavGuard::depth() <= 1)
         .with_entries(entries.to_vec());
+
+    for row in header_rows {
+        modal = modal.with_header_row(row.as_ref());
+    }
+
+    match modal.run(selected_idx)? {
+        super::modals::SelectOutcome::Selected(idx) => Ok(Some(idx)),
+        super::modals::SelectOutcome::Toggled(idx) => Ok(Some(idx)),
+        _ => Ok(None),
+    }
+}
+
+/// Runs a high-level titled menu modal with custom footer shortcuts.
+#[allow(dead_code)]
+pub fn run_titled_menu_with_shortcuts(
+    title: impl Into<String>,
+    header_rows: &[impl AsRef<str>],
+    entries: &[MenuEntry],
+    selected_idx: &mut usize,
+    shortcuts: impl Into<modal_tui::Shortcuts>,
+) -> Result<Option<usize>> {
+    let mut modal = super::modals::SelectModal::menu(title)
+        .with_allow_quit_on_q(super::NavGuard::depth() <= 1)
+        .with_entries(entries.to_vec())
+        .with_shortcuts(shortcuts);
 
     for row in header_rows {
         modal = modal.with_header_row(row.as_ref());

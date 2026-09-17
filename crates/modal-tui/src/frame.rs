@@ -134,6 +134,21 @@ impl BoxFrame {
         self
     }
 
+    /// Sets the bottom footer shortcut help bar directly from a high-level `Shortcuts` collection.
+    pub fn shortcuts(&mut self, shortcuts: &crate::shortcuts::Shortcuts) -> &mut Self {
+        self.footer_button_items = shortcuts.to_button_items();
+        self.footer_separator = "  |  ".to_string();
+        self.footer_help = Some(shortcuts.to_footer_string());
+        self
+    }
+
+    /// Sets the bottom footer shortcut help bar directly from a high-level `Shortcuts` collection (builder style).
+    pub fn with_shortcuts(mut self, shortcuts: impl Into<crate::shortcuts::Shortcuts>) -> Self {
+        let sc = shortcuts.into();
+        self.shortcuts(&sc);
+        self
+    }
+
     /// Configures whether this box frame should be rendered vertically centered in the terminal.
     pub fn with_vertical_center(mut self, center: bool) -> Self {
         self.vertical_center = center;

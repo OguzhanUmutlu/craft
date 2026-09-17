@@ -9,7 +9,8 @@ use std::io;
 
 use crate::error::Result;
 use crate::frame::BoxFrame;
-use crate::keys::{KeyAction, KeyHelpMode, KeyMap};
+use crate::keys::{KeyAction, KeyMap};
+use crate::shortcuts::Shortcuts;
 use crate::terminal::{
     clean_exit, get_content_width, get_terminal_size, is_terminal_too_small, wait_for_valid_size,
 };
@@ -21,6 +22,7 @@ pub struct InfoModal {
     pub is_error: bool,
     pub keymap: KeyMap,
     pub max_width: u16,
+    pub shortcuts: Option<Shortcuts>,
 }
 
 impl InfoModal {
@@ -32,6 +34,7 @@ impl InfoModal {
             is_error: false,
             keymap: KeyMap::default(),
             max_width: 0,
+            shortcuts: None,
         }
     }
 
@@ -68,6 +71,12 @@ impl InfoModal {
     /// Sets a custom `KeyMap`.
     pub fn with_keymap(mut self, keymap: KeyMap) -> Self {
         self.keymap = keymap;
+        self
+    }
+
+    /// Sets custom bottom footer shortcuts.
+    pub fn with_shortcuts(mut self, shortcuts: impl Into<Shortcuts>) -> Self {
+        self.shortcuts = Some(shortcuts.into());
         self
     }
 
@@ -120,7 +129,14 @@ impl InfoModal {
                     );
                 }
 
-                frame.footer(self.keymap.footer_help_text(KeyHelpMode::Info));
+                let can_scroll = self.lines.len() > viewport_size;
+                let shortcuts = self.shortcuts.clone().unwrap_or_else(|| {
+                    Shortcuts::new()
+                        .scroll_if(can_scroll)
+                        .dismiss()
+                        .exit_if(self.keymap.allow_quit_on_q)
+                });
+                frame.shortcuts(&shortcuts);
                 frame.render(&mut stdout)?;
 
                 match event::read()? {

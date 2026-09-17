@@ -14,6 +14,7 @@ pub struct WaitingModal {
     pub message: String,
     pub steps: Vec<(String, bool)>,
     pub max_width: u16,
+    pub shortcuts: Option<crate::shortcuts::Shortcuts>,
 }
 
 impl WaitingModal {
@@ -24,6 +25,7 @@ impl WaitingModal {
             message: message.into(),
             steps: Vec::new(),
             max_width: 0,
+            shortcuts: None,
         }
     }
 
@@ -36,6 +38,12 @@ impl WaitingModal {
     /// Sets maximum desired box content width.
     pub fn with_max_width(mut self, width: u16) -> Self {
         self.max_width = width;
+        self
+    }
+
+    /// Sets custom bottom footer shortcuts.
+    pub fn with_shortcuts(mut self, shortcuts: impl Into<crate::shortcuts::Shortcuts>) -> Self {
+        self.shortcuts = Some(shortcuts.into());
         self
     }
 
@@ -65,7 +73,11 @@ impl WaitingModal {
             }
         }
 
-        frame.footer("Please wait...".dimmed().to_string());
+        if let Some(ref sc) = self.shortcuts {
+            frame.shortcuts(sc);
+        } else {
+            frame.footer("Please wait...".dimmed().to_string());
+        }
         frame.render(stdout)
     }
 
@@ -89,7 +101,11 @@ impl WaitingModal {
             }
         }
 
-        frame.footer("Please wait...".dimmed().to_string());
+        if let Some(ref sc) = self.shortcuts {
+            frame.shortcuts(sc);
+        } else {
+            frame.footer("Please wait...".dimmed().to_string());
+        }
         frame.render(stdout)
     }
 }

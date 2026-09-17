@@ -4,9 +4,9 @@ pub mod remote_control;
 
 use crate::commands::dashboard::screen::{
     box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
-    run_menu, run_paged_list_menu_ext, run_password_prompt, run_titled_menu, show_modal_message,
-    AltScreenGuard, ConfirmModal, ConfirmOutcome, FormField, FormModal, MenuEntry, NavGuard,
-    PagedMenuAction,
+    run_menu, run_paged_list_menu_ext, run_password_prompt, run_titled_menu_with_shortcuts,
+    show_modal_message, AltScreenGuard, ConfirmModal, ConfirmOutcome, FormField, FormModal,
+    MenuEntry, NavGuard, PagedMenuAction,
 };
 use colored::Colorize;
 use craft_core::{CraftPaths, RemoteAuthType, RemoteHostConfig, RemotesRegistry, Result};
@@ -76,7 +76,14 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
             &action_entries,
             false,
             &['e'],
-            Some("[↑/↓/j/k] Move  |  [Enter/→] Connect  |  [e] Edit Offline  |  [Esc/←] Back"),
+            Some(
+                &modal_tui::Shortcuts::new()
+                    .move_selection()
+                    .add("Enter/→", "Connect")
+                    .add("e", "Edit Offline")
+                    .back()
+                    .to_footer_string(),
+            ),
         )?;
 
         match action {
@@ -341,7 +348,12 @@ async fn offline_host_actions_menu(paths: &CraftPaths, host_alias: &str) -> Resu
         ];
 
         let mut sel = 0;
-        let choice = run_titled_menu(
+        let shortcuts = modal_tui::Shortcuts::new()
+            .move_selection()
+            .select()
+            .back()
+            .exit_if(NavGuard::depth() <= 1);
+        let choice = run_titled_menu_with_shortcuts(
             format!("OFFLINE HOST ACTIONS: {}", host.alias.to_uppercase()),
             &[
                 format!(
@@ -355,6 +367,7 @@ async fn offline_host_actions_menu(paths: &CraftPaths, host_alias: &str) -> Resu
             ],
             &entries,
             &mut sel,
+            shortcuts,
         )?;
 
         match choice {
