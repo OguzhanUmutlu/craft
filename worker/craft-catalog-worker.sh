@@ -14,7 +14,7 @@
 set -euo pipefail
 
 # Configuration
-ENDPOINT_URL="${CRAFT_UPLOAD_URL:-https://craft.oguzhanumutlu.com/api/versions.zst}"
+ENDPOINT_URL="${CRAFT_UPLOAD_URL:-https://craft-versions-worker.someoneontheinternet.workers.dev/api/versions.zst}"
 TEMP_OUTPUT="/tmp/craft-versions-catalog.zst"
 LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')] [CraftCatalogWorker]"
 

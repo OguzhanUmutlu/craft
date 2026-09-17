@@ -12,10 +12,9 @@ compatibility_date = "2024-09-01"
 # binding = "VERSIONS_BUCKET"
 # bucket_name = "craft-catalog-assets"
 
-# Option B: Cloudflare KV Namespace
-# [[kv_namespaces]]
-# binding = "VERSIONS_KV"
-# id = "<your_kv_namespace_id>"
+[[kv_namespaces]]
+binding = "VERSIONS_KV"
+id = "165dfd41965c4b3e8edc319be7e26575"
 
 # Secrets (set via `wrangler secret put CATALOG_UPLOAD_SECRET`):
 # CATALOG_UPLOAD_SECRET

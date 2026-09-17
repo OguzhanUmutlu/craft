@@ -8,7 +8,8 @@ use craft_core::{CraftError, CraftPaths, Result, is_stable_version, sort_version
 use crate::traits::AssetDownload;
 use crate::get_all_softwares;
 
-pub const DEFAULT_CATALOG_URL: &str = "https://craft.oguzhanumutlu.com/api/versions.zst";
+pub const DEFAULT_CATALOG_URL: &str =
+    "https://craft-versions-worker.someoneontheinternet.workers.dev/api/versions.zst";
 pub const DEFAULT_CATALOG_TTL_SECS: u64 = 6 * 3600; // 6 hours
 
 /// Complete software and version catalog.
