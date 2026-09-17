@@ -518,15 +518,15 @@ pub async fn gui_create_server_wizard_with_name(
                 };
 
                 let ver_header = format!(
-                    "{}\r\n{}\r\n{}\r\n Select release version for {}:\r\n Status: {} | Auto-Update: {}\r\n{}",
+                    "{}\r\n{}\r\n{}\r\n Status: {} | Auto-Update: {}\r\n Select release version for {}:\r\n{}",
                     box_top(width).cyan().bold(),
                     box_title(&title, width, false)
                         .cyan()
                         .bold(),
                     box_divider(width).cyan().bold(),
-                    selected_sw_name,
                     cache_status,
                     auto_status,
+                    selected_sw_name,
                     box_divider(width).dimmed(),
                 );
 
@@ -557,49 +557,57 @@ pub async fn gui_create_server_wizard_with_name(
 
                 let display_versions: Vec<String> = versions_list;
 
-                let mut ver_entries: Vec<MenuEntry> = display_versions
-                    .iter()
-                    .map(|v| {
-                        let label = if v == &recommended_ver {
-                            format!("{} (Recommended)", v)
-                        } else {
-                            v.clone()
-                        };
-                        MenuEntry::button(label)
-                    })
-                    .collect();
-
-                let custom_idx = ver_entries.len();
-                ver_entries.push(MenuEntry::new("c", "Custom Version"));
-
-                let update_idx = ver_entries.len();
-                ver_entries.push(MenuEntry::new("u", "Update Versions"));
-
-                let toggle_idx = ver_entries.len();
-                ver_entries.push(MenuEntry::new(
-                    "a",
-                    format!(
-                        "Toggle Auto-Update: [{}]",
-                        if settings.auto_update_catalog { "ON" } else { "OFF" }
-                    ),
-                ));
+                let mut ver_entries: Vec<MenuEntry> = Vec::new();
 
                 let back_idx = ver_entries.len();
                 ver_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
+                let toggle_idx = ver_entries.len();
+                ver_entries.push(MenuEntry::new("a", "Toggle Auto-Update"));
+
+                let update_idx = ver_entries.len();
+                ver_entries.push(MenuEntry::new("u", "Update Versions"));
+
+                let custom_idx = ver_entries.len();
+                ver_entries.push(MenuEntry::new("c", "Custom Version"));
+
+                let versions_start_idx = ver_entries.len();
+                for v in &display_versions {
+                    let label = if v == &recommended_ver {
+                        format!("{} (Recommended)", v)
+                    } else {
+                        v.clone()
+                    };
+                    ver_entries.push(MenuEntry::button(label));
+                }
+
+                let rec_offset = display_versions
+                    .iter()
+                    .position(|v| v == &recommended_ver)
+                    .unwrap_or(0);
+                let default_ver_sel = versions_start_idx + rec_offset;
+                if ver_sel < versions_start_idx || ver_sel >= ver_entries.len() {
+                    ver_sel = default_ver_sel;
+                }
+
+                let cache_status_str = cache_status.clone();
                 let ver_choice = run_menu_with_handler(
                     &ver_header,
                     &ver_entries,
                     &mut ver_sel,
-                    |ch, idx, entries, _header_rows| {
+                    |ch, idx, entries, header_rows| {
                         if ch == 'a' || ch == 'A' || entries.get(idx).map(|e| e.hotkey.as_str()) == Some("a") {
                             settings.auto_update_catalog = !settings.auto_update_catalog;
                             let _ = settings.save(paths);
-                            if let Some(entry) = entries.iter_mut().find(|e| e.hotkey == "a") {
-                                entry.label = format!(
-                                    "Toggle Auto-Update: [{}]",
-                                    if settings.auto_update_catalog { "ON" } else { "OFF" }
-                                );
+                            let new_auto = if settings.auto_update_catalog {
+                                "ON".green()
+                            } else {
+                                "OFF".dimmed()
+                            };
+                            for row in header_rows.iter_mut() {
+                                if modalx::strip_ansi(row).contains("Auto-Update:") {
+                                    *row = format!("Status: {} | Auto-Update: {}", cache_status_str, new_auto);
+                                }
                             }
                             EventDecision::Cancel
                         } else {
@@ -608,39 +616,18 @@ pub async fn gui_create_server_wizard_with_name(
                     },
                 )?;
                 match ver_choice {
-                    Some(idx) if idx < custom_idx => {
-                        version = display_versions[idx].clone();
-                        let is_java = sw_obj
-                            .as_ref()
-                            .map(|s| s.edition() == craft_providers::ServerEdition::Java)
-                            .unwrap_or(true);
-                        if is_java {
-                            step = WizardStep::Memory;
+                    Some(idx) if idx == back_idx => {
+                        if game_id != "minecraft" && cat_idx != 99 {
+                            step = WizardStep::GameSelect;
+                        } else if cat_idx == 0 && java_type == 0 {
+                            step = WizardStep::JavaType;
                         } else {
-                            step = WizardStep::Autostart;
+                            step = WizardStep::Software;
                         }
                     }
-                    Some(idx) if idx == custom_idx => {
-                        let default_v = display_versions.first().map(|s| s.as_str()).unwrap_or("latest");
-                        match run_input_prompt(
-                            "CUSTOM SERVER VERSION",
-                            "Enter target release version string:",
-                            Some(default_v),
-                        )? {
-                            Some(v) if !v.trim().is_empty() => {
-                                version = v.trim().to_string();
-                                let is_java = sw_obj
-                                    .as_ref()
-                                    .map(|s| s.edition() == craft_providers::ServerEdition::Java)
-                                    .unwrap_or(true);
-                                if is_java {
-                                    step = WizardStep::Memory;
-                                } else {
-                                    step = WizardStep::Autostart;
-                                }
-                            }
-                            _ => {}
-                        }
+                    Some(idx) if idx == toggle_idx => {
+                        settings.auto_update_catalog = !settings.auto_update_catalog;
+                        let _ = settings.save(paths);
                     }
                     Some(idx) if idx == update_idx => {
                         if let Some(ref mgr) = catalog_mgr {
@@ -669,17 +656,41 @@ pub async fn gui_create_server_wizard_with_name(
                             }
                         }
                     }
-                    Some(idx) if idx == toggle_idx => {
-                        settings.auto_update_catalog = !settings.auto_update_catalog;
-                        let _ = settings.save(paths);
+                    Some(idx) if idx == custom_idx => {
+                        let default_v = display_versions.first().map(|s| s.as_str()).unwrap_or("latest");
+                        match run_input_prompt(
+                            "CUSTOM SERVER VERSION",
+                            "Enter target release version string:",
+                            Some(default_v),
+                        )? {
+                            Some(v) if !v.trim().is_empty() => {
+                                version = v.trim().to_string();
+                                let is_java = sw_obj
+                                    .as_ref()
+                                    .map(|s| s.edition() == craft_providers::ServerEdition::Java)
+                                    .unwrap_or(true);
+                                if is_java {
+                                    step = WizardStep::Memory;
+                                } else {
+                                    step = WizardStep::Autostart;
+                                }
+                            }
+                            _ => {}
+                        }
                     }
-                    Some(idx) if idx == back_idx => {
-                        if game_id != "minecraft" && cat_idx != 99 {
-                            step = WizardStep::GameSelect;
-                        } else if cat_idx == 0 && java_type == 0 {
-                            step = WizardStep::JavaType;
-                        } else {
-                            step = WizardStep::Software;
+                    Some(idx) if idx >= versions_start_idx => {
+                        let v_idx = idx - versions_start_idx;
+                        if v_idx < display_versions.len() {
+                            version = display_versions[v_idx].clone();
+                            let is_java = sw_obj
+                                .as_ref()
+                                .map(|s| s.edition() == craft_providers::ServerEdition::Java)
+                                .unwrap_or(true);
+                            if is_java {
+                                step = WizardStep::Memory;
+                            } else {
+                                step = WizardStep::Autostart;
+                            }
                         }
                     }
                     _ => {
