@@ -84,14 +84,47 @@ pub async fn gui_create_server_wizard_with_name(
     let mut mem_sel = 1;
     let mut start_sel = 0;
 
+    let get_cat_crumbs = |cat_idx: usize, java_type: usize, game_id: &str| -> (Option<&'static str>, Option<&'static str>) {
+        if game_id == "minecraft" {
+            match cat_idx {
+                0 => {
+                    let sub = if java_type == 1 { "Plugins" } else if java_type == 2 { "Modded" } else { "Vanilla" };
+                    (Some("Java Edition"), Some(sub))
+                }
+                1 => (Some("Bedrock Edition"), None),
+                2 => (Some("Network Proxies"), None),
+                3 => (Some("Hybrid & Cross-Play"), None),
+                4 => (Some("Minecraft Softwares"), None),
+                _ => (None, None),
+            }
+        } else if cat_idx == 99 {
+            (Some("All Softwares"), None)
+        } else {
+            (None, None)
+        }
+    };
+
+    let get_ver_step_num = |game_id: &str, cat_idx: usize, java_type: usize, has_name_override: bool| -> usize {
+        if game_id != "minecraft" && cat_idx != 99 {
+            if has_name_override { 2 } else { 3 }
+        } else if cat_idx == 99 {
+            if has_name_override { 3 } else { 4 }
+        } else if cat_idx == 0 && java_type == 0 {
+            if has_name_override { 4 } else { 5 }
+        } else if cat_idx == 0 {
+            if has_name_override { 5 } else { 6 }
+        } else {
+            if has_name_override { 4 } else { 5 }
+        }
+    };
+
     loop {
         match step {
             WizardStep::Name => {
-                match run_input_prompt(
-                    "SERVER SETUP WIZARD (STEP 1/6)",
-                    "Enter server name:",
-                    Some(&server_name),
-                )? {
+                let current_step = 1;
+                let total_steps = 6;
+                let title = format!("SERVER SETUP WIZARD (STEP {}/{})", current_step, total_steps);
+                match run_input_prompt(&title, "Enter server name:", Some(&server_name))? {
                     Some(n) if !n.trim().is_empty() => {
                         let name = n.trim().to_string();
                         let registry = ServersRegistry::load(paths)?;
@@ -122,12 +155,14 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::GameSelect => {
+                let current_step = if has_name_override { 1 } else { 2 };
+                let total_steps = if has_name_override { 5 } else { 6 };
+                let title = format!("SELECT GAME ENVIRONMENT (STEP {}/{})", current_step, total_steps);
                 let width = get_content_width(80);
-                let game_header =
-                    format!(
+                let game_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose dedicated game environment for server '{}':\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 2/6: SELECT GAME ENVIRONMENT", width, false).cyan().bold(),
+                    box_title(&title, width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
                     server_name,
                     box_divider(width).dimmed(),
@@ -197,13 +232,14 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::MinecraftCategory => {
+                let current_step = if has_name_override { 2 } else { 3 };
+                let total_steps = current_step + 3;
+                let title = format!("SELECT MINECRAFT CATEGORY (STEP {}/{})", current_step, total_steps);
                 let width = get_content_width(80);
                 let mc_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose Minecraft platform category for '{}':\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 2b: SELECT MINECRAFT CATEGORY", width, false)
-                        .cyan()
-                        .bold(),
+                    box_title(&title, width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
                     server_name,
                     box_divider(width).dimmed(),
@@ -247,13 +283,15 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::JavaType => {
+                let _sub_nav = NavGuard::enter("Java Edition");
+                let current_step = if has_name_override { 3 } else { 4 };
+                let total_steps = current_step + 3;
+                let title = format!("SELECT JAVA SERVER TYPE (STEP {}/{})", current_step, total_steps);
                 let width = get_content_width(80);
                 let jt_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose server type for Java Edition:\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 2c: SELECT JAVA SERVER TYPE", width, false)
-                        .cyan()
-                        .bold(),
+                    box_title(&title, width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
                     box_divider(width).dimmed(),
                 );
@@ -291,6 +329,22 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::Software => {
+                let (cat1, cat2) = get_cat_crumbs(cat_idx, java_type, game_id);
+                let _nav_c1 = cat1.map(NavGuard::enter);
+                let _nav_c2 = cat2.map(NavGuard::enter);
+
+                let (current_step, total_steps) = if cat_idx == 0 {
+                    let s = if has_name_override { 4 } else { 5 };
+                    (s, s + 3)
+                } else if cat_idx == 99 {
+                    let s = if has_name_override { 2 } else { 3 };
+                    (s, s + 2)
+                } else {
+                    let s = if has_name_override { 3 } else { 4 };
+                    (s, s + 2)
+                };
+                let title = format!("SELECT SERVER SOFTWARE (STEP {}/{})", current_step, total_steps);
+
                 let software_choices: Vec<(&'static str, &'static str, &'static str)> =
                     match cat_idx {
                         0 => {
@@ -382,7 +436,7 @@ pub async fn gui_create_server_wizard_with_name(
                 let sw_header = format!(
                     "{}\r\n{}\r\n{}\r\n Select the server software implementation:\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 3/6: SELECT SERVER SOFTWARE", width, false)
+                    box_title(&title, width, false)
                         .cyan()
                         .bold(),
                     box_divider(width).cyan().bold(),
@@ -423,9 +477,23 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::Version => {
+                let (cat1, cat2) = get_cat_crumbs(cat_idx, java_type, game_id);
+                let _nav_c1 = cat1.map(NavGuard::enter);
+                let _nav_c2 = cat2.map(NavGuard::enter);
+                let _nav_sw = NavGuard::enter(selected_sw_name);
+
+                let sw_obj = craft_providers::find_software(selected_sw_id);
+                let is_java = sw_obj
+                    .as_ref()
+                    .map(|s| s.edition() == craft_providers::ServerEdition::Java)
+                    .unwrap_or(true);
+                let current_step = get_ver_step_num(game_id, cat_idx, java_type, has_name_override);
+                let min_menus_left = if is_java { 2 } else { 1 };
+                let total_steps = current_step + min_menus_left;
+                let title = format!("SELECT SERVER VERSION (STEP {}/{})", current_step, total_steps);
+
                 let width = get_content_width(80);
                 let mut settings = craft_core::GlobalSettings::load(paths).unwrap_or_default();
-                let sw_obj = craft_providers::find_software(selected_sw_id);
                 let catalog_mgr = craft_providers::CatalogManager::new().ok();
 
                 if let Some(ref mgr) = catalog_mgr {
@@ -452,7 +520,7 @@ pub async fn gui_create_server_wizard_with_name(
                 let ver_header = format!(
                     "{}\r\n{}\r\n{}\r\n Select release version for {}:\r\n Status: {} | Auto-Update: {}\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 4/6: SELECT SERVER VERSION", width, false)
+                    box_title(&title, width, false)
                         .cyan()
                         .bold(),
                     box_divider(width).cyan().bold(),
@@ -627,12 +695,22 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::Memory => {
+                let (cat1, cat2) = get_cat_crumbs(cat_idx, java_type, game_id);
+                let _nav_c1 = cat1.map(NavGuard::enter);
+                let _nav_c2 = cat2.map(NavGuard::enter);
+                let _nav_sw = NavGuard::enter(selected_sw_name);
+
+                let ver_step_num = get_ver_step_num(game_id, cat_idx, java_type, has_name_override);
+                let current_step = ver_step_num + 1;
+                let total_steps = current_step + 1;
+                let title = format!("ALLOCATE SERVER MEMORY (STEP {}/{})", current_step, total_steps);
+
                 let (_os, total_ram, used_ram, ram_pct) = get_system_summary();
                 let width = get_content_width(80);
                 let mem_header = format!(
                     "{}\r\n{}\r\n{}\r\n Host RAM: {:.1} / {:.1} GB ({:.1}%) | Choose memory allocation limit:\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 5/6: ALLOCATE SERVER MEMORY", width, false).cyan().bold(),
+                    box_title(&title, width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
                     used_ram,
                     total_ram,
@@ -687,12 +765,26 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::Autostart => {
+                let (cat1, cat2) = get_cat_crumbs(cat_idx, java_type, game_id);
+                let _nav_c1 = cat1.map(NavGuard::enter);
+                let _nav_c2 = cat2.map(NavGuard::enter);
+                let _nav_sw = NavGuard::enter(selected_sw_name);
+
+                let sw_obj = craft_providers::find_software(selected_sw_id);
+                let is_java = sw_obj
+                    .as_ref()
+                    .map(|s| s.edition() == craft_providers::ServerEdition::Java)
+                    .unwrap_or(true);
+                let ver_step_num = get_ver_step_num(game_id, cat_idx, java_type, has_name_override);
+                let current_step = if is_java { ver_step_num + 2 } else { ver_step_num + 1 };
+                let total_steps = current_step;
+                let title = format!("INITIALIZATION MODE (STEP {}/{})", current_step, total_steps);
+
                 let width = get_content_width(80);
-                let start_header =
-                    format!(
+                let start_header = format!(
                     "{}\r\n{}\r\n{}\r\n How should server '{}' be initialized upon creation?\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title("STEP 6/6: INITIALIZATION MODE", width, false).cyan().bold(),
+                    box_title(&title, width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
                     server_name,
                     box_divider(width).dimmed(),

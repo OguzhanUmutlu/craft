@@ -651,7 +651,7 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
             let title = if let Some(alias) = super::screen::get_remote_node() {
                 format!("REMOTE SERVERS: {}", alias)
             } else {
-                "LOCAL SERVERS (HOST)".to_string()
+                "LOCAL SERVERS".to_string()
             };
             let desc = if let Some(alias) = super::screen::get_remote_node() {
                 format!(
@@ -659,7 +659,7 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
                     alias
                 )
             } else {
-                " No servers currently registered on this local host.\r\n".to_string()
+                " No servers currently registered locally.\r\n".to_string()
             };
             let header = format!(
                 "{}\r\n{}\r\n{}\r\n{}{}",
