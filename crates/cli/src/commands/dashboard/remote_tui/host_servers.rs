@@ -17,7 +17,8 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use std::io;
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -33,9 +34,6 @@ fn run_boxed_bootstrap(
     host_alias: &str,
     title: &str,
 ) -> Result<()> {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex};
-
     let initial_msg = format!(
         "Connecting and preparing environment on '{}'...",
         host_alias
@@ -252,100 +250,245 @@ pub async fn connect_with_cancellation(
     result
 }
 
+pub enum HostProbeResult {
+    Ready(RemoteCraftClient),
+    CraftNotInstalled(RemoteCraftClient),
+    RemoteOutdated {
+        client: RemoteCraftClient,
+        remote_version: String,
+    },
+    LocalOutdated {
+        client: RemoteCraftClient,
+        remote_version: String,
+    },
+    Cancelled,
+}
+
+pub async fn connect_and_probe_host(
+    host_config: &RemoteHostConfig,
+) -> Result<HostProbeResult> {
+    let _alt = AltScreenGuard::enter();
+    let (tx, rx) = mpsc::channel();
+    let cfg_clone = host_config.clone();
+
+    let initial_msg = format!(
+        "Establishing SSH connection to '{}' ({}@{}:{})",
+        host_config.alias, host_config.user, host_config.host, host_config.port
+    );
+    let status_msg = Arc::new(Mutex::new(initial_msg));
+    let status_clone = Arc::clone(&status_msg);
+
+    thread::spawn(move || {
+        let client = match RemoteCraftClient::connect(&cfg_clone) {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tx.send(Err(e));
+                return;
+            }
+        };
+
+        if let Ok(mut msg) = status_clone.lock() {
+            *msg = format!("Probing remote Craft installation on '{}'", cfg_clone.alias);
+        }
+
+        if !client.is_craft_installed() {
+            let _ = tx.send(Ok(HostProbeResult::CraftNotInstalled(client)));
+            return;
+        }
+
+        if let Ok(mut msg) = status_clone.lock() {
+            *msg = format!("Verifying Craft version on '{}'", cfg_clone.alias);
+        }
+
+        let remote_version = client.get_craft_version();
+        let local_version = craft_core::CRAFT_VERSION;
+
+        if let Some(ref r_ver) = remote_version {
+            let r_semver = craft_core::parse_semver(r_ver);
+            let l_semver = craft_core::parse_semver(local_version);
+
+            let is_remote_outdated = match (r_semver, l_semver) {
+                (Some(r), Some(l)) => r < l,
+                _ => r_ver != local_version,
+            };
+
+            let is_local_outdated = match (r_semver, l_semver) {
+                (Some(r), Some(l)) => l < r,
+                _ => false,
+            };
+
+            if is_remote_outdated {
+                let _ = tx.send(Ok(HostProbeResult::RemoteOutdated {
+                    client,
+                    remote_version: r_ver.clone(),
+                }));
+                return;
+            } else if is_local_outdated {
+                let _ = tx.send(Ok(HostProbeResult::LocalOutdated {
+                    client,
+                    remote_version: r_ver.clone(),
+                }));
+                return;
+            }
+        }
+
+        if let Ok(mut msg) = status_clone.lock() {
+            *msg = format!("Preparing daemon & launching remote session on '{}'", cfg_clone.alias);
+        }
+
+        let _ = client.ensure_daemon_started();
+        let _ = tx.send(Ok(HostProbeResult::Ready(client)));
+    });
+
+    let mut stdout = io::stdout();
+    enable_raw_mode()?;
+    let _ = execute!(stdout, Hide);
+
+    let frames = [".  ", ".. ", "...", " ..", "  .", "   "];
+    let mut frame_idx = 0;
+
+    let result = (|| -> Result<HostProbeResult> {
+        loop {
+            // Check if probe completed
+            match rx.try_recv() {
+                Ok(Ok(probe)) => return Ok(probe),
+                Ok(Err(e)) => {
+                    show_modal_message(
+                        "SSH CONNECTION FAILED",
+                        &[
+                            format!("Failed to connect to host '{}':", host_config.alias),
+                            format!("[ERROR] {}", e),
+                            "".to_string(),
+                            "Check network, host address, SSH credentials, and port.".to_string(),
+                        ],
+                        true,
+                    )?;
+                    return Ok(HostProbeResult::Cancelled);
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    show_modal_message(
+                        "SSH CONNECTION FAILED",
+                        &[format!(
+                            "Failed to connect to host '{}': connection dropped.",
+                            host_config.alias
+                        )],
+                        true,
+                    )?;
+                    return Ok(HostProbeResult::Cancelled);
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+
+            let current_text = status_msg.lock().map(|m| m.clone()).unwrap_or_default();
+            let width = get_content_width(80);
+            let mut frame = BoxFrame::new(width);
+            frame.title = Some(("CONNECTING TO REMOTE HOST".to_string(), false));
+            frame.empty_row();
+            frame.row(format!("{} {}", current_text, frames[frame_idx % frames.len()]));
+            frame.empty_row();
+            frame.footer("[Esc] Cancel  |  Please wait...".to_string());
+            frame.render(&mut stdout)?;
+
+            frame_idx = (frame_idx + 1) % frames.len();
+
+            // Poll for cancellation keys and drain all available events
+            if event::poll(Duration::from_millis(90))? {
+                while event::poll(Duration::from_millis(0))? {
+                    if let Event::Key(key) = event::read()? {
+                        if key.kind == KeyEventKind::Press {
+                            if (key.modifiers.contains(KeyModifiers::CONTROL)
+                                && (key.code == KeyCode::Char('c')
+                                    || key.code == KeyCode::Char('C')))
+                                || key.code == KeyCode::Char('\x03')
+                            {
+                                clean_exit();
+                            }
+
+                            match key.code {
+                                KeyCode::Esc
+                                | KeyCode::Char('q')
+                                | KeyCode::Char('Q')
+                                | KeyCode::Left
+                                | KeyCode::Backspace => {
+                                    return Ok(HostProbeResult::Cancelled);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    })();
+
+    // Drain any remaining events before returning
+    while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+        let _ = event::read();
+    }
+
+    result
+}
+
 pub async fn manage_host_servers(
     _paths: &CraftPaths,
     host_config: &RemoteHostConfig,
 ) -> Result<()> {
     let _alt = AltScreenGuard::enter();
-    let client = match connect_with_cancellation(host_config).await? {
-        Some(c) => c,
-        None => return Ok(()),
+    let probe = match connect_and_probe_host(host_config).await? {
+        HostProbeResult::Cancelled => return Ok(()),
+        other => other,
     };
 
     let _nav = NavGuard::enter(&host_config.alias);
 
-    // Check if craft is installed on remote host
-    if !client.is_craft_installed() {
-        let width = get_content_width(80);
-        let warn_header = format!(
-            "{}\r\n{}\r\n{}\r\n Warning: 'craft' CLI is not found on remote host '{}'.\r\n To manage game servers, Craft needs to be installed on the remote machine.\r\n{}\r\n Choose an action:\r\n{}",
-            box_top(width).yellow().bold(),
-            box_title("CRAFT NOT FOUND ON REMOTE", width, false).yellow().bold(),
-            box_divider(width).yellow().bold(),
-            host_config.alias.cyan().bold(),
-            box_divider(width).dimmed(),
-            box_divider(width).dimmed(),
-        );
+    let client = match probe {
+        HostProbeResult::Cancelled => return Ok(()),
+        HostProbeResult::CraftNotInstalled(client) => {
+            let width = get_content_width(80);
+            let warn_header = format!(
+                "{}\r\n{}\r\n{}\r\n Warning: 'craft' CLI is not found on remote host '{}'.\r\n To manage game servers, Craft needs to be installed on the remote machine.\r\n{}\r\n Choose an action:\r\n{}",
+                box_top(width).yellow().bold(),
+                box_title("CRAFT NOT FOUND ON REMOTE", width, false).yellow().bold(),
+                box_divider(width).yellow().bold(),
+                host_config.alias.cyan().bold(),
+                box_divider(width).dimmed(),
+                box_divider(width).dimmed(),
+            );
 
-        let warn_entries = vec![
-            MenuEntry::new("1", "Bootstrap & Install Craft").with_aliases(&["b", "i"]),
-            MenuEntry::new("2", "Continue Anyway").with_aliases(&["c"]),
-            MenuEntry::new("0", "Cancel").with_aliases(&["q"]),
-        ];
+            let warn_entries = vec![
+                MenuEntry::new("1", "Bootstrap & Install Craft").with_aliases(&["b", "i"]),
+                MenuEntry::new("2", "Continue Anyway").with_aliases(&["c"]),
+                MenuEntry::new("0", "Cancel").with_aliases(&["q"]),
+            ];
 
-        let mut w_sel = 0;
-        match run_menu(&warn_header, &warn_entries, &mut w_sel)? {
-            Some(0) => {
-                match run_boxed_bootstrap(
-                    &client.session,
-                    &host_config.alias,
-                    "BOOTSTRAPPING REMOTE HOST",
-                ) {
-                    Ok(_) => {
-                        // Immediately transition into the remote host menu without blocking modal
-                    }
-                    Err(e) => {
-                        let err_msg = e.to_string();
-                        if !err_msg.contains("cancelled") && !err_msg.contains("Cancelled") {
-                            show_modal_message("BOOTSTRAP FAILED", &[format!("[ERROR] {}", e)], true)?;
+            let mut w_sel = 0;
+            match run_menu(&warn_header, &warn_entries, &mut w_sel)? {
+                Some(0) => {
+                    match run_boxed_bootstrap(
+                        &client.session,
+                        &host_config.alias,
+                        "BOOTSTRAPPING REMOTE HOST",
+                    ) {
+                        Ok(_) => {
+                            let _ = client.ensure_daemon_started();
+                            client
                         }
-                        return Ok(());
+                        Err(e) => {
+                            let err_msg = e.to_string();
+                            if !err_msg.contains("cancelled") && !err_msg.contains("Cancelled") {
+                                show_modal_message("BOOTSTRAP FAILED", &[format!("[ERROR] {}", e)], true)?;
+                            }
+                            return Ok(());
+                        }
                     }
                 }
+                Some(1) => client,
+                _ => return Ok(()),
             }
-            Some(1) => {
-                // Continue anyway
-            }
-            _ => return Ok(()),
         }
-    }
-
-    if !client.is_craft_installed() {
-        show_modal_message(
-            "CRAFT NOT INSTALLED",
-            &[
-                format!(
-                    "Craft CLI is required to manage servers on '{}'.",
-                    host_config.alias
-                ),
-                "Please run bootstrap to install Craft.".to_string(),
-            ],
-            true,
-        )?;
-        return Ok(());
-    }
-
-    // Bidirectional version check: remote vs local
-    let remote_version = client.get_craft_version();
-    let local_version = craft_core::CRAFT_VERSION;
-
-    if let Some(ref r_ver) = remote_version {
-        let r_semver = craft_core::parse_semver(r_ver);
-        let l_semver = craft_core::parse_semver(local_version);
-
-        let is_remote_outdated = match (r_semver, l_semver) {
-            (Some(r), Some(l)) => r < l,
-            _ => r_ver != local_version,
-        };
-
-        let is_local_outdated = match (r_semver, l_semver) {
-            (Some(r), Some(l)) => l < r,
-            _ => false,
-        };
-
-        if is_remote_outdated {
-            // Case 1: Remote is outdated
+        HostProbeResult::RemoteOutdated { client, remote_version: r_ver } => {
             let width = get_content_width(80);
+            let local_version = craft_core::CRAFT_VERSION;
             let update_header = format!(
                 "{}\r\n{}\r\n{}\r\n Remote Host:          {}\r\n Remote Craft Version: {} [OUTDATED]\r\n Local Craft Version:  {} [NEWER]\r\n\r\n An updated version of Craft is available on this local machine.\r\n Would you like to update the remote binary now?\r\n{}\r\n Choose an action:\r\n{}",
                 box_top(width).cyan().bold(),
@@ -387,6 +530,7 @@ pub async fn manage_host_servers(
                                 .to_string()],
                                 false,
                             )?;
+                            client
                         }
                         Err(e) => {
                             show_modal_message(
@@ -398,14 +542,13 @@ pub async fn manage_host_servers(
                         }
                     }
                 }
-                Some(1) => {
-                    // Continue without updating
-                }
+                Some(1) => client,
                 _ => return Ok(()),
             }
-        } else if is_local_outdated {
-            // Case 2: Local is outdated
+        }
+        HostProbeResult::LocalOutdated { client, remote_version: r_ver } => {
             let width = get_content_width(80);
+            let local_version = craft_core::CRAFT_VERSION;
             let adv_header = format!(
                 "{}\r\n{}\r\n{}\r\n Remote Host:          {}\r\n Remote Craft Version: {} [NEWER]\r\n Local Craft Version:  {} [OUTDATED]\r\n\r\n Warning: Remote host '{}' is running a newer Craft version.\r\n Updating remote is disabled to prevent downgrading remote services.\r\n We recommend updating Craft on your local machine.\r\n{}\r\n Choose an action:\r\n{}",
                 box_top(width).yellow().bold(),
@@ -427,16 +570,12 @@ pub async fn manage_host_servers(
 
             let mut a_sel = 0;
             match run_menu(&adv_header, &adv_entries, &mut a_sel)? {
-                Some(0) => {
-                    // Continue connecting to remote host
-                }
+                Some(0) => client,
                 _ => return Ok(()),
             }
         }
-    }
-
-    // Ensure remote daemon is running by default if craft is installed
-    let _ = client.ensure_daemon_started();
+        HostProbeResult::Ready(client) => client,
+    };
 
     // Launch remote TUI session directly over interactive PTY
     let remote_cmd = format!(
