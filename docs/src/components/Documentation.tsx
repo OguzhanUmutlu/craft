@@ -27,7 +27,8 @@ import {
   Archive,
   Settings,
   FolderTree,
-  Network
+  Network,
+  Download
 } from 'lucide-react';
 
 export interface DocPage {
