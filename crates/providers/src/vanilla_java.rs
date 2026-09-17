@@ -1,11 +1,11 @@
+use crate::bundled::{parse_bundled_manifest, BUNDLED_VANILLA_JAVA};
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::{CraftError, Result};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
-use serde::Deserialize;
-use craft_core::{CraftError, Result};
-use crate::bundled::{parse_bundled_manifest, BUNDLED_VANILLA_JAVA};
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 #[derive(Deserialize)]
 struct MojangManifest {
@@ -59,19 +59,25 @@ impl VanillaJavaProvider {
     async fn fetch_mojang_manifest(&self) -> Result<MojangManifest> {
         let url = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
         if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
-            if let Ok(manifest) = cache.get_cached_json::<MojangManifest>(
-                "mojang_version_manifest_v2",
-                url,
-                std::time::Duration::from_secs(6 * 3600),
-            ).await {
+            if let Ok(manifest) = cache
+                .get_cached_json::<MojangManifest>(
+                    "mojang_version_manifest_v2",
+                    url,
+                    std::time::Duration::from_secs(6 * 3600),
+                )
+                .await
+            {
                 return Ok(manifest);
             }
         }
         let client = reqwest::Client::new();
-        let resp = client.get(url)
-            .send().await
+        let resp = client
+            .get(url)
+            .send()
+            .await
             .map_err(|e| CraftError::Download(format!("Mojang manifest fetch error: {}", e)))?;
-        resp.json().await
+        resp.json()
+            .await
             .map_err(|e| CraftError::Download(format!("Invalid Mojang manifest: {}", e)))
     }
 }
@@ -102,7 +108,7 @@ impl ServerSoftware for VanillaJavaProvider {
     }
 
     fn description(&self) -> &'static str {
-        "Official Mojang Java dedicated server"
+        "Official Mojang Java server"
     }
 
     fn bundled_versions(&self) -> Vec<String> {
@@ -115,8 +121,10 @@ impl ServerSoftware for VanillaJavaProvider {
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
         Box::pin(async move {
-            let mut versions: Vec<String> = if let Ok(manifest) = self.fetch_mojang_manifest().await {
-                manifest.versions
+            let mut versions: Vec<String> = if let Ok(manifest) = self.fetch_mojang_manifest().await
+            {
+                manifest
+                    .versions
                     .into_iter()
                     .filter(|v| v.release_type == "release")
                     .map(|v| v.id)

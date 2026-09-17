@@ -1,8 +1,8 @@
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::Result;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
-use craft_core::Result;
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 pub struct FactorioProvider;
 
@@ -24,7 +24,7 @@ impl ServerSoftware for FactorioProvider {
     }
 
     fn name(&self) -> &'static str {
-        "Factorio Headless Server"
+        "Factorio Headless"
     }
 
     fn edition(&self) -> ServerEdition {
@@ -52,7 +52,7 @@ impl ServerSoftware for FactorioProvider {
     }
 
     fn description(&self) -> &'static str {
-        "Factorio Headless Dedicated Server"
+        "Factorio Headless"
     }
 
     fn default_server_file(&self) -> &'static str {
@@ -70,9 +70,7 @@ impl ServerSoftware for FactorioProvider {
     fn fetch_versions<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
-        Box::pin(async move {
-            Ok(self.bundled_versions())
-        })
+        Box::pin(async move { Ok(self.bundled_versions()) })
     }
 
     fn get_assets(&self, version: &str) -> Result<Vec<AssetDownload>> {
@@ -113,7 +111,10 @@ impl ServerSoftware for FactorioProvider {
                     "require_user_verification": false,
                     "auto_pause": true
                 });
-                let _ = std::fs::write(&settings_path, serde_json::to_string_pretty(&default_settings).unwrap_or_default());
+                let _ = std::fs::write(
+                    &settings_path,
+                    serde_json::to_string_pretty(&default_settings).unwrap_or_default(),
+                );
             }
 
             #[cfg(not(target_os = "windows"))]

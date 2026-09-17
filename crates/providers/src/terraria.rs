@@ -1,8 +1,8 @@
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::Result;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
-use craft_core::Result;
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 pub struct TerrariaProvider;
 
@@ -52,7 +52,7 @@ impl ServerSoftware for TerrariaProvider {
     }
 
     fn description(&self) -> &'static str {
-        "TShock dedicated server for Terraria"
+        "TShock for Terraria"
     }
 
     fn default_server_file(&self) -> &'static str {
@@ -70,9 +70,7 @@ impl ServerSoftware for TerrariaProvider {
     fn fetch_versions<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
-        Box::pin(async move {
-            Ok(self.bundled_versions())
-        })
+        Box::pin(async move { Ok(self.bundled_versions()) })
     }
 
     fn get_assets(&self, version: &str) -> Result<Vec<AssetDownload>> {
@@ -152,7 +150,8 @@ motd=Welcome to our Terraria Server!
         #[cfg(not(target_os = "windows"))]
         {
             use std::os::unix::fs::PermissionsExt;
-            let sh_content = "#!/bin/sh\nexec ./TerrariaServer.bin.x86_64 -config serverconfig.txt\n";
+            let sh_content =
+                "#!/bin/sh\nexec ./TerrariaServer.bin.x86_64 -config serverconfig.txt\n";
             let sh_path = server_path.join("start.sh");
             std::fs::write(&sh_path, sh_content)?;
             let mut perms = std::fs::metadata(&sh_path)?.permissions();

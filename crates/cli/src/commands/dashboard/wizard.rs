@@ -196,7 +196,7 @@ pub async fn gui_create_server_wizard_with_name(
                 );
                 let width = get_content_width(80);
                 let game_header = format!(
-                    "{}\r\n{}\r\n{}\r\n Choose dedicated game environment for server '{}':\r\n{}",
+                    "{}\r\n{}\r\n{}\r\n Choose game environment for '{}':\r\n{}",
                     box_top(width).cyan().bold(),
                     box_title(&title, width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
@@ -206,11 +206,11 @@ pub async fn gui_create_server_wizard_with_name(
 
                 let game_entries = vec![
                     MenuEntry::new("1", "Minecraft (Java, Bedrock, Proxies)"),
-                    MenuEntry::new("2", "Palworld (Dedicated Server)"),
-                    MenuEntry::new("3", "Terraria (TShock Dedicated Server)"),
-                    MenuEntry::new("4", "Valheim (Dedicated Server)"),
-                    MenuEntry::new("5", "Factorio (Headless Dedicated Server)"),
-                    MenuEntry::new("6", "Custom Game Server (Generic binary/script)"),
+                    MenuEntry::new("2", "Palworld"),
+                    MenuEntry::new("3", "Terraria (TShock)"),
+                    MenuEntry::new("4", "Valheim"),
+                    MenuEntry::new("5", "Factorio (Headless)"),
+                    MenuEntry::new("6", "Custom Game (Generic binary/script)"),
                     MenuEntry::new("7", "Browse All 21 Softwares"),
                     MenuEntry::new("0", if has_name_override { "Cancel" } else { "Back" })
                         .with_aliases(&["b"]),
@@ -225,7 +225,7 @@ pub async fn gui_create_server_wizard_with_name(
                     Some(1) => {
                         game_id = "palworld";
                         selected_sw_id = "palserver";
-                        selected_sw_name = "Palworld Dedicated Server";
+                        selected_sw_name = "Palworld";
                         step = WizardStep::Version;
                     }
                     Some(2) => {
@@ -237,19 +237,19 @@ pub async fn gui_create_server_wizard_with_name(
                     Some(3) => {
                         game_id = "valheim";
                         selected_sw_id = "valheim";
-                        selected_sw_name = "Valheim Dedicated Server";
+                        selected_sw_name = "Valheim";
                         step = WizardStep::Version;
                     }
                     Some(4) => {
                         game_id = "factorio";
                         selected_sw_id = "factorio";
-                        selected_sw_name = "Factorio Headless Server";
+                        selected_sw_name = "Factorio Headless";
                         step = WizardStep::Version;
                     }
                     Some(5) => {
                         game_id = "custom";
                         selected_sw_id = "custom";
-                        selected_sw_name = "Custom Game Server";
+                        selected_sw_name = "Custom Game";
                         step = WizardStep::Version;
                     }
                     Some(6) => {
@@ -422,7 +422,7 @@ pub async fn gui_create_server_wizard_with_name(
                                 vec![(
                                     "vanilla_java",
                                     "Vanilla Java",
-                                    "Official Mojang Java dedicated server",
+                                    "Official Mojang Java server",
                                 )]
                             }
                         }
@@ -430,7 +430,7 @@ pub async fn gui_create_server_wizard_with_name(
                             (
                                 "vanilla_bedrock",
                                 "Vanilla Bedrock BDS",
-                                "Official Mojang Bedrock Dedicated Server",
+                                "Official Mojang Bedrock BDS",
                             ),
                             (
                                 "pocketmine",
@@ -1055,7 +1055,7 @@ pub async fn gui_create_server_wizard_with_name(
 
     // Execution
     print_in_place_status(
-        "CREATING DEDICATED SERVER",
+        "CREATING SERVER",
         &[
             format!(
                 "Setting up server '{}' ({} {})...",

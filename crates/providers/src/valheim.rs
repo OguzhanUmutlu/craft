@@ -1,8 +1,8 @@
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::Result;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
-use craft_core::Result;
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 pub struct ValheimProvider;
 
@@ -24,7 +24,7 @@ impl ServerSoftware for ValheimProvider {
     }
 
     fn name(&self) -> &'static str {
-        "Valheim Dedicated Server"
+        "Valheim"
     }
 
     fn edition(&self) -> ServerEdition {
@@ -52,7 +52,7 @@ impl ServerSoftware for ValheimProvider {
     }
 
     fn description(&self) -> &'static str {
-        "Valheim Dedicated Server (Unity)"
+        "Valheim (Unity)"
     }
 
     fn default_server_file(&self) -> &'static str {
@@ -70,9 +70,7 @@ impl ServerSoftware for ValheimProvider {
     fn fetch_versions<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
-        Box::pin(async move {
-            Ok(self.bundled_versions())
-        })
+        Box::pin(async move { Ok(self.bundled_versions()) })
     }
 
     fn get_assets(&self, _version: &str) -> Result<Vec<AssetDownload>> {

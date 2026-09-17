@@ -117,7 +117,7 @@ pub async fn handle_new(
                 (
                     "vanilla_bedrock",
                     "Vanilla Bedrock BDS",
-                    "Official Mojang Bedrock Dedicated Server",
+                    "Official Mojang Bedrock BDS",
                 ),
                 (
                     "pocketmine",
@@ -153,31 +153,11 @@ pub async fn handle_new(
                 ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
             ],
             4 => vec![
-                (
-                    "palserver",
-                    "Palworld Dedicated",
-                    "Palworld Dedicated Server (UE5)",
-                ),
-                (
-                    "tshock",
-                    "TShock (Terraria)",
-                    "TShock dedicated server for Terraria",
-                ),
-                (
-                    "valheim",
-                    "Valheim Dedicated",
-                    "Valheim Dedicated Server (Unity)",
-                ),
-                (
-                    "factorio",
-                    "Factorio Headless",
-                    "Factorio Headless Dedicated Server",
-                ),
-                (
-                    "custom",
-                    "Custom Game Server",
-                    "Custom dedicated server binary",
-                ),
+                ("palserver", "Palworld", "Palworld (UE5)"),
+                ("tshock", "TShock (Terraria)", "TShock for Terraria"),
+                ("valheim", "Valheim", "Valheim (Unity)"),
+                ("factorio", "Factorio Headless", "Factorio Headless"),
+                ("custom", "Custom Game", "Custom binary or script"),
             ],
             _ => get_all_softwares()
                 .into_iter()

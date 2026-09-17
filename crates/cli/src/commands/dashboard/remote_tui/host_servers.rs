@@ -774,7 +774,7 @@ async fn remote_create_server_wizard(client: &RemoteCraftClient) -> Result<()> {
         MenuEntry::new("2", "Purpur"),
         MenuEntry::new("3", "Fabric"),
         MenuEntry::new("4", "Vanilla"),
-        MenuEntry::new("5", "Bedrock Dedicated Server"),
+        MenuEntry::new("5", "Vanilla Bedrock"),
         MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
     ];
     let mut sw_sel = 0;
