@@ -75,6 +75,8 @@ pub struct GlobalSettings {
     pub download_concurrency: usize,
     #[serde(default = "default_cache_max_bytes")]
     pub cache_max_bytes: u64,
+    #[serde(default = "default_auto_update_catalog")]
+    pub auto_update_catalog: bool,
 }
 
 fn default_daemon_port() -> u16 {
@@ -92,6 +94,9 @@ fn default_download_concurrency() -> usize {
 fn default_cache_max_bytes() -> u64 {
     2 * 1024 * 1024 * 1024
 }
+fn default_auto_update_catalog() -> bool {
+    true
+}
 
 impl Default for GlobalSettings {
     fn default() -> Self {
@@ -101,6 +106,7 @@ impl Default for GlobalSettings {
             auto_agree_eula: default_auto_agree_eula(),
             download_concurrency: default_download_concurrency(),
             cache_max_bytes: default_cache_max_bytes(),
+            auto_update_catalog: default_auto_update_catalog(),
         }
     }
 }

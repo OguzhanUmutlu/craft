@@ -410,19 +410,44 @@ pub async fn gui_create_server_wizard_with_name(
 
             WizardStep::Version => {
                 let width = get_content_width(80);
+                let mut settings = craft_core::GlobalSettings::load(paths).unwrap_or_default();
+                let sw_obj = craft_providers::find_software(selected_sw_id);
+                let catalog_mgr = craft_providers::CatalogManager::new().ok();
+
+                if let Some(ref mgr) = catalog_mgr {
+                    mgr.spawn_background_update_if_needed(settings.auto_update_catalog);
+                }
+
+                let cache_status = if let Some(ref mgr) = catalog_mgr {
+                    if mgr.is_cache_fresh() {
+                        "Fresh Cache".green()
+                    } else if mgr.cache_exists() {
+                        "Cached".yellow()
+                    } else {
+                        "Bundled Fallback".cyan()
+                    }
+                } else {
+                    "Bundled".cyan()
+                };
+                let auto_status = if settings.auto_update_catalog {
+                    "ON".green()
+                } else {
+                    "OFF".dimmed()
+                };
+
                 let ver_header = format!(
-                    "{}\r\n{}\r\n{}\r\n Select release version for {}:\r\n{}",
+                    "{}\r\n{}\r\n{}\r\n Select release version for {}:\r\n Status: {} | Auto-Update: {}\r\n{}",
                     box_top(width).cyan().bold(),
                     box_title("STEP 4/6: SELECT SERVER VERSION", width, false)
                         .cyan()
                         .bold(),
                     box_divider(width).cyan().bold(),
                     selected_sw_name,
+                    cache_status,
+                    auto_status,
                     box_divider(width).dimmed(),
                 );
 
-                let sw_obj = craft_providers::find_software(selected_sw_id);
-                let catalog_mgr = craft_providers::CatalogManager::new().ok();
                 let catalog_versions = if let Some(ref mgr) = catalog_mgr {
                     mgr.load().get_versions(selected_sw_id)
                 } else {
@@ -463,13 +488,28 @@ pub async fn gui_create_server_wizard_with_name(
                         MenuEntry::new(hotkey, label)
                     })
                     .collect();
+
+                let custom_idx = ver_entries.len();
                 ver_entries.push(MenuEntry::new("c", "Custom Version"));
+
+                let update_idx = ver_entries.len();
+                ver_entries.push(MenuEntry::new("u", "Update Version Catalog Now"));
+
+                let toggle_idx = ver_entries.len();
+                ver_entries.push(MenuEntry::new(
+                    "a",
+                    format!(
+                        "Auto-Update in Background: [{}]",
+                        if settings.auto_update_catalog { "ON" } else { "OFF" }
+                    ),
+                ));
+
+                let back_idx = ver_entries.len();
                 ver_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
                 let ver_choice = run_menu(&ver_header, &ver_entries, &mut ver_sel)?;
-                let num_versions = display_versions.len();
                 match ver_choice {
-                    Some(idx) if idx < num_versions => {
+                    Some(idx) if idx < custom_idx => {
                         version = display_versions[idx].clone();
                         let is_java = sw_obj
                             .as_ref()
@@ -481,7 +521,7 @@ pub async fn gui_create_server_wizard_with_name(
                             step = WizardStep::Autostart;
                         }
                     }
-                    Some(idx) if idx == num_versions => {
+                    Some(idx) if idx == custom_idx => {
                         let default_v = display_versions.first().map(|s| s.as_str()).unwrap_or("latest");
                         match run_input_prompt(
                             "CUSTOM SERVER VERSION",
@@ -501,6 +541,44 @@ pub async fn gui_create_server_wizard_with_name(
                                 }
                             }
                             _ => {}
+                        }
+                    }
+                    Some(idx) if idx == update_idx => {
+                        if let Some(ref mgr) = catalog_mgr {
+                            match mgr.update().await {
+                                Ok(cat) => {
+                                    let total = cat.softwares.values().map(|s| s.versions.len()).sum::<usize>();
+                                    show_modal_message(
+                                        "VERSION CATALOG UPDATED",
+                                        &[
+                                            "Version catalog refreshed successfully from remote endpoint.".to_string(),
+                                            format!("Softwares: {} | Total versions indexed: {}", cat.softwares.len(), total),
+                                        ],
+                                        false,
+                                    )?;
+                                }
+                                Err(e) => {
+                                    show_modal_message(
+                                        "CATALOG UPDATE FAILED",
+                                        &[
+                                            "Unable to fetch version catalog from remote endpoint.".to_string(),
+                                            e.to_string(),
+                                        ],
+                                        true,
+                                    )?;
+                                }
+                            }
+                        }
+                    }
+                    Some(idx) if idx == toggle_idx => {
+                        settings.auto_update_catalog = !settings.auto_update_catalog;
+                        let _ = settings.save(paths);
+                    }
+                    Some(idx) if idx == back_idx => {
+                        if game_id != "minecraft" && cat_idx != 99 {
+                            step = WizardStep::GameSelect;
+                        } else {
+                            step = WizardStep::Software;
                         }
                     }
                     _ => {

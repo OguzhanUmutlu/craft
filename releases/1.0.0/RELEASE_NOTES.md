@@ -4,13 +4,13 @@ Craft official release v1.0.0: native high-performance Minecraft server supervis
 
 | Asset | SHA-256 Checksum |
 | :--- | :--- |
-| `craft-linux-amd64` | `595536786106ccbf3e76deed698e8e0cc97174f0ab74e6fcbce451415dd3d1b6` |
-| `craft-linux-amd64.tar.gz` | `10a201af7b42520f89fc16b33b67948bbc3f43aa834491657eafb0a584ae7fe2` |
-| `craft-linux-amd64.gz` | `e93896d8d26c5bc1669854a7711db9b11fb19aeca75ba989022c1c4ebd14ead0` |
+| `craft-linux-amd64` | `34c65f93bfb0ae280a647a17abf3b43dfa5e0c25b1a8436e78fd409111c41086` |
+| `craft-linux-amd64.tar.gz` | `3d919bf9f2780ba1369f844bd67e39141deb34834bb87580dcbe94060c52c39e` |
+| `craft-linux-amd64.gz` | `59b2ea902cee8c30044c4e9a2c7b13b625fb0d002cf203aa6299fe71bbb383d2` |
 | `craft-windows-amd64.exe` | `66de6465e24a2713afc9e45fe5a82985a1de660fb90e3b8966c0dac48f1ae8b9` |
-| `craft-windows-amd64.zip` | `aaf32e17a04c7e978066b200b1859717579a4837fda6a12b784c1fb06befe153` |
-| `craft-darwin-arm64.tar.gz` | `79a50eae42633e5513d100c9f90e9d7f99645b4c29b5a364ac69609fc2a82efe` |
-| `craft-darwin-amd64.tar.gz` | `742a11c57af41ff5c12469b730e1746c6889fb111b7d39ac0b64830afdba94ed` |
+| `craft-windows-amd64.zip` | `9293ccbe72f104bb7bb969bd043f51a0fbd6f8ac63d79e8d129c6a094cf07123` |
+| `craft-darwin-arm64.tar.gz` | `6656a64328c0e9bc1e099364e0f67ce5834b89cebc21e386b4d311c9ad595b70` |
+| `craft-darwin-amd64.tar.gz` | `996cb522b4961348257aab44897e77bc5f98efc0bc7d75a007957b842fecf986` |
 
 Verify any downloaded binary:
 ```bash

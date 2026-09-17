@@ -220,6 +220,69 @@ impl CatalogManager {
         Ok(catalog)
     }
 
+    /// Returns true if local cache exists on disk.
+    pub fn cache_exists(&self) -> bool {
+        self.cache_path.exists()
+    }
+
+    /// Spawns a detached background thread to refresh the version catalog if auto-update is
+    /// enabled and the cache is missing or stale.
+    pub fn spawn_background_update_if_needed(&self, auto_update_enabled: bool) {
+        if !auto_update_enabled {
+            return;
+        }
+        if self.is_cache_fresh() {
+            return;
+        }
+
+        let remote_url = self.remote_url.clone();
+        let cache_path = self.cache_path.clone();
+
+        std::thread::Builder::new()
+            .name("craft-catalog-bg-update".to_string())
+            .spawn(move || {
+                let rt = match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(r) => r,
+                    Err(_) => return,
+                };
+
+                rt.block_on(async move {
+                    let client = match reqwest::Client::builder()
+                        .timeout(Duration::from_secs(8))
+                        .user_agent("Craft-CLI/1.0 (CatalogBackgroundUpdater)")
+                        .build()
+                    {
+                        Ok(c) => c,
+                        Err(_) => return,
+                    };
+
+                    let resp = match client.get(&remote_url).send().await {
+                        Ok(r) if r.status().is_success() => r,
+                        _ => return,
+                    };
+
+                    let bytes = match resp.bytes().await {
+                        Ok(b) => b,
+                        Err(_) => return,
+                    };
+
+                    if VersionCatalog::decode_zstd(&bytes).is_ok() {
+                        if let Some(parent) = cache_path.parent() {
+                            let _ = fs::create_dir_all(parent);
+                        }
+                        let temp = cache_path.with_extension("bg.tmp");
+                        if fs::write(&temp, &bytes).is_ok() {
+                            let _ = fs::rename(&temp, &cache_path);
+                        }
+                    }
+                });
+            })
+            .ok();
+    }
+
     /// Returns true if local cache exists and is within TTL.
     pub fn is_cache_fresh(&self) -> bool {
         if let Ok(meta) = fs::metadata(&self.cache_path) {
