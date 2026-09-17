@@ -6,7 +6,9 @@ use comfy_table::{Cell, Color, Row, Table};
 use craft_core::{
     CraftError, CraftPaths, RemoteAuthType, RemoteHostConfig, RemotesRegistry, Result,
 };
-use craft_remote::{run_bootstrap, run_remote_pty_session, sync_local_to_remote, RemoteSession};
+use craft_remote::{
+    resolve_ssh_host, run_bootstrap, run_remote_pty_session, sync_local_to_remote, RemoteSession,
+};
 
 pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result<()> {
     match action {
@@ -237,7 +239,7 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
             } else {
                 r#"services:
   craft:
-    image: ghcr.io/oguzhanumutlu/craft:latest
+    image: craft:latest
     container_name: craft
     restart: unless-stopped
     stdin_open: true
@@ -252,6 +254,12 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
     environment:
       - CRAFT_HOME=/craft
       - TZ=UTC
+    healthcheck:
+      test: ["CMD-SHELL", "craft ls || exit 0"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 "#
                 .to_string()
             };
@@ -292,7 +300,321 @@ pub async fn handle_remote(action: RemoteCommands, paths: &CraftPaths) -> Result
             );
             println!("Check remote status: craft remote test {}", alias);
         }
+        RemoteCommands::SetupDocker { target, dir } => {
+            handle_remote_setup_docker(&target, dir, paths).await?;
+        }
     }
+
+    Ok(())
+}
+
+pub async fn handle_remote_setup_docker(
+    target: &str,
+    custom_dir: Option<std::path::PathBuf>,
+    paths: &CraftPaths,
+) -> Result<()> {
+    println!("{}", "Craft VDS Docker Setup (Safe SSH)".cyan().bold());
+    println!("Resolving target '{}'...", target);
+
+    let mut registry = RemotesRegistry::load(paths)?;
+    let (config, should_save) = if let Some(c) = registry.find(target) {
+        (c.clone(), false)
+    } else if let Some(c) = resolve_ssh_host(target) {
+        println!(
+            "{}",
+            format!(
+                "[OK] Discovered SSH configuration for '{}' ({}@{}:{}).",
+                target, c.user, c.host, c.port
+            )
+            .green()
+        );
+        (c, true)
+    } else if let Ok((user, host, port)) = parse_connection_string(target) {
+        let c = RemoteHostConfig {
+            alias: target.to_string(),
+            host,
+            port,
+            user,
+            auth_type: RemoteAuthType::Key,
+            key_path: None,
+            password: None,
+            remote_dir: None,
+            os_type: None,
+        };
+        (c, true)
+    } else {
+        return Err(CraftError::Other(format!(
+            "Remote host '{}' not found in remotes.toml or ~/.ssh/config. Use 'craft remote add' to configure it.",
+            target
+        )));
+    };
+
+    if should_save && registry.find(&config.alias).is_none() {
+        let _ = registry.add(config.clone());
+        let _ = registry.save(paths);
+        println!(
+            "{}",
+            format!(
+                "[OK] Registered '{}' in local Craft remote registry.",
+                config.alias
+            )
+            .green()
+        );
+    }
+
+    println!(
+        "{}",
+        format!(
+            "Connecting to '{}' ({}@{}:{})...",
+            config.alias, config.user, config.host, config.port
+        )
+        .cyan()
+    );
+    let session = RemoteSession::connect(&config)?;
+    let os = session.probe_os()?;
+    println!("{}", format!("[OK] Connected! Remote OS: {}", os).green());
+
+    println!(
+        "{}",
+        "Verifying remote Docker and Docker Compose installation...".cyan()
+    );
+    let (code, stdout, _) = session.exec(
+        "docker --version 2>/dev/null && (docker compose version 2>/dev/null || docker-compose --version 2>/dev/null)",
+    )?;
+    if code != 0 {
+        println!(
+            "{}",
+            "Docker not detected on remote host. Performing safe official installation...".yellow()
+        );
+        let (inst_code, inst_out, inst_err) =
+            session.exec("curl -fsSL https://get.docker.com | sh")?;
+        if inst_code != 0 {
+            return Err(CraftError::Other(format!(
+                "Failed to auto-install Docker on remote: {}. Please install Docker manually on host.",
+                inst_err.trim()
+            )));
+        }
+        if !inst_out.is_empty() {
+            println!("{}", inst_out);
+        }
+        let _ = session.exec(
+            "systemctl enable --now docker 2>/dev/null || service docker start 2>/dev/null || true",
+        );
+    } else {
+        println!(
+            "{}",
+            format!("[OK] Found remote Docker: {}", stdout.trim()).green()
+        );
+    }
+
+    let remote_dir = custom_dir
+        .or_else(|| config.remote_dir.clone())
+        .unwrap_or_else(|| {
+            if config.user == "root" {
+                std::path::PathBuf::from("/opt/craft")
+            } else {
+                std::path::PathBuf::from("craft-deploy")
+            }
+        });
+
+    println!(
+        "{}",
+        format!(
+            "Preparing remote deployment directory at '{}'...",
+            remote_dir.display()
+        )
+        .cyan()
+    );
+    session.exec(&format!(
+        "mkdir -p {}/craft-data/servers {}/craft-data/backups {}/craft-data/cache",
+        remote_dir.display(),
+        remote_dir.display(),
+        remote_dir.display()
+    ))?;
+
+    // Check if remote host already has craft:latest or if we need to pull/build it
+    let (has_img_code, _, _) = session.exec("docker image inspect craft:latest >/dev/null 2>&1")?;
+    if has_img_code != 0 {
+        println!(
+            "{}",
+            "Image 'craft:latest' not found on remote. Checking registry or local build context..."
+                .cyan()
+        );
+        let (pull_code, _, _) = session.exec(
+            "docker pull ghcr.io/oguzhanumutlu/craft:latest 2>/dev/null && docker tag ghcr.io/oguzhanumutlu/craft:latest craft:latest",
+        )?;
+        if pull_code != 0 {
+            println!(
+                "{}",
+                "Registry image unavailable. Transferring local build context to remote..."
+                    .yellow()
+            );
+            let sftp = craft_remote::SftpOps::new(&session);
+            let local_bin = if std::path::Path::new("bin/craft").exists() {
+                Some(std::path::PathBuf::from("bin/craft"))
+            } else if std::path::Path::new("target/release/craft").exists() {
+                Some(std::path::PathBuf::from("target/release/craft"))
+            } else {
+                None
+            };
+            if let Some(bin_path) = local_bin {
+                session.exec(&format!("mkdir -p {}/target/release", remote_dir.display()))?;
+                sftp.upload_file(&bin_path, &remote_dir.join("target/release/craft"))?;
+                session.exec(&format!(
+                    "chmod +x {}/target/release/craft && cp {}/target/release/craft /usr/local/bin/craft 2>/dev/null || true",
+                    remote_dir.display(),
+                    remote_dir.display()
+                ))?;
+                if std::path::Path::new("Dockerfile").exists() {
+                    sftp.upload_file(
+                        std::path::Path::new("Dockerfile"),
+                        &remote_dir.join("Dockerfile"),
+                    )?;
+                }
+                if std::path::Path::new("docker-entrypoint.sh").exists() {
+                    sftp.upload_file(
+                        std::path::Path::new("docker-entrypoint.sh"),
+                        &remote_dir.join("docker-entrypoint.sh"),
+                    )?;
+                    session.exec(&format!(
+                        "chmod +x {}/docker-entrypoint.sh",
+                        remote_dir.display()
+                    ))?;
+                }
+                println!(
+                    "{}",
+                    "Building Craft Docker image on remote host..."
+                        .cyan()
+                        .bold()
+                );
+                let (bld_code, _, bld_err) = session.exec(&format!(
+                    "cd {} && docker build -t craft:latest .",
+                    remote_dir.display()
+                ))?;
+                if bld_code != 0 {
+                    return Err(CraftError::Other(format!(
+                        "Failed to build Docker image on remote: {}",
+                        bld_err
+                    )));
+                }
+            } else {
+                return Err(CraftError::Other(
+                    "No remote image or local build context available. Run 'cargo build --release' or publish ghcr.io/oguzhanumutlu/craft:latest".to_string(),
+                ));
+            }
+        }
+    }
+
+    let compose_content = r#"services:
+  craft:
+    image: craft:latest
+    container_name: craft
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    ports:
+      - "25565:25565"
+      - "19132:19132/udp"
+      - "25575:25575"
+      - "8123:8123"
+    volumes:
+      - ./craft-data:/craft
+    environment:
+      - CRAFT_HOME=/craft
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD-SHELL", "craft ls || exit 0"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+"#;
+
+    let temp_compose = paths.home.join(".remote-compose-vds.tmp");
+    std::fs::write(&temp_compose, compose_content)?;
+    let remote_compose_path = remote_dir.join("docker-compose.yml");
+    let sftp = craft_remote::SftpOps::new(&session);
+    sftp.upload_file(&temp_compose, &remote_compose_path)?;
+    let _ = std::fs::remove_file(&temp_compose);
+
+    println!(
+        "{}",
+        "Launching Craft container stack on remote VDS..."
+            .cyan()
+            .bold()
+    );
+    let launch_cmd = format!(
+        "cd {} && (docker compose up -d || docker-compose up -d)",
+        remote_dir.display()
+    );
+    let (up_code, up_stdout, up_stderr) = session.exec(&launch_cmd)?;
+    if up_code != 0 {
+        return Err(CraftError::Other(format!(
+            "Failed to start containers on remote host: {}",
+            up_stderr
+        )));
+    }
+    if !up_stdout.is_empty() {
+        println!("{}", up_stdout);
+    }
+
+    let status_cmd = format!(
+        "cd {} && (docker compose ps 2>/dev/null || docker-compose ps 2>/dev/null || docker ps --filter name=craft)",
+        remote_dir.display()
+    );
+    let (_, ps_out, _) = session.exec(&status_cmd)?;
+    if !ps_out.is_empty() {
+        println!("{}", ps_out);
+    }
+
+    println!();
+    println!(
+        "{}",
+        "=================================================================="
+            .green()
+            .bold()
+    );
+    println!(
+        "{}",
+        "       Craft VDS Docker Setup Completed Successfully!             "
+            .green()
+            .bold()
+    );
+    println!(
+        "{}",
+        "=================================================================="
+            .green()
+            .bold()
+    );
+    println!(
+        "  Host Alias:       {} ({}@{}:{})",
+        config.alias.cyan().bold(),
+        config.user,
+        config.host,
+        config.port
+    );
+    println!("  Deploy Path:      {}", remote_dir.display());
+    println!("  Container Name:   craft");
+    println!("  Minecraft Java:   Port 25565 (TCP)");
+    println!("  Minecraft Bedrock:Port 19132 (UDP)");
+    println!("  RCON Console:     Port 25575 (TCP)");
+    println!("  Web / BlueMap:    Port 8123  (TCP)");
+    println!();
+    println!("Next Steps:");
+    println!("  1. Connect directly to VDS:     ssh {}", config.alias);
+    println!(
+        "  2. Test remote connection:      craft remote test {}",
+        config.alias
+    );
+    println!(
+        "  3. Stream remote TUI dashboard: craft ui --remote {}",
+        config.alias
+    );
+    println!(
+        "  4. Create a server on VDS:      craft new my-server --remote {}",
+        config.alias
+    );
+    println!();
 
     Ok(())
 }

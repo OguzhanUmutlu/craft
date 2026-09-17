@@ -596,10 +596,27 @@ pub enum RemoteCommands {
     },
     /// Deploy Craft container stack to a remote host over SSH
     Deploy { alias: String },
+    /// Setup Docker on a remote VDS host over safe SSH and launch Craft container stack
+    #[command(alias = "docker-setup", alias = "vds-setup")]
+    SetupDocker {
+        /// Target remote host alias (e.g. 'saga' from ~/.ssh/config) or user@host
+        target: String,
+        /// Custom remote deployment directory (default: /opt/craft or ~/craft-deploy)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum DeployCommands {
+    /// Setup Docker on a remote VDS via safe SSH and deploy Craft container stack
+    Vds {
+        /// Remote host alias (e.g. 'saga' from ~/.ssh/config) or user@host
+        target: String,
+        /// Custom remote deployment directory (default: /opt/craft or ~/craft-deploy)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
     /// Deploy and start the containerized Craft daemon and servers
     Up {
         /// Run containers in background (detached)
@@ -765,6 +782,31 @@ mod tests {
                 action: Some(CatalogCommands::Info),
             }) => {}
             _ => panic!("Expected Catalog Info command"),
+        }
+    }
+
+    #[test]
+    fn test_remote_setup_docker_parsing() {
+        let cli = Cli::try_parse_from(["craft", "remote", "setup-docker", "saga"]).unwrap();
+        match cli.command {
+            Some(Commands::Remote {
+                action: Some(RemoteCommands::SetupDocker { target, dir }),
+            }) => {
+                assert_eq!(target, "saga");
+                assert_eq!(dir, None);
+            }
+            _ => panic!("Expected Remote SetupDocker command"),
+        }
+
+        let cli_vds = Cli::try_parse_from(["craft", "deploy", "vds", "saga", "--dir", "/opt/craft"]).unwrap();
+        match cli_vds.command {
+            Some(Commands::Deploy {
+                action: Some(DeployCommands::Vds { target, dir }),
+            }) => {
+                assert_eq!(target, "saga");
+                assert_eq!(dir, Some(PathBuf::from("/opt/craft")));
+            }
+            _ => panic!("Expected Deploy Vds command"),
         }
     }
 }

@@ -389,7 +389,7 @@ async fn main() {
                 handle_remote(crate::cli::RemoteCommands::Ls, &paths).await
             }
         }
-        Some(Commands::Deploy { action }) => handle_deploy(action, &paths),
+        Some(Commands::Deploy { action }) => handle_deploy(action, &paths).await,
         Some(Commands::Prop { server, action }) => handle_prop(&server, action, &paths).await,
         Some(Commands::World { server, action }) => handle_world(&server, action, &paths).await,
         Some(Commands::Dev { server, action }) => handle_dev(&server, action, &paths).await,

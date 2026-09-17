@@ -11,6 +11,6 @@ pub use sftp_ops::SftpOps;
 pub use pty::run_remote_pty_session;
 pub use bootstrap::{run_bootstrap, run_bootstrap_with_progress};
 pub use sync::sync_local_to_remote;
-pub use ssh_config::{discover_ssh_hosts, parse_ssh_config, SshConfigHost};
+pub use ssh_config::{discover_ssh_hosts, parse_ssh_config, resolve_ssh_host, SshConfigHost};
 pub use client::{RemoteCraftClient, RemoteServerInfo, RemoteBackupInfo};
 

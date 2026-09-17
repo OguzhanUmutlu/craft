@@ -92,13 +92,16 @@ case "$1" in
 esac
 "#;
 
-pub fn handle_deploy(action: Option<DeployCommands>, _paths: &CraftPaths) -> Result<()> {
+pub async fn handle_deploy(action: Option<DeployCommands>, paths: &CraftPaths) -> Result<()> {
     let action = action.unwrap_or(DeployCommands::Up {
         detach: true,
         build: false,
     });
 
     match action {
+        DeployCommands::Vds { target, dir } => {
+            crate::commands::remote::handle_remote_setup_docker(&target, dir, paths).await?;
+        }
         DeployCommands::Up { detach, build } => {
             println!(
                 "{}",

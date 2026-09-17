@@ -135,6 +135,66 @@ pub fn discover_ssh_hosts() -> Vec<RemoteHostConfig> {
         .collect()
 }
 
+/// Resolves a remote host by alias using OpenSSH `ssh -G <alias>` or ~/.ssh/config parser
+pub fn resolve_ssh_host(alias: &str) -> Option<RemoteHostConfig> {
+    // 1. Try `ssh -G <alias>` first (most accurate OpenSSH resolution including Includes and wildcards)
+    if let Ok(output) = std::process::Command::new("ssh")
+        .args(["-G", alias])
+        .output()
+    {
+        if output.status.success() {
+            if let Ok(text) = String::from_utf8(output.stdout) {
+                let mut host = None;
+                let mut user = None;
+                let mut port = 22;
+                let mut identity_file = None;
+
+                for line in text.lines() {
+                    let mut parts = line.split_whitespace();
+                    let key = parts.next().unwrap_or("").to_lowercase();
+                    let val = parts.next().unwrap_or("");
+                    match key.as_str() {
+                        "hostname" if !val.is_empty() => host = Some(val.to_string()),
+                        "user" if !val.is_empty() => user = Some(val.to_string()),
+                        "port" => {
+                            if let Ok(p) = val.parse::<u16>() {
+                                port = p;
+                            }
+                        }
+                        "identityfile" if !val.is_empty() && identity_file.is_none() => {
+                            let p = PathBuf::from(val);
+                            let expanded = crate::session::expand_tilde(&p);
+                            if expanded.is_file() {
+                                identity_file = Some(p);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                if let Some(host_addr) = host {
+                    return Some(RemoteHostConfig {
+                        alias: alias.to_string(),
+                        host: host_addr,
+                        port,
+                        user: user.unwrap_or_else(whoami_user),
+                        auth_type: RemoteAuthType::Key,
+                        key_path: identity_file,
+                        password: None,
+                        remote_dir: None,
+                        os_type: None,
+                    });
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to discover_ssh_hosts() from ~/.ssh/config
+    discover_ssh_hosts()
+        .into_iter()
+        .find(|h| h.alias.eq_ignore_ascii_case(alias))
+}
+
 fn whoami_user() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
@@ -175,5 +235,13 @@ Host myserver.net
         assert_eq!(hosts[1].host_name, None);
         assert_eq!(hosts[1].user.as_deref(), Some("craftadmin"));
         assert_eq!(hosts[1].port, None);
+    }
+
+    #[test]
+    fn test_resolve_ssh_host_localhost() {
+        let res = resolve_ssh_host("localhost");
+        assert!(res.is_some());
+        let conf = res.unwrap();
+        assert_eq!(conf.port, 22);
     }
 }
