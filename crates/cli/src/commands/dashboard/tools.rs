@@ -11,8 +11,8 @@ use craft_plugins::PluginManager;
 use craft_providers::CacheManager;
 
 use super::screen::{
-    box_divider, box_title, box_top, get_content_width, print_in_place_status, run_input_prompt,
-    run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
+    box_divider, box_title, box_top, exec_console_action, get_content_width, print_in_place_status,
+    run_input_prompt, run_menu, show_modal_message, AltScreenGuard, MenuEntry, NavGuard,
 };
 use super::server_control::show_empty_servers_modal;
 use crate::commands::remote::parse_connection_string;
@@ -1562,44 +1562,57 @@ pub async fn firewall_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 s_entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b"]));
                 let mut s_sel = 0;
-                if let Some(idx) =
-                    run_menu(" Select Server for Firewall Rule:", &s_entries, &mut s_sel)?
-                {
-                    if idx < reg.servers.len() {
-                        let s = &reg.servers[idx];
-                        let is_bedrock =
-                            s.software.contains("bedrock") || s.software.contains("pocketmine");
-                        let port = s.port.unwrap_or(if is_bedrock { 19132 } else { 25565 });
-                        let ip_prompt = run_input_prompt(
-                            "ALLOWED IP ADDRESS",
-                            "Enter remote IP allowed to connect (e.g. 192.168.1.50 or 0.0.0.0/0 for any):",
-                            Some("0.0.0.0/0"),
+                let server_idx =
+                    match run_menu(" Select Server for Firewall Rule:", &s_entries, &mut s_sel)? {
+                        Some(idx) if idx < reg.servers.len() => idx,
+                        _ => continue,
+                    };
+
+                let s = &reg.servers[server_idx];
+                let is_bedrock =
+                    s.software.contains("bedrock") || s.software.contains("pocketmine");
+                let port = s.port.unwrap_or(if is_bedrock { 19132 } else { 25565 });
+                let ip_prompt = run_input_prompt(
+                    "ALLOWED IP ADDRESS",
+                    "Enter remote IP allowed to connect (e.g. 192.168.1.50 or 0.0.0.0/0 for any):",
+                    Some("0.0.0.0/0"),
+                )?;
+                let ip = match ip_prompt {
+                    Some(i) if !i.trim().is_empty() => i.trim().to_string(),
+                    _ => continue,
+                };
+
+                let proto_name = if is_bedrock { "UDP" } else { "TCP" };
+                let action_res = exec_console_action(|| async {
+                    println!(
+                        "Applying firewall rule for port {} ({})...",
+                        port, proto_name
+                    );
+                    #[cfg(unix)]
+                    println!("Superuser privileges (sudo) may be requested.");
+                    #[cfg(windows)]
+                    println!("Administrator privileges (UAC) may be requested.");
+                    println!();
+                    craft_net::allow_ip_port(&ip, port, is_bedrock)
+                })
+                .await;
+
+                match action_res {
+                    Ok(_) => {
+                        show_modal_message(
+                            "FIREWALL RULE ADDED",
+                            &[format!(
+                                "[OK] Allowed incoming connections from '{}' on port {}.",
+                                ip, port
+                            )
+                            .green()
+                            .bold()
+                            .to_string()],
+                            false,
                         )?;
-                        if let Some(ip) = ip_prompt {
-                            let ip = ip.trim();
-                            if !ip.is_empty() {
-                                let _ = print_in_place_status(
-                                    "APPLYING FIREWALL RULE",
-                                    &[format!(
-                                        "Adding rule for port {} ({})...",
-                                        port,
-                                        if is_bedrock { "UDP" } else { "TCP" }
-                                    )],
-                                );
-                                match craft_net::allow_ip_port(ip, port, is_bedrock) {
-                                    Ok(_) => {
-                                        show_modal_message("FIREWALL RULE ADDED", &[format!("[OK] Allowed incoming connections from '{}' on port {}.", ip, port).green().bold().to_string()], false)?;
-                                    }
-                                    Err(e) => {
-                                        show_modal_message(
-                                            "FIREWALL ERROR",
-                                            &[format!("[ERROR] {}", e)],
-                                            true,
-                                        )?;
-                                    }
-                                }
-                            }
-                        }
+                    }
+                    Err(e) => {
+                        show_modal_message("FIREWALL ERROR", &[format!("[ERROR] {}", e)], true)?;
                     }
                 }
             }
@@ -1636,23 +1649,37 @@ pub async fn firewall_menu(paths: &CraftPaths) -> Result<()> {
                     &[
                         MenuEntry::new("1", "TCP (Java)"),
                         MenuEntry::new("2", "UDP (Bedrock)"),
+                        MenuEntry::new("0", "Cancel").with_aliases(&["b"]),
                     ],
                     &mut 0,
                 )?;
-                let is_udp = proto_sel == Some(1);
-                let _ = print_in_place_status(
-                    "APPLYING FIREWALL RULE",
-                    &[format!("Adding rule for {}:{}...", ip_str, port)],
-                );
-                match craft_net::allow_ip_port(&ip_str, port, is_udp) {
+                let is_udp = match proto_sel {
+                    Some(0) => false,
+                    Some(1) => true,
+                    _ => continue,
+                };
+                let proto_name = if is_udp { "UDP" } else { "TCP" };
+                let action_res = exec_console_action(|| async {
+                    println!(
+                        "Applying firewall rule for {}:{} ({})...",
+                        ip_str, port, proto_name
+                    );
+                    #[cfg(unix)]
+                    println!("Superuser privileges (sudo) may be requested.");
+                    #[cfg(windows)]
+                    println!("Administrator privileges (UAC) may be requested.");
+                    println!();
+                    craft_net::allow_ip_port(&ip_str, port, is_udp)
+                })
+                .await;
+
+                match action_res {
                     Ok(_) => {
                         show_modal_message(
                             "FIREWALL RULE ADDED",
                             &[format!(
                                 "[OK] Successfully allowed {}:{} ({})!",
-                                ip_str,
-                                port,
-                                if is_udp { "UDP" } else { "TCP" }
+                                ip_str, port, proto_name
                             )
                             .green()
                             .bold()

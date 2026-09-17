@@ -74,7 +74,7 @@ This task list tracks ongoing development, bug fixes, enhancements, and UI polis
 ### 8. Documentation & Packaging
 - [x] Create standalone `modalx` repository and sync with `git@github.com:OguzhanUmutlu/modalx.git`.
 - [x] Build comprehensive 21-page VitePress documentation suite for `modalx` under `tools/modalx/docs/`.
-- [x] Configure automated GitHub Pages deployment workflow for `modalx` docs (`.github/workflows/deploy-docs.yml`).
+- [x] Configure automated documentation deployment to Cloudflare Workers (`modalx.oguzhanumutlu.com`).
 - [x] Perform Unicode zero-emoji audit on documentation and README.
 
 ### 9. Zstandard-Compressed Caching & Inside-the-Box Console Input
