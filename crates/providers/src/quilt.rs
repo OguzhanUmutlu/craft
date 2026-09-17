@@ -80,11 +80,12 @@ impl ServerSoftware for QuiltProvider {
             let url = "https://meta.quiltmc.org/v3/versions/game";
             if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
                 if let Ok(list) = cache.get_cached_json::<Vec<QuiltGameVersion>>("quilt_game_versions", url, std::time::Duration::from_secs(6 * 3600)).await {
-                    let versions: Vec<String> = list.into_iter()
+                    let mut versions: Vec<String> = list.into_iter()
                         .filter(|g| g.stable)
                         .map(|g| g.version)
                         .collect();
                     if !versions.is_empty() {
+                        craft_core::sort_versions_descending(&mut versions);
                         return Ok(versions);
                     }
                 }
@@ -97,11 +98,12 @@ impl ServerSoftware for QuiltProvider {
 
             if let Ok(resp) = client.get(url).send().await {
                 if let Ok(list) = resp.json::<Vec<QuiltGameVersion>>().await {
-                    let versions: Vec<String> = list.into_iter()
+                    let mut versions: Vec<String> = list.into_iter()
                         .filter(|g| g.stable)
                         .map(|g| g.version)
                         .collect();
                     if !versions.is_empty() {
+                        craft_core::sort_versions_descending(&mut versions);
                         return Ok(versions);
                     }
                 }

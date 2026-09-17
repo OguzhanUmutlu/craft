@@ -107,8 +107,7 @@ impl ServerSoftware for VanillaJavaProvider {
 
     fn bundled_versions(&self) -> Vec<String> {
         let mut v: Vec<String> = self.bundled.keys().cloned().collect();
-        v.sort();
-        v.reverse();
+        craft_core::sort_versions_descending(&mut v);
         v
     }
 
@@ -117,12 +116,13 @@ impl ServerSoftware for VanillaJavaProvider {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
         Box::pin(async move {
             if let Ok(manifest) = self.fetch_mojang_manifest().await {
-                let versions: Vec<String> = manifest.versions
+                let mut versions: Vec<String> = manifest.versions
                     .into_iter()
                     .filter(|v| v.release_type == "release")
                     .map(|v| v.id)
                     .collect();
                 if !versions.is_empty() {
+                    craft_core::sort_versions_descending(&mut versions);
                     return Ok(versions);
                 }
             }

@@ -21,9 +21,14 @@ pub mod terraria;
 pub mod valheim;
 pub mod factorio;
 pub mod custom;
+pub mod catalog;
 
 pub use traits::{AssetDownload, ServerEdition, ServerSoftware};
 pub use cache::CacheManager;
+pub use catalog::{
+    CatalogAsset, CatalogBuilder, CatalogManager, SoftwareCatalogEntry, VersionCatalog,
+    DEFAULT_CATALOG_TTL_SECS, DEFAULT_CATALOG_URL,
+};
 pub use paper::PaperProvider;
 pub use purpur::PurpurProvider;
 pub use vanilla_java::VanillaJavaProvider;

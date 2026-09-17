@@ -72,8 +72,7 @@ impl ServerSoftware for VanillaBedrockProvider {
         } else {
             self.linux_versions.keys().cloned().collect()
         };
-        versions.sort();
-        versions.reverse();
+        craft_core::sort_versions_descending(&mut versions);
         versions
     }
 

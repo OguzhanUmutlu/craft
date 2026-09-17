@@ -1,6 +1,7 @@
 pub mod auto;
 pub mod backup;
 pub mod cache;
+pub mod catalog;
 pub mod dashboard;
 pub mod datapack;
 pub mod deploy;

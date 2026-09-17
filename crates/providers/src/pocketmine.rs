@@ -128,8 +128,7 @@ impl ServerSoftware for PocketmineProvider {
 
     fn bundled_versions(&self) -> Vec<String> {
         let mut v: Vec<String> = self.versions.keys().cloned().collect();
-        v.sort();
-        v.reverse();
+        craft_core::sort_versions_descending(&mut v);
         v
     }
 

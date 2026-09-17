@@ -209,6 +209,12 @@ pub enum Commands {
         action: Option<CacheCommands>,
     },
 
+    /// Manage, inspect, update, and build the centralized server software version catalog
+    Catalog {
+        #[command(subcommand)]
+        action: Option<CatalogCommands>,
+    },
+
     /// Manage background service daemon
     #[command(alias = "daemon")]
     Service {
@@ -371,6 +377,29 @@ pub enum CacheCommands {
     SetLimit {
         /// New cache limit with unit (e.g. 500MB, 2GB, 10GB)
         limit: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum CatalogCommands {
+    /// Build a new compiled catalog by querying upstream providers and compressing to zstd
+    Build {
+        /// Target output file path (default: versions.zst)
+        #[arg(short, long, default_value = "versions.zst")]
+        output: PathBuf,
+    },
+    /// Fetch and update the local cached version catalog from remote worker
+    Update {
+        /// Custom remote catalog URL
+        #[arg(long)]
+        url: Option<String>,
+    },
+    /// Display information and cache status about the local version catalog
+    Info,
+    /// List available software implementations or versions in the catalog
+    List {
+        /// Server software ID or name (omit to list all softwares)
+        software: Option<String>,
     },
 }
 
@@ -695,6 +724,47 @@ mod tests {
                 assert_eq!(world.as_deref(), Some("custom_world"));
             }
             _ => panic!("Expected Datapack Install command"),
+        }
+    }
+
+    #[test]
+    fn test_catalog_commands_parsing() {
+        let cli_build = Cli::try_parse_from(["craft", "catalog", "build", "--output", "/tmp/versions.zst"]).unwrap();
+        match cli_build.command {
+            Some(Commands::Catalog {
+                action: Some(CatalogCommands::Build { output }),
+            }) => {
+                assert_eq!(output, PathBuf::from("/tmp/versions.zst"));
+            }
+            _ => panic!("Expected Catalog Build command"),
+        }
+
+        let cli_update = Cli::try_parse_from(["craft", "catalog", "update", "--url", "https://example.com/versions.zst"]).unwrap();
+        match cli_update.command {
+            Some(Commands::Catalog {
+                action: Some(CatalogCommands::Update { url }),
+            }) => {
+                assert_eq!(url.as_deref(), Some("https://example.com/versions.zst"));
+            }
+            _ => panic!("Expected Catalog Update command"),
+        }
+
+        let cli_list = Cli::try_parse_from(["craft", "catalog", "list", "paper"]).unwrap();
+        match cli_list.command {
+            Some(Commands::Catalog {
+                action: Some(CatalogCommands::List { software }),
+            }) => {
+                assert_eq!(software.as_deref(), Some("paper"));
+            }
+            _ => panic!("Expected Catalog List command"),
+        }
+
+        let cli_info = Cli::try_parse_from(["craft", "catalog", "info"]).unwrap();
+        match cli_info.command {
+            Some(Commands::Catalog {
+                action: Some(CatalogCommands::Info),
+            }) => {}
+            _ => panic!("Expected Catalog Info command"),
         }
     }
 }

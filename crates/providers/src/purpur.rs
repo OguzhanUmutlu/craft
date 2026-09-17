@@ -60,8 +60,7 @@ impl ServerSoftware for PurpurProvider {
 
     fn bundled_versions(&self) -> Vec<String> {
         let mut v: Vec<String> = self.bundled.keys().cloned().collect();
-        v.sort();
-        v.reverse();
+        craft_core::sort_versions_descending(&mut v);
         v
     }
 
@@ -73,7 +72,7 @@ impl ServerSoftware for PurpurProvider {
             if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
                 if let Ok(data) = cache.get_cached_json::<PurpurResponse>("purpur_versions", url, std::time::Duration::from_secs(6 * 3600)).await {
                     let mut versions = data.versions;
-                    versions.reverse();
+                    craft_core::sort_versions_descending(&mut versions);
                     return Ok(versions);
                 }
             }
@@ -81,7 +80,7 @@ impl ServerSoftware for PurpurProvider {
             if let Ok(resp) = client.get(url).send().await {
                 if let Ok(data) = resp.json::<PurpurResponse>().await {
                     let mut versions = data.versions;
-                    versions.reverse();
+                    craft_core::sort_versions_descending(&mut versions);
                     return Ok(versions);
                 }
             }

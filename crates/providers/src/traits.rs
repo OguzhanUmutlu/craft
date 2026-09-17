@@ -99,6 +99,15 @@ pub trait ServerSoftware: Send + Sync {
     /// Default or fallback versions bundled with the tool
     fn bundled_versions(&self) -> Vec<String>;
 
+    /// Returns the recommended / default stable release version for this software
+    fn recommended_version(&self) -> String {
+        let mut v = self.bundled_versions();
+        craft_core::sort_versions_descending(&mut v);
+        v.into_iter()
+            .find(|ver| craft_core::is_stable_version(ver))
+            .unwrap_or_else(|| "latest".to_string())
+    }
+
     /// Fetch latest live versions from the upstream API
     fn fetch_versions<'a>(
         &'a self,

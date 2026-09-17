@@ -12,6 +12,7 @@ use commands::{
     auto::handle_auto,
     backup::handle_backup,
     cache::handle_cache,
+    catalog::handle_catalog,
     dashboard::{
         backups_menu, cache_menu, daemon_menu, gui_create_server_wizard_with_name,
         handle_dashboard, ping_menu, plugins_menu, quick_start_menu, remotes_menu,
@@ -293,6 +294,7 @@ async fn main() {
                 handle_cache(action, &paths)
             }
         }
+        Some(Commands::Catalog { action }) => handle_catalog(action, &paths).await,
         Some(Commands::Service { action }) => {
             if let Some(act) = action {
                 handle_service(act, &paths).await

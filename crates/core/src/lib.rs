@@ -10,6 +10,7 @@ pub mod trash;
 pub mod cache;
 pub mod nbt;
 pub mod properties;
+pub mod version;
 
 pub use error::{CraftError, Result};
 pub use path::CraftPaths;
@@ -35,6 +36,9 @@ pub use process::{
 };
 pub use nbt::{NbtFile, NbtTag};
 pub use properties::{PropertyCategory, PropertyLine, ServerProperties};
+pub use version::{
+    compare_versions, is_stable_version, sort_versions_descending, ReleaseTier, VersionToken,
+};
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");
 

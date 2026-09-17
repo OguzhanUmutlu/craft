@@ -107,8 +107,7 @@ impl PaperProvider {
             all_versions.extend(vers);
         }
 
-        all_versions.sort();
-        all_versions.reverse();
+        craft_core::sort_versions_descending(&mut all_versions);
         all_versions.dedup();
         Ok(all_versions)
     }
@@ -207,11 +206,12 @@ impl ServerSoftware for PaperProvider {
     fn bundled_versions(&self) -> Vec<String> {
         if !self.bundled.is_empty() {
             let mut v: Vec<String> = self.bundled.keys().cloned().collect();
-            v.sort();
-            v.reverse();
+            craft_core::sort_versions_descending(&mut v);
             v
         } else {
-            self.default_versions.clone()
+            let mut v = self.default_versions.clone();
+            craft_core::sort_versions_descending(&mut v);
+            v
         }
     }
 

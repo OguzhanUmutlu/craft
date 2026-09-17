@@ -39,7 +39,7 @@ impl NeoForgeProvider {
             }
         }
 
-        versions.reverse();
+        craft_core::sort_versions_descending(&mut versions);
         Ok(versions)
     }
 }

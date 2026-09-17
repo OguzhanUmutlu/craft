@@ -205,11 +205,20 @@ pub async fn handle_new(
         .ok_or_else(|| CraftError::UnknownSoftware(selected_software_id.clone()))?;
 
     // 3. Determine target version
-    let bundled = software.bundled_versions();
-    let default_version = bundled
-        .first()
-        .cloned()
-        .unwrap_or_else(|| "latest".to_string());
+    let catalog_mgr = craft_providers::CatalogManager::new().ok();
+    let catalog_versions = if let Some(ref mgr) = catalog_mgr {
+        mgr.load().get_versions(software.id())
+    } else {
+        Vec::new()
+    };
+    let mut bundled = if !catalog_versions.is_empty() {
+        catalog_versions
+    } else {
+        software.bundled_versions()
+    };
+    craft_core::sort_versions_descending(&mut bundled);
+
+    let default_version = software.recommended_version();
 
     let version = if let Some(v) = version_input {
         if v == "latest" {

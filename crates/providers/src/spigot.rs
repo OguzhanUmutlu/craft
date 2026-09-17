@@ -54,8 +54,7 @@ impl ServerSoftware for SpigotProvider {
 
     fn bundled_versions(&self) -> Vec<String> {
         let mut v: Vec<String> = self.bundled.keys().cloned().collect();
-        v.sort();
-        v.reverse();
+        craft_core::sort_versions_descending(&mut v);
         v
     }
 

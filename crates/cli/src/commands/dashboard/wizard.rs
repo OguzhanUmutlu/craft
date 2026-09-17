@@ -422,32 +422,55 @@ pub async fn gui_create_server_wizard_with_name(
                 );
 
                 let sw_obj = craft_providers::find_software(selected_sw_id);
-                let bundled = sw_obj
-                    .as_ref()
-                    .map(|s| s.bundled_versions())
-                    .unwrap_or_else(|| vec!["latest".to_string()]);
+                let catalog_mgr = craft_providers::CatalogManager::new().ok();
+                let catalog_versions = if let Some(ref mgr) = catalog_mgr {
+                    mgr.load().get_versions(selected_sw_id)
+                } else {
+                    Vec::new()
+                };
 
-                let mut ver_entries: Vec<MenuEntry> = bundled
+                let mut versions_list = if !catalog_versions.is_empty() {
+                    catalog_versions
+                } else {
+                    sw_obj
+                        .as_ref()
+                        .map(|s| s.bundled_versions())
+                        .unwrap_or_default()
+                };
+
+                craft_core::sort_versions_descending(&mut versions_list);
+                if versions_list.is_empty() {
+                    versions_list.push("latest".to_string());
+                }
+
+                let recommended_ver = sw_obj
+                    .as_ref()
+                    .map(|s| s.recommended_version())
+                    .unwrap_or_else(|| versions_list[0].clone());
+
+                let display_versions: Vec<String> = versions_list.into_iter().take(30).collect();
+
+                let mut ver_entries: Vec<MenuEntry> = display_versions
                     .iter()
-                    .take(8)
                     .enumerate()
                     .map(|(i, v)| {
-                        let label = if i == 0 {
+                        let hotkey = (i + 1).to_string();
+                        let label = if v == &recommended_ver {
                             format!("{} (Recommended)", v)
                         } else {
                             v.clone()
                         };
-                        MenuEntry::new((i + 1).to_string(), label)
+                        MenuEntry::new(hotkey, label)
                     })
                     .collect();
                 ver_entries.push(MenuEntry::new("c", "Custom Version"));
                 ver_entries.push(MenuEntry::new("0", "Back").with_aliases(&["b"]));
 
                 let ver_choice = run_menu(&ver_header, &ver_entries, &mut ver_sel)?;
-                let num_bundled = bundled.iter().take(8).count();
+                let num_versions = display_versions.len();
                 match ver_choice {
-                    Some(idx) if idx < num_bundled => {
-                        version = bundled[idx].clone();
+                    Some(idx) if idx < num_versions => {
+                        version = display_versions[idx].clone();
                         let is_java = sw_obj
                             .as_ref()
                             .map(|s| s.edition() == craft_providers::ServerEdition::Java)
@@ -458,8 +481,8 @@ pub async fn gui_create_server_wizard_with_name(
                             step = WizardStep::Autostart;
                         }
                     }
-                    Some(idx) if idx == num_bundled => {
-                        let default_v = bundled.first().map(|s| s.as_str()).unwrap_or("latest");
+                    Some(idx) if idx == num_versions => {
+                        let default_v = display_versions.first().map(|s| s.as_str()).unwrap_or("latest");
                         match run_input_prompt(
                             "CUSTOM SERVER VERSION",
                             "Enter target release version string:",
