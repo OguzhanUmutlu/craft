@@ -25,6 +25,14 @@ pub async fn manage_installed_worlds_menu(server: &ServerConfig) -> Result<()> {
     let mut selected = 0;
 
     loop {
+        if !server.path.exists() {
+            show_modal_message(
+                "SERVER NOT FOUND",
+                &[format!("Server directory '{}' was deleted or moved.", server.path.display())],
+                true,
+            )?;
+            return Ok(());
+        }
         let worlds = list_installed_worlds(&server.path);
         let (default_world, nether_world, end_world) = get_dimension_worlds(&server.path);
 
@@ -149,6 +157,14 @@ async fn world_detail_menu(server: &ServerConfig, world: &InstalledWorldItem) ->
     let mut selected = 0;
 
     loop {
+        if !world.path.exists() {
+            show_modal_message(
+                "WORLD NOT FOUND",
+                &[format!("World directory '{}' was deleted or moved.", world.path.display())],
+                true,
+            )?;
+            return Ok(());
+        }
         let (default_world, nether_world, end_world) = get_dimension_worlds(&server.path);
         let is_def = world.name.eq_ignore_ascii_case(&default_world);
         let is_neth = nether_world

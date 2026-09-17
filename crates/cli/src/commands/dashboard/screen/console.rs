@@ -79,26 +79,51 @@ pub async fn run_virtual_console(
 
     loop {
         tokio::select! {
-            Some(chunk) = rx_from_daemon.recv() => {
-                partial_chunk.push_str(&chunk);
-                while let Some(idx) = partial_chunk.find('\n') {
-                    let line = partial_chunk[..idx].trim_end_matches('\r').to_string();
-                    partial_chunk = partial_chunk[idx + 1..].to_string();
-                    if !line.trim().is_empty() {
-                        lines.push(line);
+            chunk_opt = rx_from_daemon.recv() => {
+                match chunk_opt {
+                    Some(chunk) => {
+                        partial_chunk.push_str(&chunk);
+                        while let Some(idx) = partial_chunk.find('\n') {
+                            let line = partial_chunk[..idx].trim_end_matches('\r').to_string();
+                            partial_chunk = partial_chunk[idx + 1..].to_string();
+                            if !line.trim().is_empty() {
+                                lines.push(line);
+                                if lines.len() > 200 {
+                                    lines.remove(0);
+                                }
+                            }
+                        }
+                        render(
+                            &mut stdout,
+                            server_name,
+                            server_path,
+                            &lines,
+                            scroll_offset,
+                            &text_input,
+                        )?;
+                    }
+                    None => {
+                        lines.push(
+                            "[SYSTEM: Server process terminated. Detaching console...]"
+                                .yellow()
+                                .bold()
+                                .to_string(),
+                        );
                         if lines.len() > 200 {
                             lines.remove(0);
                         }
+                        let _ = render(
+                            &mut stdout,
+                            server_name,
+                            server_path,
+                            &lines,
+                            0,
+                            &text_input,
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+                        break;
                     }
                 }
-                render(
-                    &mut stdout,
-                    server_name,
-                    server_path,
-                    &lines,
-                    scroll_offset,
-                    &text_input,
-                )?;
             }
 
             Some(event) = event_rx.recv() => {

@@ -94,7 +94,19 @@ pub async fn trash_bin_menu(paths: &CraftPaths) -> Result<()> {
                 if global_idx >= items.len() {
                     continue;
                 }
-                let item = &items[global_idx];
+                let target_id = items[global_idx].id.clone();
+                let fresh_items = manager.list_items().unwrap_or_default();
+                let item = match fresh_items.into_iter().find(|i| i.id == target_id) {
+                    Some(i) => i,
+                    None => {
+                        show_modal_message(
+                            "TRASH ITEM NOT FOUND",
+                            &["This trash item was restored or removed by another process.".to_string()],
+                            true,
+                        )?;
+                        continue;
+                    }
+                };
                 let item_mb = (item.size_bytes as f64) / (1024.0 * 1024.0);
 
                 let detail_header = format!(

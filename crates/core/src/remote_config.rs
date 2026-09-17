@@ -74,10 +74,17 @@ impl RemotesRegistry {
         Ok(Self::default())
     }
 
-    pub fn save(&self, paths: &CraftPaths) -> Result<()> {
+    fn save_internal(&self, paths: &CraftPaths) -> Result<()> {
         let content = toml::to_string_pretty(self)
             .map_err(|e| CraftError::Config(format!("Failed to serialize remotes.toml: {}", e)))?;
 
+        let temp_path = paths.remotes_file.with_extension("tmp");
+        fs::write(&temp_path, content)?;
+        fs::rename(&temp_path, &paths.remotes_file)?;
+        Ok(())
+    }
+
+    pub fn save(&self, paths: &CraftPaths) -> Result<()> {
         let lock_file_path = paths.locks_dir.join("remotes.lock");
         let lock_file = OpenOptions::new()
             .read(true)
@@ -87,13 +94,35 @@ impl RemotesRegistry {
             .open(&lock_file_path)?;
 
         lock_file.lock_exclusive()?;
+        let res = self.save_internal(paths);
+        let _ = lock_file.unlock();
+        res
+    }
 
-        let temp_path = paths.remotes_file.with_extension("tmp");
-        fs::write(&temp_path, content)?;
-        fs::rename(&temp_path, &paths.remotes_file)?;
+    /// Transactionally loads, mutates, and saves the remotes registry under an exclusive file lock.
+    pub fn modify<F, R>(paths: &CraftPaths, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut RemotesRegistry) -> Result<R>,
+    {
+        let lock_file_path = paths.locks_dir.join("remotes.lock");
+        let lock_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_file_path)?;
 
-        lock_file.unlock()?;
-        Ok(())
+        lock_file.lock_exclusive()?;
+        let mut reg = Self::load(paths)?;
+        let result = f(&mut reg);
+        if result.is_ok() {
+            if let Err(e) = reg.save_internal(paths) {
+                let _ = lock_file.unlock();
+                return Err(e);
+            }
+        }
+        let _ = lock_file.unlock();
+        result
     }
 
     pub fn find(&self, alias: &str) -> Option<&RemoteHostConfig> {

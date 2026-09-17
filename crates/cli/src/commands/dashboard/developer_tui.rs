@@ -14,12 +14,24 @@ pub async fn developer_tools_menu(server: &ServerConfig, paths: &CraftPaths) -> 
 
     loop {
         let registry = ServersRegistry::load(paths)?;
-        let current_server = registry
+        let current_server = match registry
             .servers
             .iter()
             .find(|s| s.path == server.path || s.name.eq_ignore_ascii_case(&server.name))
-            .cloned()
-            .unwrap_or_else(|| server.clone());
+        {
+            Some(s) if s.path.exists() => s.clone(),
+            _ => {
+                show_modal_message(
+                    "SERVER NOT FOUND",
+                    &[format!(
+                        "Server '{}' was deleted or moved by another process.",
+                        server.name
+                    )],
+                    true,
+                )?;
+                return Ok(());
+            }
+        };
 
         let width = get_content_width(80);
         let debug_status = if let Some(port) = current_server.jdwp_debug_port {

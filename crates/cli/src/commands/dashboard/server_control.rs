@@ -761,32 +761,75 @@ pub async fn manage_servers_menu(paths: &CraftPaths) -> Result<()> {
             super::screen::PagedMenuAction::Select(global_idx)
                 if global_idx < registry.servers.len() =>
             {
-                let chosen = &registry.servers[global_idx];
-                server_control_panel(&chosen.name, paths).await?;
+                let server_name = registry.servers[global_idx].name.clone();
+                let fresh_registry = ServersRegistry::load(paths)?;
+                if let Some(chosen) = fresh_registry.find_by_name(&server_name) {
+                    if chosen.path.exists() {
+                        server_control_panel(&chosen.name, paths).await?;
+                    } else {
+                        show_modal_message(
+                            "SERVER NOT FOUND",
+                            &[format!("Server directory for '{}' was deleted or moved.", server_name)],
+                            true,
+                        )?;
+                    }
+                } else {
+                    show_modal_message(
+                        "SERVER NOT FOUND",
+                        &[format!("Server '{}' was deleted by another process.", server_name)],
+                        true,
+                    )?;
+                }
             }
             super::screen::PagedMenuAction::Space(global_idx)
                 if global_idx < registry.servers.len() =>
             {
-                let chosen = &registry.servers[global_idx];
-                let is_running = running_paths.contains(&chosen.path)
-                    || chosen
-                        .path
-                        .canonicalize()
-                        .map(|p| running_paths.contains(&p))
-                        .unwrap_or(false)
-                    || craft_core::is_server_locked(&chosen.path);
-                if is_running {
-                    let _ = print_in_place_status(
-                        "STOPPING SERVER",
-                        &[format!("Stopping '{}' gracefully...", chosen.name)],
-                    );
-                    let _ = stop_server_daemon(&chosen.name, false, paths).await;
+                let server_name = registry.servers[global_idx].name.clone();
+                let fresh_registry = ServersRegistry::load(paths)?;
+                if let Some(chosen) = fresh_registry.find_by_name(&server_name) {
+                    if !chosen.path.exists() {
+                        show_modal_message(
+                            "SERVER NOT FOUND",
+                            &[format!("Server directory for '{}' was deleted or moved.", server_name)],
+                            true,
+                        )?;
+                        continue;
+                    }
+                    let fresh_running = if DaemonClient::is_daemon_running(paths) {
+                        if let Ok(mut c) = DaemonClient::connect(paths).await {
+                            let running = c.get_running().await.unwrap_or_default();
+                            running.contains(&chosen.path)
+                                || chosen
+                                    .path
+                                    .canonicalize()
+                                    .map(|p| running.contains(&p))
+                                    .unwrap_or(false)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    } || craft_core::is_server_locked(&chosen.path);
+
+                    if fresh_running {
+                        let _ = print_in_place_status(
+                            "STOPPING SERVER",
+                            &[format!("Stopping '{}' gracefully...", chosen.name)],
+                        );
+                        let _ = stop_server_daemon(&chosen.name, false, paths).await;
+                    } else {
+                        let _ = print_in_place_status(
+                            "STARTING SERVER",
+                            &[format!("Starting '{}' in background...", chosen.name)],
+                        );
+                        let _ = start_server_daemon(&chosen.name, paths).await;
+                    }
                 } else {
-                    let _ = print_in_place_status(
-                        "STARTING SERVER",
-                        &[format!("Starting '{}' in background...", chosen.name)],
-                    );
-                    let _ = start_server_daemon(&chosen.name, paths).await;
+                    show_modal_message(
+                        "SERVER NOT FOUND",
+                        &[format!("Server '{}' was deleted by another process.", server_name)],
+                        true,
+                    )?;
                 }
             }
             super::screen::PagedMenuAction::Action(act) if act == "n" => {
@@ -995,21 +1038,69 @@ pub(crate) async fn server_control_panel(
             _ => return Ok(()),
         };
 
+        // Validate entity existence against live state before dispatching
+        let fresh_registry = ServersRegistry::load(paths)?;
+        let fresh_server = match fresh_registry.find_by_name(&current_server_name) {
+            Some(s) if s.path.exists() => s.clone(),
+            _ => {
+                show_modal_message(
+                    "SERVER NOT FOUND",
+                    &[format!(
+                        "Server '{}' was deleted or moved by another process.",
+                        current_server_name
+                    )],
+                    true,
+                )?;
+                return Ok(());
+            }
+        };
+
+        // Query fresh running state dynamically
+        let fresh_daemon_running = DaemonClient::is_daemon_running(paths);
+        let fresh_is_running = if fresh_daemon_running {
+            if let Ok(mut c) = DaemonClient::connect(paths).await {
+                let running = c.get_running().await.unwrap_or_default();
+                running.contains(&fresh_server.path)
+                    || fresh_server
+                        .path
+                        .canonicalize()
+                        .map(|p| running.contains(&p))
+                        .unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            false
+        } || craft_core::is_server_locked(&fresh_server.path);
+
         match action {
             ControlAction::ToggleStartStop => {
                 if is_running {
+                    // Menu showed "Stop Server"
+                    if !fresh_is_running {
+                        flash_status = Some(
+                            format!(
+                                "Server '{}' was already stopped by another process.",
+                                fresh_server.name
+                            )
+                            .yellow()
+                            .bold()
+                            .to_string(),
+                        );
+                        continue;
+                    }
                     let _ = print_in_place_status(
                         "STOPPING SERVER",
                         &[
-                            format!("Stopping server '{}' gracefully...", server.name),
+                            format!("Stopping server '{}' gracefully...", fresh_server.name),
                             "Saving world and player data...".to_string(),
                             "Waiting for process termination...".to_string(),
                         ],
                     );
-                    match stop_server_daemon(&server.name, false, paths).await {
+                    match stop_server_daemon(&fresh_server.name, false, paths).await {
                         Ok(_) => {
                             flash_status = Some(
-                                format!("[OK] Server '{}' stopped.", server.name)
+                                format!("[OK] Server '{}' stopped.", fresh_server.name)
                                     .green()
                                     .bold()
                                     .to_string(),
@@ -1025,17 +1116,30 @@ pub(crate) async fn server_control_panel(
                         }
                     }
                 } else {
+                    // Menu showed "Start Server"
+                    if fresh_is_running {
+                        flash_status = Some(
+                            format!(
+                                "Server '{}' was already started by another process.",
+                                fresh_server.name
+                            )
+                            .green()
+                            .bold()
+                            .to_string(),
+                        );
+                        continue;
+                    }
                     let _ = print_in_place_status(
                         "STARTING SERVER",
                         &[
-                            format!("Starting server '{}' in background daemon...", server.name),
+                            format!("Starting server '{}' in background daemon...", fresh_server.name),
                             "Initializing supervisor process...".to_string(),
                         ],
                     );
-                    match start_server_daemon(&server.name, paths).await {
+                    match start_server_daemon(&fresh_server.name, paths).await {
                         Ok(_) => {
                             flash_status = Some(
-                                format!("[OK] Server '{}' started in daemon.", server.name)
+                                format!("[OK] Server '{}' started in daemon.", fresh_server.name)
                                     .green()
                                     .bold()
                                     .to_string(),
@@ -1053,17 +1157,29 @@ pub(crate) async fn server_control_panel(
                 }
             }
             ControlAction::Restart => {
+                if !fresh_is_running {
+                    flash_status = Some(
+                        format!(
+                            "Server '{}' is stopped. Start the server instead.",
+                            fresh_server.name
+                        )
+                        .yellow()
+                        .bold()
+                        .to_string(),
+                    );
+                    continue;
+                }
                 let _ = print_in_place_status(
                     "RESTARTING SERVER",
                     &[
-                        format!("Stopping server '{}' gracefully...", server.name),
+                        format!("Stopping server '{}' gracefully...", fresh_server.name),
                         "Re-launching server via background daemon...".to_string(),
                     ],
                 );
-                match restart_server_daemon(&server.name, false, paths).await {
+                match restart_server_daemon(&fresh_server.name, false, paths).await {
                     Ok(_) => {
                         flash_status = Some(
-                            format!("[OK] Server '{}' restarted in daemon.", server.name)
+                            format!("[OK] Server '{}' restarted in daemon.", fresh_server.name)
                                 .green()
                                 .bold()
                                 .to_string(),
@@ -1080,8 +1196,20 @@ pub(crate) async fn server_control_panel(
                 }
             }
             ControlAction::AttachConsole => {
-                let server_name = server.name.clone();
-                let server_path = server.path.clone();
+                if !fresh_is_running {
+                    flash_status = Some(
+                        format!(
+                            "Server '{}' was stopped by another process. Live console is unavailable.",
+                            fresh_server.name
+                        )
+                        .yellow()
+                        .bold()
+                        .to_string(),
+                    );
+                    continue;
+                }
+                let server_name = fresh_server.name.clone();
+                let server_path = fresh_server.path.clone();
                 let res =
                     super::screen::run_virtual_console(&server_name, &server_path, paths).await;
                 match res {
@@ -1104,22 +1232,22 @@ pub(crate) async fn server_control_panel(
                 }
             }
             ControlAction::ServerProperties => {
-                super::properties_tui::server_properties_editor(&server.path, &server.name).await?;
+                super::properties_tui::server_properties_editor(&fresh_server.path, &fresh_server.name).await?;
             }
             ControlAction::ManageWorlds => {
-                super::worlds_tui::manage_installed_worlds_menu(&server).await?;
+                super::worlds_tui::manage_installed_worlds_menu(&fresh_server).await?;
             }
             ControlAction::ContentManagement => {
-                server_content_menu(&server, paths).await?;
+                server_content_menu(&fresh_server, paths).await?;
             }
             ControlAction::DeveloperTools => {
-                super::developer_tui::developer_tools_menu(&server, paths).await?;
+                super::developer_tui::developer_tools_menu(&fresh_server, paths).await?;
             }
             ControlAction::Backups => {
-                server_backups_panel(&server.name, paths).await?;
+                server_backups_panel(&fresh_server.name, paths).await?;
             }
             ControlAction::Maintenance => {
-                match server_maintenance_menu(&server, paths, is_running).await? {
+                match server_maintenance_menu(&fresh_server, paths).await? {
                     MaintenanceOutcome::Renamed(new_name) => {
                         flash_status = Some(
                             format!(
@@ -1172,6 +1300,14 @@ pub(crate) async fn server_content_menu(
     }
 
     loop {
+        if !server.path.exists() {
+            show_modal_message(
+                "SERVER NOT FOUND",
+                &[format!("Server directory '{}' was deleted or moved.", server.path.display())],
+                true,
+            )?;
+            return Ok(());
+        }
         let width = get_content_width(80);
         let header =
             format!(
@@ -1253,21 +1389,52 @@ pub(crate) enum MaintenanceOutcome {
 pub(crate) async fn server_maintenance_menu(
     server: &craft_core::ServerConfig,
     paths: &CraftPaths,
-    is_running: bool,
 ) -> Result<MaintenanceOutcome> {
     let _guard = AltScreenGuard::enter();
     let _nav = NavGuard::enter("Maintenance");
     let mut selected = 0;
 
     loop {
+        let reg = ServersRegistry::load(paths)?;
+        let current_server = match reg.find_by_name(&server.name) {
+            Some(s) if s.path.exists() => s.clone(),
+            _ => {
+                show_modal_message(
+                    "SERVER NOT FOUND",
+                    &[format!(
+                        "Server '{}' was deleted or moved by another process.",
+                        server.name
+                    )],
+                    true,
+                )?;
+                return Ok(MaintenanceOutcome::Deleted);
+            }
+        };
+
+        let live_running = if DaemonClient::is_daemon_running(paths) {
+            if let Ok(mut c) = DaemonClient::connect(paths).await {
+                let running = c.get_running().await.unwrap_or_default();
+                running.contains(&current_server.path)
+                    || current_server
+                        .path
+                        .canonicalize()
+                        .map(|p| running.contains(&p))
+                        .unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            false
+        } || craft_core::is_server_locked(&current_server.path);
+
         let width = get_content_width(80);
         let header = format!(
             "{}\r\n{}\r\n{}\r\n Server:   {}\r\n Path:     {}\r\n Choose maintenance operation:\r\n{}",
             box_top(width).cyan().bold(),
-            box_title(&format!("SERVER MAINTENANCE: {}", server.name), width, false).cyan().bold(),
+            box_title(&format!("SERVER MAINTENANCE: {}", current_server.name), width, false).cyan().bold(),
             box_divider(width).cyan().bold(),
-            server.name.white().bold(),
-            server.path.display(),
+            current_server.name.white().bold(),
+            current_server.path.display(),
             box_divider(width).dimmed(),
         );
 
@@ -1287,15 +1454,15 @@ pub(crate) async fn server_maintenance_menu(
             Some(0) => {
                 let _ = print_in_place_status(
                     "RUNNING AUTO-HEAL",
-                    &[format!("Analyzing server '{}'...", server.name)],
+                    &[format!("Analyzing server '{}'...", current_server.name)],
                 );
-                match crate::commands::fix::handle_fix(&server.name, None, paths).await {
+                match crate::commands::fix::handle_fix(&current_server.name, None, paths).await {
                     Ok(_) => {
                         show_modal_message(
                             "FIX COMPLETE",
                             &[format!(
                                 "[OK] Server '{}' checked and repaired successfully.",
-                                server.name
+                                current_server.name
                             )
                             .green()
                             .bold()
@@ -1313,13 +1480,13 @@ pub(crate) async fn server_maintenance_menu(
                 }
             }
             Some(1) => {
-                if is_running {
+                if live_running {
                     show_modal_message(
                         "RENAME BLOCKED",
                         &[
                             format!(
                                 "Cannot rename server '{}': The server is currently RUNNING.",
-                                server.name
+                                current_server.name
                             ),
                             "Please STOP the server first before renaming it.".to_string(),
                         ],
@@ -1328,8 +1495,8 @@ pub(crate) async fn server_maintenance_menu(
                     continue;
                 }
 
-                let prompt = format!("Enter new name for server '{}':", server.name);
-                let new_name = match run_input_prompt("RENAME SERVER", &prompt, Some(&server.name))?
+                let prompt = format!("Enter new name for server '{}':", current_server.name);
+                let new_name = match run_input_prompt("RENAME SERVER", &prompt, Some(&current_server.name))?
                 {
                     Some(n) => n.trim().to_string(),
                     None => continue,
@@ -1353,7 +1520,7 @@ pub(crate) async fn server_maintenance_menu(
                     continue;
                 }
 
-                let mut reg = ServersRegistry::load(paths)?;
+                let reg = ServersRegistry::load(paths)?;
                 if reg
                     .servers
                     .iter()
@@ -1401,11 +1568,14 @@ pub(crate) async fn server_maintenance_menu(
                     old_path
                 };
 
-                if let Some(s) = reg.servers.iter_mut().find(|s| s.name == old_name) {
-                    s.name = new_name.clone();
-                    s.path = new_path;
-                    let _ = reg.save(paths);
-                }
+                let new_path_clone = new_path.clone();
+                let _ = ServersRegistry::modify(paths, |r| {
+                    if let Some(s) = r.servers.iter_mut().find(|s| s.name == old_name) {
+                        s.name = new_name.clone();
+                        s.path = new_path_clone;
+                    }
+                    Ok(())
+                });
 
                 if let Ok(mut bkp_reg) = GlobalBackupRegistry::load(paths) {
                     if let Some(policy) = bkp_reg.server_policies.remove(&old_name) {
@@ -1427,11 +1597,11 @@ pub(crate) async fn server_maintenance_menu(
                 let confirm_header = format!(
                     "{}\r\n{}\r\n{}\r\n Choose removal method for server '{}':\r\n{}",
                     box_top(width).cyan().bold(),
-                    box_title(&format!("DELETE SERVER: {}", server.name), width, false)
+                    box_title(&format!("DELETE SERVER: {}", current_server.name), width, false)
                         .cyan()
                         .bold(),
                     box_divider(width).cyan().bold(),
-                    server.name,
+                    current_server.name,
                     box_divider(width).dimmed(),
                 );
                 let confirm_entries = vec![
@@ -1446,20 +1616,21 @@ pub(crate) async fn server_maintenance_menu(
                 let mut c_sel = 0;
                 match run_menu(&confirm_header, &confirm_entries, &mut c_sel)? {
                     Some(0) => {
-                        let mut reg = ServersRegistry::load(paths)?;
-                        reg.remove(&server.path);
-                        reg.save(paths)?;
+                        let _ = ServersRegistry::modify(paths, |r| {
+                            r.remove(&current_server.path);
+                            Ok(())
+                        });
 
                         let trash = TrashManager::new(paths);
-                        if server.path.exists() {
-                            let _ = trash.trash_file(&server.path, Some(&server.name));
+                        if current_server.path.exists() {
+                            let _ = trash.trash_file(&current_server.path, Some(&current_server.name));
                         }
                         show_modal_message(
                             "MOVED TO TRASH",
                             &[
                                 format!(
                                     "[OK] Server '{}' was safely moved to the Trash Bin.",
-                                    server.name
+                                    current_server.name
                                 )
                                 .green()
                                 .bold()
@@ -1472,14 +1643,15 @@ pub(crate) async fn server_maintenance_menu(
                         return Ok(MaintenanceOutcome::Deleted);
                     }
                     Some(1) => {
-                        let mut reg = ServersRegistry::load(paths)?;
-                        reg.remove(&server.path);
-                        reg.save(paths)?;
+                        let _ = ServersRegistry::modify(paths, |r| {
+                            r.remove(&current_server.path);
+                            Ok(())
+                        });
                         show_modal_message(
                             "SERVER UNREGISTERED",
                             &[format!(
                                 "[OK] Server '{}' unregistered. Files kept on disk.",
-                                server.name
+                                current_server.name
                             )],
                             false,
                         )?;
@@ -1491,8 +1663,8 @@ pub(crate) async fn server_maintenance_menu(
                             box_top(width).red().bold(),
                             box_title("FINAL CONFIRMATION: PERMANENT REMOVAL", width, false).red().bold(),
                             box_divider(width).red().bold(),
-                            server.name.red().bold(),
-                            server.path.display(),
+                            current_server.name.red().bold(),
+                            current_server.path.display(),
                             box_divider(width).dimmed(),
                             box_divider(width).dimmed(),
                         );
@@ -1500,23 +1672,24 @@ pub(crate) async fn server_maintenance_menu(
                             MenuEntry::new("1", "Cancel").with_aliases(&["0", "b"]),
                             MenuEntry::new(
                                 "2",
-                                format!("Confirm Permanent Delete '{}'", server.name),
+                                format!("Confirm Permanent Delete '{}'", current_server.name),
                             ),
                         ];
                         let mut second_sel = 0;
                         if let Some(1) = run_menu(&second_header, &second_entries, &mut second_sel)?
                         {
-                            let mut reg = ServersRegistry::load(paths)?;
-                            reg.remove(&server.path);
-                            reg.save(paths)?;
-                            if server.path.exists() {
-                                let _ = std::fs::remove_dir_all(&server.path);
+                            let _ = ServersRegistry::modify(paths, |r| {
+                                r.remove(&current_server.path);
+                                Ok(())
+                            });
+                            if current_server.path.exists() {
+                                let _ = std::fs::remove_dir_all(&current_server.path);
                             }
                             show_modal_message(
                                 "SERVER DELETED",
                                 &[format!(
                                     "[OK] Server '{}' and directory permanently removed.",
-                                    server.name
+                                    current_server.name
                                 )],
                                 false,
                             )?;
@@ -1539,11 +1712,11 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
     loop {
         let registry = ServersRegistry::load(paths)?;
         let server = match registry.find_by_name(server_name) {
-            Some(s) => s.clone(),
-            None => {
+            Some(s) if s.path.exists() => s.clone(),
+            _ => {
                 show_modal_message(
                     "SERVER NOT FOUND",
-                    &[format!("Server '{}' is no longer registered.", server_name)],
+                    &[format!("Server '{}' was deleted or moved by another process.", server_name)],
                     true,
                 )?;
                 return Ok(());

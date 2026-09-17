@@ -11,6 +11,15 @@ pub async fn server_properties_editor(server_path: &Path, server_name: &str) -> 
     let _guard = AltScreenGuard::enter();
     let _nav = NavGuard::enter("Properties");
 
+    if !server_path.exists() {
+        show_modal_message(
+            "SERVER NOT FOUND",
+            &[format!("Server directory '{}' was deleted or moved.", server_path.display())],
+            true,
+        )?;
+        return Ok(());
+    }
+
     let props_path = server_path.join("server.properties");
     if !props_path.exists() {
         // Create initial default properties if missing
@@ -24,6 +33,14 @@ pub async fn server_properties_editor(server_path: &Path, server_name: &str) -> 
     let mut flash_msg: Option<String> = None;
 
     loop {
+        if !server_path.exists() {
+            show_modal_message(
+                "SERVER NOT FOUND",
+                &[format!("Server directory '{}' was deleted or moved.", server_path.display())],
+                true,
+            )?;
+            return Ok(());
+        }
         let mut props = ServerProperties::load(&props_path)?;
         let width = get_content_width(80);
 
@@ -132,6 +149,16 @@ async fn category_properties_menu(
     category: PropertyCategory,
 ) -> Result<()> {
     let _nav = NavGuard::enter(category.name());
+
+    if !props_path.exists() {
+        show_modal_message(
+            "SERVER NOT FOUND",
+            &[format!("Properties file for '{}' was deleted or moved.", server_name)],
+            true,
+        )?;
+        return Ok(());
+    }
+
     let mut props = ServerProperties::load(props_path)?;
     let items: Vec<(String, String)> = props
         .list_by_category(category)
@@ -199,6 +226,14 @@ async fn category_properties_menu(
     }
 
     if let Some(result) = form.run()? {
+        if !props_path.exists() {
+            show_modal_message(
+                "SERVER NOT FOUND",
+                &[format!("Server was deleted before settings could be saved.")],
+                true,
+            )?;
+            return Ok(());
+        }
         for (k, _) in &items {
             if let Some(new_val) = result.get(k) {
                 props.set(k, new_val);
@@ -221,6 +256,16 @@ async fn category_properties_menu(
 
 async fn search_properties_menu(props_path: &Path, server_name: &str, query: &str) -> Result<()> {
     let _nav = NavGuard::enter(format!("Search: {}", query));
+
+    if !props_path.exists() {
+        show_modal_message(
+            "SERVER NOT FOUND",
+            &[format!("Properties file for '{}' was deleted or moved.", server_name)],
+            true,
+        )?;
+        return Ok(());
+    }
+
     let mut props = ServerProperties::load(props_path)?;
     let q = query.to_lowercase();
 
@@ -279,6 +324,14 @@ async fn search_properties_menu(props_path: &Path, server_name: &str, query: &st
     }
 
     if let Some(result) = form.run()? {
+        if !props_path.exists() {
+            show_modal_message(
+                "SERVER NOT FOUND",
+                &[format!("Server was deleted before settings could be saved.")],
+                true,
+            )?;
+            return Ok(());
+        }
         for (k, _) in &matches {
             if let Some(new_val) = result.get(k) {
                 props.set(k, new_val);

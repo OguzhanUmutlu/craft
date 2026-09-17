@@ -88,12 +88,30 @@ pub async fn remote_servers_menu(paths: &CraftPaths) -> Result<()> {
 
         match action {
             PagedMenuAction::Select(global_idx) if global_idx < registry.remotes.len() => {
-                let host = &registry.remotes[global_idx];
-                manage_host_servers(paths, host).await?;
+                let alias = registry.remotes[global_idx].alias.clone();
+                let fresh = RemotesRegistry::load(paths)?;
+                if let Some(host) = fresh.find(&alias) {
+                    manage_host_servers(paths, host).await?;
+                } else {
+                    show_modal_message(
+                        "HOST NOT FOUND",
+                        &[format!("Remote host '{}' was removed by another process.", alias)],
+                        true,
+                    )?;
+                }
             }
             PagedMenuAction::ItemAction('e', global_idx) if global_idx < registry.remotes.len() => {
-                let host = &registry.remotes[global_idx];
-                offline_host_actions_menu(paths, &host.alias).await?;
+                let alias = registry.remotes[global_idx].alias.clone();
+                let fresh = RemotesRegistry::load(paths)?;
+                if fresh.find(&alias).is_some() {
+                    offline_host_actions_menu(paths, &alias).await?;
+                } else {
+                    show_modal_message(
+                        "HOST NOT FOUND",
+                        &[format!("Remote host '{}' was removed by another process.", alias)],
+                        true,
+                    )?;
+                }
             }
             PagedMenuAction::Action(act) if act == "n" || act == "a" || act == "+" => {
                 new_host_flow(paths).await?;

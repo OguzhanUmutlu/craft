@@ -144,10 +144,17 @@ impl ServersRegistry {
         Ok(Self::default())
     }
 
-    pub fn save(&self, paths: &CraftPaths) -> Result<()> {
+    fn save_internal(&self, paths: &CraftPaths) -> Result<()> {
         let content = toml::to_string_pretty(self)
             .map_err(|e| CraftError::Config(format!("Failed to serialize servers.toml: {}", e)))?;
 
+        let temp_path = paths.servers_file.with_extension("tmp");
+        fs::write(&temp_path, content)?;
+        fs::rename(&temp_path, &paths.servers_file)?;
+        Ok(())
+    }
+
+    pub fn save(&self, paths: &CraftPaths) -> Result<()> {
         let lock_file_path = paths.locks_dir.join("servers.lock");
         let lock_file = OpenOptions::new()
             .read(true)
@@ -157,13 +164,35 @@ impl ServersRegistry {
             .open(&lock_file_path)?;
 
         lock_file.lock_exclusive()?;
+        let res = self.save_internal(paths);
+        let _ = lock_file.unlock();
+        res
+    }
 
-        let temp_path = paths.servers_file.with_extension("tmp");
-        fs::write(&temp_path, content)?;
-        fs::rename(&temp_path, &paths.servers_file)?;
+    /// Transactionally loads, mutates, and saves the servers registry under an exclusive file lock.
+    pub fn modify<F, R>(paths: &CraftPaths, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut ServersRegistry) -> Result<R>,
+    {
+        let lock_file_path = paths.locks_dir.join("servers.lock");
+        let lock_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_file_path)?;
 
-        lock_file.unlock()?;
-        Ok(())
+        lock_file.lock_exclusive()?;
+        let mut reg = Self::load(paths)?;
+        let result = f(&mut reg);
+        if result.is_ok() {
+            if let Err(e) = reg.save_internal(paths) {
+                let _ = lock_file.unlock();
+                return Err(e);
+            }
+        }
+        let _ = lock_file.unlock();
+        result
     }
 
     pub fn find_by_path<P: AsRef<Path>>(&self, path: P) -> Option<&ServerConfig> {
@@ -449,5 +478,53 @@ port = 25565
         // Update default world
         assert!(set_default_world(path, "skyblock").is_ok());
         assert_eq!(get_default_world(path), "skyblock");
+    }
+
+    #[test]
+    fn test_servers_registry_modify() {
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = CraftPaths::from_base(tmp.path().to_path_buf());
+        std::fs::create_dir_all(&paths.locks_dir).unwrap();
+
+        // Transactional add
+        let server = ServerConfig {
+            name: "lobby".to_string(),
+            path: tmp.path().join("lobby"),
+            software: "paper".to_string(),
+            version: "1.20.4".to_string(),
+            game: "minecraft".to_string(),
+            auto: false,
+            port: Some(25565),
+            query_port: None,
+            rcon_port: None,
+            memory: None,
+            java_path: None,
+            binary_path: None,
+            start_args: None,
+            jvm_args: None,
+            created_at: None,
+            backup_method: None,
+            jdwp_debug_port: None,
+        };
+
+        ServersRegistry::modify(&paths, |reg| {
+            reg.add(server.clone())?;
+            Ok(())
+        })
+        .expect("modify should succeed");
+
+        let loaded = ServersRegistry::load(&paths).expect("load should succeed");
+        assert_eq!(loaded.servers.len(), 1);
+        assert_eq!(loaded.servers[0].name, "lobby");
+
+        // Transactional remove
+        ServersRegistry::modify(&paths, |reg| {
+            reg.remove(server.path);
+            Ok(())
+        })
+        .expect("modify remove should succeed");
+
+        let loaded_after = ServersRegistry::load(&paths).expect("load should succeed");
+        assert_eq!(loaded_after.servers.len(), 0);
     }
 }
