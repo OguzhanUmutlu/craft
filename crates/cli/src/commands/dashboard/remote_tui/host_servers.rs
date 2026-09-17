@@ -48,8 +48,11 @@ fn run_boxed_bootstrap(
     }));
 
     let stop_flag = Arc::new(AtomicBool::new(false));
+    let cancel_flag = Arc::new(AtomicBool::new(false));
     let state_clone = Arc::clone(&state);
     let stop_clone = Arc::clone(&stop_flag);
+    let cancel_clone = Arc::clone(&cancel_flag);
+    let stop_keys = Arc::clone(&stop_flag);
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -62,7 +65,9 @@ fn run_boxed_bootstrap(
                 if let Ok(mut s) = state_clone.lock() {
                     s.spinner_idx = s.spinner_idx.wrapping_add(1);
                     let mut modal =
-                        modalx::modals::WaitingModal::new(&s.title, &s.current).with_max_width(84);
+                        modalx::modals::WaitingModal::new(&s.title, &s.current)
+                            .with_max_width(84)
+                            .with_cancellable(true);
                     for (step_label, completed) in &s.steps {
                         modal = modal.with_step(step_label.clone(), *completed);
                     }
@@ -73,7 +78,23 @@ fn run_boxed_bootstrap(
         }
     });
 
+    let key_handle = thread::spawn(move || {
+        while !stop_keys.load(Ordering::Relaxed) {
+            if let Ok(true) = event::poll(Duration::from_millis(60)) {
+                if let Ok(Event::Key(key)) = event::read() {
+                    if key.kind == KeyEventKind::Press && key.code == KeyCode::Esc {
+                        cancel_clone.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
     let res = craft_remote::run_bootstrap_with_progress(session, |msg| {
+        if cancel_flag.load(Ordering::Relaxed) {
+            return;
+        }
         if let Ok(mut s) = state.lock() {
             if let Some(last) = s.steps.last_mut() {
                 last.1 = true;
@@ -85,6 +106,17 @@ fn run_boxed_bootstrap(
 
     stop_flag.store(true, Ordering::Relaxed);
     let _ = render_handle.join();
+    let _ = key_handle.join();
+
+    if cancel_flag.load(Ordering::Relaxed) {
+        if !modalx::terminal::is_alt_screen_active() {
+            let _ = disable_raw_mode();
+        }
+        let _ = execute!(stdout, Show);
+        return Err(craft_core::CraftError::Other(
+            "Bootstrap cancelled by user.".to_string(),
+        ));
+    }
 
     if res.is_ok() {
         if let Ok(mut s) = state.lock() {
@@ -177,7 +209,7 @@ pub async fn connect_with_cancellation(
                 frames[frame_idx % frames.len()]
             ));
             frame.empty_row();
-            frame.footer("Press Esc to cancel.");
+            frame.footer("[Esc] Cancel  |  Please wait...".to_string());
             frame.render(&mut stdout)?;
 
             frame_idx = (frame_idx + 1) % frames.len();
@@ -263,7 +295,10 @@ pub async fn manage_host_servers(
                         // Immediately transition into the remote host menu without blocking modal
                     }
                     Err(e) => {
-                        show_modal_message("BOOTSTRAP FAILED", &[format!("[ERROR] {}", e)], true)?;
+                        let err_msg = e.to_string();
+                        if !err_msg.contains("cancelled") && !err_msg.contains("Cancelled") {
+                            show_modal_message("BOOTSTRAP FAILED", &[format!("[ERROR] {}", e)], true)?;
+                        }
                         return Ok(());
                     }
                 }
