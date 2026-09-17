@@ -1,5 +1,5 @@
-use craft_core::Result;
 use crate::session::RemoteSession;
+use craft_core::Result;
 
 pub fn bootstrap_macos(session: &RemoteSession, progress: &mut dyn FnMut(&str)) -> Result<()> {
     progress("Bootstrapping macOS Remote Host...");
@@ -14,14 +14,22 @@ pub fn bootstrap_macos(session: &RemoteSession, progress: &mut dyn FnMut(&str)) 
     let needs_java = match java_check {
         Ok((0, stdout, stderr)) => {
             let out = format!("{}\n{}", stdout, stderr);
-            !out.contains("\"21") && !out.contains("\"22") && !out.contains("\"23") && !out.contains("\"24") && !out.contains("\"25")
+            !out.contains("\"21")
+                && !out.contains("\"22")
+                && !out.contains("\"23")
+                && !out.contains("\"24")
+                && !out.contains("\"25")
         }
         _ => true,
     };
 
     if needs_java {
         progress("Installing OpenJDK 21 on remote macOS host...");
-        if session.exec("which brew").map(|(c, ..)| c == 0).unwrap_or(false) {
+        if session
+            .exec("which brew")
+            .map(|(c, ..)| c == 0)
+            .unwrap_or(false)
+        {
             progress("Installing OpenJDK 21 via Homebrew...");
             let _ = session.exec("brew install openjdk@21");
             let _ = session.exec("sudo ln -sfn /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-21.jdk 2>/dev/null || true");

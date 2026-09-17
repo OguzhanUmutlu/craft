@@ -1,8 +1,8 @@
 #[cfg(target_os = "windows")]
-use std::process::Command;
-#[cfg(target_os = "windows")]
 use craft_core::CraftError;
 use craft_core::Result;
+#[cfg(target_os = "windows")]
+use std::process::Command;
 
 pub const MINECRAFT_UWP_PACKAGE: &str = "Microsoft.MinecraftUWP_8wekyb3d8bbwe";
 
@@ -30,9 +30,14 @@ pub fn enable_bedrock_loopback() -> Result<()> {
     {
         let status = Command::new("powershell")
             .arg("-Command")
-            .arg(format!("CheckNetIsolation LoopbackExempt -a -n='{}'", MINECRAFT_UWP_PACKAGE))
+            .arg(format!(
+                "CheckNetIsolation LoopbackExempt -a -n='{}'",
+                MINECRAFT_UWP_PACKAGE
+            ))
             .status()
-            .map_err(|e| CraftError::Other(format!("Failed to enable loopback exemption: {}", e)))?;
+            .map_err(|e| {
+                CraftError::Other(format!("Failed to enable loopback exemption: {}", e))
+            })?;
 
         if status.success() {
             Ok(())

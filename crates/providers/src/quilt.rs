@@ -1,10 +1,10 @@
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::{CraftError, Result};
+use serde::Deserialize;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 use std::process::Command;
-use serde::Deserialize;
-use craft_core::{CraftError, Result};
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 #[derive(Deserialize)]
 struct QuiltGameVersion {
@@ -79,8 +79,16 @@ impl ServerSoftware for QuiltProvider {
         Box::pin(async move {
             let url = "https://meta.quiltmc.org/v3/versions/game";
             if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
-                if let Ok(list) = cache.get_cached_json::<Vec<QuiltGameVersion>>("quilt_game_versions", url, std::time::Duration::from_secs(6 * 3600)).await {
-                    let mut versions: Vec<String> = list.into_iter()
+                if let Ok(list) = cache
+                    .get_cached_json::<Vec<QuiltGameVersion>>(
+                        "quilt_game_versions",
+                        url,
+                        std::time::Duration::from_secs(6 * 3600),
+                    )
+                    .await
+                {
+                    let mut versions: Vec<String> = list
+                        .into_iter()
                         .filter(|g| g.stable)
                         .map(|g| g.version)
                         .collect();
@@ -98,7 +106,8 @@ impl ServerSoftware for QuiltProvider {
 
             if let Ok(resp) = client.get(url).send().await {
                 if let Ok(list) = resp.json::<Vec<QuiltGameVersion>>().await {
-                    let mut versions: Vec<String> = list.into_iter()
+                    let mut versions: Vec<String> = list
+                        .into_iter()
                         .filter(|g| g.stable)
                         .map(|g| g.version)
                         .collect();
@@ -135,12 +144,23 @@ impl ServerSoftware for QuiltProvider {
                 println!("Running Quilt installer for version {}...", ver);
                 let status = Command::new("java")
                     .current_dir(&path)
-                    .args(["-jar", "quilt-installer.jar", "install", "server", &ver, "--download-server"])
+                    .args([
+                        "-jar",
+                        "quilt-installer.jar",
+                        "install",
+                        "server",
+                        &ver,
+                        "--download-server",
+                    ])
                     .status()
-                    .map_err(|e| CraftError::Process(format!("Failed to run Quilt installer: {}", e)))?;
+                    .map_err(|e| {
+                        CraftError::Process(format!("Failed to run Quilt installer: {}", e))
+                    })?;
 
                 if !status.success() {
-                    return Err(CraftError::Process("Quilt installer exited with non-zero exit code".to_string()));
+                    return Err(CraftError::Process(
+                        "Quilt installer exited with non-zero exit code".to_string(),
+                    ));
                 }
 
                 let _ = std::fs::remove_file(&installer);

@@ -12,6 +12,20 @@ use super::screen::{
 };
 use crate::commands::new::handle_new;
 
+fn titlecase(s: &str) -> String {
+    s.split(['-', '_'])
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub async fn gui_create_server_wizard(paths: &CraftPaths) -> Result<()> {
     gui_create_server_wizard_with_name("", paths).await
 }
@@ -122,10 +136,11 @@ pub async fn gui_create_server_wizard_with_name(
     let get_ver_step_num =
         |game_id: &str, cat_idx: usize, java_type: usize, has_name_override: bool| -> usize {
             if game_id != "minecraft" && cat_idx != 99 {
+                let base = if cat_idx == 88 { 3 } else { 2 };
                 if has_name_override {
-                    2
+                    base
                 } else {
-                    3
+                    base + 1
                 }
             } else if cat_idx == 99 {
                 if has_name_override {
@@ -194,6 +209,9 @@ pub async fn gui_create_server_wizard_with_name(
             }
 
             WizardStep::GameSelect => {
+                craft_providers::reload_registry(paths);
+                let all_softwares = craft_providers::get_all_softwares();
+
                 let current_step = if has_name_override { 1 } else { 2 };
                 let total_steps = if has_name_override { 5 } else { 6 };
                 let title = format!(
@@ -210,65 +228,186 @@ pub async fn gui_create_server_wizard_with_name(
                     box_divider(width).dimmed(),
                 );
 
-                let game_entries = vec![
-                    MenuEntry::new("1", "Minecraft (Java, Bedrock, Proxies)"),
-                    MenuEntry::new("2", "Palworld"),
-                    MenuEntry::new("3", "Terraria (TShock)"),
-                    MenuEntry::new("4", "Valheim"),
-                    MenuEntry::new("5", "Factorio (Headless)"),
-                    MenuEntry::new("6", "Custom Game (Generic binary/script)"),
-                    MenuEntry::new(
-                        "7",
-                        format!(
-                            "Browse All Softwares ({} Available)",
-                            craft_providers::get_all_softwares().len()
-                        ),
-                    ),
+                enum WizardGameTarget {
+                    Minecraft,
+                    CustomRuntime {
+                        sw_id: &'static str,
+                        sw_name: &'static str,
+                    },
+                    SingleSoftware {
+                        sw_id: &'static str,
+                        sw_name: &'static str,
+                        game_id: &'static str,
+                    },
+                    MultiSoftwareGroup {
+                        game_id: &'static str,
+                    },
+                    BrowseAll,
+                }
+
+                struct WizardGameOption {
+                    label: String,
+                    target: WizardGameTarget,
+                    priority: u32,
+                }
+
+                let mut game_options: Vec<WizardGameOption> = Vec::new();
+
+                let has_minecraft = all_softwares.iter().any(|s| s.game_id() == "minecraft");
+                if has_minecraft {
+                    game_options.push(WizardGameOption {
+                        label: "Minecraft (Java, Bedrock, Proxies)".to_string(),
+                        target: WizardGameTarget::Minecraft,
+                        priority: 10,
+                    });
+                }
+
+                let mut grouped_games: std::collections::BTreeMap<
+                    &'static str,
+                    Vec<std::sync::Arc<dyn craft_providers::ServerSoftware>>,
+                > = std::collections::BTreeMap::new();
+
+                for sw in &all_softwares {
+                    let gid = sw.game_id();
+                    if gid == "minecraft" {
+                        continue;
+                    }
+                    if gid.is_empty() {
+                        if sw.id() == "custom" {
+                            game_options.push(WizardGameOption {
+                                label: sw.display_name().to_string(),
+                                target: WizardGameTarget::CustomRuntime {
+                                    sw_id: sw.id(),
+                                    sw_name: sw.name(),
+                                },
+                                priority: 900,
+                            });
+                        } else {
+                            game_options.push(WizardGameOption {
+                                label: sw.display_name().to_string(),
+                                target: WizardGameTarget::SingleSoftware {
+                                    sw_id: sw.id(),
+                                    sw_name: sw.name(),
+                                    game_id: sw.id(),
+                                },
+                                priority: 100,
+                            });
+                        }
+                    } else {
+                        grouped_games.entry(gid).or_default().push(sw.clone());
+                    }
+                }
+
+                for (gid, sw_list) in grouped_games {
+                    if gid == "custom" {
+                        let sw = &sw_list[0];
+                        game_options.push(WizardGameOption {
+                            label: sw.display_name().to_string(),
+                            target: WizardGameTarget::CustomRuntime {
+                                sw_id: sw.id(),
+                                sw_name: sw.name(),
+                            },
+                            priority: 900,
+                        });
+                    } else if sw_list.len() == 1 {
+                        let sw = &sw_list[0];
+                        let (priority, label) = match gid {
+                            "palworld" => (20, "Palworld".to_string()),
+                            "terraria" => (30, "Terraria (TShock)".to_string()),
+                            "valheim" => (40, "Valheim".to_string()),
+                            "factorio" => (50, "Factorio (Headless)".to_string()),
+                            _ => (100, sw.display_name().to_string()),
+                        };
+                        game_options.push(WizardGameOption {
+                            label,
+                            target: WizardGameTarget::SingleSoftware {
+                                sw_id: sw.id(),
+                                sw_name: sw.name(),
+                                game_id: gid,
+                            },
+                            priority,
+                        });
+                    } else {
+                        let (priority, label) = match gid {
+                            "palworld" => (20, "Palworld".to_string()),
+                            "terraria" => (30, "Terraria".to_string()),
+                            "valheim" => (40, "Valheim".to_string()),
+                            "factorio" => (50, "Factorio".to_string()),
+                            _ => (100, titlecase(gid)),
+                        };
+                        game_options.push(WizardGameOption {
+                            label,
+                            target: WizardGameTarget::MultiSoftwareGroup { game_id: gid },
+                            priority,
+                        });
+                    }
+                }
+
+                game_options.push(WizardGameOption {
+                    label: format!("Browse All Softwares ({} Available)", all_softwares.len()),
+                    target: WizardGameTarget::BrowseAll,
+                    priority: 990,
+                });
+
+                game_options.sort_by(|a, b| {
+                    if a.priority != b.priority {
+                        a.priority.cmp(&b.priority)
+                    } else {
+                        a.label.cmp(&b.label)
+                    }
+                });
+
+                let mut game_entries: Vec<MenuEntry> = game_options
+                    .iter()
+                    .enumerate()
+                    .map(|(i, opt)| {
+                        let hotkey = if i < 9 {
+                            (i + 1).to_string()
+                        } else {
+                            ((b'a' + (i - 9) as u8) as char).to_string()
+                        };
+                        MenuEntry::new(hotkey, opt.label.clone())
+                    })
+                    .collect();
+                game_entries.push(
                     MenuEntry::new("0", if has_name_override { "Cancel" } else { "Back" })
                         .with_aliases(&["b"]),
-                ];
+                );
 
                 let game_choice = run_menu(&game_header, &game_entries, &mut game_sel)?;
                 match game_choice {
-                    Some(0) => {
-                        game_id = "minecraft";
-                        step = WizardStep::MinecraftCategory;
-                    }
-                    Some(1) => {
-                        game_id = "palworld";
-                        selected_sw_id = "palserver";
-                        selected_sw_name = "Palworld";
-                        step = WizardStep::Version;
-                    }
-                    Some(2) => {
-                        game_id = "terraria";
-                        selected_sw_id = "tshock";
-                        selected_sw_name = "TShock (Terraria)";
-                        step = WizardStep::Version;
-                    }
-                    Some(3) => {
-                        game_id = "valheim";
-                        selected_sw_id = "valheim";
-                        selected_sw_name = "Valheim";
-                        step = WizardStep::Version;
-                    }
-                    Some(4) => {
-                        game_id = "factorio";
-                        selected_sw_id = "factorio";
-                        selected_sw_name = "Factorio Headless";
-                        step = WizardStep::Version;
-                    }
-                    Some(5) => {
-                        game_id = "custom";
-                        selected_sw_id = "custom";
-                        selected_sw_name = "Custom Game";
-                        step = WizardStep::CustomRuntime;
-                    }
-                    Some(6) => {
-                        game_id = "all";
-                        cat_idx = 99;
-                        step = WizardStep::Software;
-                    }
+                    Some(idx) if idx < game_options.len() => match &game_options[idx].target {
+                        WizardGameTarget::Minecraft => {
+                            game_id = "minecraft";
+                            step = WizardStep::MinecraftCategory;
+                        }
+                        WizardGameTarget::SingleSoftware {
+                            sw_id,
+                            sw_name,
+                            game_id: gid,
+                        } => {
+                            game_id = gid;
+                            selected_sw_id = sw_id;
+                            selected_sw_name = sw_name;
+                            step = WizardStep::Version;
+                        }
+                        WizardGameTarget::CustomRuntime { sw_id, sw_name } => {
+                            game_id = "custom";
+                            selected_sw_id = sw_id;
+                            selected_sw_name = sw_name;
+                            step = WizardStep::CustomRuntime;
+                        }
+                        WizardGameTarget::MultiSoftwareGroup { game_id: gid } => {
+                            game_id = gid;
+                            cat_idx = 88;
+                            step = WizardStep::Software;
+                        }
+                        WizardGameTarget::BrowseAll => {
+                            game_id = "all";
+                            cat_idx = 99;
+                            step = WizardStep::Software;
+                        }
+                    },
                     _ => {
                         if has_name_override {
                             return Ok(());
@@ -508,7 +647,7 @@ pub async fn gui_create_server_wizard_with_name(
                 let (current_step, total_steps) = if cat_idx == 0 {
                     let s = if has_name_override { 4 } else { 5 };
                     (s, s + 3)
-                } else if cat_idx == 99 {
+                } else if cat_idx == 99 || cat_idx == 88 {
                     let s = if has_name_override { 2 } else { 3 };
                     (s, s + 2)
                 } else {
@@ -524,7 +663,7 @@ pub async fn gui_create_server_wizard_with_name(
                     match cat_idx {
                         0 => {
                             if java_type == 1 {
-                                vec![
+                                let mut list = vec![
                                     (
                                         "paper",
                                         "Paper",
@@ -537,9 +676,18 @@ pub async fn gui_create_server_wizard_with_name(
                                     ),
                                     ("folia", "Folia", "Multi-threaded regional ticking server"),
                                     ("spigot", "Spigot", "Classic Bukkit / Spigot plugin server"),
-                                ]
+                                ];
+                                for s in craft_providers::get_softwares_for_game("minecraft") {
+                                    if s.edition() == craft_providers::ServerEdition::Java
+                                        && s.supports_plugins()
+                                        && !list.iter().any(|(id, _, _)| *id == s.id())
+                                    {
+                                        list.push((s.id(), s.name(), s.description()));
+                                    }
+                                }
+                                list
                             } else if java_type == 2 {
-                                vec![
+                                let mut list = vec![
                                     ("fabric", "Fabric", "Lightweight modular modded server"),
                                     ("quilt", "Quilt", "Community-driven modular modded server"),
                                     (
@@ -547,7 +695,16 @@ pub async fn gui_create_server_wizard_with_name(
                                         "NeoForge",
                                         "Modern Forge-compatible modded server",
                                     ),
-                                ]
+                                ];
+                                for s in craft_providers::get_softwares_for_game("minecraft") {
+                                    if s.edition() == craft_providers::ServerEdition::Java
+                                        && s.supports_mods()
+                                        && !list.iter().any(|(id, _, _)| *id == s.id())
+                                    {
+                                        list.push((s.id(), s.name(), s.description()));
+                                    }
+                                }
+                                list
                             } else {
                                 vec![(
                                     "vanilla_java",
@@ -556,37 +713,57 @@ pub async fn gui_create_server_wizard_with_name(
                                 )]
                             }
                         }
-                        1 => vec![
-                            (
-                                "vanilla_bedrock",
-                                "Vanilla Bedrock BDS",
-                                "Official Mojang Bedrock BDS",
-                            ),
-                            (
-                                "pocketmine",
-                                "PocketMine-MP",
-                                "High-performance C++ / PHP Bedrock server",
-                            ),
-                            (
-                                "nukkit",
-                                "NukkitX",
-                                "Java-based multi-threaded Bedrock server",
-                            ),
-                        ],
-                        2 => vec![
-                            (
-                                "velocity",
-                                "Velocity",
-                                "Next-generation ultra-fast proxy (Rec.)",
-                            ),
-                            ("waterfall", "Waterfall", "Optimized BungeeCord proxy fork"),
-                            (
-                                "bungeecord",
-                                "BungeeCord",
-                                "Classic multi-server network proxy",
-                            ),
-                            ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
-                        ],
+                        1 => {
+                            let mut list = vec![
+                                (
+                                    "vanilla_bedrock",
+                                    "Vanilla Bedrock BDS",
+                                    "Official Mojang Bedrock BDS",
+                                ),
+                                (
+                                    "pocketmine",
+                                    "PocketMine-MP",
+                                    "High-performance C++ / PHP Bedrock server",
+                                ),
+                                (
+                                    "nukkit",
+                                    "NukkitX",
+                                    "Java-based multi-threaded Bedrock server",
+                                ),
+                            ];
+                            for s in craft_providers::get_softwares_for_game("minecraft") {
+                                if s.edition() == craft_providers::ServerEdition::Bedrock
+                                    && !list.iter().any(|(id, _, _)| *id == s.id())
+                                {
+                                    list.push((s.id(), s.name(), s.description()));
+                                }
+                            }
+                            list
+                        }
+                        2 => {
+                            let mut list = vec![
+                                (
+                                    "velocity",
+                                    "Velocity",
+                                    "Next-generation ultra-fast proxy (Rec.)",
+                                ),
+                                ("waterfall", "Waterfall", "Optimized BungeeCord proxy fork"),
+                                (
+                                    "bungeecord",
+                                    "BungeeCord",
+                                    "Classic multi-server network proxy",
+                                ),
+                                ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
+                            ];
+                            for s in craft_providers::get_softwares_for_game("minecraft") {
+                                if s.edition() == craft_providers::ServerEdition::Proxy
+                                    && !list.iter().any(|(id, _, _)| *id == s.id())
+                                {
+                                    list.push((s.id(), s.name(), s.description()));
+                                }
+                            }
+                            list
+                        }
                         3 => vec![
                             (
                                 "geyser",
@@ -599,6 +776,10 @@ pub async fn gui_create_server_wizard_with_name(
                             .into_iter()
                             .map(|s| (s.id(), s.name(), s.description()))
                             .collect(),
+                        88 => craft_providers::get_softwares_for_game(game_id)
+                            .into_iter()
+                            .map(|s| (s.id(), s.name(), s.description()))
+                            .collect(),
                         _ => get_all_softwares()
                             .into_iter()
                             .map(|s| (s.id(), s.name(), s.description()))
@@ -607,10 +788,11 @@ pub async fn gui_create_server_wizard_with_name(
 
                 let width = get_content_width(80);
                 let sw_header = format!(
-                    "{}\r\n{}\r\n{}\r\n Select the server software implementation:\r\n{}",
+                    "{}\r\n{}\r\n{}\r\n Select the server software implementation for '{}':\r\n{}",
                     box_top(width).cyan().bold(),
                     box_title(&title, width, false).cyan().bold(),
                     box_divider(width).cyan().bold(),
+                    server_name,
                     box_divider(width).dimmed(),
                 );
 
@@ -638,7 +820,7 @@ pub async fn gui_create_server_wizard_with_name(
                     _ => {
                         if cat_idx == 0 {
                             step = WizardStep::JavaType;
-                        } else if cat_idx == 99 {
+                        } else if cat_idx == 99 || cat_idx == 88 {
                             step = WizardStep::GameSelect;
                         } else {
                             step = WizardStep::MinecraftCategory;
@@ -1000,8 +1182,10 @@ pub async fn gui_create_server_wizard_with_name(
                 )?;
                 match ver_choice {
                     Some(idx) if idx == back_idx => {
-                        if game_id != "minecraft" && cat_idx != 99 {
+                        if game_id != "minecraft" && cat_idx != 99 && cat_idx != 88 {
                             step = WizardStep::GameSelect;
+                        } else if cat_idx == 88 {
+                            step = WizardStep::Software;
                         } else if cat_idx == 0 && java_type == 0 {
                             step = WizardStep::JavaType;
                         } else {
@@ -1029,8 +1213,10 @@ pub async fn gui_create_server_wizard_with_name(
                         }
                     }
                     _ => {
-                        if game_id != "minecraft" && cat_idx != 99 {
+                        if game_id != "minecraft" && cat_idx != 99 && cat_idx != 88 {
                             step = WizardStep::GameSelect;
+                        } else if cat_idx == 88 {
+                            step = WizardStep::Software;
                         } else if cat_idx == 0 && java_type == 0 {
                             step = WizardStep::JavaType;
                         } else {

@@ -594,9 +594,10 @@ pub async fn install_world_from_url(
                     resolved_url
                 )));
             }
-            let bytes = resp.bytes().await.map_err(|e| {
-                CraftError::Download(format!("Failed to read world bytes: {}", e))
-            })?;
+            let bytes = resp
+                .bytes()
+                .await
+                .map_err(|e| CraftError::Download(format!("Failed to read world bytes: {}", e)))?;
             store.put_artifact_compressed(
                 &rel_subpath,
                 &bytes,
@@ -647,7 +648,9 @@ pub fn list_cached_maps() -> Vec<craft_core::CacheEntryMeta> {
     }
 }
 
-pub fn list_cached_maps_with_store(store: &craft_core::CacheStore) -> Vec<craft_core::CacheEntryMeta> {
+pub fn list_cached_maps_with_store(
+    store: &craft_core::CacheStore,
+) -> Vec<craft_core::CacheEntryMeta> {
     store.list_cached_artifacts(Some("map"))
 }
 
@@ -669,10 +672,13 @@ pub fn install_cached_map(
     rel_subpath: &str,
     world_name: Option<&str>,
 ) -> Result<(PathBuf, String)> {
-    let store = craft_core::CraftPaths::new().ok().and_then(|paths| {
-        let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
-        craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes).ok()
-    }).ok_or_else(|| CraftError::Other("Cache store is not available".to_string()))?;
+    let store = craft_core::CraftPaths::new()
+        .ok()
+        .and_then(|paths| {
+            let settings = craft_core::GlobalSettings::load(&paths).unwrap_or_default();
+            craft_core::CacheStore::new(paths.cache_dir, settings.cache_max_bytes).ok()
+        })
+        .ok_or_else(|| CraftError::Other("Cache store is not available".to_string()))?;
 
     install_cached_map_with_store(server_path, &store, rel_subpath, world_name)
 }

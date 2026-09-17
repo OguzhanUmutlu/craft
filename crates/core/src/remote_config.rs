@@ -1,9 +1,9 @@
-use std::fs::{self, OpenOptions};
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
-use fs2::FileExt;
 use crate::error::{CraftError, Result};
 use crate::path::CraftPaths;
+use fs2::FileExt;
+use serde::{Deserialize, Serialize};
+use std::fs::{self, OpenOptions};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -126,19 +126,28 @@ impl RemotesRegistry {
     }
 
     pub fn find(&self, alias: &str) -> Option<&RemoteHostConfig> {
-        self.remotes.iter().find(|r| r.alias.eq_ignore_ascii_case(alias))
+        self.remotes
+            .iter()
+            .find(|r| r.alias.eq_ignore_ascii_case(alias))
     }
 
     pub fn add(&mut self, remote: RemoteHostConfig) -> Result<()> {
         if self.find(&remote.alias).is_some() {
-            return Err(CraftError::Other(format!("Remote host with alias '{}' already exists", remote.alias)));
+            return Err(CraftError::Other(format!(
+                "Remote host with alias '{}' already exists",
+                remote.alias
+            )));
         }
         self.remotes.push(remote);
         Ok(())
     }
 
     pub fn remove(&mut self, alias: &str) -> Option<RemoteHostConfig> {
-        if let Some(pos) = self.remotes.iter().position(|r| r.alias.eq_ignore_ascii_case(alias)) {
+        if let Some(pos) = self
+            .remotes
+            .iter()
+            .position(|r| r.alias.eq_ignore_ascii_case(alias))
+        {
             Some(self.remotes.remove(pos))
         } else {
             None
@@ -197,7 +206,8 @@ mod tests {
         });
 
         let serialized = toml::to_string(&registry).expect("Failed to serialize remotes.toml");
-        let deserialized: RemotesRegistry = toml::from_str(&serialized).expect("Failed to deserialize remotes.toml");
+        let deserialized: RemotesRegistry =
+            toml::from_str(&serialized).expect("Failed to deserialize remotes.toml");
 
         assert_eq!(registry.remotes.len(), deserialized.remotes.len());
         assert_eq!(registry.remotes[0].alias, deserialized.remotes[0].alias);
@@ -205,4 +215,3 @@ mod tests {
         assert_eq!(registry.remotes[0].auth_type, RemoteAuthType::Password);
     }
 }
-

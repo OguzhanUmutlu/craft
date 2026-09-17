@@ -1,13 +1,15 @@
-use std::collections::HashMap;
 use serde_json::Value;
+use std::collections::HashMap;
 
 pub static BUNDLED_PAPER: &str = include_str!("../../../data/paper-versions.json");
 pub static BUNDLED_PURPUR: &str = include_str!("../../../data/purpur-versions.json");
 pub static BUNDLED_FOLIA: &str = include_str!("../../../data/folia-versions.json");
 pub static BUNDLED_SPIGOT: &str = include_str!("../../../data/spigot-versions.json");
 pub static BUNDLED_VANILLA_JAVA: &str = include_str!("../../../data/vanilla-java-versions.json");
-pub static BUNDLED_BEDROCK_WIN: &str = include_str!("../../../data/vanilla-bedrock-windows-versions.json");
-pub static BUNDLED_BEDROCK_LINUX: &str = include_str!("../../../data/vanilla-bedrock-linux-versions.json");
+pub static BUNDLED_BEDROCK_WIN: &str =
+    include_str!("../../../data/vanilla-bedrock-windows-versions.json");
+pub static BUNDLED_BEDROCK_LINUX: &str =
+    include_str!("../../../data/vanilla-bedrock-linux-versions.json");
 pub static BUNDLED_POCKETMINE: &str = include_str!("../../../data/pocketmine-versions.json");
 
 /// Parses a simple key-value version mapping (excluding "latest")

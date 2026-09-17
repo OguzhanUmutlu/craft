@@ -1,5 +1,5 @@
-use std::fs;
 use crate::engine::BackupEngine;
+use std::fs;
 
 pub fn enforce_retention(engine: &BackupEngine, server_name: &str, max_backups_to_keep: usize) {
     let mut backups = engine.list_backups(server_name);

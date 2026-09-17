@@ -1,11 +1,11 @@
+use crate::bundled::{parse_bundled_manifest, BUNDLED_PURPUR};
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::Result;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
-use serde::Deserialize;
-use craft_core::Result;
-use crate::bundled::{parse_bundled_manifest, BUNDLED_PURPUR};
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 #[derive(Deserialize)]
 struct PurpurResponse {
@@ -70,7 +70,14 @@ impl ServerSoftware for PurpurProvider {
         Box::pin(async move {
             let url = "https://api.purpurmc.org/v2/purpur";
             if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
-                if let Ok(data) = cache.get_cached_json::<PurpurResponse>("purpur_versions", url, std::time::Duration::from_secs(6 * 3600)).await {
+                if let Ok(data) = cache
+                    .get_cached_json::<PurpurResponse>(
+                        "purpur_versions",
+                        url,
+                        std::time::Duration::from_secs(6 * 3600),
+                    )
+                    .await
+                {
                     let mut versions = data.versions;
                     craft_core::sort_versions_descending(&mut versions);
                     return Ok(versions);
@@ -92,7 +99,10 @@ impl ServerSoftware for PurpurProvider {
         let url = if let Some(u) = self.bundled.get(version) {
             u.clone()
         } else {
-            format!("https://api.purpurmc.org/v2/purpur/{}/latest/download", version)
+            format!(
+                "https://api.purpurmc.org/v2/purpur/{}/latest/download",
+                version
+            )
         };
 
         Ok(vec![AssetDownload {

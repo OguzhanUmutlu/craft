@@ -161,9 +161,10 @@ impl PluginManager {
                         url
                     )));
                 }
-                let bytes = resp.bytes().await.map_err(|e| {
-                    CraftError::Download(format!("Failed to read bytes: {}", e))
-                })?;
+                let bytes = resp
+                    .bytes()
+                    .await
+                    .map_err(|e| CraftError::Download(format!("Failed to read bytes: {}", e)))?;
                 store.put_artifact_compressed(
                     &rel_subpath,
                     &bytes,
@@ -208,13 +209,17 @@ impl PluginManager {
             let raw_name = Path::new(rel_subpath)
                 .file_name()
                 .and_then(|n| n.to_str())
-                .ok_or_else(|| CraftError::Other(format!("Invalid plugin subpath: {}", rel_subpath)))?;
+                .ok_or_else(|| {
+                    CraftError::Other(format!("Invalid plugin subpath: {}", rel_subpath))
+                })?;
             let filename = raw_name.strip_suffix(".zst").unwrap_or(raw_name);
             let dest = destination_dir.join(filename);
             store.extract_artifact_to(rel_subpath, &dest)?;
             Ok(dest)
         } else {
-            Err(CraftError::Other("Cache store is not configured".to_string()))
+            Err(CraftError::Other(
+                "Cache store is not configured".to_string(),
+            ))
         }
     }
 

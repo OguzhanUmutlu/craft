@@ -74,6 +74,14 @@ Each folder defines a supported server type (e.g. Paper, Purpur, Palworld, Facto
             return;
         }
 
+        // If the directory itself contains a software.toml, load it directly
+        if dir.join("software.toml").is_file() {
+            if let Ok(bundle) = load_bundle(dir) {
+                self.register_bundle(bundle);
+                return;
+            }
+        }
+
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -118,7 +126,15 @@ Each folder defines a supported server type (e.g. Paper, Purpur, Palworld, Facto
             }
         }
 
-        // 3. Scan user's softwares_dir (~/.craft/softwares/), overriding built-ins and install defaults
+        // 3. Scan current working directory's softwares folder if present
+        if let Ok(cwd) = std::env::current_dir() {
+            let cwd_softwares = cwd.join("softwares");
+            if cwd_softwares.is_dir() && cwd_softwares != paths.softwares_dir {
+                registry.scan_and_load_dir(&cwd_softwares);
+            }
+        }
+
+        // 4. Scan user's softwares_dir (~/.craft/softwares/), overriding built-ins, install defaults, and cwd
         registry.scan_and_load_dir(&paths.softwares_dir);
 
         registry

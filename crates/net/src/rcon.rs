@@ -1,6 +1,6 @@
+use craft_core::{CraftError, Result};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use craft_core::{CraftError, Result};
 
 const SERVERDATA_AUTH: i32 = 3;
 const SERVERDATA_EXECCOMMAND: i32 = 2;
@@ -14,7 +14,8 @@ pub struct RconClient {
 impl RconClient {
     pub async fn connect(host: &str, port: u16, password: &str) -> Result<Self> {
         let addr = format!("{}:{}", host, port);
-        let mut stream = TcpStream::connect(&addr).await
+        let mut stream = TcpStream::connect(&addr)
+            .await
             .map_err(|e| CraftError::Other(format!("Failed to connect to RCON {}: {}", addr, e)))?;
 
         let auth_id = 1;
@@ -26,16 +27,17 @@ impl RconClient {
             // Read next packet
             let (res_id2, _, _) = read_rcon_packet(&mut stream).await?;
             if res_id2 == -1 {
-                return Err(CraftError::Other("RCON Authentication failed: Invalid password".to_string()));
+                return Err(CraftError::Other(
+                    "RCON Authentication failed: Invalid password".to_string(),
+                ));
             }
         } else if res_id == -1 {
-            return Err(CraftError::Other("RCON Authentication failed: Invalid password".to_string()));
+            return Err(CraftError::Other(
+                "RCON Authentication failed: Invalid password".to_string(),
+            ));
         }
 
-        Ok(Self {
-            stream,
-            req_id: 2,
-        })
+        Ok(Self { stream, req_id: 2 })
     }
 
     pub async fn send_command(&mut self, command: &str) -> Result<String> {
@@ -53,7 +55,12 @@ impl RconClient {
     }
 }
 
-async fn send_rcon_packet(stream: &mut TcpStream, req_id: i32, packet_type: i32, payload: &str) -> Result<()> {
+async fn send_rcon_packet(
+    stream: &mut TcpStream,
+    req_id: i32,
+    packet_type: i32,
+    payload: &str,
+) -> Result<()> {
     let payload_bytes = payload.as_bytes();
     let length = (4 + 4 + payload_bytes.len() + 2) as i32;
 

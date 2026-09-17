@@ -1,12 +1,12 @@
+use crate::get_all_softwares;
+use crate::traits::AssetDownload;
+use craft_core::{is_stable_version, sort_versions_descending, CraftError, CraftPaths, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
-use craft_core::{CraftError, CraftPaths, Result, is_stable_version, sort_versions_descending};
-use crate::traits::AssetDownload;
-use crate::get_all_softwares;
 
 pub const DEFAULT_CATALOG_URL: &str =
     "https://github.com/OguzhanUmutlu/craft/releases/download/catalog/versions.zst";
@@ -44,16 +44,19 @@ impl VersionCatalog {
 
     /// Compresses and serializes the catalog into zstandard binary bytes (compression level 19).
     pub fn encode_zstd(&self) -> Result<Vec<u8>> {
-        let json_bytes = serde_json::to_vec(self)
-            .map_err(|e| CraftError::Other(format!("Failed to serialize version catalog: {}", e)))?;
-        zstd::encode_all(&json_bytes[..], 19)
-            .map_err(|e| CraftError::Other(format!("Failed to zstd-compress version catalog: {}", e)))
+        let json_bytes = serde_json::to_vec(self).map_err(|e| {
+            CraftError::Other(format!("Failed to serialize version catalog: {}", e))
+        })?;
+        zstd::encode_all(&json_bytes[..], 19).map_err(|e| {
+            CraftError::Other(format!("Failed to zstd-compress version catalog: {}", e))
+        })
     }
 
     /// Decompresses and deserializes the catalog from zstandard binary bytes.
     pub fn decode_zstd(bytes: &[u8]) -> Result<Self> {
-        let decompressed = zstd::decode_all(bytes)
-            .map_err(|e| CraftError::Other(format!("Failed to zstd-decompress version catalog: {}", e)))?;
+        let decompressed = zstd::decode_all(bytes).map_err(|e| {
+            CraftError::Other(format!("Failed to zstd-decompress version catalog: {}", e))
+        })?;
         serde_json::from_slice(&decompressed)
             .map_err(|e| CraftError::Other(format!("Failed to deserialize version catalog: {}", e)))
     }
@@ -148,8 +151,8 @@ impl CatalogManager {
         fs::create_dir_all(&cache_dir)?;
         let cache_path = cache_dir.join("versions.zst");
 
-        let remote_url = std::env::var("CRAFT_VERSIONS_URL")
-            .unwrap_or_else(|_| DEFAULT_CATALOG_URL.to_string());
+        let remote_url =
+            std::env::var("CRAFT_VERSIONS_URL").unwrap_or_else(|_| DEFAULT_CATALOG_URL.to_string());
 
         Ok(Self {
             cache_path,
@@ -329,11 +332,12 @@ impl CatalogManager {
             .build()
             .map_err(|e| CraftError::Download(format!("HTTP client error: {}", e)))?;
 
-        let resp = client
-            .get(&self.remote_url)
-            .send()
-            .await
-            .map_err(|e| CraftError::Download(format!("Failed to fetch catalog from {}: {}", self.remote_url, e)))?;
+        let resp = client.get(&self.remote_url).send().await.map_err(|e| {
+            CraftError::Download(format!(
+                "Failed to fetch catalog from {}: {}",
+                self.remote_url, e
+            ))
+        })?;
 
         if !resp.status().is_success() {
             return Err(CraftError::Download(format!(
@@ -343,10 +347,9 @@ impl CatalogManager {
             )));
         }
 
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| CraftError::Download(format!("Failed to read catalog response body: {}", e)))?;
+        let bytes = resp.bytes().await.map_err(|e| {
+            CraftError::Download(format!("Failed to read catalog response body: {}", e))
+        })?;
 
         VersionCatalog::decode_zstd(&bytes)
     }
@@ -364,9 +367,17 @@ impl CatalogManager {
                 .iter()
                 .find(|v| is_stable_version(v))
                 .cloned()
-                .unwrap_or_else(|| versions.first().cloned().unwrap_or_else(|| "latest".to_string()));
+                .unwrap_or_else(|| {
+                    versions
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "latest".to_string())
+                });
 
-            let latest = versions.first().cloned().unwrap_or_else(|| "latest".to_string());
+            let latest = versions
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "latest".to_string());
 
             let mut assets_map = HashMap::new();
             for v in versions.iter().take(10) {
@@ -417,7 +428,10 @@ impl CatalogBuilder {
         let mut catalog = VersionCatalog::new();
         let softwares = get_all_softwares();
 
-        println!("Building version catalog for {} server softwares...", softwares.len());
+        println!(
+            "Building version catalog for {} server softwares...",
+            softwares.len()
+        );
 
         for sw in softwares {
             print!("  Fetching versions for {:<20} ... ", sw.name());
@@ -433,9 +447,17 @@ impl CatalogBuilder {
                 .iter()
                 .find(|v| is_stable_version(v))
                 .cloned()
-                .unwrap_or_else(|| versions.first().cloned().unwrap_or_else(|| "latest".to_string()));
+                .unwrap_or_else(|| {
+                    versions
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "latest".to_string())
+                });
 
-            let latest = versions.first().cloned().unwrap_or_else(|| "latest".to_string());
+            let latest = versions
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "latest".to_string());
 
             let mut assets_map = HashMap::new();
             // Pre-resolve assets for top versions
@@ -525,7 +547,9 @@ mod tests {
 
         let decoded = VersionCatalog::decode_zstd(&encoded).expect("decode_zstd");
         assert_eq!(decoded.schema_version, 1);
-        let paper = decoded.get_software("paper").expect("paper software exists");
+        let paper = decoded
+            .get_software("paper")
+            .expect("paper software exists");
         assert_eq!(paper.recommended_version, "1.21.9");
         assert_eq!(paper.versions[0], "1.21.9");
         assert_eq!(paper.versions[1], "1.21.9-pre4");

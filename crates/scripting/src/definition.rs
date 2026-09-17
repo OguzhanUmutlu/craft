@@ -23,11 +23,11 @@ pub struct SoftwareMetaSection {
 }
 
 fn default_game() -> String {
-    "minecraft".to_string()
+    String::new()
 }
 
 fn default_edition() -> String {
-    "java".to_string()
+    "native".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

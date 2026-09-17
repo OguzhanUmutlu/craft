@@ -21,9 +21,7 @@ pub async fn handle_software(
             handle_install(&package, force, paths)
         }
         crate::cli::SoftwareCommands::Remove { id } => handle_remove(&id, paths),
-        crate::cli::SoftwareCommands::Reset { id, all } => {
-            handle_reset(id.as_deref(), all, paths)
-        }
+        crate::cli::SoftwareCommands::Reset { id, all } => handle_reset(id.as_deref(), all, paths),
         crate::cli::SoftwareCommands::Template { id, path } => {
             handle_template(&id, path.as_deref())
         }
@@ -346,7 +344,12 @@ fn handle_reset(id: Option<&str>, all: bool, paths: &CraftPaths) -> Result<()> {
             "{} Restored default software definition '{}' in {}",
             "[OK]".green().bold(),
             specific.cyan().bold(),
-            paths.softwares_dir.join(specific).display().to_string().dimmed()
+            paths
+                .softwares_dir
+                .join(specific)
+                .display()
+                .to_string()
+                .dimmed()
         );
     } else {
         println!(

@@ -40,10 +40,11 @@ impl VersionToken {
         }
 
         // Split into numeric dot-separated prefix and trailing suffix (-pre4, -rc1, etc.)
-        let (num_part, suffix_part) = match trimmed.find(|c: char| c == '-' || c == '+' || (c.is_alphabetic() && c != '.')) {
-            Some(idx) => (&trimmed[..idx], &trimmed[idx..]),
-            None => (trimmed, ""),
-        };
+        let (num_part, suffix_part) =
+            match trimmed.find(|c: char| c == '-' || c == '+' || (c.is_alphabetic() && c != '.')) {
+                Some(idx) => (&trimmed[..idx], &trimmed[idx..]),
+                None => (trimmed, ""),
+            };
 
         let numbers: Vec<u64> = num_part
             .split('.')
@@ -104,7 +105,9 @@ fn try_parse_minecraft_snapshot(s: &str) -> Option<VersionToken> {
     }
     let year: u64 = s[..w_pos].parse().ok()?;
     let rest = &s[w_pos + 1..];
-    let num_end = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+    let num_end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
     let week: u64 = rest[..num_end].parse().ok()?;
     let rev_char = rest[num_end..].chars().next().unwrap_or('a');
     let rev_num = (rev_char.to_ascii_lowercase() as u64).saturating_sub('a' as u64) + 1;
@@ -183,19 +186,37 @@ mod tests {
     fn test_prerelease_precedence() {
         // Stable release must be newer than pre-release of the same version
         assert_eq!(compare_versions("1.21.9", "1.21.9-pre4"), Ordering::Greater);
-        assert_eq!(compare_versions("1.21.9-pre4", "1.21.9-pre3"), Ordering::Greater);
-        assert_eq!(compare_versions("1.21.9-pre2", "1.21.9-pre1"), Ordering::Greater);
+        assert_eq!(
+            compare_versions("1.21.9-pre4", "1.21.9-pre3"),
+            Ordering::Greater
+        );
+        assert_eq!(
+            compare_versions("1.21.9-pre2", "1.21.9-pre1"),
+            Ordering::Greater
+        );
 
         // RC must be newer than pre-release
-        assert_eq!(compare_versions("1.21.9-rc1", "1.21.9-pre4"), Ordering::Greater);
-        assert_eq!(compare_versions("1.21.9-rc2", "1.21.9-rc1"), Ordering::Greater);
+        assert_eq!(
+            compare_versions("1.21.9-rc1", "1.21.9-pre4"),
+            Ordering::Greater
+        );
+        assert_eq!(
+            compare_versions("1.21.9-rc2", "1.21.9-rc1"),
+            Ordering::Greater
+        );
         assert_eq!(compare_versions("1.21.9", "1.21.9-rc2"), Ordering::Greater);
     }
 
     #[test]
     fn test_bedrock_four_part_versions() {
-        assert_eq!(compare_versions("1.21.60.21", "1.21.51.2"), Ordering::Greater);
-        assert_eq!(compare_versions("1.21.51.02", "1.21.50.01"), Ordering::Greater);
+        assert_eq!(
+            compare_versions("1.21.60.21", "1.21.51.2"),
+            Ordering::Greater
+        );
+        assert_eq!(
+            compare_versions("1.21.51.02", "1.21.50.01"),
+            Ordering::Greater
+        );
     }
 
     #[test]

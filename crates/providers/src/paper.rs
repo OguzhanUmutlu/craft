@@ -1,11 +1,11 @@
+use crate::bundled::{parse_bundled_manifest, BUNDLED_FOLIA, BUNDLED_PAPER};
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::{CraftError, Result};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
-use serde::Deserialize;
-use craft_core::{CraftError, Result};
-use crate::bundled::{parse_bundled_manifest, BUNDLED_FOLIA, BUNDLED_PAPER};
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 #[derive(Deserialize)]
 struct PaperV3ProjectResponse {
@@ -29,9 +29,17 @@ impl PaperProvider {
             edition: ServerEdition::Java,
             bundled,
             default_versions: vec![
-                "1.21.4".into(), "1.21.3".into(), "1.21.1".into(), "1.21".into(),
-                "1.20.6".into(), "1.20.4".into(), "1.20.2".into(), "1.20.1".into(),
-                "1.19.4".into(), "1.18.2".into(), "1.16.5".into(),
+                "1.21.4".into(),
+                "1.21.3".into(),
+                "1.21.1".into(),
+                "1.21".into(),
+                "1.20.6".into(),
+                "1.20.4".into(),
+                "1.20.2".into(),
+                "1.20.1".into(),
+                "1.19.4".into(),
+                "1.18.2".into(),
+                "1.16.5".into(),
             ],
         }
     }
@@ -44,7 +52,11 @@ impl PaperProvider {
             edition: ServerEdition::Java,
             bundled,
             default_versions: vec![
-                "1.21.4".into(), "1.21.3".into(), "1.21.1".into(), "1.20.6".into(), "1.20.4".into(),
+                "1.21.4".into(),
+                "1.21.3".into(),
+                "1.21.1".into(),
+                "1.20.6".into(),
+                "1.20.4".into(),
             ],
         }
     }
@@ -56,7 +68,10 @@ impl PaperProvider {
             edition: ServerEdition::Proxy,
             bundled: HashMap::new(),
             default_versions: vec![
-                "3.4.0".into(), "3.3.0-SNAPSHOT".into(), "3.2.0-SNAPSHOT".into(), "3.1.2-SNAPSHOT".into(),
+                "3.4.0".into(),
+                "3.3.0-SNAPSHOT".into(),
+                "3.2.0-SNAPSHOT".into(),
+                "3.1.2-SNAPSHOT".into(),
             ],
         }
     }
@@ -68,7 +83,12 @@ impl PaperProvider {
             edition: ServerEdition::Proxy,
             bundled: HashMap::new(),
             default_versions: vec![
-                "1.21".into(), "1.20".into(), "1.19".into(), "1.18".into(), "1.17".into(), "1.16".into(),
+                "1.21".into(),
+                "1.20".into(),
+                "1.19".into(),
+                "1.18".into(),
+                "1.17".into(),
+                "1.16".into(),
             ],
         }
     }
@@ -77,18 +97,27 @@ impl PaperProvider {
         let url = format!("https://fill.papermc.io/v3/projects/{}", self.project);
         let cache_key = format!("papermc_project_{}", self.project);
 
-        let data: PaperV3ProjectResponse = if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
-            match cache.get_cached_json(&cache_key, &url, std::time::Duration::from_secs(6 * 3600)).await {
+        let data: PaperV3ProjectResponse = if let Ok(cache) =
+            crate::cache::CacheManager::from_default_paths()
+        {
+            match cache
+                .get_cached_json(&cache_key, &url, std::time::Duration::from_secs(6 * 3600))
+                .await
+            {
                 Ok(data) => data,
                 Err(_) => {
                     let client = reqwest::Client::builder()
                         .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
                         .build()
-                        .map_err(|e| CraftError::Download(format!("Failed to build HTTP client: {}", e)))?;
-                    let resp = client.get(&url).send().await
-                        .map_err(|e| CraftError::Download(format!("Failed to fetch PaperMC project info: {}", e)))?;
-                    resp.json().await
-                        .map_err(|e| CraftError::Download(format!("Invalid PaperMC API response: {}", e)))?
+                        .map_err(|e| {
+                            CraftError::Download(format!("Failed to build HTTP client: {}", e))
+                        })?;
+                    let resp = client.get(&url).send().await.map_err(|e| {
+                        CraftError::Download(format!("Failed to fetch PaperMC project info: {}", e))
+                    })?;
+                    resp.json().await.map_err(|e| {
+                        CraftError::Download(format!("Invalid PaperMC API response: {}", e))
+                    })?
                 }
             }
         } else {
@@ -96,9 +125,11 @@ impl PaperProvider {
                 .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
                 .build()
                 .map_err(|e| CraftError::Download(format!("Failed to build HTTP client: {}", e)))?;
-            let resp = client.get(&url).send().await
-                .map_err(|e| CraftError::Download(format!("Failed to fetch PaperMC project info: {}", e)))?;
-            resp.json().await
+            let resp = client.get(&url).send().await.map_err(|e| {
+                CraftError::Download(format!("Failed to fetch PaperMC project info: {}", e))
+            })?;
+            resp.json()
+                .await
                 .map_err(|e| CraftError::Download(format!("Invalid PaperMC API response: {}", e)))?
         };
 
@@ -119,27 +150,38 @@ impl PaperProvider {
 
         tokio::task::block_in_place(|| {
             handle.block_on(async move {
-                let url = format!("https://fill.papermc.io/v3/projects/{}/versions/{}/builds", project, version_str);
+                let url = format!(
+                    "https://fill.papermc.io/v3/projects/{}/versions/{}/builds",
+                    project, version_str
+                );
                 let cache_key = format!("papermc_builds_{}_{}", project, version_str);
 
-                let builds: Vec<serde_json::Value> = if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
-                    match cache.get_cached_json(&cache_key, &url, std::time::Duration::from_secs(3600)).await {
-                        Ok(b) => b,
-                        Err(_) => {
-                            let client = reqwest::Client::builder()
-                                .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
-                                .build().ok()?;
-                            let resp = client.get(&url).send().await.ok()?;
-                            resp.json().await.ok()?
+                let builds: Vec<serde_json::Value> =
+                    if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
+                        match cache
+                            .get_cached_json(&cache_key, &url, std::time::Duration::from_secs(3600))
+                            .await
+                        {
+                            Ok(b) => b,
+                            Err(_) => {
+                                let client = reqwest::Client::builder()
+                                    .user_agent(
+                                        "Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)",
+                                    )
+                                    .build()
+                                    .ok()?;
+                                let resp = client.get(&url).send().await.ok()?;
+                                resp.json().await.ok()?
+                            }
                         }
-                    }
-                } else {
-                    let client = reqwest::Client::builder()
-                        .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
-                        .build().ok()?;
-                    let resp = client.get(&url).send().await.ok()?;
-                    resp.json().await.ok()?
-                };
+                    } else {
+                        let client = reqwest::Client::builder()
+                            .user_agent("Craft-CLI/1.0 (https://github.com/OguzhanUmutlu/craft)")
+                            .build()
+                            .ok()?;
+                        let resp = client.get(&url).send().await.ok()?;
+                        resp.json().await.ok()?
+                    };
 
                 let chosen = builds
                     .iter()
@@ -148,10 +190,15 @@ impl PaperProvider {
 
                 if let Some(b) = chosen {
                     let downloads = b.get("downloads")?.as_object()?;
-                    let dl = downloads.get("server:default")
+                    let dl = downloads
+                        .get("server:default")
                         .or_else(|| downloads.values().next())?;
                     let file_url = dl.get("url")?.as_str()?.to_string();
-                    let sha256 = dl.get("checksums").and_then(|c| c.get("sha256")).and_then(|s| s.as_str()).map(|s| s.to_string());
+                    let sha256 = dl
+                        .get("checksums")
+                        .and_then(|c| c.get("sha256"))
+                        .and_then(|s| s.as_str())
+                        .map(|s| s.to_string());
                     let filename = "server.jar".to_string();
 
                     Some(AssetDownload {

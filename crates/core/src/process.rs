@@ -1,9 +1,9 @@
+use crate::error::{CraftError, Result};
+use fs2::FileExt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use fs2::FileExt;
 #[cfg(target_os = "windows")]
 use sysinfo::{Pid, System};
-use crate::error::{CraftError, Result};
 
 pub fn is_process_running(pid: u32) -> bool {
     #[cfg(target_os = "windows")]
@@ -30,11 +30,16 @@ pub fn kill_process(pid: u32, force: bool) -> Result<()> {
             cmd.arg("/F");
         }
         cmd.arg("/T"); // kill child processes too
-        let status = cmd.status().map_err(|e| CraftError::Process(format!("taskkill failed: {}", e)))?;
+        let status = cmd
+            .status()
+            .map_err(|e| CraftError::Process(format!("taskkill failed: {}", e)))?;
         if status.success() {
             Ok(())
         } else {
-            Err(CraftError::Process(format!("taskkill exited with non-zero status for PID {}", pid)))
+            Err(CraftError::Process(format!(
+                "taskkill exited with non-zero status for PID {}",
+                pid
+            )))
         }
     }
 
@@ -61,8 +66,7 @@ pub fn read_pid_file<P: AsRef<Path>>(path: P) -> Option<u32> {
 }
 
 pub fn write_pid_file<P: AsRef<Path>>(path: P, pid: u32) -> Result<()> {
-    fs::write(path.as_ref(), pid.to_string())
-        .map_err(CraftError::Io)
+    fs::write(path.as_ref(), pid.to_string()).map_err(CraftError::Io)
 }
 
 pub fn remove_pid_file<P: AsRef<Path>>(path: P) {
@@ -81,7 +85,10 @@ pub fn auto_heal_server_jar<P: AsRef<Path>>(server_dir: P) -> Option<String> {
 /// searches for files with the same extension (excluding installer jars / wrappers)
 /// and copies the largest matching file to `target_filename`.
 /// Returns Some(source_filename) if a repair was performed.
-pub fn auto_heal_server_file<P: AsRef<Path>>(server_dir: P, target_filename: &str) -> Option<String> {
+pub fn auto_heal_server_file<P: AsRef<Path>>(
+    server_dir: P,
+    target_filename: &str,
+) -> Option<String> {
     let dir = server_dir.as_ref();
     let target = dir.join(target_filename);
     if target.exists() {
@@ -138,7 +145,10 @@ pub fn auto_heal_server_file<P: AsRef<Path>>(server_dir: P, target_filename: &st
             let _ = fs::remove_file(&target);
         }
         if fs::hard_link(best_path, &target).is_ok() || fs::copy(best_path, &target).is_ok() {
-            return best_path.file_name().and_then(|n| n.to_str()).map(|s| s.to_string());
+            return best_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string());
         }
     }
 
@@ -238,7 +248,11 @@ pub fn is_server_locked<P: AsRef<Path>>(server_path: P) -> bool {
 
     let lock_path = dir.join(".server.lock");
     if lock_path.exists() {
-        if let Ok(file) = fs::OpenOptions::new().read(true).write(true).open(&lock_path) {
+        if let Ok(file) = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+        {
             if file.try_lock_exclusive().is_err() {
                 return true;
             }

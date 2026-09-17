@@ -38,10 +38,20 @@ impl QueryProtocolKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RuntimeKind {
-    Java { default_jar: String },
-    NativeBinary { default_executable: String },
-    Interpreted { interpreter: String, script_name: String },
-    SteamApp { app_id: u32, anonymous: bool },
+    Java {
+        default_jar: String,
+    },
+    NativeBinary {
+        default_executable: String,
+    },
+    Interpreted {
+        interpreter: String,
+        script_name: String,
+    },
+    SteamApp {
+        app_id: u32,
+        anonymous: bool,
+    },
 }
 
 impl RuntimeKind {
@@ -169,7 +179,11 @@ impl GameDefinition {
             default_config_file: Some("server.properties".to_string()),
             config_format: ConfigFormat::Properties,
             save_directory: Some("world".to_string()),
-            content_categories: vec!["Plugins".to_string(), "Mods".to_string(), "Datapacks".to_string()],
+            content_categories: vec![
+                "Plugins".to_string(),
+                "Mods".to_string(),
+                "Datapacks".to_string(),
+            ],
         }
     }
 
@@ -182,7 +196,9 @@ impl GameDefinition {
             default_query_port: Some(27015),
             default_rcon_port: Some(25575),
             query_protocol: QueryProtocolKind::ValveA2S,
-            default_config_file: Some("Pal/Saved/Config/LinuxServer/PalWorldSettings.ini".to_string()),
+            default_config_file: Some(
+                "Pal/Saved/Config/LinuxServer/PalWorldSettings.ini".to_string(),
+            ),
             config_format: ConfigFormat::Ini,
             save_directory: Some("Pal/Saved/SaveGames".to_string()),
             content_categories: vec!["Mods".to_string(), "Scripts".to_string()],
@@ -261,15 +277,20 @@ pub fn get_supported_games() -> Vec<GameDefinition> {
         GameDefinition::terraria(),
         GameDefinition::valheim(),
         GameDefinition::factorio(),
-        GameDefinition::custom("custom", "Custom Game Server", 25565, TransportProtocol::Both),
+        GameDefinition::custom(
+            "custom",
+            "Custom Game Server",
+            25565,
+            TransportProtocol::Both,
+        ),
     ]
 }
 
 pub fn find_game(id: &str) -> Option<GameDefinition> {
     let lower = id.trim().to_lowercase();
-    get_supported_games().into_iter().find(|g| {
-        g.id.eq_ignore_ascii_case(&lower) || g.name.eq_ignore_ascii_case(&lower)
-    })
+    get_supported_games()
+        .into_iter()
+        .find(|g| g.id.eq_ignore_ascii_case(&lower) || g.name.eq_ignore_ascii_case(&lower))
 }
 
 #[cfg(test)]

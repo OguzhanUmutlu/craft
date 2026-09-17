@@ -1,6 +1,6 @@
+use craft_core::{RemoteAuthType, RemoteHostConfig};
 use std::fs;
 use std::path::{Path, PathBuf};
-use craft_core::{RemoteAuthType, RemoteHostConfig};
 
 #[derive(Debug, Clone, Default)]
 pub struct SshConfigHost {
@@ -68,7 +68,6 @@ pub fn parse_ssh_config_content(content: &str) -> Vec<SshConfigHost> {
                 }
                 _ => {}
             }
-
         }
     }
 
@@ -130,7 +129,6 @@ pub fn discover_ssh_hosts() -> Vec<RemoteHostConfig> {
                 remote_dir: None,
                 os_type: None,
             }
-
         })
         .collect()
 }

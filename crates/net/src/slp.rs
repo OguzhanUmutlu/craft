@@ -1,9 +1,9 @@
-use std::time::Instant;
 use bytes::{Buf, BufMut, BytesMut};
+use craft_core::{CraftError, Result};
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use craft_core::{CraftError, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerPingStatus {
@@ -38,16 +38,17 @@ pub async fn ping_java_server(host: &str, port: u16) -> Result<ServerPingStatus>
     let addr = format!("{}:{}", host, port);
     let start_time = Instant::now();
 
-    let mut stream = TcpStream::connect(&addr).await
+    let mut stream = TcpStream::connect(&addr)
+        .await
         .map_err(|e| CraftError::Other(format!("Failed to connect to {}: {}", addr, e)))?;
 
     // 1. Send Handshake packet (ID = 0x00, protocol = 47, host, port, next_state = 1)
     let mut handshake = BytesMut::new();
     write_varint(&mut handshake, 0x00); // Packet ID
-    write_varint(&mut handshake, 765);  // Protocol version
+    write_varint(&mut handshake, 765); // Protocol version
     write_string(&mut handshake, host); // Server address
-    handshake.put_u16(port);            // Server port
-    write_varint(&mut handshake, 1);    // Next state: status (1)
+    handshake.put_u16(port); // Server port
+    write_varint(&mut handshake, 1); // Next state: status (1)
 
     send_packet(&mut stream, &handshake).await?;
 
@@ -62,7 +63,10 @@ pub async fn ping_java_server(host: &str, port: u16) -> Result<ServerPingStatus>
 
     let packet_id = read_varint(&mut buf)?;
     if packet_id != 0x00 {
-        return Err(CraftError::Other(format!("Unexpected SLP packet ID: {}", packet_id)));
+        return Err(CraftError::Other(format!(
+            "Unexpected SLP packet ID: {}",
+            packet_id
+        )));
     }
 
     let json_str = read_string(&mut buf)?;
@@ -112,7 +116,9 @@ fn read_varint(buf: &mut &[u8]) -> Result<i32> {
 
     while position < 35 {
         if !buf.has_remaining() {
-            return Err(CraftError::Other("Unexpected EOF while reading VarInt".to_string()));
+            return Err(CraftError::Other(
+                "Unexpected EOF while reading VarInt".to_string(),
+            ));
         }
         let byte = buf.get_u8();
         value |= ((byte & 0x7F) as i32) << position;
@@ -128,7 +134,9 @@ fn read_varint(buf: &mut &[u8]) -> Result<i32> {
 fn read_string(buf: &mut &[u8]) -> Result<String> {
     let len = read_varint(buf)? as usize;
     if buf.remaining() < len {
-        return Err(CraftError::Other("Not enough bytes to read string".to_string()));
+        return Err(CraftError::Other(
+            "Not enough bytes to read string".to_string(),
+        ));
     }
     let s = String::from_utf8_lossy(&buf[..len]).to_string();
     buf.advance(len);

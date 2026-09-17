@@ -1,11 +1,12 @@
-use craft_core::Result;
 use crate::session::RemoteSession;
+use craft_core::Result;
 
 pub fn bootstrap_windows(session: &RemoteSession, progress: &mut dyn FnMut(&str)) -> Result<()> {
     progress("Bootstrapping Windows Remote Host...");
 
     // 1. Probe Windows Version
-    let os_check = session.exec("powershell -Command \"[System.Environment]::OSVersion.VersionString\"");
+    let os_check =
+        session.exec("powershell -Command \"[System.Environment]::OSVersion.VersionString\"");
     if let Ok((0, stdout, _)) = os_check {
         progress(&format!("Remote Windows Version: {}", stdout.trim()));
     }
@@ -16,7 +17,11 @@ pub fn bootstrap_windows(session: &RemoteSession, progress: &mut dyn FnMut(&str)
     let needs_java = match java_check {
         Ok((0, stdout, stderr)) => {
             let out = format!("{}\n{}", stdout, stderr);
-            !out.contains("\"21") && !out.contains("\"22") && !out.contains("\"23") && !out.contains("\"24") && !out.contains("\"25")
+            !out.contains("\"21")
+                && !out.contains("\"22")
+                && !out.contains("\"23")
+                && !out.contains("\"24")
+                && !out.contains("\"25")
         }
         _ => true,
     };

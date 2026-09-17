@@ -1,12 +1,12 @@
-use std::fs::{self, File, OpenOptions};
-use std::io::Read;
-use std::path::{Path, PathBuf};
+use crate::error::{CraftError, Result};
+use crate::path::CraftPaths;
 use chrono::Utc;
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use crate::error::{CraftError, Result};
-use crate::path::CraftPaths;
+use std::fs::{self, File, OpenOptions};
+use std::io::Read;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TrashItem {
@@ -48,15 +48,17 @@ impl TrashManager {
             return Ok(TrashManifest::default());
         }
         let content = fs::read_to_string(&path)?;
-        let manifest: TrashManifest = toml::from_str(&content)
-            .map_err(|e| CraftError::Config(format!("Failed to parse trash manifest.toml: {}", e)))?;
+        let manifest: TrashManifest = toml::from_str(&content).map_err(|e| {
+            CraftError::Config(format!("Failed to parse trash manifest.toml: {}", e))
+        })?;
         Ok(manifest)
     }
 
     pub fn save_manifest(&self, manifest: &TrashManifest) -> Result<()> {
         let path = self.manifest_path();
-        let content = toml::to_string_pretty(manifest)
-            .map_err(|e| CraftError::Config(format!("Failed to serialize trash manifest.toml: {}", e)))?;
+        let content = toml::to_string_pretty(manifest).map_err(|e| {
+            CraftError::Config(format!("Failed to serialize trash manifest.toml: {}", e))
+        })?;
 
         let lock_path = self.paths.locks_dir.join("trash.lock");
         let _ = fs::create_dir_all(&self.paths.locks_dir);
@@ -162,7 +164,10 @@ impl TrashManager {
     /// Finds a trash item by ID
     pub fn find_item(&self, id: &str) -> Result<Option<TrashItem>> {
         let manifest = self.load_manifest()?;
-        Ok(manifest.items.into_iter().find(|i| i.id == id || i.original_name == id))
+        Ok(manifest
+            .items
+            .into_iter()
+            .find(|i| i.id == id || i.original_name == id))
     }
 
     /// Restores a trashed item back to its original location, verifying SHA-256 hash first
@@ -309,7 +314,10 @@ mod tests {
         // Attempting to restore must fail due to SHA-256 mismatch
         let res = manager.restore_item(&item.id);
         assert!(res.is_err());
-        assert!(res.unwrap_err().to_string().contains("Integrity check failed"));
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("Integrity check failed"));
     }
 
     #[test]

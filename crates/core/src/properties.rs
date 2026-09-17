@@ -1,6 +1,6 @@
+use crate::error::{CraftError, Result};
 use std::fs;
 use std::path::Path;
-use crate::error::{CraftError, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PropertyCategory {
@@ -61,8 +61,7 @@ impl ServerProperties {
         if !p.exists() {
             return Ok(Self::new());
         }
-        let content = fs::read_to_string(p)
-            .map_err(CraftError::Io)?;
+        let content = fs::read_to_string(p).map_err(CraftError::Io)?;
         Ok(Self::parse(&content))
     }
 
@@ -118,7 +117,6 @@ impl std::fmt::Display for ServerProperties {
 }
 
 impl ServerProperties {
-
     pub fn get(&self, key: &str) -> Option<&str> {
         for line in &self.lines {
             if let PropertyLine::Entry { key: k, value } = line {
@@ -131,11 +129,12 @@ impl ServerProperties {
     }
 
     pub fn get_bool(&self, key: &str) -> Option<bool> {
-        self.get(key).and_then(|v| match v.trim().to_lowercase().as_str() {
-            "true" | "yes" | "1" | "on" => Some(true),
-            "false" | "no" | "0" | "off" => Some(false),
-            _ => None,
-        })
+        self.get(key)
+            .and_then(|v| match v.trim().to_lowercase().as_str() {
+                "true" | "yes" | "1" | "on" => Some(true),
+                "false" | "no" | "0" | "off" => Some(false),
+                _ => None,
+            })
     }
 
     pub fn get_u16(&self, key: &str) -> Option<u16> {
@@ -202,35 +201,85 @@ impl ServerProperties {
     pub fn category_of(key: &str) -> PropertyCategory {
         let lower = key.to_lowercase();
         match lower.as_str() {
-            "server-port" | "server-portv6" | "server-ip" | "online-mode" | "prevent-proxy-connections"
-            | "use-native-transport" | "network-compression-threshold" | "compression-threshold"
-            | "rate-limit" | "enable-status" | "accepts-transfers" => PropertyCategory::Network,
+            "server-port"
+            | "server-portv6"
+            | "server-ip"
+            | "online-mode"
+            | "prevent-proxy-connections"
+            | "use-native-transport"
+            | "network-compression-threshold"
+            | "compression-threshold"
+            | "rate-limit"
+            | "enable-status"
+            | "accepts-transfers" => PropertyCategory::Network,
 
-            "gamemode" | "force-gamemode" | "difficulty" | "hardcore" | "pvp" | "allow-flight"
-            | "allow-cheats" | "spawn-monsters" | "spawn-animals" | "spawn-npcs" | "allow-nether"
-            | "spawn-protection" | "player-idle-timeout" | "default-player-permission-level"
-            | "function-permission-level" | "op-permission-level" | "enable-command-block"
-            | "announce-player-achievements" | "server-authoritative-movement"
+            "gamemode"
+            | "force-gamemode"
+            | "difficulty"
+            | "hardcore"
+            | "pvp"
+            | "allow-flight"
+            | "allow-cheats"
+            | "spawn-monsters"
+            | "spawn-animals"
+            | "spawn-npcs"
+            | "allow-nether"
+            | "spawn-protection"
+            | "player-idle-timeout"
+            | "default-player-permission-level"
+            | "function-permission-level"
+            | "op-permission-level"
+            | "enable-command-block"
+            | "announce-player-achievements"
+            | "server-authoritative-movement"
             | "player-movement-score-threshold" => PropertyCategory::Gameplay,
 
-            "level-name" | "level-seed" | "level-type" | "generate-structures" | "generator-settings"
-            | "max-world-size" | "max-build-height" | "texturepack-required" | "resource-pack"
-            | "resource-pack-sha1" | "resource-pack-id" | "require-resource-pack"
-            | "resource-pack-prompt" | "initial-enabled-packs" | "initial-disabled-packs" => {
-                PropertyCategory::World
-            }
+            "level-name"
+            | "level-seed"
+            | "level-type"
+            | "generate-structures"
+            | "generator-settings"
+            | "max-world-size"
+            | "max-build-height"
+            | "texturepack-required"
+            | "resource-pack"
+            | "resource-pack-sha1"
+            | "resource-pack-id"
+            | "require-resource-pack"
+            | "resource-pack-prompt"
+            | "initial-enabled-packs"
+            | "initial-disabled-packs" => PropertyCategory::World,
 
-            "white-list" | "enforce-whitelist" | "enforce-secure-profile" | "previews-chat"
-            | "hide-online-players" | "max-players" | "motd" | "server-name" | "log-ips"
+            "white-list"
+            | "enforce-whitelist"
+            | "enforce-secure-profile"
+            | "previews-chat"
+            | "hide-online-players"
+            | "max-players"
+            | "motd"
+            | "server-name"
+            | "log-ips"
             | "text-filtering-config" => PropertyCategory::Security,
 
-            "view-distance" | "simulation-distance" | "tick-distance" | "max-tick-time"
-            | "entity-broadcast-range-percentage" | "sync-chunk-writes" | "max-threads"
-            | "enable-jmx-monitoring" | "pause-when-empty-seconds" | "region-file-compression"
+            "view-distance"
+            | "simulation-distance"
+            | "tick-distance"
+            | "max-tick-time"
+            | "entity-broadcast-range-percentage"
+            | "sync-chunk-writes"
+            | "max-threads"
+            | "enable-jmx-monitoring"
+            | "pause-when-empty-seconds"
+            | "region-file-compression"
             | "content-log-console-output-enabled" => PropertyCategory::Performance,
 
-            "enable-rcon" | "rcon.port" | "rcon.password" | "enable-query" | "query.port"
-            | "broadcast-rcon-to-ops" | "broadcast-console-to-ops" => PropertyCategory::Rcon,
+            "enable-rcon"
+            | "rcon.port"
+            | "rcon.password"
+            | "enable-query"
+            | "query.port"
+            | "broadcast-rcon-to-ops"
+            | "broadcast-console-to-ops" => PropertyCategory::Rcon,
 
             _ => PropertyCategory::General,
         }
@@ -379,11 +428,29 @@ rcon.port=25575
 
     #[test]
     fn test_property_categories() {
-        assert_eq!(ServerProperties::category_of("server-port"), PropertyCategory::Network);
-        assert_eq!(ServerProperties::category_of("pvp"), PropertyCategory::Gameplay);
-        assert_eq!(ServerProperties::category_of("level-name"), PropertyCategory::World);
-        assert_eq!(ServerProperties::category_of("white-list"), PropertyCategory::Security);
-        assert_eq!(ServerProperties::category_of("view-distance"), PropertyCategory::Performance);
-        assert_eq!(ServerProperties::category_of("enable-rcon"), PropertyCategory::Rcon);
+        assert_eq!(
+            ServerProperties::category_of("server-port"),
+            PropertyCategory::Network
+        );
+        assert_eq!(
+            ServerProperties::category_of("pvp"),
+            PropertyCategory::Gameplay
+        );
+        assert_eq!(
+            ServerProperties::category_of("level-name"),
+            PropertyCategory::World
+        );
+        assert_eq!(
+            ServerProperties::category_of("white-list"),
+            PropertyCategory::Security
+        );
+        assert_eq!(
+            ServerProperties::category_of("view-distance"),
+            PropertyCategory::Performance
+        );
+        assert_eq!(
+            ServerProperties::category_of("enable-rcon"),
+            PropertyCategory::Rcon
+        );
     }
 }

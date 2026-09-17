@@ -1,9 +1,9 @@
+use craft_core::{CraftError, QueryProtocolKind, Result};
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-use craft_core::{CraftError, QueryProtocolKind, Result};
 
 use crate::a2s::{ping_a2s_server, A2sPingStatus};
 use crate::raknet::{ping_bedrock_server, BedrockPingStatus};
@@ -40,9 +40,7 @@ pub async fn ping_server_auto(
             let res = ping_a2s_server(host, port).await?;
             Ok(UniversalPingStatus::ValveA2S(res))
         }
-        Some(QueryProtocolKind::GenericPortProbe) => {
-            probe_tcp_port(host, port).await
-        }
+        Some(QueryProtocolKind::GenericPortProbe) => probe_tcp_port(host, port).await,
         None => {
             // Auto-detect based on port conventions or fast probe
             if port == 19132 || port == 19133 {
@@ -87,8 +85,14 @@ pub async fn probe_tcp_port(host: &str, port: u16) -> Result<UniversalPingStatus
                 transport: "TCP".to_string(),
             })
         }
-        Ok(Err(e)) => Err(CraftError::Other(format!("Connection refused to {}: {}", addr_str, e))),
-        Err(_) => Err(CraftError::Other(format!("Connection to {} timed out after 3s", addr_str))),
+        Ok(Err(e)) => Err(CraftError::Other(format!(
+            "Connection refused to {}: {}",
+            addr_str, e
+        ))),
+        Err(_) => Err(CraftError::Other(format!(
+            "Connection to {} timed out after 3s",
+            addr_str
+        ))),
     }
 }
 
@@ -105,9 +109,12 @@ mod tests {
             transport: "TCP".to_string(),
         };
         let json = serde_json::to_string(&status).expect("serialization works");
-        let deserialized: UniversalPingStatus = serde_json::from_str(&json).expect("deserialization works");
+        let deserialized: UniversalPingStatus =
+            serde_json::from_str(&json).expect("deserialization works");
         match deserialized {
-            UniversalPingStatus::PortProbe { port, latency_ms, .. } => {
+            UniversalPingStatus::PortProbe {
+                port, latency_ms, ..
+            } => {
                 assert_eq!(port, 8211);
                 assert_eq!(latency_ms, 15);
             }

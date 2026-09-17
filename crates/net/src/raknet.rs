@@ -1,8 +1,8 @@
-use std::time::Instant;
+use craft_core::{CraftError, Result};
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 use tokio::net::UdpSocket;
 use tokio::time::{timeout, Duration};
-use craft_core::{CraftError, Result};
 
 pub const RAKNET_OFFLINE_MAGIC: &[u8] = &[
     0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78,
@@ -35,13 +35,16 @@ pub async fn ping_bedrock_server(host: &str, port: u16) -> Result<BedrockPingSta
     socket.send(&packet).await?;
 
     let mut recv_buf = [0u8; 1024];
-    let len = timeout(Duration::from_secs(3), socket.recv(&mut recv_buf)).await
+    let len = timeout(Duration::from_secs(3), socket.recv(&mut recv_buf))
+        .await
         .map_err(|_| CraftError::Other("Bedrock ping timed out".to_string()))??;
 
     let latency_ms = start_time.elapsed().as_millis() as u64;
 
     if len < 35 || recv_buf[0] != 0x1c {
-        return Err(CraftError::Other("Invalid Bedrock Unconnected Pong packet".to_string()));
+        return Err(CraftError::Other(
+            "Invalid Bedrock Unconnected Pong packet".to_string(),
+        ));
     }
 
     // Packet format: [1 byte ID (0x1c)] [8 bytes time] [8 bytes server GUID] [16 bytes magic] [2 bytes string len] [string]
@@ -87,4 +90,3 @@ mod tests {
         assert_eq!(status.latency_ms, 25);
     }
 }
-

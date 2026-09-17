@@ -1,9 +1,9 @@
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::{CraftError, Result};
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 use std::process::Command;
-use craft_core::{CraftError, Result};
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 pub struct NeoForgeProvider;
 
@@ -25,10 +25,12 @@ impl NeoForgeProvider {
             .map_err(|e| CraftError::Download(format!("Failed to build HTTP client: {}", e)))?;
 
         let url = "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml";
-        let resp = client.get(url).send().await
-            .map_err(|e| CraftError::Download(format!("Failed to fetch NeoForge metadata: {}", e)))?;
-        let text = resp.text().await
-            .map_err(|e| CraftError::Download(format!("Failed to read NeoForge metadata: {}", e)))?;
+        let resp = client.get(url).send().await.map_err(|e| {
+            CraftError::Download(format!("Failed to fetch NeoForge metadata: {}", e))
+        })?;
+        let text = resp.text().await.map_err(|e| {
+            CraftError::Download(format!("Failed to read NeoForge metadata: {}", e))
+        })?;
 
         let mut versions = Vec::new();
         for line in text.lines() {
@@ -126,10 +128,14 @@ impl ServerSoftware for NeoForgeProvider {
                     .current_dir(&path)
                     .args(["-jar", "neoforge-installer.jar", "--installServer"])
                     .status()
-                    .map_err(|e| CraftError::Process(format!("Failed to run NeoForge installer: {}", e)))?;
+                    .map_err(|e| {
+                        CraftError::Process(format!("Failed to run NeoForge installer: {}", e))
+                    })?;
 
                 if !status.success() {
-                    return Err(CraftError::Process("NeoForge installer exited with non-zero code".to_string()));
+                    return Err(CraftError::Process(
+                        "NeoForge installer exited with non-zero code".to_string(),
+                    ));
                 }
 
                 // Remove the installer to keep directory clean
@@ -140,7 +146,10 @@ impl ServerSoftware for NeoForgeProvider {
                     use std::os::unix::fs::PermissionsExt;
                     let run_sh = path.join("run.sh");
                     if run_sh.exists() {
-                        let _ = std::fs::set_permissions(&run_sh, std::fs::Permissions::from_mode(0o755));
+                        let _ = std::fs::set_permissions(
+                            &run_sh,
+                            std::fs::Permissions::from_mode(0o755),
+                        );
                     }
                 }
             }

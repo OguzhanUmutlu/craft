@@ -2,8 +2,8 @@ pub mod linux;
 pub mod macos;
 pub mod windows;
 
-use craft_core::{RemoteOsType, Result};
 use crate::session::RemoteSession;
+use craft_core::{RemoteOsType, Result};
 
 pub fn run_bootstrap(session: &RemoteSession) -> Result<()> {
     run_bootstrap_with_progress(session, |msg| println!("{}", msg))

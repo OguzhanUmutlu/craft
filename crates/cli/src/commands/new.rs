@@ -58,7 +58,7 @@ pub async fn handle_new(
             "[2] Bedrock Edition",
             "[3] Network Proxies",
             "[4] Hybrid & Cross-Play",
-            "[5] Other Games (Palworld, Terraria, Valheim, Factorio, Custom)",
+            "[5] Other Games & Standalone Softwares",
             "[6] Browse All Platforms",
         ];
         let cat_idx = Select::with_theme(&theme)
@@ -154,13 +154,18 @@ pub async fn handle_new(
                 ),
                 ("waterdog", "WaterdogPE", "Native Bedrock network proxy"),
             ],
-            4 => vec![
-                ("palserver", "Palworld", "Palworld (UE5)"),
-                ("tshock", "TShock (Terraria)", "TShock for Terraria"),
-                ("valheim", "Valheim", "Valheim (Unity)"),
-                ("factorio", "Factorio Headless", "Factorio Headless"),
-                ("custom", "Custom Game", "Custom binary or script"),
-            ],
+            4 => {
+                let non_mc = craft_providers::get_all_softwares()
+                    .into_iter()
+                    .filter(|s| s.game_id() != "minecraft")
+                    .map(|s| (s.id(), s.name(), s.description()))
+                    .collect::<Vec<_>>();
+                if !non_mc.is_empty() {
+                    non_mc
+                } else {
+                    vec![("custom", "Custom Game", "Custom binary or script")]
+                }
+            }
             _ => get_all_softwares()
                 .into_iter()
                 .map(|s| (s.id(), s.name(), s.description()))
@@ -567,7 +572,11 @@ pub async fn handle_new(
         path: target_dir.clone(),
         software: software.id().to_string(),
         version: version.clone(),
-        game: software.game_id().to_string(),
+        game: if software.game_id().is_empty() {
+            software.id().to_string()
+        } else {
+            software.game_id().to_string()
+        },
         auto: false,
         java_path,
         memory: Some(memory.to_string()),

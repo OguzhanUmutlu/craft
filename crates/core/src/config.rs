@@ -1,10 +1,10 @@
-use std::fs::{self, OpenOptions};
-use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use fs2::FileExt;
 use crate::error::{CraftError, Result};
 use crate::path::CraftPaths;
+use chrono::{DateTime, Utc};
+use fs2::FileExt;
+use serde::{Deserialize, Serialize};
+use std::fs::{self, OpenOptions};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ServerConfig {
@@ -197,19 +197,29 @@ impl ServersRegistry {
 
     pub fn find_by_path<P: AsRef<Path>>(&self, path: P) -> Option<&ServerConfig> {
         let target = path.as_ref();
-        let canonical_target = target.canonicalize().unwrap_or_else(|_| target.to_path_buf());
+        let canonical_target = target
+            .canonicalize()
+            .unwrap_or_else(|_| target.to_path_buf());
         self.servers.iter().find(|s| {
-            s.path == target || s.path.canonicalize().map(|p| p == canonical_target).unwrap_or(false)
+            s.path == target
+                || s.path
+                    .canonicalize()
+                    .map(|p| p == canonical_target)
+                    .unwrap_or(false)
         })
     }
 
     pub fn find_by_name(&self, name: &str) -> Option<&ServerConfig> {
-        self.servers.iter().find(|s| s.name.eq_ignore_ascii_case(name))
+        self.servers
+            .iter()
+            .find(|s| s.name.eq_ignore_ascii_case(name))
     }
 
     pub fn add(&mut self, server: ServerConfig) -> Result<()> {
         if self.find_by_path(&server.path).is_some() {
-            return Err(CraftError::ServerAlreadyExists(server.path.to_string_lossy().to_string()));
+            return Err(CraftError::ServerAlreadyExists(
+                server.path.to_string_lossy().to_string(),
+            ));
         }
         self.servers.push(server);
         Ok(())
@@ -438,7 +448,8 @@ mod tests {
         });
 
         let serialized = toml::to_string(&registry).expect("Failed to serialize");
-        let deserialized: ServersRegistry = toml::from_str(&serialized).expect("Failed to deserialize");
+        let deserialized: ServersRegistry =
+            toml::from_str(&serialized).expect("Failed to deserialize");
         assert_eq!(registry.servers.len(), deserialized.servers.len());
         assert_eq!(registry.servers[0].name, deserialized.servers[0].name);
         assert_eq!(registry.servers[0].game, "minecraft");

@@ -1,8 +1,8 @@
 [software]
 id = "custom"
 name = "Custom Game"
-display_name = "Custom Game Server (Generic binary/script)"
-game = "custom"
+display_name = "Custom Game (Generic binary/script)"
+game = ""
 edition = "native"
 description = "Custom binary or script"
 version = "1.0.0"

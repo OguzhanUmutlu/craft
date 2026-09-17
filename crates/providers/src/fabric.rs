@@ -1,9 +1,9 @@
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::Result;
+use serde::Deserialize;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
-use serde::Deserialize;
-use craft_core::Result;
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 #[derive(Deserialize)]
 struct FabricGameVersion {
@@ -70,9 +70,18 @@ impl ServerSoftware for FabricProvider {
 
     fn bundled_versions(&self) -> Vec<String> {
         vec![
-            "1.21.4".into(), "1.21.3".into(), "1.21.1".into(), "1.21".into(),
-            "1.20.6".into(), "1.20.4".into(), "1.20.2".into(), "1.20.1".into(),
-            "1.19.4".into(), "1.19.2".into(), "1.18.2".into(), "1.16.5".into(),
+            "1.21.4".into(),
+            "1.21.3".into(),
+            "1.21.1".into(),
+            "1.21".into(),
+            "1.20.6".into(),
+            "1.20.4".into(),
+            "1.20.2".into(),
+            "1.20.1".into(),
+            "1.19.4".into(),
+            "1.19.2".into(),
+            "1.18.2".into(),
+            "1.16.5".into(),
         ]
     }
 
@@ -82,8 +91,16 @@ impl ServerSoftware for FabricProvider {
         Box::pin(async move {
             let url = "https://meta.fabricmc.net/v2/versions/game";
             if let Ok(cache) = crate::cache::CacheManager::from_default_paths() {
-                if let Ok(list) = cache.get_cached_json::<Vec<FabricGameVersion>>("fabric_game_versions", url, std::time::Duration::from_secs(6 * 3600)).await {
-                    let mut versions: Vec<String> = list.into_iter()
+                if let Ok(list) = cache
+                    .get_cached_json::<Vec<FabricGameVersion>>(
+                        "fabric_game_versions",
+                        url,
+                        std::time::Duration::from_secs(6 * 3600),
+                    )
+                    .await
+                {
+                    let mut versions: Vec<String> = list
+                        .into_iter()
                         .filter(|g| g.stable)
                         .map(|g| g.version)
                         .collect();
@@ -96,7 +113,8 @@ impl ServerSoftware for FabricProvider {
             let client = reqwest::Client::new();
             if let Ok(resp) = client.get(url).send().await {
                 if let Ok(list) = resp.json::<Vec<FabricGameVersion>>().await {
-                    let mut versions: Vec<String> = list.into_iter()
+                    let mut versions: Vec<String> = list
+                        .into_iter()
                         .filter(|g| g.stable)
                         .map(|g| g.version)
                         .collect();

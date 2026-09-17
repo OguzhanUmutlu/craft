@@ -1,7 +1,7 @@
+use fs2::FileExt;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
-use fs2::FileExt;
 
 use crate::error::{CraftError, Result};
 use crate::path::CraftPaths;
@@ -180,7 +180,10 @@ impl GlobalBackupRegistry {
 
     pub fn ensure_defaults(&mut self, paths: &CraftPaths) {
         if self.local_targets.is_empty() {
-            let p = self.local_path.clone().unwrap_or_else(|| paths.backups_dir.clone());
+            let p = self
+                .local_path
+                .clone()
+                .unwrap_or_else(|| paths.backups_dir.clone());
             self.local_targets.push(LocalBackupTarget {
                 id: "default".to_string(),
                 name: "Default Storage".to_string(),
@@ -219,8 +222,9 @@ impl GlobalBackupRegistry {
         let exists = path.exists();
         let mut reg = if exists {
             let content = fs::read_to_string(&path)?;
-            toml::from_str(&content)
-                .map_err(|e| CraftError::Config(format!("Failed to parse backup_config.toml: {}", e)))?
+            toml::from_str(&content).map_err(|e| {
+                CraftError::Config(format!("Failed to parse backup_config.toml: {}", e))
+            })?
         } else {
             Self::default()
         };
@@ -229,7 +233,10 @@ impl GlobalBackupRegistry {
         } else {
             // Only migrate legacy single-target fields if new arrays are empty and legacy fields exist
             if reg.local_targets.is_empty() && reg.local_path.is_some() {
-                let p = reg.local_path.clone().unwrap_or_else(|| paths.backups_dir.clone());
+                let p = reg
+                    .local_path
+                    .clone()
+                    .unwrap_or_else(|| paths.backups_dir.clone());
                 reg.local_targets.push(LocalBackupTarget {
                     id: "default".to_string(),
                     name: "Default Storage".to_string(),
@@ -267,8 +274,9 @@ impl GlobalBackupRegistry {
 
     pub fn save(&self, paths: &CraftPaths) -> Result<()> {
         let path = Self::config_path(paths);
-        let content = toml::to_string_pretty(self)
-            .map_err(|e| CraftError::Config(format!("Failed to serialize backup_config.toml: {}", e)))?;
+        let content = toml::to_string_pretty(self).map_err(|e| {
+            CraftError::Config(format!("Failed to serialize backup_config.toml: {}", e))
+        })?;
 
         let lock_file_path = paths.locks_dir.join("backup_config.lock");
         let lock_file = OpenOptions::new()
@@ -343,7 +351,11 @@ impl GlobalBackupRegistry {
                 }
             }
             Some(m) if m.starts_with("s3:") || m == "s3" => {
-                let id = if m == "s3" { "default-s3" } else { &m["s3:".len()..] };
+                let id = if m == "s3" {
+                    "default-s3"
+                } else {
+                    &m["s3:".len()..]
+                };
                 if let Some(t) = self.s3_targets.iter().find(|t| t.id == id) {
                     format!("S3: {}", t.name)
                 } else if let Some(first) = self.s3_targets.first() {
@@ -353,7 +365,11 @@ impl GlobalBackupRegistry {
                 }
             }
             Some(m) if m.starts_with("gdrive:") || m == "gdrive" => {
-                let id = if m == "gdrive" { "default-gdrive" } else { &m["gdrive:".len()..] };
+                let id = if m == "gdrive" {
+                    "default-gdrive"
+                } else {
+                    &m["gdrive:".len()..]
+                };
                 if let Some(t) = self.gdrive_targets.iter().find(|t| t.id == id) {
                     format!("Google Drive: {}", t.name)
                 } else if let Some(first) = self.gdrive_targets.first() {
@@ -367,7 +383,10 @@ impl GlobalBackupRegistry {
     }
 
     pub fn get_policy(&self, server_name: &str) -> AutoBackupPolicy {
-        self.server_policies.get(server_name).cloned().unwrap_or_default()
+        self.server_policies
+            .get(server_name)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn set_policy(&mut self, server_name: &str, policy: AutoBackupPolicy) {
@@ -395,9 +414,18 @@ mod tests {
 
         // Test display formatting
         assert_eq!(reg.format_method_display(None), "Local: Default Storage");
-        assert_eq!(reg.format_method_display(Some("local")), "Local: Default Storage");
-        assert_eq!(reg.format_method_display(Some("local:default")), "Local: Default Storage");
-        assert_eq!(reg.format_method_display(Some("multi")), "Multi-Destination");
+        assert_eq!(
+            reg.format_method_display(Some("local")),
+            "Local: Default Storage"
+        );
+        assert_eq!(
+            reg.format_method_display(Some("local:default")),
+            "Local: Default Storage"
+        );
+        assert_eq!(
+            reg.format_method_display(Some("multi")),
+            "Multi-Destination"
+        );
 
         // Add S3 target
         reg.s3_targets.push(S3BackupTarget {
@@ -411,8 +439,14 @@ mod tests {
             prefix: Some("server1/".to_string()),
         });
 
-        assert_eq!(reg.format_method_display(Some("s3:s3-prod")), "S3: AWS Production Bucket");
-        assert_eq!(reg.format_method_display(Some("s3")), "S3: AWS Production Bucket");
+        assert_eq!(
+            reg.format_method_display(Some("s3:s3-prod")),
+            "S3: AWS Production Bucket"
+        );
+        assert_eq!(
+            reg.format_method_display(Some("s3")),
+            "S3: AWS Production Bucket"
+        );
         assert_eq!(reg.find_s3("s3-prod").unwrap().bucket, "mc-backups");
 
         // Test TOML roundtrip
@@ -451,4 +485,3 @@ mod tests {
         assert_eq!(reg.gdrive_targets[0].folder_id, "folder-123");
     }
 }
-

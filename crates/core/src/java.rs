@@ -1,9 +1,9 @@
+use crate::error::{CraftError, Result};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::warn;
-use crate::error::{CraftError, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JavaInstallation {
@@ -23,10 +23,12 @@ pub fn get_jar_java_version<P: AsRef<Path>>(jar_path: P) -> Result<u32> {
     let mut max_class_version = 0u16;
 
     for i in 0..archive.len() {
-        let mut zip_file = archive.by_index(i)
+        let mut zip_file = archive
+            .by_index(i)
             .map_err(|e| CraftError::Java(format!("Failed reading entry in JAR: {}", e)))?;
 
-        if zip_file.name().ends_with(".class") && !zip_file.name().starts_with("META-INF/versions/") {
+        if zip_file.name().ends_with(".class") && !zip_file.name().starts_with("META-INF/versions/")
+        {
             let mut header = [0u8; 8];
             if zip_file.read_exact(&mut header).is_ok() {
                 // Check magic number 0xCAFEBABE
@@ -41,7 +43,9 @@ pub fn get_jar_java_version<P: AsRef<Path>>(jar_path: P) -> Result<u32> {
     }
 
     if max_class_version == 0 {
-        return Err(CraftError::Java("No valid .class files found in JAR archive".to_string()));
+        return Err(CraftError::Java(
+            "No valid .class files found in JAR archive".to_string(),
+        ));
     }
 
     Ok(class_major_to_java_version(max_class_version))
@@ -49,7 +53,7 @@ pub fn get_jar_java_version<P: AsRef<Path>>(jar_path: P) -> Result<u32> {
 
 pub fn class_major_to_java_version(major: u16) -> u32 {
     match major {
-        45..=48 => 1, // Java 1.1 - 1.4
+        45..=48 => 1,                // Java 1.1 - 1.4
         49.. => (major - 44) as u32, // 52 = Java 8, 61 = Java 17, 65 = Java 21, etc.
         _ => 8,
     }
@@ -61,7 +65,11 @@ pub fn get_java_installations() -> Vec<JavaInstallation> {
 
     // 1. JAVA_HOME environment variable
     if let Ok(java_home) = std::env::var("JAVA_HOME") {
-        let bin_java = PathBuf::from(java_home).join("bin").join(if cfg!(windows) { "java.exe" } else { "java" });
+        let bin_java = PathBuf::from(java_home).join("bin").join(if cfg!(windows) {
+            "java.exe"
+        } else {
+            "java"
+        });
         if bin_java.is_file() {
             candidates.push(bin_java);
         }
@@ -140,7 +148,11 @@ pub fn get_java_installations() -> Vec<JavaInstallation> {
     for path in candidates {
         if let Some(inst) = inspect_java_binary(&path) {
             // Avoid duplicate versions pointing to same resolved binary
-            if !installations.iter().any(|i: &JavaInstallation| i.path == inst.path || (i.major_version == inst.major_version && i.path.canonicalize().ok() == inst.path.canonicalize().ok())) {
+            if !installations.iter().any(|i: &JavaInstallation| {
+                i.path == inst.path
+                    || (i.major_version == inst.major_version
+                        && i.path.canonicalize().ok() == inst.path.canonicalize().ok())
+            }) {
                 installations.push(inst);
             }
         }
@@ -197,12 +209,16 @@ pub fn find_best_java(required_version: u32) -> Result<JavaInstallation> {
     let installations = get_java_installations();
     if installations.is_empty() {
         return Err(CraftError::Java(
-            "No Java installations found on system. Please install Java and ensure it is in PATH.".to_string(),
+            "No Java installations found on system. Please install Java and ensure it is in PATH."
+                .to_string(),
         ));
     }
 
     // Try exact match
-    if let Some(direct) = installations.iter().find(|i| i.major_version == required_version) {
+    if let Some(direct) = installations
+        .iter()
+        .find(|i| i.major_version == required_version)
+    {
         return Ok(direct.clone());
     }
 
@@ -251,14 +267,23 @@ mod tests {
         let openjdk_21 = r#"openjdk version "21.0.2" 2024-01-16
 OpenJDK Runtime Environment (build 21.0.2+13-Ubuntu-122.04.1)
 OpenJDK 64-Bit Server VM (build 21.0.2+13-Ubuntu-122.04.1, mixed mode, sharing)"#;
-        assert_eq!(parse_java_version_output(openjdk_21), Some((21, "21.0.2".to_string())));
+        assert_eq!(
+            parse_java_version_output(openjdk_21),
+            Some((21, "21.0.2".to_string()))
+        );
 
         let java_8 = r#"java version "1.8.0_381"
 Java(TM) SE Runtime Environment (build 1.8.0_381-b09)
 Java HotSpot(TM) 64-Bit Server VM (build 25.381-b09, mixed mode)"#;
-        assert_eq!(parse_java_version_output(java_8), Some((8, "1.8.0_381".to_string())));
+        assert_eq!(
+            parse_java_version_output(java_8),
+            Some((8, "1.8.0_381".to_string()))
+        );
 
         let openjdk_17 = r#"openjdk version "17.0.9" 2023-10-17"#;
-        assert_eq!(parse_java_version_output(openjdk_17), Some((17, "17.0.9".to_string())));
+        assert_eq!(
+            parse_java_version_output(openjdk_17),
+            Some((17, "17.0.9".to_string()))
+        );
     }
 }

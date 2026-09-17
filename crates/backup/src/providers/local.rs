@@ -1,8 +1,8 @@
-use std::fs;
-use std::path::{Path, PathBuf};
+use super::{CloudBackupEntry, StorageProvider};
 use chrono::Utc;
 use craft_core::{CraftError, Result};
-use super::{CloudBackupEntry, StorageProvider};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct LocalStorageProvider {
     base_dir: PathBuf,
@@ -71,7 +71,10 @@ impl StorageProvider for LocalStorageProvider {
     async fn download_file(&self, remote_key: &str, target_path: &Path) -> Result<()> {
         let src = self.base_dir.join(remote_key);
         if !src.exists() {
-            return Err(CraftError::Other(format!("Local file not found: {}", src.display())));
+            return Err(CraftError::Other(format!(
+                "Local file not found: {}",
+                src.display()
+            )));
         }
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent)?;

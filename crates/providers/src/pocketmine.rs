@@ -1,12 +1,12 @@
+use crate::bundled::BUNDLED_POCKETMINE;
+use crate::cache::CacheManager;
+use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
+use craft_core::{CraftError, Result};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
-use serde_json::Value;
-use craft_core::{CraftError, Result};
-use crate::bundled::BUNDLED_POCKETMINE;
-use crate::cache::CacheManager;
-use crate::traits::{AssetDownload, ServerEdition, ServerSoftware};
 
 #[derive(Clone)]
 struct PocketmineEntry {
@@ -83,11 +83,20 @@ impl PocketmineProvider {
             }
             _ => {
                 #[cfg(target_os = "windows")]
-                return Ok(("https://pmmp-php.github.io/files/api3/php-7.4.21-Windows.zip", false));
+                return Ok((
+                    "https://pmmp-php.github.io/files/api3/php-7.4.21-Windows.zip",
+                    false,
+                ));
                 #[cfg(target_os = "linux")]
-                return Ok(("https://pmmp-php.github.io/files/api3/php-7.4.21-Linux.zip", false));
+                return Ok((
+                    "https://pmmp-php.github.io/files/api3/php-7.4.21-Linux.zip",
+                    false,
+                ));
                 #[cfg(target_os = "macos")]
-                return Ok(("https://pmmp-php.github.io/files/api3/php-7.4.21-Mac.zip", false));
+                return Ok((
+                    "https://pmmp-php.github.io/files/api3/php-7.4.21-Mac.zip",
+                    false,
+                ));
             }
         }
     }
@@ -135,16 +144,17 @@ impl ServerSoftware for PocketmineProvider {
     fn fetch_versions<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>> {
-        Box::pin(async move {
-            Ok(self.bundled_versions())
-        })
+        Box::pin(async move { Ok(self.bundled_versions()) })
     }
 
     fn get_assets(&self, version: &str) -> Result<Vec<AssetDownload>> {
-        let entry = self.versions.get(version).ok_or_else(|| CraftError::UnknownVersion {
-            software: self.name().to_string(),
-            version: version.to_string(),
-        })?;
+        let entry = self
+            .versions
+            .get(version)
+            .ok_or_else(|| CraftError::UnknownVersion {
+                software: self.name().to_string(),
+                version: version.to_string(),
+            })?;
 
         let (php_url, is_tar_gz) = self.resolve_php_binary_url(&entry.pm_version)?;
 
@@ -156,7 +166,11 @@ impl ServerSoftware for PocketmineProvider {
                 is_archive: false,
             },
             AssetDownload {
-                filename: if is_tar_gz { "libs.tar.gz".to_string() } else { "libs.zip".to_string() },
+                filename: if is_tar_gz {
+                    "libs.tar.gz".to_string()
+                } else {
+                    "libs.zip".to_string()
+                },
                 url: php_url.to_string(),
                 sha256: None,
                 is_archive: true,

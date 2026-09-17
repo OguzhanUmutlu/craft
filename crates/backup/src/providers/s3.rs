@@ -1,11 +1,11 @@
+use super::{CloudBackupEntry, StorageProvider};
+use chrono::Utc;
+use craft_core::{CraftError, Result, S3BackupConfig};
+use reqwest::Client;
+use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use chrono::Utc;
-use reqwest::Client;
-use sha2::{Digest, Sha256};
-use craft_core::{CraftError, Result, S3BackupConfig};
-use super::{CloudBackupEntry, StorageProvider};
 
 pub struct S3StorageProvider {
     config: S3BackupConfig,
@@ -32,7 +32,10 @@ impl S3StorageProvider {
             };
             (url, host)
         } else {
-            let host = format!("{}.s3.{}.amazonaws.com", self.config.bucket, self.config.region);
+            let host = format!(
+                "{}.s3.{}.amazonaws.com",
+                self.config.bucket, self.config.region
+            );
             let url = format!("https://{}/{}", host, clean_key);
             (url, host)
         }
@@ -56,7 +59,10 @@ impl S3StorageProvider {
             format!("/{}", path)
         };
 
-        let canonical_headers = format!("host:{}\nx-amz-content-sha256:{}\nx-amz-date:{}\n", host, payload_hash, amz_date);
+        let canonical_headers = format!(
+            "host:{}\nx-amz-content-sha256:{}\nx-amz-date:{}\n",
+            host, payload_hash, amz_date
+        );
         let signed_headers = "host;x-amz-content-sha256;x-amz-date";
 
         let canonical_request = format!(
@@ -99,7 +105,11 @@ impl StorageProvider for S3StorageProvider {
 
         let payload_hash = hex::encode(Sha256::digest(&body));
         let full_key = if let Some(ref pfx) = self.config.prefix {
-            format!("{}/{}", pfx.trim_end_matches('/'), remote_key.trim_start_matches('/'))
+            format!(
+                "{}/{}",
+                pfx.trim_end_matches('/'),
+                remote_key.trim_start_matches('/')
+            )
         } else {
             remote_key.to_string()
         };
@@ -126,7 +136,10 @@ impl StorageProvider for S3StorageProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(CraftError::Other(format!("S3 error (HTTP {}): {}", status, body)));
+            return Err(CraftError::Other(format!(
+                "S3 error (HTTP {}): {}",
+                status, body
+            )));
         }
 
         Ok(())
@@ -134,7 +147,11 @@ impl StorageProvider for S3StorageProvider {
 
     async fn list_files(&self, prefix: &str) -> Result<Vec<CloudBackupEntry>> {
         let full_prefix = if let Some(ref pfx) = self.config.prefix {
-            format!("{}/{}", pfx.trim_end_matches('/'), prefix.trim_start_matches('/'))
+            format!(
+                "{}/{}",
+                pfx.trim_end_matches('/'),
+                prefix.trim_start_matches('/')
+            )
         } else {
             prefix.to_string()
         };
@@ -163,7 +180,10 @@ impl StorageProvider for S3StorageProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(CraftError::Other(format!("S3 list error (HTTP {}): {}", status, body)));
+            return Err(CraftError::Other(format!(
+                "S3 list error (HTTP {}): {}",
+                status, body
+            )));
         }
 
         let xml = resp.text().await.unwrap_or_default();
@@ -180,9 +200,9 @@ impl StorageProvider for S3StorageProvider {
                 let key = extract_tag(chunk, "Key").unwrap_or_default();
                 let size_str = extract_tag(chunk, "Size").unwrap_or_default();
                 let size_bytes = size_str.parse::<u64>().unwrap_or(0);
-                let last_modified = extract_tag(chunk, "LastModified").unwrap_or_else(|| "Unknown".to_string());
+                let last_modified =
+                    extract_tag(chunk, "LastModified").unwrap_or_else(|| "Unknown".to_string());
                 let filename = key.split('/').next_back().unwrap_or(&key).to_string();
-
 
                 if !key.is_empty() {
                     entries.push(CloudBackupEntry {
@@ -226,10 +246,16 @@ impl StorageProvider for S3StorageProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(CraftError::Other(format!("S3 download error (HTTP {}): {}", status, body)));
+            return Err(CraftError::Other(format!(
+                "S3 download error (HTTP {}): {}",
+                status, body
+            )));
         }
 
-        let bytes = resp.bytes().await.map_err(|e| CraftError::Other(format!("Error reading S3 body: {}", e)))?;
+        let bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| CraftError::Other(format!("Error reading S3 body: {}", e)))?;
         if let Some(parent) = target_path.parent() {
             std::fs::create_dir_all(parent)?;
         }

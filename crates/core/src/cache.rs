@@ -1,12 +1,12 @@
+use chrono::Utc;
+use fs2::FileExt;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use chrono::Utc;
-use fs2::FileExt;
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use crate::error::{CraftError, Result};
 
@@ -41,7 +41,10 @@ impl CacheEntryMeta {
             }
         }
         let sub = self.rel_subpath();
-        Path::new(sub).file_name().and_then(|n| n.to_str()).unwrap_or(sub)
+        Path::new(sub)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(sub)
     }
 }
 
@@ -115,7 +118,10 @@ impl CacheStore {
                 if path.is_file() {
                     let file_name = entry.file_name();
                     let name_str = file_name.to_string_lossy();
-                    if name_str != "index.json" && name_str != "cache.lock" && !name_str.ends_with(".tmp") {
+                    if name_str != "index.json"
+                        && name_str != "cache.lock"
+                        && !name_str.ends_with(".tmp")
+                    {
                         let target = store.artifacts_dir.join(&*name_str);
                         if !target.exists() {
                             let _ = fs::rename(&path, &target);
@@ -315,7 +321,9 @@ impl CacheStore {
     }
 
     pub fn has_artifact(&self, rel_subpath: &str) -> bool {
-        let clean = rel_subpath.strip_prefix("artifacts/").unwrap_or(rel_subpath);
+        let clean = rel_subpath
+            .strip_prefix("artifacts/")
+            .unwrap_or(rel_subpath);
         let key = format!("artifacts/{}", clean);
         let idx = self.load_index();
         if let Some(entry) = idx.entries.get(&key) {
@@ -410,7 +418,9 @@ impl CacheStore {
     }
 
     pub fn get_artifact_data(&self, rel_subpath: &str) -> Result<Option<Vec<u8>>> {
-        let clean = rel_subpath.strip_prefix("artifacts/").unwrap_or(rel_subpath);
+        let clean = rel_subpath
+            .strip_prefix("artifacts/")
+            .unwrap_or(rel_subpath);
         let key = format!("artifacts/{}", clean);
         let _lock = self.lock()?;
         let mut idx = self.load_index();
@@ -427,8 +437,9 @@ impl CacheStore {
 
             let raw_bytes = fs::read(&full_path)?;
             if is_compressed {
-                let decompressed = zstd::decode_all(raw_bytes.as_slice())
-                    .map_err(|e| CraftError::Other(format!("Failed to decompress cached artifact: {}", e)))?;
+                let decompressed = zstd::decode_all(raw_bytes.as_slice()).map_err(|e| {
+                    CraftError::Other(format!("Failed to decompress cached artifact: {}", e))
+                })?;
                 Ok(Some(decompressed))
             } else {
                 Ok(Some(raw_bytes))
@@ -437,8 +448,9 @@ impl CacheStore {
             let compressed_path = self.artifacts_dir.join(format!("{}.zst", clean));
             if compressed_path.is_file() {
                 let raw_bytes = fs::read(&compressed_path)?;
-                let decompressed = zstd::decode_all(raw_bytes.as_slice())
-                    .map_err(|e| CraftError::Other(format!("Failed to decompress cached artifact: {}", e)))?;
+                let decompressed = zstd::decode_all(raw_bytes.as_slice()).map_err(|e| {
+                    CraftError::Other(format!("Failed to decompress cached artifact: {}", e))
+                })?;
                 return Ok(Some(decompressed));
             }
             let uncompressed_path = self.artifacts_dir.join(clean);
@@ -458,7 +470,9 @@ impl CacheStore {
             let _ = fs::remove_file(destination_file);
         }
 
-        let clean = rel_subpath.strip_prefix("artifacts/").unwrap_or(rel_subpath);
+        let clean = rel_subpath
+            .strip_prefix("artifacts/")
+            .unwrap_or(rel_subpath);
         let key = format!("artifacts/{}", clean);
         let (rel_path, is_compressed) = {
             let _lock = self.lock()?;
@@ -538,12 +552,7 @@ impl CacheStore {
         items
     }
 
-    pub fn put_metadata(
-        &self,
-        key: &str,
-        data: &[u8],
-        ttl: Option<Duration>,
-    ) -> Result<PathBuf> {
+    pub fn put_metadata(&self, key: &str, data: &[u8], ttl: Option<Duration>) -> Result<PathBuf> {
         let _lock = self.lock()?;
 
         // Compress with Zstandard level 3 (fastest high-ratio compression)
@@ -789,7 +798,13 @@ impl CacheStore {
 fn sanitize_cache_key(key: &str) -> String {
     let cleaned: String = key
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if cleaned.len() > 100 {
         let hash = compute_sha256_bytes(key.as_bytes());
@@ -886,7 +901,13 @@ mod tests {
         let manifest_data = r#"{"latest":{"release":"1.21.4","snapshot":"25w02a"},"versions":[{"id":"1.21.4","type":"release","url":"https://piston-meta.mojang.com/v1/packages/123/1.21.4.json"},{"id":"1.21.3","type":"release","url":"https://piston-meta.mojang.com/v1/packages/456/1.21.3.json"}]}"#.repeat(50);
         let raw_len = manifest_data.len() as u64;
 
-        store.put_metadata("test_manifest", manifest_data.as_bytes(), Some(Duration::from_secs(3600))).unwrap();
+        store
+            .put_metadata(
+                "test_manifest",
+                manifest_data.as_bytes(),
+                Some(Duration::from_secs(3600)),
+            )
+            .unwrap();
 
         let retrieved = store.get_metadata("test_manifest").unwrap().unwrap();
         assert_eq!(retrieved, manifest_data.as_bytes());
@@ -903,7 +924,9 @@ mod tests {
         let store = CacheStore::new(tmp.path().join("cache"), 10 * 1024 * 1024).unwrap();
 
         let jar_bytes = b"sample-server-jar-binary-content-123456789";
-        let (cached_path, _) = store.put_artifact("jars/paper-1.21.4.jar", jar_bytes, None).unwrap();
+        let (cached_path, _) = store
+            .put_artifact("jars/paper-1.21.4.jar", jar_bytes, None)
+            .unwrap();
 
         let server_dest1 = tmp.path().join("server1").join("server.jar");
         let server_dest2 = tmp.path().join("server2").join("server.jar");
@@ -968,7 +991,9 @@ mod tests {
         let store = CacheStore::new(tmp.path().join("cache"), 1024 * 1024).unwrap();
 
         // 1 second TTL
-        store.put_metadata("short_lived", b"data", Some(Duration::from_secs(1))).unwrap();
+        store
+            .put_metadata("short_lived", b"data", Some(Duration::from_secs(1)))
+            .unwrap();
         assert!(store.get_metadata("short_lived").unwrap().is_some());
 
         // Sleep 1.2 seconds to expire
@@ -982,7 +1007,10 @@ mod tests {
     fn test_parse_and_format_size() {
         assert_eq!(parse_size("500MB"), Some(500 * 1024 * 1024));
         assert_eq!(parse_size("2GB"), Some(2 * 1024 * 1024 * 1024));
-        assert_eq!(parse_size("1.5G"), Some((1.5 * 1024.0 * 1024.0 * 1024.0) as u64));
+        assert_eq!(
+            parse_size("1.5G"),
+            Some((1.5 * 1024.0 * 1024.0 * 1024.0) as u64)
+        );
         assert_eq!(parse_size("1024KB"), Some(1024 * 1024));
         assert_eq!(parse_size("4096B"), Some(4096));
         assert_eq!(parse_size("invalid"), None);
@@ -1015,12 +1043,17 @@ mod tests {
         assert_eq!(meta.uncompressed_size, sample_data.len() as u64);
 
         // Verify retrieval of uncompressed bytes
-        let retrieved = store.get_artifact_data("plugins/EssentialsX.jar").unwrap().unwrap();
+        let retrieved = store
+            .get_artifact_data("plugins/EssentialsX.jar")
+            .unwrap()
+            .unwrap();
         assert_eq!(retrieved, sample_data);
 
         // Verify extraction directly into a destination file
         let dest = tmp.path().join("server/plugins/EssentialsX.jar");
-        store.extract_artifact_to("plugins/EssentialsX.jar", &dest).unwrap();
+        store
+            .extract_artifact_to("plugins/EssentialsX.jar", &dest)
+            .unwrap();
         assert!(dest.exists());
         assert_eq!(fs::read(&dest).unwrap(), sample_data);
 

@@ -27,12 +27,16 @@ impl ServerSoftware for CustomGameProvider {
         "Custom Game"
     }
 
+    fn display_name(&self) -> &'static str {
+        "Custom Game (Generic binary/script)"
+    }
+
     fn edition(&self) -> ServerEdition {
         ServerEdition::Native
     }
 
     fn game_id(&self) -> &'static str {
-        "custom"
+        ""
     }
 
     fn supports_plugins(&self) -> bool {

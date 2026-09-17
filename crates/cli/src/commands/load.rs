@@ -45,7 +45,11 @@ pub async fn handle_load(
         path: canonical.clone(),
         software: software.id().to_string(),
         version: version.to_string(),
-        game: software.game_id().to_string(),
+        game: if software.game_id().is_empty() {
+            software.id().to_string()
+        } else {
+            software.game_id().to_string()
+        },
         auto: false,
         java_path: None,
         memory: Some("2G".to_string()),

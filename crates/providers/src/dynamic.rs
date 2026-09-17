@@ -9,6 +9,7 @@ pub struct DynamicSoftwareProvider {
     pub bundle: SoftwareDefinitionBundle,
     id_static: &'static str,
     name_static: &'static str,
+    display_name_static: &'static str,
     game_id_static: &'static str,
     description_static: &'static str,
     default_server_file_static: &'static str,
@@ -18,6 +19,15 @@ impl DynamicSoftwareProvider {
     pub fn new(bundle: SoftwareDefinitionBundle) -> Self {
         let id_static = Box::leak(bundle.definition.software.id.clone().into_boxed_str());
         let name_static = Box::leak(bundle.definition.software.name.clone().into_boxed_str());
+        let display_name_static = Box::leak(
+            bundle
+                .definition
+                .software
+                .display_name
+                .clone()
+                .unwrap_or_else(|| bundle.definition.software.name.clone())
+                .into_boxed_str(),
+        );
         let game_id_static = Box::leak(bundle.definition.software.game.clone().into_boxed_str());
         let description_static =
             Box::leak(bundle.definition.description().to_string().into_boxed_str());
@@ -33,6 +43,7 @@ impl DynamicSoftwareProvider {
             bundle,
             id_static,
             name_static,
+            display_name_static,
             game_id_static,
             description_static,
             default_server_file_static,
@@ -47,6 +58,10 @@ impl ServerSoftware for DynamicSoftwareProvider {
 
     fn name(&self) -> &'static str {
         self.name_static
+    }
+
+    fn display_name(&self) -> &'static str {
+        self.display_name_static
     }
 
     fn edition(&self) -> ServerEdition {

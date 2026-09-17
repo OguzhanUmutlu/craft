@@ -1,10 +1,10 @@
+use super::{CloudBackupEntry, StorageProvider};
+use craft_core::{CraftError, GDriveBackupConfig, Result};
+use reqwest::Client;
+use serde::Deserialize;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use reqwest::Client;
-use serde::Deserialize;
-use craft_core::{CraftError, GDriveBackupConfig, Result};
-use super::{CloudBackupEntry, StorageProvider};
 
 #[derive(Debug, Deserialize)]
 struct GDriveFileList {
@@ -88,7 +88,6 @@ impl GDriveStorageProvider {
             url_encode(&query)
         );
 
-
         let resp = self
             .client
             .get(&url)
@@ -154,7 +153,10 @@ impl StorageProvider for GDriveStorageProvider {
             .client
             .post(url)
             .header("Authorization", format!("Bearer {}", token))
-            .header("Content-Type", format!("multipart/related; boundary={}", boundary))
+            .header(
+                "Content-Type",
+                format!("multipart/related; boundary={}", boundary),
+            )
             .body(payload)
             .send()
             .await
@@ -180,7 +182,6 @@ impl StorageProvider for GDriveStorageProvider {
             url_encode(&query)
         );
 
-
         let resp = self
             .client
             .get(&url)
@@ -198,10 +199,9 @@ impl StorageProvider for GDriveStorageProvider {
             )));
         }
 
-        let file_list: GDriveFileList = resp
-            .json()
-            .await
-            .map_err(|e| CraftError::Other(format!("Failed to parse GDrive list response: {}", e)))?;
+        let file_list: GDriveFileList = resp.json().await.map_err(|e| {
+            CraftError::Other(format!("Failed to parse GDrive list response: {}", e))
+        })?;
 
         let mut entries = Vec::new();
         for file in file_list.files {
@@ -245,7 +245,10 @@ impl StorageProvider for GDriveStorageProvider {
             remote_key.to_string()
         };
 
-        let url = format!("https://www.googleapis.com/drive/v3/files/{}?alt=media", file_id);
+        let url = format!(
+            "https://www.googleapis.com/drive/v3/files/{}?alt=media",
+            file_id
+        );
         let resp = self
             .client
             .get(&url)
@@ -263,10 +266,9 @@ impl StorageProvider for GDriveStorageProvider {
             )));
         }
 
-        let bytes = resp
-            .bytes()
-            .await
-            .map_err(|e| CraftError::Other(format!("Failed to read GDrive response body: {}", e)))?;
+        let bytes = resp.bytes().await.map_err(|e| {
+            CraftError::Other(format!("Failed to read GDrive response body: {}", e))
+        })?;
 
         if let Some(parent) = target_path.parent() {
             std::fs::create_dir_all(parent)?;

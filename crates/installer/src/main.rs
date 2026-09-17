@@ -54,7 +54,12 @@ fn box_title(title: &str, width: usize) -> String {
         let pad_total = inner_width - title_len;
         let pad_left = pad_total / 2;
         let pad_right = pad_total - pad_left;
-        format!("│ {}{}{} │", " ".repeat(pad_left), title, " ".repeat(pad_right))
+        format!(
+            "│ {}{}{} │",
+            " ".repeat(pad_left),
+            title,
+            " ".repeat(pad_right)
+        )
     }
 }
 
@@ -164,11 +169,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Confirm with user if interactive
     if !args.yes {
-        println!("\r\nProceed with installation to {}? [Y/n]: ", install_dir.display());
+        println!(
+            "\r\nProceed with installation to {}? [Y/n]: ",
+            install_dir.display()
+        );
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
         let trimmed = input.trim();
-        if !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("y") && !trimmed.eq_ignore_ascii_case("yes") {
+        if !trimmed.is_empty()
+            && !trimmed.eq_ignore_ascii_case("y")
+            && !trimmed.eq_ignore_ascii_case("yes")
+        {
             println!("{}", "Installation cancelled.".yellow());
             return Ok(());
         }
@@ -279,7 +290,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "{}",
-        box_row("Definitions: ~/.craft/softwares/ (21 default servers)", width).white()
+        box_row(
+            "Definitions: ~/.craft/softwares/ (21 default servers)",
+            width
+        )
+        .white()
     );
     println!(
         "{}",
@@ -288,7 +303,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", box_divider(width).dimmed());
     println!(
         "{}",
-        box_row("Run 'craft' or 'craft --help' to launch the manager.", width).yellow()
+        box_row(
+            "Run 'craft' or 'craft --help' to launch the manager.",
+            width
+        )
+        .yellow()
     );
     println!("{}\r\n", box_bottom(width).green().bold());
 
@@ -378,7 +397,8 @@ fn check_and_update_path(install_dir: &Path) -> Result<(), Box<dyn std::error::E
                     if rc_path.exists() {
                         if let Ok(content) = fs::read_to_string(&rc_path) {
                             if !content.contains(&*install_dir_str) {
-                                if let Ok(mut file) = OpenOptions::new().append(true).open(&rc_path) {
+                                if let Ok(mut file) = OpenOptions::new().append(true).open(&rc_path)
+                                {
                                     let _ = file.write_all(export_line.as_bytes());
                                     println!(
                                         " {} Added PATH export to ~/{}.",

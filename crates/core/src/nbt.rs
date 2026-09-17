@@ -1,11 +1,11 @@
+use crate::error::{CraftError, Result};
+use flate2::read::{GzDecoder, ZlibDecoder};
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Cursor, Read, Write};
 use std::path::Path;
-use flate2::read::{GzDecoder, ZlibDecoder};
-use flate2::write::GzEncoder;
-use flate2::Compression;
-use crate::error::{CraftError, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NbtTag {
@@ -171,8 +171,7 @@ pub struct NbtFile {
 
 impl NbtFile {
     pub fn read<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let raw = fs::read(path.as_ref())
-            .map_err(CraftError::Io)?;
+        let raw = fs::read(path.as_ref()).map_err(CraftError::Io)?;
 
         if raw.is_empty() {
             return Err(CraftError::Other("Empty NBT file".to_string()));
@@ -182,13 +181,18 @@ impl NbtFile {
         let (bytes, is_compressed) = if raw.len() >= 2 && raw[0] == 0x1F && raw[1] == 0x8B {
             let mut decoder = GzDecoder::new(&raw[..]);
             let mut decompressed = Vec::new();
-            decoder.read_to_end(&mut decompressed)
+            decoder
+                .read_to_end(&mut decompressed)
                 .map_err(|e| CraftError::Other(format!("GZIP decompression error: {}", e)))?;
             (decompressed, true)
-        } else if raw.len() >= 2 && raw[0] == 0x78 && (raw[1] == 0x9C || raw[1] == 0x01 || raw[1] == 0xDA) {
+        } else if raw.len() >= 2
+            && raw[0] == 0x78
+            && (raw[1] == 0x9C || raw[1] == 0x01 || raw[1] == 0xDA)
+        {
             let mut decoder = ZlibDecoder::new(&raw[..]);
             let mut decompressed = Vec::new();
-            decoder.read_to_end(&mut decompressed)
+            decoder
+                .read_to_end(&mut decompressed)
                 .map_err(|e| CraftError::Other(format!("ZLIB decompression error: {}", e)))?;
             (decompressed, true)
         } else {
@@ -198,7 +202,10 @@ impl NbtFile {
         let mut cursor = Cursor::new(&bytes);
         let tag_id = read_u8(&mut cursor)?;
         if tag_id != 10 {
-            return Err(CraftError::Other(format!("Root NBT tag must be Compound (10), found {}", tag_id)));
+            return Err(CraftError::Other(format!(
+                "Root NBT tag must be Compound (10), found {}",
+                tag_id
+            )));
         }
 
         let root_name = read_string(&mut cursor)?;
@@ -219,9 +226,11 @@ impl NbtFile {
 
         let final_bytes = if self.is_compressed {
             let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-            encoder.write_all(&uncompressed)
+            encoder
+                .write_all(&uncompressed)
                 .map_err(|e| CraftError::Other(format!("GZIP compression error: {}", e)))?;
-            encoder.finish()
+            encoder
+                .finish()
                 .map_err(|e| CraftError::Other(format!("GZIP finish error: {}", e)))?
         } else {
             uncompressed
@@ -291,7 +300,8 @@ fn read_string<R: Read>(r: &mut R) -> Result<String> {
     let mut buf = vec![0u8; len];
     r.read_exact(&mut buf)
         .map_err(|e| CraftError::Other(format!("Failed to read string bytes: {}", e)))?;
-    String::from_utf8(buf).map_err(|e| CraftError::Other(format!("Invalid UTF-8 in NBT string: {}", e)))
+    String::from_utf8(buf)
+        .map_err(|e| CraftError::Other(format!("Invalid UTF-8 in NBT string: {}", e)))
 }
 
 fn read_tag_payload<R: Read>(r: &mut R, tag_id: u8) -> Result<NbtTag> {
@@ -365,42 +375,26 @@ fn read_compound<R: Read>(r: &mut R) -> Result<NbtTag> {
 fn write_string<W: Write>(w: &mut W, s: &str) -> Result<()> {
     let bytes = s.as_bytes();
     let len = bytes.len() as u16;
-    w.write_all(&len.to_be_bytes())
-        .map_err(CraftError::Io)?;
-    w.write_all(bytes)
-        .map_err(CraftError::Io)?;
+    w.write_all(&len.to_be_bytes()).map_err(CraftError::Io)?;
+    w.write_all(bytes).map_err(CraftError::Io)?;
     Ok(())
 }
 
 fn write_tag_payload<W: Write>(w: &mut W, tag: &NbtTag) -> Result<()> {
     match tag {
         NbtTag::End => Ok(()),
-        NbtTag::Byte(v) => {
-            w.write_all(&[*v as u8]).map_err(CraftError::Io)
-        }
-        NbtTag::Short(v) => {
-            w.write_all(&v.to_be_bytes()).map_err(CraftError::Io)
-        }
-        NbtTag::Int(v) => {
-            w.write_all(&v.to_be_bytes()).map_err(CraftError::Io)
-        }
-        NbtTag::Long(v) => {
-            w.write_all(&v.to_be_bytes()).map_err(CraftError::Io)
-        }
-        NbtTag::Float(v) => {
-            w.write_all(&v.to_be_bytes()).map_err(CraftError::Io)
-        }
-        NbtTag::Double(v) => {
-            w.write_all(&v.to_be_bytes()).map_err(CraftError::Io)
-        }
+        NbtTag::Byte(v) => w.write_all(&[*v as u8]).map_err(CraftError::Io),
+        NbtTag::Short(v) => w.write_all(&v.to_be_bytes()).map_err(CraftError::Io),
+        NbtTag::Int(v) => w.write_all(&v.to_be_bytes()).map_err(CraftError::Io),
+        NbtTag::Long(v) => w.write_all(&v.to_be_bytes()).map_err(CraftError::Io),
+        NbtTag::Float(v) => w.write_all(&v.to_be_bytes()).map_err(CraftError::Io),
+        NbtTag::Double(v) => w.write_all(&v.to_be_bytes()).map_err(CraftError::Io),
         NbtTag::ByteArray(v) => {
             let len = v.len() as i32;
             w.write_all(&len.to_be_bytes()).map_err(CraftError::Io)?;
             w.write_all(v).map_err(CraftError::Io)
         }
-        NbtTag::String(v) => {
-            write_string(w, v)
-        }
+        NbtTag::String(v) => write_string(w, v),
         NbtTag::List(v) => {
             let item_id = v.first().map(|i| i.type_id()).unwrap_or(0);
             w.write_all(&[item_id]).map_err(CraftError::Io)?;
@@ -445,7 +439,10 @@ mod tests {
     #[test]
     fn test_nbt_roundtrip_uncompressed() {
         let mut data_map = BTreeMap::new();
-        data_map.insert("LevelName".to_string(), NbtTag::String("Survival World".to_string()));
+        data_map.insert(
+            "LevelName".to_string(),
+            NbtTag::String("Survival World".to_string()),
+        );
         data_map.insert("GameType".to_string(), NbtTag::Int(0));
         data_map.insert("Difficulty".to_string(), NbtTag::Byte(2));
         data_map.insert("hardcore".to_string(), NbtTag::Byte(0));
@@ -484,11 +481,14 @@ mod tests {
         let mut root_map = BTreeMap::new();
         root_map.insert("Health".to_string(), NbtTag::Float(20.0));
         root_map.insert("foodLevel".to_string(), NbtTag::Int(20));
-        root_map.insert("Pos".to_string(), NbtTag::List(vec![
-            NbtTag::Double(12.5),
-            NbtTag::Double(65.0),
-            NbtTag::Double(-89.2),
-        ]));
+        root_map.insert(
+            "Pos".to_string(),
+            NbtTag::List(vec![
+                NbtTag::Double(12.5),
+                NbtTag::Double(65.0),
+                NbtTag::Double(-89.2),
+            ]),
+        );
 
         let file = NbtFile {
             root_name: "".to_string(),

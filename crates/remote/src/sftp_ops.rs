@@ -1,9 +1,9 @@
+use crate::session::RemoteSession;
+use craft_core::{CraftError, Result};
+use modalx::modals::ProgressModal;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
-use modalx::modals::ProgressModal;
-use craft_core::{CraftError, Result};
-use crate::session::RemoteSession;
 
 pub struct SftpOps<'a> {
     pub session: &'a RemoteSession,
@@ -16,8 +16,7 @@ impl<'a> SftpOps<'a> {
 
     pub fn upload_file(&self, local_path: &Path, remote_path: &Path) -> Result<()> {
         let sftp = self.session.sftp()?;
-        let mut local_file = File::open(local_path)
-            .map_err(CraftError::Io)?;
+        let mut local_file = File::open(local_path).map_err(CraftError::Io)?;
 
         let meta = local_file.metadata().map_err(CraftError::Io)?;
         let total_size = meta.len();
@@ -31,8 +30,13 @@ impl<'a> SftpOps<'a> {
         );
         let _ = modal.render_forced(&mut stdout);
 
-        let mut remote_file = sftp.create(remote_path)
-            .map_err(|e| CraftError::Other(format!("Failed to create remote file '{}': {}", remote_path.display(), e)))?;
+        let mut remote_file = sftp.create(remote_path).map_err(|e| {
+            CraftError::Other(format!(
+                "Failed to create remote file '{}': {}",
+                remote_path.display(),
+                e
+            ))
+        })?;
 
         let mut buf = [0u8; 64 * 1024];
         loop {
@@ -40,7 +44,8 @@ impl<'a> SftpOps<'a> {
             if count == 0 {
                 break;
             }
-            remote_file.write_all(&buf[..count])
+            remote_file
+                .write_all(&buf[..count])
                 .map_err(|e| CraftError::Other(format!("SFTP write error: {}", e)))?;
             modal.inc(count as u64);
             let _ = modal.render(&mut stdout);
@@ -52,15 +57,24 @@ impl<'a> SftpOps<'a> {
 
     pub fn download_file(&self, remote_path: &Path, local_path: &Path) -> Result<()> {
         let sftp = self.session.sftp()?;
-        let mut remote_file = sftp.open(remote_path)
-            .map_err(|e| CraftError::Other(format!("Failed to open remote file '{}': {}", remote_path.display(), e)))?;
+        let mut remote_file = sftp.open(remote_path).map_err(|e| {
+            CraftError::Other(format!(
+                "Failed to open remote file '{}': {}",
+                remote_path.display(),
+                e
+            ))
+        })?;
 
-        let stat = remote_file.stat()
+        let stat = remote_file
+            .stat()
             .map_err(|e| CraftError::Other(format!("Failed to stat remote file: {}", e)))?;
         let total_size = stat.size.unwrap_or(0);
 
         let mut stdout = io::stdout();
-        let name = remote_path.file_name().unwrap_or_default().to_string_lossy();
+        let name = remote_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
         let mut modal = if total_size > 0 {
             ProgressModal::new(
                 "DOWNLOADING FILE",
@@ -83,12 +97,15 @@ impl<'a> SftpOps<'a> {
         let mut buf = [0u8; 64 * 1024];
 
         loop {
-            let count = remote_file.read(&mut buf)
+            let count = remote_file
+                .read(&mut buf)
                 .map_err(|e| CraftError::Other(format!("SFTP read error: {}", e)))?;
             if count == 0 {
                 break;
             }
-            local_file.write_all(&buf[..count]).map_err(CraftError::Io)?;
+            local_file
+                .write_all(&buf[..count])
+                .map_err(CraftError::Io)?;
             modal.inc(count as u64);
             let _ = modal.render(&mut stdout);
         }
@@ -117,8 +134,13 @@ impl<'a> SftpOps<'a> {
 
     pub fn read_file_to_string(&self, remote_path: &Path) -> Result<String> {
         let sftp = self.session.sftp()?;
-        let mut file = sftp.open(remote_path)
-            .map_err(|e| CraftError::Other(format!("Failed to open remote file '{}': {}", remote_path.display(), e)))?;
+        let mut file = sftp.open(remote_path).map_err(|e| {
+            CraftError::Other(format!(
+                "Failed to open remote file '{}': {}",
+                remote_path.display(),
+                e
+            ))
+        })?;
         let mut content = String::new();
         file.read_to_string(&mut content)
             .map_err(|e| CraftError::Other(format!("Failed to read remote file: {}", e)))?;
@@ -127,8 +149,13 @@ impl<'a> SftpOps<'a> {
 
     pub fn list_dir(&self, remote_path: &Path) -> Result<Vec<(String, ssh2::FileStat)>> {
         let sftp = self.session.sftp()?;
-        let entries = sftp.readdir(remote_path)
-            .map_err(|e| CraftError::Other(format!("Failed to readdir '{}': {}", remote_path.display(), e)))?;
+        let entries = sftp.readdir(remote_path).map_err(|e| {
+            CraftError::Other(format!(
+                "Failed to readdir '{}': {}",
+                remote_path.display(),
+                e
+            ))
+        })?;
         let mut result = Vec::new();
         for (path, stat) in entries {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
@@ -140,4 +167,3 @@ impl<'a> SftpOps<'a> {
         Ok(result)
     }
 }
-

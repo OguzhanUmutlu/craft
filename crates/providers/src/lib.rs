@@ -147,8 +147,10 @@ mod tests {
         assert_eq!(valheim.len(), 1);
         let factorio = get_softwares_for_game("factorio");
         assert_eq!(factorio.len(), 1);
-        let custom = get_softwares_for_game("custom");
+        let custom = get_softwares_for_game("");
         assert_eq!(custom.len(), 1);
+        assert_eq!(custom[0].id(), "custom");
+        assert_eq!(custom[0].game_id(), "");
     }
 
     #[test]
@@ -332,5 +334,38 @@ description = "User overridden Paper definition"
         let paper = reg.find("paper").expect("paper found");
         assert_eq!(paper.name(), "Paper Custom Override");
         assert_eq!(paper.description(), "User overridden Paper definition");
+    }
+
+    #[test]
+    fn test_standalone_software_definition_empty_game_and_zip() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let paths = craft_core::CraftPaths::from_base(temp_dir.path().to_path_buf());
+        std::fs::create_dir_all(&paths.softwares_dir).expect("create softwares_dir");
+
+        // 1. Create a standalone software with empty game
+        let enshrouded_dir = paths.softwares_dir.join("enshrouded");
+        std::fs::create_dir_all(&enshrouded_dir).expect("create enshrouded dir");
+        let toml_content = r#"
+[software]
+id = "enshrouded"
+name = "Enshrouded"
+display_name = "Enshrouded Dedicated Server"
+game = ""
+edition = "native"
+description = "Survival action RPG server"
+version = "1.0.0"
+"#;
+        std::fs::write(enshrouded_dir.join("software.toml"), toml_content).expect("write toml");
+
+        let reg = SoftwareRegistry::load(&paths);
+        let enshrouded = reg.find("enshrouded").expect("enshrouded found");
+        assert_eq!(enshrouded.name(), "Enshrouded");
+        assert_eq!(enshrouded.display_name(), "Enshrouded Dedicated Server");
+        assert_eq!(enshrouded.game_id(), "");
+
+        // Standalone softwares with empty game_id appear in for_game("")
+        let standalones = reg.for_game("");
+        assert!(standalones.iter().any(|s| s.id() == "custom"));
+        assert!(standalones.iter().any(|s| s.id() == "enshrouded"));
     }
 }

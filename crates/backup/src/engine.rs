@@ -1,10 +1,10 @@
-use std::fs::{self, File};
-use std::path::{Path, PathBuf};
 use chrono::Utc;
-use flate2::write::GzEncoder;
-use flate2::Compression;
 use craft_core::{CraftError, CraftPaths, Result};
 use craft_net::RconClient;
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use std::fs::{self, File};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct BackupMetadata {
@@ -25,9 +25,7 @@ impl BackupEngine {
         } else {
             paths.backups_dir.clone()
         };
-        Self {
-            backups_dir: dir,
-        }
+        Self { backups_dir: dir }
     }
 
     pub fn with_dir(backups_dir: PathBuf) -> Self {
@@ -47,7 +45,9 @@ impl BackupEngine {
         world_only: bool,
     ) -> Result<PathBuf> {
         if !server_path.exists() {
-            return Err(CraftError::InvalidPath(server_path.to_string_lossy().to_string()));
+            return Err(CraftError::InvalidPath(
+                server_path.to_string_lossy().to_string(),
+            ));
         }
 
         let mut rcon_client = None;
@@ -113,7 +113,9 @@ impl BackupEngine {
 
     pub fn restore_backup(&self, backup_file: &Path, server_path: &Path) -> Result<()> {
         if !backup_file.exists() {
-            return Err(CraftError::InvalidPath(backup_file.to_string_lossy().to_string()));
+            return Err(CraftError::InvalidPath(
+                backup_file.to_string_lossy().to_string(),
+            ));
         }
 
         // Strict safety check: Never restore a backup while server is running!
@@ -131,7 +133,8 @@ impl BackupEngine {
         let mut archive = tar::Archive::new(gz);
 
         fs::create_dir_all(server_path)?;
-        archive.unpack(server_path)
+        archive
+            .unpack(server_path)
             .map_err(|e| CraftError::Other(format!("Failed to unpack backup archive: {}", e)))?;
 
         Ok(())
@@ -154,8 +157,12 @@ impl BackupEngine {
             )));
         }
 
-        let temp_dir = tempfile::tempdir()
-            .map_err(|e| CraftError::Other(format!("Failed to create temporary directory for restore: {}", e)))?;
+        let temp_dir = tempfile::tempdir().map_err(|e| {
+            CraftError::Other(format!(
+                "Failed to create temporary directory for restore: {}",
+                e
+            ))
+        })?;
         let temp_file = temp_dir.path().join("downloaded_backup.tar.gz");
 
         provider.download_file(remote_key, &temp_file).await?;
@@ -165,9 +172,11 @@ impl BackupEngine {
     }
 }
 
-
 fn should_exclude(rel_path: &Path) -> bool {
-    let components: Vec<_> = rel_path.iter().map(|c| c.to_string_lossy().to_string()).collect();
+    let components: Vec<_> = rel_path
+        .iter()
+        .map(|c| c.to_string_lossy().to_string())
+        .collect();
     for comp in &components {
         let lower = comp.to_lowercase();
         if lower == "logs" || lower == "crash-reports" || lower == "cache" || lower == ".craft" {
@@ -177,7 +186,11 @@ fn should_exclude(rel_path: &Path) -> bool {
 
     if let Some(file_name) = rel_path.file_name().and_then(|f| f.to_str()) {
         let lower = file_name.to_lowercase();
-        if lower.ends_with(".tmp") || lower.ends_with(".sock") || lower.ends_with(".pid") || lower == "session.lock" {
+        if lower.ends_with(".tmp")
+            || lower.ends_with(".sock")
+            || lower.ends_with(".pid")
+            || lower == "session.lock"
+        {
             return true;
         }
     }
@@ -193,7 +206,12 @@ fn is_world_or_config(rel_path: &Path, is_dir: bool) -> bool {
     };
 
     // World root folders
-    if comp.starts_with("world") || comp == "dim-1" || comp == "dim1" || comp == "worlds" || comp == "db" {
+    if comp.starts_with("world")
+        || comp == "dim-1"
+        || comp == "dim1"
+        || comp == "worlds"
+        || comp == "db"
+    {
         return true;
     }
 
@@ -203,7 +221,12 @@ fn is_world_or_config(rel_path: &Path, is_dir: bool) -> bool {
     }
 
     // Root config / script files
-    if !is_dir && rel_path.parent().map(|p| p.as_os_str().is_empty()).unwrap_or(true) {
+    if !is_dir
+        && rel_path
+            .parent()
+            .map(|p| p.as_os_str().is_empty())
+            .unwrap_or(true)
+    {
         let lower = comp;
         if lower.ends_with(".properties")
             || lower.ends_with(".yml")
@@ -222,7 +245,11 @@ fn is_world_or_config(rel_path: &Path, is_dir: bool) -> bool {
     false
 }
 
-fn compress_server_directory(source_dir: &Path, output_tar_gz: &Path, world_only: bool) -> Result<()> {
+fn compress_server_directory(
+    source_dir: &Path,
+    output_tar_gz: &Path,
+    world_only: bool,
+) -> Result<()> {
     let file = File::create(output_tar_gz)?;
     let enc = GzEncoder::new(file, Compression::default());
     let mut tar = tar::Builder::new(enc);
@@ -249,13 +276,23 @@ fn compress_server_directory(source_dir: &Path, output_tar_gz: &Path, world_only
                 }
 
                 if is_dir {
-                    tar.append_dir(rel_path, &path)
-                        .map_err(|e| CraftError::Other(format!("Failed to append dir {}: {}", rel_path.display(), e)))?;
+                    tar.append_dir(rel_path, &path).map_err(|e| {
+                        CraftError::Other(format!(
+                            "Failed to append dir {}: {}",
+                            rel_path.display(),
+                            e
+                        ))
+                    })?;
                     stack.push(path);
                 } else {
                     let mut f = File::open(&path)?;
-                    tar.append_file(rel_path, &mut f)
-                        .map_err(|e| CraftError::Other(format!("Failed to append file {}: {}", rel_path.display(), e)))?;
+                    tar.append_file(rel_path, &mut f).map_err(|e| {
+                        CraftError::Other(format!(
+                            "Failed to append file {}: {}",
+                            rel_path.display(),
+                            e
+                        ))
+                    })?;
                 }
             }
         }
@@ -351,4 +388,3 @@ mod tests {
         assert!(result_ok.is_ok());
     }
 }
-

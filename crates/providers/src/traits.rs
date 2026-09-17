@@ -1,7 +1,7 @@
+use craft_core::Result;
 use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
-use craft_core::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerEdition {
@@ -22,6 +22,9 @@ pub struct AssetDownload {
 pub trait ServerSoftware: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
+    fn display_name(&self) -> &'static str {
+        self.name()
+    }
     fn edition(&self) -> ServerEdition;
     fn game_id(&self) -> &'static str {
         "minecraft"
@@ -47,9 +50,11 @@ pub trait ServerSoftware: Send + Sync {
             ServerEdition::Java | ServerEdition::Proxy => craft_core::RuntimeKind::Java {
                 default_jar: self.default_server_file().to_string(),
             },
-            ServerEdition::Bedrock | ServerEdition::Native => craft_core::RuntimeKind::NativeBinary {
-                default_executable: self.default_server_file().to_string(),
-            },
+            ServerEdition::Bedrock | ServerEdition::Native => {
+                craft_core::RuntimeKind::NativeBinary {
+                    default_executable: self.default_server_file().to_string(),
+                }
+            }
         }
     }
     fn default_ports(&self) -> (u16, Option<u16>) {

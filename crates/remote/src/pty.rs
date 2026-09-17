@@ -1,22 +1,34 @@
-use std::io::{Read, Write};
-use std::time::Duration;
+use crate::session::RemoteSession;
+use craft_core::{CraftError, Result};
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use craft_core::{CraftError, Result};
-use crate::session::RemoteSession;
+use std::io::{Read, Write};
+use std::time::Duration;
 
 pub fn run_remote_pty_session(session: &RemoteSession, remote_command: &str) -> Result<()> {
-    let mut channel = session.session.channel_session()
+    let mut channel = session
+        .session
+        .channel_session()
         .map_err(|e| CraftError::Other(format!("Failed to open channel session: {}", e)))?;
 
     let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
-    channel.request_pty("xterm-256color", None, Some((cols as u32, rows as u32, 0, 0)))
+    channel
+        .request_pty(
+            "xterm-256color",
+            None,
+            Some((cols as u32, rows as u32, 0, 0)),
+        )
         .map_err(|e| CraftError::Other(format!("Failed to request remote PTY: {}", e)))?;
 
-    channel.exec(remote_command)
-        .map_err(|e| CraftError::Other(format!("Failed to execute remote command '{}': {}", remote_command, e)))?;
+    channel.exec(remote_command).map_err(|e| {
+        CraftError::Other(format!(
+            "Failed to execute remote command '{}': {}",
+            remote_command, e
+        ))
+    })?;
 
-    enable_raw_mode().map_err(|e| CraftError::Other(format!("Failed to enable local raw mode: {}", e)))?;
+    enable_raw_mode()
+        .map_err(|e| CraftError::Other(format!("Failed to enable local raw mode: {}", e)))?;
 
     session.session.set_blocking(false);
     let res = pump_pty(&mut channel);
@@ -78,7 +90,9 @@ fn pump_pty(channel: &mut ssh2::Channel) -> Result<()> {
             match event::read() {
                 Ok(Event::Key(key)) => {
                     // Check for Ctrl+B
-                    if key.modifiers.contains(KeyModifiers::CONTROL) && (key.code == KeyCode::Char('b') || key.code == KeyCode::Char('B')) {
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && (key.code == KeyCode::Char('b') || key.code == KeyCode::Char('B'))
+                    {
                         ctrl_b_pressed = true;
                         continue;
                     }
@@ -159,18 +173,42 @@ fn pump_pty(channel: &mut ssh2::Channel) -> Result<()> {
                         KeyCode::Delete => {
                             let _ = channel.write_all(b"\x1b[3~");
                         }
-                        KeyCode::F(1) => { let _ = channel.write_all(b"\x1bOP"); }
-                        KeyCode::F(2) => { let _ = channel.write_all(b"\x1bOQ"); }
-                        KeyCode::F(3) => { let _ = channel.write_all(b"\x1bOR"); }
-                        KeyCode::F(4) => { let _ = channel.write_all(b"\x1bOS"); }
-                        KeyCode::F(5) => { let _ = channel.write_all(b"\x1b[15~"); }
-                        KeyCode::F(6) => { let _ = channel.write_all(b"\x1b[17~"); }
-                        KeyCode::F(7) => { let _ = channel.write_all(b"\x1b[18~"); }
-                        KeyCode::F(8) => { let _ = channel.write_all(b"\x1b[19~"); }
-                        KeyCode::F(9) => { let _ = channel.write_all(b"\x1b[20~"); }
-                        KeyCode::F(10) => { let _ = channel.write_all(b"\x1b[21~"); }
-                        KeyCode::F(11) => { let _ = channel.write_all(b"\x1b[23~"); }
-                        KeyCode::F(12) => { let _ = channel.write_all(b"\x1b[24~"); }
+                        KeyCode::F(1) => {
+                            let _ = channel.write_all(b"\x1bOP");
+                        }
+                        KeyCode::F(2) => {
+                            let _ = channel.write_all(b"\x1bOQ");
+                        }
+                        KeyCode::F(3) => {
+                            let _ = channel.write_all(b"\x1bOR");
+                        }
+                        KeyCode::F(4) => {
+                            let _ = channel.write_all(b"\x1bOS");
+                        }
+                        KeyCode::F(5) => {
+                            let _ = channel.write_all(b"\x1b[15~");
+                        }
+                        KeyCode::F(6) => {
+                            let _ = channel.write_all(b"\x1b[17~");
+                        }
+                        KeyCode::F(7) => {
+                            let _ = channel.write_all(b"\x1b[18~");
+                        }
+                        KeyCode::F(8) => {
+                            let _ = channel.write_all(b"\x1b[19~");
+                        }
+                        KeyCode::F(9) => {
+                            let _ = channel.write_all(b"\x1b[20~");
+                        }
+                        KeyCode::F(10) => {
+                            let _ = channel.write_all(b"\x1b[21~");
+                        }
+                        KeyCode::F(11) => {
+                            let _ = channel.write_all(b"\x1b[23~");
+                        }
+                        KeyCode::F(12) => {
+                            let _ = channel.write_all(b"\x1b[24~");
+                        }
                         _ => {}
                     }
                     let _ = channel.flush();

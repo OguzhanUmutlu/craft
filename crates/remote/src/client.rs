@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
-use craft_core::{CraftError, RemoteHostConfig, Result};
 use crate::session::RemoteSession;
 use crate::sftp_ops::SftpOps;
+use craft_core::{CraftError, RemoteHostConfig, Result};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteServerInfo {
@@ -37,10 +37,11 @@ impl RemoteCraftClient {
         SftpOps::new(&self.session)
     }
 
-
     /// Checks whether the `craft` binary is installed and executable on the remote host
     pub fn is_craft_installed(&self) -> bool {
-        if let Ok((code, out, _)) = self.session.exec("craft --version || ~/.local/bin/craft --version || /usr/local/bin/craft --version") {
+        if let Ok((code, out, _)) = self.session.exec(
+            "craft --version || ~/.local/bin/craft --version || /usr/local/bin/craft --version",
+        ) {
             code == 0 && out.to_lowercase().contains("craft")
         } else {
             false
@@ -86,7 +87,8 @@ impl RemoteCraftClient {
             Ok(c) => c,
             Err(_) => {
                 // If relative path didn't find it, try running cat
-                let (code, stdout, _) = self.session.exec("cat ~/.craft/servers.toml 2>/dev/null")?;
+                let (code, stdout, _) =
+                    self.session.exec("cat ~/.craft/servers.toml 2>/dev/null")?;
                 if code != 0 || stdout.trim().is_empty() {
                     return Ok(Vec::new());
                 }
@@ -94,17 +96,37 @@ impl RemoteCraftClient {
             }
         };
 
-        let parsed: toml::Value = toml::from_str(&content)
-            .map_err(|e| CraftError::Other(format!("Failed to parse remote servers.toml: {}", e)))?;
+        let parsed: toml::Value = toml::from_str(&content).map_err(|e| {
+            CraftError::Other(format!("Failed to parse remote servers.toml: {}", e))
+        })?;
 
         let mut servers = Vec::new();
         if let Some(servers_arr) = parsed.get("servers").and_then(|s| s.as_array()) {
             for entry in servers_arr {
-                let name = entry.get("name").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-                let server_type = entry.get("server_type").and_then(|v| v.as_str()).unwrap_or("custom").to_string();
-                let version = entry.get("version").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
-                let port = entry.get("port").and_then(|v| v.as_integer()).unwrap_or(25565) as u16;
-                let path = entry.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let name = entry
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let server_type = entry
+                    .get("server_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("custom")
+                    .to_string();
+                let version = entry
+                    .get("version")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let port = entry
+                    .get("port")
+                    .and_then(|v| v.as_integer())
+                    .unwrap_or(25565) as u16;
+                let path = entry
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
 
                 // Check if server is running on remote
                 let (is_running, pid) = self.check_server_running(&name, &path);
@@ -125,7 +147,11 @@ impl RemoteCraftClient {
     }
 
     /// Checks if a remote server is running by inspecting PID file or process
-    pub fn check_server_running(&self, server_name: &str, server_path: &str) -> (bool, Option<u32>) {
+    pub fn check_server_running(
+        &self,
+        server_name: &str,
+        server_path: &str,
+    ) -> (bool, Option<u32>) {
         let cmd = format!(
             "if [ -f \"{}/.server.pid\" ]; then cat \"{}/.server.pid\"; fi",
             server_path, server_path
@@ -135,7 +161,9 @@ impl RemoteCraftClient {
             if code == 0 && !out.trim().is_empty() {
                 if let Ok(pid) = out.trim().parse::<u32>() {
                     // Check if PID is alive: kill -0 <pid>
-                    if let Ok((kcode, _, _)) = self.session.exec(&format!("kill -0 {} 2>/dev/null", pid)) {
+                    if let Ok((kcode, _, _)) =
+                        self.session.exec(&format!("kill -0 {} 2>/dev/null", pid))
+                    {
                         if kcode == 0 {
                             return (true, Some(pid));
                         }
@@ -160,8 +188,15 @@ impl RemoteCraftClient {
         let cmd = format!("{} start {}", self.craft_bin(), server_name);
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to start remote server: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to start remote server: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -171,8 +206,15 @@ impl RemoteCraftClient {
         let cmd = format!("{} stop {}", self.craft_bin(), server_name);
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to stop remote server: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to stop remote server: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -182,8 +224,15 @@ impl RemoteCraftClient {
         let cmd = format!("{} restart {}", self.craft_bin(), server_name);
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to restart remote server: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to restart remote server: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -203,7 +252,12 @@ impl RemoteCraftClient {
                 let mut list = Vec::new();
                 for line in out.lines() {
                     let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 9 && parts.last().map(|f| f.ends_with(".tar.gz")).unwrap_or(false) {
+                    if parts.len() >= 9
+                        && parts
+                            .last()
+                            .map(|f| f.ends_with(".tar.gz"))
+                            .unwrap_or(false)
+                    {
                         let fname = parts.last().unwrap().to_string();
                         list.push(RemoteBackupInfo {
                             remote_path: format!("~/.craft/backups/{}/{}", server_name, fname),
@@ -241,7 +295,12 @@ impl RemoteCraftClient {
 
     /// Restores a backup on remote host.
     /// STRICTLY validates that the remote server is stopped first!
-    pub fn restore_backup(&self, server_name: &str, server_path: &str, backup_filename: &str) -> Result<()> {
+    pub fn restore_backup(
+        &self,
+        server_name: &str,
+        server_path: &str,
+        backup_filename: &str,
+    ) -> Result<()> {
         let (running, pid) = self.check_server_running(server_name, server_path);
         if running {
             let pid_str = pid.map(|p| format!(" (PID: {})", p)).unwrap_or_default();
@@ -251,19 +310,39 @@ impl RemoteCraftClient {
             )));
         }
 
-        let cmd = format!("{} backup restore {} {}", self.craft_bin(), server_name, backup_filename);
+        let cmd = format!(
+            "{} backup restore {} {}",
+            self.craft_bin(),
+            server_name,
+            backup_filename
+        );
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to restore remote backup: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to restore remote backup: {}",
+                err.trim()
+            )));
         }
 
         Ok(())
     }
 
     /// Downloads a remote backup archive via SFTP into a target local path
-    pub fn download_backup(&self, server_name: &str, backup_filename: &str, local_target_dir: &Path) -> Result<PathBuf> {
-        let remote_path_rel = Path::new(".craft").join("backups").join(server_name).join(backup_filename);
+    pub fn download_backup(
+        &self,
+        server_name: &str,
+        backup_filename: &str,
+        local_target_dir: &Path,
+    ) -> Result<PathBuf> {
+        let remote_path_rel = Path::new(".craft")
+            .join("backups")
+            .join(server_name)
+            .join(backup_filename);
         let local_dest_path = local_target_dir.join(backup_filename);
 
         if let Some(parent) = local_dest_path.parent() {
@@ -271,7 +350,8 @@ impl RemoteCraftClient {
         }
 
         // SFTP download
-        self.sftp().download_file(&remote_path_rel, &local_dest_path)
+        self.sftp()
+            .download_file(&remote_path_rel, &local_dest_path)
             .map_err(|e| CraftError::Other(format!("SFTP download failed: {}", e)))?;
 
         Ok(local_dest_path)
@@ -280,25 +360,53 @@ impl RemoteCraftClient {
     /// Triggers an immediate backup creation on the remote server
     pub fn create_backup(&self, server_name: &str, world_only: bool) -> Result<()> {
         let suffix = if world_only { " --world-only" } else { "" };
-        let cmd = format!("{} backup create {}{}", self.craft_bin(), server_name, suffix);
+        let cmd = format!(
+            "{} backup create {}{}",
+            self.craft_bin(),
+            server_name,
+            suffix
+        );
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to create remote backup: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to create remote backup: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
 
     /// Creates a new server on the remote host using craft new
-    pub fn create_server(&self, name: &str, software: &str, version: &str, port: u16) -> Result<()> {
+    pub fn create_server(
+        &self,
+        name: &str,
+        software: &str,
+        version: &str,
+        port: u16,
+    ) -> Result<()> {
         let cmd = format!(
             "{} new \"{}\" \"{}\" \"{}\" --yes --agree-eula --no-start",
-            self.craft_bin(), name, software, version
+            self.craft_bin(),
+            name,
+            software,
+            version
         );
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to create remote server: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to create remote server: {}",
+                err.trim()
+            )));
         }
 
         // Configure port in server.properties if customized
@@ -328,11 +436,15 @@ impl RemoteCraftClient {
             if !stdout.trim().is_empty() {
                 if let Ok(mut parsed) = toml::from_str::<toml::Value>(&stdout) {
                     let mut modified = false;
-                    if let Some(servers) = parsed.get_mut("servers").and_then(|s| s.as_array_mut()) {
+                    if let Some(servers) = parsed.get_mut("servers").and_then(|s| s.as_array_mut())
+                    {
                         for s in servers {
                             if s.get("name").and_then(|v| v.as_str()) == Some(name) {
                                 if let Some(tbl) = s.as_table_mut() {
-                                    tbl.insert("port".to_string(), toml::Value::Integer(port as i64));
+                                    tbl.insert(
+                                        "port".to_string(),
+                                        toml::Value::Integer(port as i64),
+                                    );
                                     modified = true;
                                 }
                             }
@@ -340,7 +452,8 @@ impl RemoteCraftClient {
                     }
                     if modified {
                         if let Ok(new_toml) = toml::to_string(&parsed) {
-                            let write_cmd = format!("cat << 'EOF' > ~/.craft/servers.toml\n{}\nEOF", new_toml);
+                            let write_cmd =
+                                format!("cat << 'EOF' > ~/.craft/servers.toml\n{}\nEOF", new_toml);
                             let _ = self.session.exec(&write_cmd);
                         }
                     }
@@ -353,10 +466,17 @@ impl RemoteCraftClient {
 
     /// Checks the status of the remote service daemon
     pub fn daemon_status(&self) -> Result<bool> {
-        let cmd = format!("{} service status 2>/dev/null || {} daemon status 2>/dev/null", self.craft_bin(), self.craft_bin());
+        let cmd = format!(
+            "{} service status 2>/dev/null || {} daemon status 2>/dev/null",
+            self.craft_bin(),
+            self.craft_bin()
+        );
         if let Ok((code, stdout, _)) = self.session.exec(&cmd) {
             let s = stdout.to_lowercase();
-            Ok(code == 0 && (s.contains("running") || s.contains("online") || s.contains("active")))
+            Ok(
+                code == 0
+                    && (s.contains("running") || s.contains("online") || s.contains("active")),
+            )
         } else {
             Ok(false)
         }
@@ -367,8 +487,15 @@ impl RemoteCraftClient {
         let cmd = format!("systemctl --user start craft.service 2>/dev/null || {} service start 2>/dev/null || {} daemon start", self.craft_bin(), self.craft_bin());
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to start remote daemon: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to start remote daemon: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -386,8 +513,15 @@ impl RemoteCraftClient {
         let cmd = format!("systemctl --user stop craft.service 2>/dev/null || {} service stop 2>/dev/null || {} daemon stop", self.craft_bin(), self.craft_bin());
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to stop remote daemon: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to stop remote daemon: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -397,8 +531,15 @@ impl RemoteCraftClient {
         let cmd = format!("systemctl --user restart craft.service 2>/dev/null || {} service restart 2>/dev/null || {} daemon restart", self.craft_bin(), self.craft_bin());
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to restart remote daemon: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to restart remote daemon: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -406,26 +547,51 @@ impl RemoteCraftClient {
     /// Completely uninstalls Craft CLI, daemon, and background services from the remote host
     pub fn uninstall_craft(&self) -> Result<()> {
         // Stop & remove systemd user unit
-        let _ = self.session.exec("systemctl --user stop craft.service 2>/dev/null || true");
-        let _ = self.session.exec("systemctl --user disable craft.service 2>/dev/null || true");
-        let _ = self.session.exec("rm -f ~/.config/systemd/user/craft.service 2>/dev/null || true");
-        let _ = self.session.exec("systemctl --user daemon-reload 2>/dev/null || true");
+        let _ = self
+            .session
+            .exec("systemctl --user stop craft.service 2>/dev/null || true");
+        let _ = self
+            .session
+            .exec("systemctl --user disable craft.service 2>/dev/null || true");
+        let _ = self
+            .session
+            .exec("rm -f ~/.config/systemd/user/craft.service 2>/dev/null || true");
+        let _ = self
+            .session
+            .exec("systemctl --user daemon-reload 2>/dev/null || true");
 
         // Stop daemon directly
-        let _ = self.session.exec(&format!("{} service stop 2>/dev/null || true", self.craft_bin()));
-        let _ = self.session.exec("pkill -f 'craft service' 2>/dev/null || true");
-        let _ = self.session.exec("pkill -f 'craft daemon' 2>/dev/null || true");
+        let _ = self.session.exec(&format!(
+            "{} service stop 2>/dev/null || true",
+            self.craft_bin()
+        ));
+        let _ = self
+            .session
+            .exec("pkill -f 'craft service' 2>/dev/null || true");
+        let _ = self
+            .session
+            .exec("pkill -f 'craft daemon' 2>/dev/null || true");
 
         // macOS launchctl cleanup if present
-        let _ = self.session.exec("launchctl unload -w ~/Library/LaunchAgents/com.craft.daemon.plist 2>/dev/null || true");
-        let _ = self.session.exec("rm -f ~/Library/LaunchAgents/com.craft.daemon.plist 2>/dev/null || true");
+        let _ = self.session.exec(
+            "launchctl unload -w ~/Library/LaunchAgents/com.craft.daemon.plist 2>/dev/null || true",
+        );
+        let _ = self
+            .session
+            .exec("rm -f ~/Library/LaunchAgents/com.craft.daemon.plist 2>/dev/null || true");
 
         // Windows scheduled task cleanup if present
-        let _ = self.session.exec("schtasks /Delete /TN CraftDaemon /F 2>nul || true");
+        let _ = self
+            .session
+            .exec("schtasks /Delete /TN CraftDaemon /F 2>nul || true");
 
         // Remove installed binaries
-        let _ = self.session.exec("rm -f ~/.local/bin/craft ~/craft 2>/dev/null || true");
-        let _ = self.session.exec("sudo rm -f /usr/local/bin/craft 2>/dev/null || true");
+        let _ = self
+            .session
+            .exec("rm -f ~/.local/bin/craft ~/craft 2>/dev/null || true");
+        let _ = self
+            .session
+            .exec("sudo rm -f /usr/local/bin/craft 2>/dev/null || true");
 
         Ok(())
     }
@@ -435,8 +601,15 @@ impl RemoteCraftClient {
         let cmd = format!("{} cache clean", self.craft_bin());
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to clean remote cache: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to clean remote cache: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -449,8 +622,15 @@ impl RemoteCraftClient {
         );
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to trash remote backup: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to trash remote backup: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -489,8 +669,15 @@ impl RemoteCraftClient {
         );
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to restore remote trash: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to restore remote trash: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -500,8 +687,15 @@ impl RemoteCraftClient {
         let cmd = format!("rm -f ~/.craft/trash/\"{}\"", filename);
         let (code, stdout, stderr) = self.session.exec(&cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to delete remote trash item: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to delete remote trash item: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -511,8 +705,15 @@ impl RemoteCraftClient {
         let cmd = "rm -rf ~/.craft/trash/*";
         let (code, stdout, stderr) = self.session.exec(cmd)?;
         if code != 0 {
-            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
-            return Err(CraftError::Other(format!("Failed to empty remote trash: {}", err.trim())));
+            let err = if !stderr.trim().is_empty() {
+                stderr
+            } else {
+                stdout
+            };
+            return Err(CraftError::Other(format!(
+                "Failed to empty remote trash: {}",
+                err.trim()
+            )));
         }
         Ok(())
     }
@@ -524,10 +725,22 @@ mod tests {
 
     #[test]
     fn test_parse_version_str() {
-        assert_eq!(RemoteCraftClient::parse_version_str("craft 1.0.0\n"), Some("1.0.0".to_string()));
-        assert_eq!(RemoteCraftClient::parse_version_str("craft 1.0.1"), Some("1.0.1".to_string()));
-        assert_eq!(RemoteCraftClient::parse_version_str("1.0.1\n"), Some("1.0.1".to_string()));
-        assert_eq!(RemoteCraftClient::parse_version_str("craft version 1.0.1\n"), Some("1.0.1".to_string()));
+        assert_eq!(
+            RemoteCraftClient::parse_version_str("craft 1.0.0\n"),
+            Some("1.0.0".to_string())
+        );
+        assert_eq!(
+            RemoteCraftClient::parse_version_str("craft 1.0.1"),
+            Some("1.0.1".to_string())
+        );
+        assert_eq!(
+            RemoteCraftClient::parse_version_str("1.0.1\n"),
+            Some("1.0.1".to_string())
+        );
+        assert_eq!(
+            RemoteCraftClient::parse_version_str("craft version 1.0.1\n"),
+            Some("1.0.1".to_string())
+        );
         assert_eq!(RemoteCraftClient::parse_version_str(""), None);
         assert_eq!(RemoteCraftClient::parse_version_str("   \n"), None);
     }

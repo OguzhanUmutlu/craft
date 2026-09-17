@@ -1,12 +1,12 @@
+use craft_core::{CacheStats, CacheStore, CraftError, CraftPaths, GlobalSettings, Result};
+use futures_util::StreamExt;
+use modalx::modals::ProgressModal;
+use reqwest::Client;
+use serde::de::DeserializeOwned;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use modalx::modals::ProgressModal;
-use reqwest::Client;
-use serde::de::DeserializeOwned;
-use futures_util::StreamExt;
-use craft_core::{CraftError, CraftPaths, Result, CacheStore, CacheStats, GlobalSettings};
 
 pub struct CacheManager {
     client: Client,
@@ -23,7 +23,10 @@ impl CacheManager {
 
         let settings = GlobalSettings::load(paths).unwrap_or_default();
         let store = CacheStore::new(paths.cache_dir.clone(), settings.cache_max_bytes)
-            .unwrap_or_else(|_| CacheStore::new(paths.cache_dir.clone(), 2 * 1024 * 1024 * 1024).expect("cache store init"));
+            .unwrap_or_else(|_| {
+                CacheStore::new(paths.cache_dir.clone(), 2 * 1024 * 1024 * 1024)
+                    .expect("cache store init")
+            });
 
         Self {
             client,
@@ -73,7 +76,9 @@ impl CacheManager {
                 let temp_file = temp_dir.path().join(filename);
                 self.download_file(url, &temp_file, filename).await?;
 
-                let (path, _) = self.store.put_artifact_file(&rel_subpath, &temp_file, expected_sha256)?;
+                let (path, _) =
+                    self.store
+                        .put_artifact_file(&rel_subpath, &temp_file, expected_sha256)?;
                 path
             }
         };
@@ -99,8 +104,10 @@ impl CacheManager {
         }
 
         // 2. Fetch from network
-        let resp = self.client.get(url).send().await
-            .map_err(|e| CraftError::Download(format!("HTTP request failed for {}: {}", url, e)))?;
+        let resp =
+            self.client.get(url).send().await.map_err(|e| {
+                CraftError::Download(format!("HTTP request failed for {}: {}", url, e))
+            })?;
 
         if !resp.status().is_success() {
             return Err(CraftError::Download(format!(
@@ -110,12 +117,15 @@ impl CacheManager {
             )));
         }
 
-        let bytes = resp.bytes().await
+        let bytes = resp
+            .bytes()
+            .await
             .map_err(|e| CraftError::Download(format!("Failed to read response body: {}", e)))?;
 
         // 3. Deserialize JSON
-        let parsed: T = serde_json::from_slice(&bytes)
-            .map_err(|e| CraftError::Download(format!("Failed to parse JSON from {}: {}", url, e)))?;
+        let parsed: T = serde_json::from_slice(&bytes).map_err(|e| {
+            CraftError::Download(format!("Failed to parse JSON from {}: {}", url, e))
+        })?;
 
         // 4. Cache compressed with Zstandard level 3
         let _ = self.store.put_metadata(key, &bytes, Some(ttl));
@@ -124,8 +134,10 @@ impl CacheManager {
     }
 
     async fn download_file(&self, url: &str, target_path: &Path, display_name: &str) -> Result<()> {
-        let response = self.client.get(url).send().await
-            .map_err(|e| CraftError::Download(format!("HTTP request failed for {}: {}", url, e)))?;
+        let response =
+            self.client.get(url).send().await.map_err(|e| {
+                CraftError::Download(format!("HTTP request failed for {}: {}", url, e))
+            })?;
 
         if !response.status().is_success() {
             return Err(CraftError::Download(format!(
@@ -197,7 +209,8 @@ impl CacheManager {
             .map_err(|e| CraftError::Other(format!("Failed to open zip: {}", e)))?;
 
         for i in 0..archive.len() {
-            let mut file = archive.by_index(i)
+            let mut file = archive
+                .by_index(i)
                 .map_err(|e| CraftError::Other(format!("Zip read error: {}", e)))?;
             let outpath = match file.enclosed_name() {
                 Some(path) => destination.join(path),
@@ -224,7 +237,8 @@ impl CacheManager {
         let file = File::open(tar_gz_path)?;
         let gz = flate2::read::GzDecoder::new(file);
         let mut archive = tar::Archive::new(gz);
-        archive.unpack(destination)
+        archive
+            .unpack(destination)
             .map_err(|e| CraftError::Other(format!("Failed to unpack tar.gz: {}", e)))?;
         Ok(())
     }
@@ -236,7 +250,8 @@ mod tests {
 
     #[test]
     fn test_cache_hardlink_and_fallback() {
-        let temp_dir = std::env::temp_dir().join(format!("craft_test_cache_{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("craft_test_cache_{}", std::process::id()));
         let _ = fs::remove_dir_all(&temp_dir);
         let cache_dir = temp_dir.join("cache");
         let server_dir = temp_dir.join("server");
@@ -256,7 +271,10 @@ mod tests {
         }
 
         assert!(target_file.exists());
-        assert_eq!(fs::read(&target_file).unwrap(), b"test-minecraft-jar-content");
+        assert_eq!(
+            fs::read(&target_file).unwrap(),
+            b"test-minecraft-jar-content"
+        );
 
         #[cfg(unix)]
         {
@@ -283,7 +301,10 @@ mod tests {
         assert_eq!(stats.metadata_count, 0);
 
         // Put an artifact directly through store
-        let (_, meta) = cache.store().put_artifact("test-server.jar", b"jar content", None).unwrap();
+        let (_, meta) = cache
+            .store()
+            .put_artifact("test-server.jar", b"jar content", None)
+            .unwrap();
         assert_eq!(meta.size_bytes, 11);
         assert_eq!(cache.get_cache_size(), 11);
 
@@ -293,4 +314,3 @@ mod tests {
         assert_eq!(cache.get_cache_size(), 0);
     }
 }
-

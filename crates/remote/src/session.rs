@@ -1,9 +1,9 @@
+use craft_core::{CraftError, RemoteAuthType, RemoteHostConfig, RemoteOsType, Result};
+use ssh2::Session;
 use std::io::Read;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use ssh2::Session;
-use craft_core::{CraftError, RemoteAuthType, RemoteHostConfig, RemoteOsType, Result};
 
 pub struct RemoteSession {
     pub session: Session,
@@ -14,12 +14,16 @@ pub struct RemoteSession {
 impl RemoteSession {
     pub fn connect(config: &RemoteHostConfig) -> Result<Self> {
         let addr = format!("{}:{}", config.host, config.port);
-        let socket_addrs: Vec<_> = addr.to_socket_addrs()
+        let socket_addrs: Vec<_> = addr
+            .to_socket_addrs()
             .map_err(|e| CraftError::Other(format!("Failed to resolve host {}: {}", addr, e)))?
             .collect();
 
         if socket_addrs.is_empty() {
-            return Err(CraftError::Other(format!("No IP addresses found for {}", addr)));
+            return Err(CraftError::Other(format!(
+                "No IP addresses found for {}",
+                addr
+            )));
         }
 
         let tcp = TcpStream::connect_timeout(&socket_addrs[0], Duration::from_secs(10))
@@ -29,16 +33,25 @@ impl RemoteSession {
             .map_err(|e| CraftError::Other(format!("Failed to initialize SSH session: {}", e)))?;
 
         session.set_tcp_stream(tcp.try_clone().map_err(CraftError::Io)?);
-        session.handshake()
+        session
+            .handshake()
             .map_err(|e| CraftError::Other(format!("SSH handshake failed: {}", e)))?;
 
         // Authenticate (OpenSSH-style resilient chain):
         if config.auth_type == RemoteAuthType::Password {
             let password = config.password.as_deref().ok_or_else(|| {
-                CraftError::Other("Password authentication specified but no password configured".to_string())
+                CraftError::Other(
+                    "Password authentication specified but no password configured".to_string(),
+                )
             })?;
-            session.userauth_password(&config.user, password)
-                .map_err(|e| CraftError::Other(format!("SSH password authentication failed for {}: {}", config.user, e)))?;
+            session
+                .userauth_password(&config.user, password)
+                .map_err(|e| {
+                    CraftError::Other(format!(
+                        "SSH password authentication failed for {}: {}",
+                        config.user, e
+                    ))
+                })?;
         } else {
             // 1. Try SSH Agent first (matches standard OpenSSH behavior)
             if let Ok(mut agent) = session.agent() {
@@ -58,7 +71,12 @@ impl RemoteSession {
                 if let Some(ref p) = config.key_path {
                     let expanded = expand_tilde(p);
                     if expanded.exists() {
-                        let _ = session.userauth_pubkey_file(&config.user, None, &expanded, config.password.as_deref());
+                        let _ = session.userauth_pubkey_file(
+                            &config.user,
+                            None,
+                            &expanded,
+                            config.password.as_deref(),
+                        );
                     }
                 }
             }
@@ -74,12 +92,18 @@ impl RemoteSession {
                     ];
                     for cand in &candidates {
                         if cand.is_file()
-                            && session.userauth_pubkey_file(&config.user, None, cand, config.password.as_deref()).is_ok()
+                            && session
+                                .userauth_pubkey_file(
+                                    &config.user,
+                                    None,
+                                    cand,
+                                    config.password.as_deref(),
+                                )
+                                .is_ok()
                         {
                             break;
                         }
                     }
-
                 }
             }
 
@@ -93,7 +117,9 @@ impl RemoteSession {
 
         if !session.authenticated() {
             let detail = match config.auth_type {
-                RemoteAuthType::Password => format!("Password authentication failed for user '{}'.", config.user),
+                RemoteAuthType::Password => {
+                    format!("Password authentication failed for user '{}'.", config.user)
+                }
                 _ => {
                     if let Some(ref kp) = config.key_path {
                         let exp = expand_tilde(kp);
@@ -114,7 +140,6 @@ impl RemoteSession {
             return Err(CraftError::Other(detail));
         }
 
-
         Ok(Self {
             session,
             config: config.clone(),
@@ -124,11 +149,17 @@ impl RemoteSession {
 
     /// Execute a command and capture exit code, stdout, and stderr
     pub fn exec(&self, command: &str) -> Result<(i32, String, String)> {
-        let mut channel = self.session.channel_session()
+        let mut channel = self
+            .session
+            .channel_session()
             .map_err(|e| CraftError::Other(format!("Failed to open SSH channel: {}", e)))?;
 
-        channel.exec(command)
-            .map_err(|e| CraftError::Other(format!("Failed to exec remote command '{}': {}", command, e)))?;
+        channel.exec(command).map_err(|e| {
+            CraftError::Other(format!(
+                "Failed to exec remote command '{}': {}",
+                command, e
+            ))
+        })?;
 
         let mut stdout = String::new();
         let _ = channel.read_to_string(&mut stdout);
@@ -136,7 +167,8 @@ impl RemoteSession {
         let mut stderr = String::new();
         let _ = channel.stderr().read_to_string(&mut stderr);
 
-        channel.wait_close()
+        channel
+            .wait_close()
             .map_err(|e| CraftError::Other(format!("Channel close error: {}", e)))?;
 
         let exit_code = channel.exit_status().unwrap_or(0);
@@ -152,7 +184,11 @@ impl RemoteSession {
             Err(CraftError::Other(format!(
                 "Remote command failed with exit code {}: {}",
                 code,
-                if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() }
+                if stderr.trim().is_empty() {
+                    stdout.trim()
+                } else {
+                    stderr.trim()
+                }
             )))
         }
     }
@@ -187,13 +223,13 @@ impl RemoteSession {
     }
 
     pub fn sftp(&self) -> Result<ssh2::Sftp> {
-        self.session.sftp()
+        self.session
+            .sftp()
             .map_err(|e| CraftError::Other(format!("Failed to open SFTP session: {}", e)))
     }
 }
 
 pub fn expand_tilde(path: &Path) -> PathBuf {
-
     let s = path.to_string_lossy();
     if s.starts_with("~/") || s == "~" {
         if let Some(user_dirs) = directories::UserDirs::new() {
