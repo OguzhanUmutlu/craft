@@ -1,43 +1,43 @@
 {
-  "latest": "1.0.0",
-  "lts": "1.0.0",
-  "updated_at": "2026-09-17T05:21:16Z",
+  "latest": "0.1.0",
+  "lts": "0.1.0",
+  "updated_at": "2026-09-17T06:50:00Z",
   "versions": [
     {
-      "version": "1.0.0",
+      "version": "0.1.0",
       "channel": "latest",
-      "label": "v1.0.0",
+      "label": "v0.1.0",
       "release_date": "2026-09-17",
-      "notes": "Craft official release v1.0.0: native high-performance Minecraft server supervisor, multi-platform runner, remote TUI, and backup engine.",
+      "notes": "Craft release v0.1.0: native high-performance Minecraft server supervisor, multi-platform runner, remote TUI, and backup engine.",
       "assets": {
         "linux_tar": {
           "name": "craft-linux-amd64.tar.gz",
-          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64.tar.gz",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-linux-amd64.tar.gz",
           "size": "5.7M"
         },
         "linux_bin": {
           "name": "craft-linux-amd64",
-          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-linux-amd64",
           "size": "15M"
         },
         "windows_zip": {
           "name": "craft-windows-amd64.zip",
-          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-windows-amd64.zip",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-windows-amd64.zip",
           "size": "5.9M"
         },
         "windows_exe": {
           "name": "craft-windows-amd64.exe",
-          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-windows-amd64.exe",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-windows-amd64.exe",
           "size": "17M"
         },
         "darwin_arm64_tar": {
           "name": "craft-darwin-arm64.tar.gz",
-          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-darwin-arm64.tar.gz",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-darwin-arm64.tar.gz",
           "size": "5.5M"
         },
         "darwin_amd64_tar": {
           "name": "craft-darwin-amd64.tar.gz",
-          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-darwin-amd64.tar.gz",
+          "url": "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-darwin-amd64.tar.gz",
           "size": "5.4M"
         }
       }

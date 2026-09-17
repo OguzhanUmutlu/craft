@@ -58,7 +58,7 @@ TARGET_NAME="craft-${OS_TYPE}-${ARCH_TYPE}"
 if [ -n "${CRAFT_DOWNLOAD_URL:-}" ]; then
   DOWNLOAD_URL="${CRAFT_DOWNLOAD_URL}"
 elif [ -n "${CRAFT_VERSION:-}" ]; then
-  # Strip leading 'v' if user typed CRAFT_VERSION=v1.0.0
+  # Strip leading 'v' if user typed CRAFT_VERSION=v0.1.0
   CLEAN_VERSION="${CRAFT_VERSION#v}"
   DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/v${CLEAN_VERSION}/${TARGET_NAME}"
   echo -e "${BLUE}==> Target version requested:${NC} ${GREEN}v${CLEAN_VERSION}${NC}"

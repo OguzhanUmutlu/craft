@@ -51,45 +51,45 @@ interface VersionsManifest {
 }
 
 const DEFAULT_VERSIONS: VersionsManifest = {
-  latest: "1.0.0",
-  lts: "1.0.0",
-  updated_at: "2026-09-17T05:21:16Z",
+  latest: "0.1.0",
+  lts: "0.1.0",
+  updated_at: "2026-09-17T06:50:00Z",
   versions: [
     {
-      version: "1.0.0",
+      version: "0.1.0",
       channel: "latest",
-      label: "v1.0.0",
+      label: "v0.1.0",
       release_date: "2026-09-17",
-      notes: "Craft v1.0.0: native supervisor, centralized version catalog with background auto-sync, automated safe SSH VDS setup, multi-platform runner, and remote TUI.",
+      notes: "Craft release v0.1.0: native supervisor, centralized version catalog with background auto-sync, automated safe SSH VDS setup, multi-platform runner, and remote TUI.",
       assets: {
         linux_tar: {
           name: "craft-linux-amd64.tar.gz",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64.tar.gz",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-linux-amd64.tar.gz",
           size: "5.7M",
         },
         linux_bin: {
           name: "craft-linux-amd64",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-linux-amd64",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-linux-amd64",
           size: "15M",
         },
         windows_zip: {
           name: "craft-windows-amd64.zip",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-windows-amd64.zip",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-windows-amd64.zip",
           size: "5.9M",
         },
         windows_exe: {
           name: "craft-windows-amd64.exe",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-windows-amd64.exe",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-windows-amd64.exe",
           size: "17M",
         },
         darwin_arm64_tar: {
           name: "craft-darwin-arm64.tar.gz",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-darwin-arm64.tar.gz",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-darwin-arm64.tar.gz",
           size: "5.5M",
         },
         darwin_amd64_tar: {
           name: "craft-darwin-amd64.tar.gz",
-          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v1.0.0/craft-darwin-amd64.tar.gz",
+          url: "https://github.com/OguzhanUmutlu/craft/releases/download/v0.1.0/craft-darwin-amd64.tar.gz",
           size: "5.4M",
         },
       },
@@ -103,7 +103,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'linux' | 'macos' | 'windows' | 'docker' | 'vds'>('linux');
   const [copied, setCopied] = useState(false);
   const [manifest, setManifest] = useState<VersionsManifest>(DEFAULT_VERSIONS);
-  const [selectedVersion, setSelectedVersion] = useState<string>('1.0.0');
+  const [selectedVersion, setSelectedVersion] = useState<string>('0.1.0');
 
   // Base URL resolves dynamically to current static origin or official production domain
   const getBaseUrl = () => {
@@ -115,24 +115,99 @@ export default function App() {
 
   const baseUrl = getBaseUrl();
 
-  // Load versions.json manifest dynamically from public static path
+  // Dynamically fetch releases from GitHub API first; fallback to static versions.json if rate-limited
   useEffect(() => {
-    fetch(`${baseUrl}/versions.json`)
-      .then((res) => {
-        if (res.ok) return res.json();
-        throw new Error('Failed to fetch versions.json');
-      })
-      .then((data: VersionsManifest) => {
-        if (data && Array.isArray(data.versions) && data.versions.length > 0) {
-          setManifest(data);
-          if (data.latest && !data.versions.some(v => v.version === selectedVersion)) {
-            setSelectedVersion(data.latest);
+    const fetchGitHubReleases = async () => {
+      try {
+        const ghRes = await fetch('https://api.github.com/repos/OguzhanUmutlu/craft/releases?per_page=30');
+        if (ghRes.ok) {
+          const releases = await ghRes.json();
+          if (Array.isArray(releases) && releases.length > 0) {
+            // Filter out internal tags like 'catalog'
+            const validReleases = releases.filter((r: any) => {
+              const tag = r.tag_name || '';
+              return tag !== 'catalog' && !tag.startsWith('catalog-') && !r.draft;
+            });
+
+            if (validReleases.length > 0) {
+              const formatSize = (bytes?: number) => {
+                if (!bytes) return undefined;
+                return (bytes / (1024 * 1024)).toFixed(1) + 'M';
+              };
+
+              const parsedVersions: ReleaseVersion[] = validReleases.map((r: any, idx: number) => {
+                const tag = r.tag_name || '';
+                const ver = tag.replace(/^v/, '');
+                const assets = Array.isArray(r.assets) ? r.assets : [];
+
+                const findAsset = (predicate: (name: string) => boolean, fallbackName: string) => {
+                  const found = assets.find((a: any) => predicate(a.name || ''));
+                  if (found) {
+                    return {
+                      name: found.name,
+                      url: found.browser_download_url,
+                      size: formatSize(found.size),
+                    };
+                  }
+                  return {
+                    name: fallbackName,
+                    url: `https://github.com/OguzhanUmutlu/craft/releases/download/${tag}/${fallbackName}`,
+                  };
+                };
+
+                return {
+                  version: ver,
+                  channel: idx === 0 ? 'latest' : 'stable',
+                  label: tag.startsWith('v') ? tag : `v${ver}`,
+                  release_date: (r.published_at || '').split('T')[0] || new Date().toISOString().split('T')[0],
+                  notes: r.body || `Craft release ${tag}`,
+                  assets: {
+                    linux_tar: findAsset((n: string) => n.includes('linux') && n.endsWith('.tar.gz'), 'craft-linux-amd64.tar.gz'),
+                    linux_bin: findAsset((n: string) => n.includes('linux') && !n.endsWith('.tar.gz') && !n.endsWith('.gz') && !n.endsWith('.sha256'), 'craft-linux-amd64'),
+                    windows_zip: findAsset((n: string) => n.includes('windows') && n.endsWith('.zip'), 'craft-windows-amd64.zip'),
+                    windows_exe: findAsset((n: string) => n.includes('windows') && n.endsWith('.exe'), 'craft-windows-amd64.exe'),
+                    darwin_arm64_tar: findAsset((n: string) => n.includes('darwin') && n.includes('arm64') && n.endsWith('.tar.gz'), 'craft-darwin-arm64.tar.gz'),
+                    darwin_amd64_tar: findAsset((n: string) => n.includes('darwin') && (n.includes('amd64') || n.includes('x86_64')) && n.endsWith('.tar.gz'), 'craft-darwin-amd64.tar.gz'),
+                  },
+                };
+              });
+
+              if (parsedVersions.length > 0) {
+                const latestVer = parsedVersions[0].version;
+                setManifest({
+                  latest: latestVer,
+                  lts: latestVer,
+                  updated_at: new Date().toISOString(),
+                  versions: parsedVersions,
+                });
+                setSelectedVersion(latestVer);
+                return;
+              }
+            }
           }
         }
-      })
-      .catch(() => {
-        // Fallback already pre-populated
-      });
+      } catch {
+        // Fallback to static versions.json if GitHub API is unavailable or rate-limited
+      }
+
+      // Fallback: static versions.json
+      try {
+        const staticRes = await fetch(`${baseUrl}/versions.json`);
+        if (staticRes.ok) {
+          const data: VersionsManifest = await staticRes.json();
+          if (data && Array.isArray(data.versions) && data.versions.length > 0) {
+            setManifest(data);
+            if (data.latest && !data.versions.some(v => v.version === selectedVersion)) {
+              setSelectedVersion(data.latest);
+            }
+          }
+        }
+      } catch {
+        // DEFAULT_VERSIONS already active
+      }
+    };
+
+    fetchGitHubReleases();
   }, [baseUrl]);
 
   // Sync state with URL hash for zero-refresh client-side routing
