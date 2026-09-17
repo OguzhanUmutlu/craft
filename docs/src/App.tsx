@@ -295,8 +295,8 @@ export default function App() {
       <header className="sticky top-0 z-50 backdrop-blur-md bg-[#0a0d14]/80 border-b border-slate-800/80 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => openHome()}>
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20 flex items-center justify-center">
-              <Box className="h-6 w-6 text-black" strokeWidth={2.5} />
+            <div className="h-10 w-10 rounded-xl bg-slate-900 border border-emerald-500/30 p-1 shadow-lg shadow-emerald-500/10 flex items-center justify-center">
+              <img src="/logo.png" alt="Craft Logo" className="h-7 w-7 object-contain [image-rendering:pixelated] drop-shadow" />
             </div>
             <div>
               <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
@@ -350,6 +350,15 @@ export default function App() {
           <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-emerald-500/10 blur-[130px] rounded-full pointer-events-none"></div>
 
           <div className="max-w-5xl mx-auto text-center relative z-10">
+            <div className="flex justify-center mb-6">
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl blur-lg opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+                <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl bg-slate-900/90 border border-emerald-500/30 p-2.5 flex items-center justify-center shadow-2xl">
+                  <img src="/logo.png" alt="Craft Logo" className="h-full w-full object-contain [image-rendering:pixelated] drop-shadow-lg" />
+                </div>
+              </div>
+            </div>
+
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300 mb-8">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
               Ultra-fast startup &lt;2ms &bull; Zero Node.js or npm needed &bull; Pure Rust

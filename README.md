@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="Craft Logo" width="128" height="128" />
+</p>
+
 # Craft
 
 > **High-performance, industry-grade Minecraft server setup, management CLI tool, and background daemon written in Rust.**
