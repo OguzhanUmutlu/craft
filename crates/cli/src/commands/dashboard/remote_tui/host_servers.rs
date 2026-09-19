@@ -4,7 +4,7 @@ use super::remote_backups::manage_remote_backups;
 use super::remote_control::remote_server_control_panel;
 use crate::commands::dashboard::screen::{
     box_divider, box_title, box_top, clean_exit, get_content_width, print_in_place_status,
-    run_input_prompt, run_menu, run_paged_list_menu, show_modal_message, AltScreenGuard, BoxFrame,
+    run_input_prompt, run_menu, run_paged_list_menu, show_modal_message, AltScreenGuard,
     MenuEntry, NavGuard, PagedMenuAction,
 };
 use colored::Colorize;
@@ -157,7 +157,6 @@ pub async fn connect_with_cancellation(
     enable_raw_mode()?;
     let _ = execute!(stdout, Hide);
 
-    let frames = [".  ", ".. ", "...", " ..", "  .", "   "];
     let mut frame_idx = 0;
 
     let result = (|| -> Result<Option<RemoteCraftClient>> {
@@ -193,23 +192,20 @@ pub async fn connect_with_cancellation(
             }
 
             // Render connecting status
-            let width = get_content_width(80);
-            let mut frame = BoxFrame::new(width);
-            frame.title = Some(("CONNECTING TO REMOTE HOST".to_string(), false));
-            frame.empty_row();
-            frame.row(format!(
-                "Establishing SSH connection to '{}' ({}@{}:{}) {}",
-                host_config.alias,
-                host_config.user,
-                host_config.host,
-                host_config.port,
-                frames[frame_idx % frames.len()]
-            ));
-            frame.empty_row();
-            frame.footer("[Esc] Cancel  |  Please wait...".to_string());
-            frame.render(&mut stdout)?;
+            let modal = modalx::modals::WaitingModal::new(
+                "CONNECTING TO REMOTE HOST",
+                format!(
+                    "Establishing SSH connection to '{}' ({}@{}:{})",
+                    host_config.alias,
+                    host_config.user,
+                    host_config.host,
+                    host_config.port,
+                ),
+            )
+            .with_cancellable(true);
+            let _ = modal.render_spinner(frame_idx, &mut stdout);
 
-            frame_idx = (frame_idx + 1) % frames.len();
+            frame_idx = frame_idx.wrapping_add(1);
 
             // Poll for cancellation keys and drain all available events
             if event::poll(Duration::from_millis(120))? {
@@ -344,7 +340,6 @@ pub async fn connect_and_probe_host(host_config: &RemoteHostConfig) -> Result<Ho
     enable_raw_mode()?;
     let _ = execute!(stdout, Hide);
 
-    let frames = [".  ", ".. ", "...", " ..", "  .", "   "];
     let mut frame_idx = 0;
 
     let result = (|| -> Result<HostProbeResult> {
@@ -380,20 +375,11 @@ pub async fn connect_and_probe_host(host_config: &RemoteHostConfig) -> Result<Ho
             }
 
             let current_text = status_msg.lock().map(|m| m.clone()).unwrap_or_default();
-            let width = get_content_width(80);
-            let mut frame = BoxFrame::new(width);
-            frame.title = Some(("CONNECTING TO REMOTE HOST".to_string(), false));
-            frame.empty_row();
-            frame.row(format!(
-                "{} {}",
-                current_text,
-                frames[frame_idx % frames.len()]
-            ));
-            frame.empty_row();
-            frame.footer("[Esc] Cancel  |  Please wait...".to_string());
-            frame.render(&mut stdout)?;
+            let modal = modalx::modals::WaitingModal::new("CONNECTING TO REMOTE HOST", &current_text)
+                .with_cancellable(true);
+            let _ = modal.render_spinner(frame_idx, &mut stdout);
 
-            frame_idx = (frame_idx + 1) % frames.len();
+            frame_idx = frame_idx.wrapping_add(1);
 
             // Poll for cancellation keys and drain all available events
             if event::poll(Duration::from_millis(90))? {
@@ -448,17 +434,6 @@ pub async fn manage_host_servers(
     let client = match probe {
         HostProbeResult::Cancelled => return Ok(()),
         HostProbeResult::CraftNotInstalled(client) => {
-            let width = get_content_width(80);
-            let warn_header = format!(
-                "{}\r\n{}\r\n{}\r\n Warning: 'craft' CLI is not found on remote host '{}'.\r\n To manage game servers, Craft needs to be installed on the remote machine.\r\n{}\r\n Choose an action:\r\n{}",
-                box_top(width).yellow().bold(),
-                box_title("CRAFT NOT FOUND ON REMOTE", width, false).yellow().bold(),
-                box_divider(width).yellow().bold(),
-                host_config.alias.cyan().bold(),
-                box_divider(width).dimmed(),
-                box_divider(width).dimmed(),
-            );
-
             let warn_entries = vec![
                 MenuEntry::new("1", "Bootstrap & Install Craft").with_aliases(&["b", "i"]),
                 MenuEntry::new("2", "Continue Anyway").with_aliases(&["c"]),
@@ -466,8 +441,18 @@ pub async fn manage_host_servers(
             ];
 
             let mut w_sel = 0;
-            match run_menu(&warn_header, &warn_entries, &mut w_sel)? {
-                Some(0) => {
+            let warn_modal = modalx::modals::SelectModal::menu("CRAFT NOT FOUND ON REMOTE")
+                .with_header_row(format!(
+                    "Warning: 'craft' CLI is not found on remote host '{}'.",
+                    host_config.alias.cyan().bold()
+                ))
+                .with_header_row("To manage game servers, Craft needs to be installed on the remote machine.")
+                .with_header_row("")
+                .with_header_row("Choose an action:")
+                .with_entries(warn_entries);
+
+            match warn_modal.run(&mut w_sel)? {
+                modalx::modals::SelectOutcome::Selected(0) => {
                     match run_boxed_bootstrap(
                         &client.session,
                         &host_config.alias,
@@ -490,7 +475,7 @@ pub async fn manage_host_servers(
                         }
                     }
                 }
-                Some(1) => client,
+                modalx::modals::SelectOutcome::Selected(1) => client,
                 _ => return Ok(()),
             }
         }
@@ -498,20 +483,7 @@ pub async fn manage_host_servers(
             client,
             remote_version: r_ver,
         } => {
-            let width = get_content_width(80);
             let local_version = craft_core::CRAFT_VERSION;
-            let update_header = format!(
-                "{}\r\n{}\r\n{}\r\n Remote Host:          {}\r\n Remote Craft Version: {} [OUTDATED]\r\n Local Craft Version:  {} [NEWER]\r\n\r\n An updated version of Craft is available on this local machine.\r\n Would you like to update the remote binary now?\r\n{}\r\n Choose an action:\r\n{}",
-                box_top(width).cyan().bold(),
-                box_title("REMOTE CRAFT UPDATE AVAILABLE", width, false).cyan().bold(),
-                box_divider(width).cyan().bold(),
-                host_config.alias.cyan().bold(),
-                r_ver.yellow().bold(),
-                local_version.green().bold(),
-                box_divider(width).dimmed(),
-                box_divider(width).dimmed(),
-            );
-
             let update_entries = vec![
                 MenuEntry::new("1", "Update Remote Craft Now")
                     .with_aliases(&["u", "update", "y", "yes"]),
@@ -521,8 +493,19 @@ pub async fn manage_host_servers(
             ];
 
             let mut u_sel = 0;
-            match run_menu(&update_header, &update_entries, &mut u_sel)? {
-                Some(0) => {
+            let update_modal = modalx::modals::SelectModal::menu("REMOTE CRAFT UPDATE AVAILABLE")
+                .with_header_row(format!("Remote Host:          {}", host_config.alias.cyan().bold()))
+                .with_header_row(format!("Remote Craft Version: {} [OUTDATED]", r_ver.yellow().bold()))
+                .with_header_row(format!("Local Craft Version:  {} [NEWER]", local_version.green().bold()))
+                .with_header_row("")
+                .with_header_row("An updated version of Craft is available on this local machine.")
+                .with_header_row("Would you like to update the remote binary now?")
+                .with_header_row("")
+                .with_header_row("Choose an action:")
+                .with_entries(update_entries);
+
+            match update_modal.run(&mut u_sel)? {
+                modalx::modals::SelectOutcome::Selected(0) => {
                     match run_boxed_bootstrap(
                         &client.session,
                         &host_config.alias,
@@ -553,7 +536,7 @@ pub async fn manage_host_servers(
                         }
                     }
                 }
-                Some(1) => client,
+                modalx::modals::SelectOutcome::Selected(1) => client,
                 _ => return Ok(()),
             }
         }
@@ -561,21 +544,7 @@ pub async fn manage_host_servers(
             client,
             remote_version: r_ver,
         } => {
-            let width = get_content_width(80);
             let local_version = craft_core::CRAFT_VERSION;
-            let adv_header = format!(
-                "{}\r\n{}\r\n{}\r\n Remote Host:          {}\r\n Remote Craft Version: {} [NEWER]\r\n Local Craft Version:  {} [OUTDATED]\r\n\r\n Warning: Remote host '{}' is running a newer Craft version.\r\n Updating remote is disabled to prevent downgrading remote services.\r\n We recommend updating Craft on your local machine.\r\n{}\r\n Choose an action:\r\n{}",
-                box_top(width).yellow().bold(),
-                box_title("LOCAL CRAFT OUTDATED", width, false).yellow().bold(),
-                box_divider(width).yellow().bold(),
-                host_config.alias.cyan().bold(),
-                r_ver.green().bold(),
-                local_version.yellow().bold(),
-                host_config.alias.cyan().bold(),
-                box_divider(width).dimmed(),
-                box_divider(width).dimmed(),
-            );
-
             let adv_entries = vec![
                 MenuEntry::new("1", "Continue Connecting to Remote Host")
                     .with_aliases(&["c", "continue", "y"]),
@@ -583,8 +552,23 @@ pub async fn manage_host_servers(
             ];
 
             let mut a_sel = 0;
-            match run_menu(&adv_header, &adv_entries, &mut a_sel)? {
-                Some(0) => client,
+            let adv_modal = modalx::modals::SelectModal::menu("LOCAL CRAFT OUTDATED")
+                .with_header_row(format!("Remote Host:          {}", host_config.alias.cyan().bold()))
+                .with_header_row(format!("Remote Craft Version: {} [NEWER]", r_ver.green().bold()))
+                .with_header_row(format!("Local Craft Version:  {} [OUTDATED]", local_version.yellow().bold()))
+                .with_header_row("")
+                .with_header_row(format!(
+                    "Warning: Remote host '{}' is running a newer Craft version.",
+                    host_config.alias.cyan().bold()
+                ))
+                .with_header_row("Updating remote is disabled to prevent downgrading remote services.")
+                .with_header_row("We recommend updating Craft on your local machine.")
+                .with_header_row("")
+                .with_header_row("Choose an action:")
+                .with_entries(adv_entries);
+
+            match adv_modal.run(&mut a_sel)? {
+                modalx::modals::SelectOutcome::Selected(0) => client,
                 _ => return Ok(()),
             }
         }
@@ -1328,39 +1312,33 @@ pub async fn remote_uninstall_craft_wizard(
     host_alias: &str,
 ) -> Result<bool> {
     let _nav = NavGuard::enter("Uninstall Craft");
-    let width = get_content_width(80);
-
     // Confirmation Prompt 1 of 2: Warning & intent check
-    let prompt1_header = format!(
-        "{}\r\n{}\r\n{}\r\n Warning: You are about to UNINSTALL Craft from remote host '{}'.\r\n\r\n This will:\r\n  - Stop all running Craft background daemons and services\r\n  - Disable and remove the systemd user service unit\r\n  - Delete the 'craft' CLI binary from ~/.local/bin/craft\r\n\r\n Do you wish to proceed to confirmation? (Prompt 1 of 2)\r\n{}",
-        box_top(width).yellow().bold(),
-        box_title("UNINSTALL CRAFT - PROMPT 1 OF 2", width, false).yellow().bold(),
-        box_divider(width).yellow().bold(),
-        host_alias.white().bold(),
-        box_divider(width).dimmed(),
-    );
-
     let prompt1_entries = vec![
         MenuEntry::new("1", "Cancel").with_aliases(&["0", "b", "q"]),
         MenuEntry::new("2", "Proceed to Final Confirmation"),
     ];
 
     let mut sel1 = 0;
-    match run_menu(&prompt1_header, &prompt1_entries, &mut sel1)? {
-        Some(1) => {}
+    let prompt1_modal = modalx::modals::SelectModal::menu("UNINSTALL CRAFT - PROMPT 1 OF 2")
+        .with_header_row(format!(
+            "Warning: You are about to UNINSTALL Craft from remote host '{}'.",
+            host_alias.white().bold()
+        ))
+        .with_header_row("")
+        .with_header_row("This will:")
+        .with_header_row("  - Stop all running Craft background daemons and services")
+        .with_header_row("  - Disable and remove the systemd user service unit")
+        .with_header_row("  - Delete the 'craft' CLI binary from ~/.local/bin/craft")
+        .with_header_row("")
+        .with_header_row("Do you wish to proceed to confirmation? (Prompt 1 of 2)")
+        .with_entries(prompt1_entries);
+
+    match prompt1_modal.run(&mut sel1)? {
+        modalx::modals::SelectOutcome::Selected(1) => {}
         _ => return Ok(false),
     }
 
     // Confirmation Prompt 2 of 2: Destructive action confirmation
-    let prompt2_header = format!(
-        "{}\r\n{}\r\n{}\r\n FINAL CONFIRMATION: Are you ABSOLUTELY sure?\r\n\r\n Remote host '{}' will no longer have Craft installed.\r\n You will need to re-install / bootstrap Craft before managing servers again.\r\n\r\n (Prompt 2 of 2)\r\n{}",
-        box_top(width).red().bold(),
-        box_title("FINAL CONFIRMATION - PROMPT 2 OF 2", width, false).red().bold(),
-        box_divider(width).red().bold(),
-        host_alias.white().bold(),
-        box_divider(width).dimmed(),
-    );
-
     let prompt2_entries = vec![
         MenuEntry::new("1", "Cancel (Keep Craft Installed)").with_aliases(&["0", "b", "q"]),
         MenuEntry::new(
@@ -1370,8 +1348,20 @@ pub async fn remote_uninstall_craft_wizard(
     ];
 
     let mut sel2 = 0;
-    match run_menu(&prompt2_header, &prompt2_entries, &mut sel2)? {
-        Some(1) => {
+    let prompt2_modal = modalx::modals::SelectModal::menu("FINAL CONFIRMATION - PROMPT 2 OF 2")
+        .with_header_row("FINAL CONFIRMATION: Are you ABSOLUTELY sure?")
+        .with_header_row("")
+        .with_header_row(format!(
+            "Remote host '{}' will no longer have Craft installed.",
+            host_alias.white().bold()
+        ))
+        .with_header_row("You will need to re-install / bootstrap Craft before managing servers again.")
+        .with_header_row("")
+        .with_header_row("(Prompt 2 of 2)")
+        .with_entries(prompt2_entries);
+
+    match prompt2_modal.run(&mut sel2)? {
+        modalx::modals::SelectOutcome::Selected(1) => {
             let _ = print_in_place_status(
                 "UNINSTALLING CRAFT",
                 &[format!(
