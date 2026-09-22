@@ -23,4 +23,10 @@ modalx.workspace = true
 chrono.workspace = true
 toml.workspace = true
 ssh2 = { version = "0.9", features = ["vendored-openssl"] }
+tar.workspace = true
+zstd.workspace = true
+sha2.workspace = true
+hex.workspace = true
+tempfile.workspace = true
+flate2.workspace = true
 

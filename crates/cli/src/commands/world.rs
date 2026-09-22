@@ -49,7 +49,7 @@ pub enum WorldAction {
         #[arg(short, long)]
         name: Option<String>,
     },
-    /// Delete a world directory permanently
+    /// Delete a world directory (moves to trash bin by default, or permanently with --permanent)
     #[command(alias = "delete")]
     Rm {
         /// World directory name
@@ -57,6 +57,9 @@ pub enum WorldAction {
         /// Bypass confirmation prompt
         #[arg(short, long)]
         force: bool,
+        /// Delete permanently instead of moving to trash bin
+        #[arg(long)]
+        permanent: bool,
     },
 }
 
@@ -327,7 +330,11 @@ pub async fn handle_world(
             );
             Ok(())
         }
-        WorldAction::Rm { world, force } => {
+        WorldAction::Rm {
+            world,
+            force,
+            permanent,
+        } => {
             let world_path = server_path.join(&world);
             if !world_path.exists() {
                 return Err(CraftError::Other(format!(
@@ -336,27 +343,54 @@ pub async fn handle_world(
                 )));
             }
 
-            if !force {
-                let prompt = format!(
-                    "Are you sure you want to permanently delete world '{}'?",
-                    world
-                );
-                if !dialoguer::Confirm::new()
-                    .with_prompt(prompt)
-                    .default(false)
-                    .interact()?
-                {
-                    println!("{}", "Deletion cancelled.".yellow());
-                    return Ok(());
+            if permanent {
+                if !force {
+                    let prompt = format!(
+                        "Are you sure you want to permanently delete world '{}'?",
+                        world
+                    );
+                    if !dialoguer::Confirm::new()
+                        .with_prompt(prompt)
+                        .default(false)
+                        .interact()?
+                    {
+                        println!("{}", "Deletion cancelled.".yellow());
+                        return Ok(());
+                    }
                 }
-            }
 
-            std::fs::remove_dir_all(&world_path)?;
-            println!(
-                "{}: Removed world directory '{}'.",
-                "Success".green().bold(),
-                world_path.display()
-            );
+                std::fs::remove_dir_all(&world_path)?;
+                println!(
+                    "{}: Permanently deleted world directory '{}'.",
+                    "Success".green().bold(),
+                    world_path.display()
+                );
+            } else {
+                if !force {
+                    let prompt = format!("Move world '{}' to Craft trash bin?", world);
+                    if !dialoguer::Confirm::new()
+                        .with_prompt(prompt)
+                        .default(true)
+                        .interact()?
+                    {
+                        println!("{}", "Deletion cancelled.".yellow());
+                        return Ok(());
+                    }
+                }
+
+                let trash = craft_core::TrashManager::new(paths);
+                let item = trash.trash_path(&world_path, Some(server_name))?;
+                println!(
+                    "{}: Moved world '{}' to trash bin (ID: {}).",
+                    "Success".green().bold(),
+                    world.white().bold(),
+                    item.id.cyan()
+                );
+                println!(
+                    "To restore this world later, run: craft trash restore {}",
+                    item.id
+                );
+            }
             Ok(())
         }
     }

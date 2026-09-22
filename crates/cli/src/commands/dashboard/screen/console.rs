@@ -15,12 +15,186 @@ use super::terminal::get_terminal_size;
 use super::theme::strip_ansi;
 use super::AltScreenGuard;
 
+/// Active input mode for the live console.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsoleMode {
+    /// Normal command entry sending input to daemon
+    Command,
+    /// Live search and regex filtering
+    Search,
+}
+
+/// Search and filter specification for console logs.
+#[derive(Debug, Clone, Default)]
+pub struct ConsoleFilter {
+    pub query: String,
+    pub active: bool,
+}
+
+impl ConsoleFilter {
+    /// Checks whether a given log line satisfies the filter criteria.
+    pub fn matches(&self, line: &str) -> bool {
+        if !self.active || self.query.trim().is_empty() {
+            return true;
+        }
+        let stripped = strip_ansi(line);
+        // Attempt regular expression matching if pattern parses cleanly
+        if let Ok(re) = regex::RegexBuilder::new(&self.query)
+            .case_insensitive(true)
+            .build()
+        {
+            if re.is_match(&stripped) {
+                return true;
+            }
+        }
+        // Fallback to case-insensitive literal substring matching
+        stripped
+            .to_lowercase()
+            .contains(&self.query.trim().to_lowercase())
+    }
+}
+
+/// Colorizes a log line according to recognized server log levels and stack trace markers.
+pub fn colorize_log_line(line: &str) -> String {
+    let stripped = strip_ansi(line);
+    let upper = stripped.to_uppercase();
+
+    // Fatal and critical failures
+    if upper.contains("/FATAL")
+        || upper.contains("[FATAL")
+        || upper.contains("FATAL:")
+        || upper.contains("[CRITICAL")
+        || upper.contains("CRITICAL:")
+    {
+        return stripped.red().bold().to_string();
+    }
+
+    // Errors and severe issues
+    if upper.contains("/ERROR")
+        || upper.contains("[ERROR")
+        || upper.contains("ERROR:")
+        || upper.contains("[SEVERE")
+        || upper.contains("SEVERE:")
+    {
+        return stripped.bright_red().to_string();
+    }
+
+    // Warnings
+    if upper.contains("/WARN")
+        || upper.contains("[WARN")
+        || upper.contains("WARN:")
+        || upper.contains("[WARNING")
+        || upper.contains("WARNING:")
+    {
+        return stripped.yellow().to_string();
+    }
+
+    // Stack trace markers
+    let trimmed = stripped.trim_start();
+    if trimmed.starts_with("at ")
+        || trimmed.starts_with("Caused by:")
+        || trimmed.starts_with("Exception in thread")
+    {
+        return stripped.bright_red().dimmed().to_string();
+    }
+
+    // Info lines
+    if upper.contains("/INFO")
+        || upper.contains("[INFO")
+        || upper.contains("INFO:")
+        || upper.contains("INFO]")
+    {
+        if let Ok(re) = regex::Regex::new(r"\bINFO\b") {
+            let colored = re.replace_all(&stripped, "INFO".cyan().bold().to_string().as_str()).to_string();
+            return colored;
+        }
+    }
+
+    // Debug and trace lines
+    if upper.contains("/DEBUG")
+        || upper.contains("[DEBUG")
+        || upper.contains("DEBUG:")
+        || upper.contains("DEBUG]")
+        || upper.contains("/TRACE")
+        || upper.contains("[TRACE")
+        || upper.contains("TRACE:")
+        || upper.contains("TRACE]")
+    {
+        return stripped.dimmed().to_string();
+    }
+
+    line.to_string()
+}
+
+/// Highlights matching search or regex terms within a log line using contrasting ANSI styling.
+pub fn highlight_matches(line: &str, query: &str) -> String {
+    let q = query.trim();
+    if q.is_empty() {
+        return line.to_string();
+    }
+    let stripped = strip_ansi(line);
+
+    // Try regex-based matching first
+    if let Ok(re) = regex::RegexBuilder::new(q)
+        .case_insensitive(true)
+        .build()
+    {
+        let mut result = String::new();
+        let mut last_end = 0;
+        let mut matched = false;
+        for mat in re.find_iter(&stripped) {
+            matched = true;
+            result.push_str(&stripped[last_end..mat.start()]);
+            result.push_str(&mat.as_str().black().on_yellow().bold().to_string());
+            last_end = mat.end();
+        }
+        if matched {
+            if last_end < stripped.len() {
+                result.push_str(&stripped[last_end..]);
+            }
+            return result;
+        }
+    }
+
+    // Fallback: substring matching
+    let lower_line = stripped.to_lowercase();
+    let lower_q = q.to_lowercase();
+    let q_len = q.chars().count();
+    let mut result = String::new();
+    let mut last_end = 0;
+    let mut matched = false;
+
+    while let Some(idx) = lower_line[last_end..].find(&lower_q) {
+        matched = true;
+        let actual_idx = last_end + idx;
+        result.push_str(&stripped[last_end..actual_idx]);
+        let end_idx = actual_idx + q_len;
+        if end_idx <= stripped.len() {
+            let match_str = &stripped[actual_idx..end_idx];
+            result.push_str(&match_str.black().on_yellow().bold().to_string());
+            last_end = end_idx;
+        } else {
+            break;
+        }
+    }
+
+    if matched {
+        if last_end < stripped.len() {
+            result.push_str(&stripped[last_end..]);
+        }
+        return result;
+    }
+
+    line.to_string()
+}
+
 /// Runs a responsive, virtual-scrolling live console for an active server.
-/// - Keeps a persistent `> ` command prompt at the bottom.
-/// - Redraws incoming logs smoothly without clobbering or shifting user input.
-/// - Supports readline editing (Ctrl+Backspace, Ctrl+W, Ctrl+A/E/U/K, Backspace, Delete).
-/// - Supports history navigation and scrolling via Up/Down and PageUp/PageDown.
-/// - Supports chunked seek-based log file reading for virtual scrolling without RAM buildup.
+/// - Keeps a persistent command prompt (`> `) or search prompt (`Search [/]: `) at the bottom.
+/// - Redraws incoming logs smoothly without clobbering user input.
+/// - Interactive `/` search and regex filter mode with match counter and match highlighting.
+/// - Freeze / pause scroll lock via Spacebar or Ctrl+S to halt viewport scrolling during crashes.
+/// - Distinct ANSI log level syntax styling for `[INFO]`, `[WARN]`, `[ERROR]`, `[FATAL]`, and stack traces.
+/// - Readline editing, history navigation, and chunked seek-based log file reading.
 /// - Cleanly detaches on Ctrl+C or Esc.
 pub async fn run_virtual_console(
     server_name: &str,
@@ -53,6 +227,10 @@ pub async fn run_virtual_console(
     }
 
     let mut text_input = modalx::TextInput::new();
+    let mut search_input = modalx::TextInput::new();
+    let mut mode = ConsoleMode::Command;
+    let mut filter = ConsoleFilter::default();
+    let mut is_paused = false;
     let mut scroll_offset = 0usize;
     let mut partial_chunk = String::new();
 
@@ -75,6 +253,10 @@ pub async fn run_virtual_console(
         &lines,
         scroll_offset,
         &text_input,
+        &search_input,
+        mode,
+        &filter,
+        is_paused,
     )?;
 
     loop {
@@ -88,7 +270,7 @@ pub async fn run_virtual_console(
                             partial_chunk = partial_chunk[idx + 1..].to_string();
                             if !line.trim().is_empty() {
                                 lines.push(line);
-                                if lines.len() > 200 {
+                                if lines.len() > 1000 {
                                     lines.remove(0);
                                 }
                             }
@@ -100,6 +282,10 @@ pub async fn run_virtual_console(
                             &lines,
                             scroll_offset,
                             &text_input,
+                            &search_input,
+                            mode,
+                            &filter,
+                            is_paused,
                         )?;
                     }
                     None => {
@@ -109,7 +295,7 @@ pub async fn run_virtual_console(
                                 .bold()
                                 .to_string(),
                         );
-                        if lines.len() > 200 {
+                        if lines.len() > 1000 {
                             lines.remove(0);
                         }
                         let _ = render(
@@ -119,6 +305,10 @@ pub async fn run_virtual_console(
                             &lines,
                             0,
                             &text_input,
+                            &search_input,
+                            mode,
+                            &filter,
+                            false,
                         );
                         tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
                         break;
@@ -133,11 +323,15 @@ pub async fn run_virtual_console(
                             continue;
                         }
 
-                        // Detach console: Ctrl+C or Esc
-                        if (key.modifiers.contains(KeyModifiers::CONTROL)
-                            && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('C')))
+                        let is_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+                        let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
+                        let is_alt = key.modifiers.contains(KeyModifiers::ALT);
+                        let is_nav_mod = is_shift || is_ctrl || is_alt;
+
+                        // Detach console: Ctrl+C or Ctrl+D
+                        if (is_ctrl && (key.code == KeyCode::Char('c') || key.code == KeyCode::Char('C')))
                             || key.code == KeyCode::Char('\x03')
-                            || key.code == KeyCode::Esc
+                            || (is_ctrl && (key.code == KeyCode::Char('d') || key.code == KeyCode::Char('D')))
                         {
                             break;
                         }
@@ -145,41 +339,110 @@ pub async fn run_virtual_console(
                         let (_, term_h) = get_terminal_size();
                         let log_area_height = (term_h.saturating_sub(6)).max(1) as usize;
 
-                        let is_nav_mod = key.modifiers.contains(KeyModifiers::SHIFT)
-                            || key.modifiers.contains(KeyModifiers::CONTROL)
-                            || key.modifiers.contains(KeyModifiers::ALT);
-
-                        match key.code {
-                            KeyCode::PageUp => {
-                                let step = (log_area_height / 2).max(1);
-                                scroll_offset = scroll_offset.saturating_add(step);
+                        if mode == ConsoleMode::Search {
+                            match key.code {
+                                KeyCode::Esc => {
+                                    mode = ConsoleMode::Command;
+                                    filter.active = false;
+                                    filter.query.clear();
+                                    scroll_offset = 0;
+                                }
+                                KeyCode::Enter => {
+                                    mode = ConsoleMode::Command;
+                                    filter.query = search_input.buffer().to_string();
+                                    filter.active = !filter.query.trim().is_empty();
+                                    scroll_offset = 0;
+                                }
+                                KeyCode::PageUp => {
+                                    let step = (log_area_height / 2).max(1);
+                                    scroll_offset = scroll_offset.saturating_add(step);
+                                }
+                                KeyCode::PageDown => {
+                                    let step = (log_area_height / 2).max(1);
+                                    scroll_offset = scroll_offset.saturating_sub(step);
+                                }
+                                KeyCode::Up => {
+                                    scroll_offset = scroll_offset.saturating_add(1);
+                                }
+                                KeyCode::Down => {
+                                    scroll_offset = scroll_offset.saturating_sub(1);
+                                }
+                                _ => {
+                                    search_input.handle_key(&key);
+                                    filter.query = search_input.buffer().to_string();
+                                    filter.active = !filter.query.trim().is_empty();
+                                    scroll_offset = 0;
+                                }
                             }
-                            KeyCode::PageDown => {
-                                let step = (log_area_height / 2).max(1);
-                                scroll_offset = scroll_offset.saturating_sub(step);
-                            }
-                            KeyCode::Home if text_input.buffer().is_empty() => {
-                                scroll_offset = scroll_offset.saturating_add(200);
-                            }
-                            KeyCode::End if scroll_offset > 0 => {
-                                scroll_offset = 0;
-                            }
-                            KeyCode::Up if is_nav_mod || scroll_offset > 0 || (text_input.buffer().is_empty() && text_input.history().is_empty()) => {
-                                scroll_offset = scroll_offset.saturating_add(1);
-                            }
-                            KeyCode::Down if is_nav_mod || scroll_offset > 0 => {
-                                scroll_offset = scroll_offset.saturating_sub(1);
-                            }
-                            _ => {
-                                if let modalx::TextInputAction::Submit(cmd) = text_input.handle_key(&key) {
-                                    let trimmed = cmd.trim();
-                                    if !trimmed.is_empty() {
-                                        let _ = tx_to_daemon.send(format!("{}\n", trimmed)).await;
-                                        lines.push(format!("> {}", trimmed));
-                                        if lines.len() > 200 {
-                                            lines.remove(0);
-                                        }
+                        } else {
+                            match key.code {
+                                KeyCode::Esc => {
+                                    if filter.active {
+                                        filter.active = false;
+                                        filter.query.clear();
                                         scroll_offset = 0;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                // Enter search mode via '/' when command input is empty
+                                KeyCode::Char('/') if text_input.buffer().is_empty() => {
+                                    mode = ConsoleMode::Search;
+                                    search_input = modalx::TextInput::with_value(&filter.query);
+                                }
+                                // Enter search mode via Ctrl+F
+                                KeyCode::Char('f') | KeyCode::Char('F') if is_ctrl => {
+                                    mode = ConsoleMode::Search;
+                                    search_input = modalx::TextInput::with_value(&filter.query);
+                                }
+                                // Freeze / Pause scroll lock via Spacebar when command buffer is empty
+                                KeyCode::Char(' ') if text_input.buffer().is_empty() => {
+                                    is_paused = !is_paused;
+                                    if !is_paused {
+                                        scroll_offset = 0;
+                                    }
+                                }
+                                // Freeze / Pause scroll lock via Ctrl+S
+                                KeyCode::Char('s') | KeyCode::Char('S') if is_ctrl => {
+                                    is_paused = !is_paused;
+                                    if !is_paused {
+                                        scroll_offset = 0;
+                                    }
+                                }
+                                KeyCode::PageUp => {
+                                    let step = (log_area_height / 2).max(1);
+                                    scroll_offset = scroll_offset.saturating_add(step);
+                                }
+                                KeyCode::PageDown => {
+                                    let step = (log_area_height / 2).max(1);
+                                    scroll_offset = scroll_offset.saturating_sub(step);
+                                }
+                                KeyCode::Home if text_input.buffer().is_empty() => {
+                                    scroll_offset = scroll_offset.saturating_add(500);
+                                }
+                                KeyCode::End => {
+                                    scroll_offset = 0;
+                                    if is_paused {
+                                        is_paused = false;
+                                    }
+                                }
+                                KeyCode::Up if is_nav_mod || scroll_offset > 0 || (text_input.buffer().is_empty() && text_input.history().is_empty()) => {
+                                    scroll_offset = scroll_offset.saturating_add(1);
+                                }
+                                KeyCode::Down if is_nav_mod || scroll_offset > 0 => {
+                                    scroll_offset = scroll_offset.saturating_sub(1);
+                                }
+                                _ => {
+                                    if let modalx::TextInputAction::Submit(cmd) = text_input.handle_key(&key) {
+                                        let trimmed = cmd.trim();
+                                        if !trimmed.is_empty() {
+                                            let _ = tx_to_daemon.send(format!("{}\n", trimmed)).await;
+                                            lines.push(format!("> {}", trimmed));
+                                            if lines.len() > 1000 {
+                                                lines.remove(0);
+                                            }
+                                            scroll_offset = 0;
+                                        }
                                     }
                                 }
                             }
@@ -192,6 +455,10 @@ pub async fn run_virtual_console(
                             &lines,
                             scroll_offset,
                             &text_input,
+                            &search_input,
+                            mode,
+                            &filter,
+                            is_paused,
                         )?;
                     }
 
@@ -206,6 +473,10 @@ pub async fn run_virtual_console(
                                     &lines,
                                     scroll_offset,
                                     &text_input,
+                                    &search_input,
+                                    mode,
+                                    &filter,
+                                    is_paused,
                                 )?;
                             }
                             MouseEventKind::ScrollDown => {
@@ -217,6 +488,10 @@ pub async fn run_virtual_console(
                                     &lines,
                                     scroll_offset,
                                     &text_input,
+                                    &search_input,
+                                    mode,
+                                    &filter,
+                                    is_paused,
                                 )?;
                             }
                             _ => {}
@@ -224,7 +499,13 @@ pub async fn run_virtual_console(
                     }
 
                     Event::Paste(text) => {
-                        text_input.insert_str(&text);
+                        if mode == ConsoleMode::Search {
+                            search_input.insert_str(&text);
+                            filter.query = search_input.buffer().to_string();
+                            filter.active = !filter.query.trim().is_empty();
+                        } else {
+                            text_input.insert_str(&text);
+                        }
                         render(
                             &mut stdout,
                             server_name,
@@ -232,6 +513,10 @@ pub async fn run_virtual_console(
                             &lines,
                             scroll_offset,
                             &text_input,
+                            &search_input,
+                            mode,
+                            &filter,
+                            is_paused,
                         )?;
                     }
 
@@ -243,6 +528,10 @@ pub async fn run_virtual_console(
                             &lines,
                             scroll_offset,
                             &text_input,
+                            &search_input,
+                            mode,
+                            &filter,
+                            is_paused,
                         )?;
                     }
 
@@ -324,6 +613,10 @@ fn render<W: Write>(
     lines: &[String],
     scroll_offset: usize,
     text_input: &modalx::TextInput,
+    search_input: &modalx::TextInput,
+    mode: ConsoleMode,
+    filter: &ConsoleFilter,
+    is_paused: bool,
 ) -> Result<()> {
     let (term_w, term_h) = get_terminal_size();
     let width = (term_w as usize).max(40);
@@ -344,7 +637,7 @@ fn render<W: Write>(
     out.write_all(top_border.as_bytes())?;
 
     // Row 1: Subtitle
-    let sub = " [↑/↓/PgUp/PgDn] Scroll  |  [Ctrl+C/Esc] Detach ";
+    let sub = " [/] Search  |  [Space] Freeze  |  [↑/↓/PgUp] Scroll  |  [Esc/Ctrl+C] Exit ";
     let sub_len = strip_ansi(sub).len();
     let sub_pad = inner_width.saturating_sub(sub_len);
     let sub_line = format!("│{}{}{}│\x1B[K\r\n", sub.dimmed(), " ".repeat(sub_pad), "");
@@ -355,42 +648,52 @@ fn render<W: Write>(
     out.write_all(div_line.as_bytes())?;
 
     // Rows 3 .. (term_h - 4): Log viewport
-    let visible_lines: Vec<String> = if scroll_offset == 0 {
-        let total = lines.len();
-        let start = total.saturating_sub(log_area_height);
-        lines[start..total].to_vec()
-    } else if let Some(log_file) = find_log_file(server_path) {
-        if let Ok(file_lines) = read_log_window_from_file(&log_file, scroll_offset, log_area_height)
-        {
-            if !file_lines.is_empty() {
-                file_lines
-            } else {
-                let total = lines.len();
-                let end = total.saturating_sub(scroll_offset);
-                let start = end.saturating_sub(log_area_height);
-                lines[start..end].to_vec()
-            }
+    let pool_lines: Vec<String> = if scroll_offset > 0 && !filter.active {
+        if let Some(log_file) = find_log_file(server_path) {
+            read_log_window_from_file(&log_file, scroll_offset, log_area_height)
+                .unwrap_or_else(|_| lines.to_vec())
         } else {
-            let total = lines.len();
-            let end = total.saturating_sub(scroll_offset);
-            let start = end.saturating_sub(log_area_height);
-            lines[start..end].to_vec()
+            lines.to_vec()
         }
     } else {
-        let total = lines.len();
+        lines.to_vec()
+    };
+
+    let matching_lines: Vec<String> = if filter.active {
+        pool_lines
+            .into_iter()
+            .filter(|l| filter.matches(l))
+            .collect()
+    } else {
+        pool_lines
+    };
+
+    let visible_lines: Vec<String> = if filter.active && scroll_offset > 0 {
+        let total = matching_lines.len();
         let end = total.saturating_sub(scroll_offset);
         let start = end.saturating_sub(log_area_height);
-        lines[start..end].to_vec()
+        matching_lines[start..end].to_vec()
+    } else {
+        let total = matching_lines.len();
+        let start = total.saturating_sub(log_area_height);
+        matching_lines[start..total].to_vec()
     };
 
     for i in 0..log_area_height {
-        if let Some(log_line) = visible_lines.get(i) {
-            let stripped = strip_ansi(log_line);
+        if let Some(raw_log) = visible_lines.get(i) {
+            let colored = colorize_log_line(raw_log);
+            let styled = if filter.active {
+                highlight_matches(&colored, &filter.query)
+            } else {
+                colored
+            };
+
+            let stripped = strip_ansi(&styled);
             let vis_len = stripped.chars().count();
             let truncated = if vis_len > inner_width {
                 craft_core::truncate_str(&stripped, inner_width).to_string()
             } else {
-                log_line.clone()
+                styled
             };
             let pad = inner_width.saturating_sub(strip_ansi(&truncated).chars().count());
             let row = format!(
@@ -405,27 +708,60 @@ fn render<W: Write>(
         }
     }
 
-    // Row term_h - 3: Divider or scroll indicator
-    let divider_or_scroll = if scroll_offset > 0 {
-        let badge = format!(
-            " [▲ SCROLLED +{} LINES | PRESS END TO RETURN] ",
-            scroll_offset
+    // Row term_h - 3: Divider with status badges
+    let mut badges = Vec::new();
+
+    if is_paused {
+        badges.push(
+            "[PAUSED / FROZEN - PRESS SPACE TO RESUME]"
+                .yellow()
+                .bold()
+                .to_string(),
         );
-        let badge_len = strip_ansi(&badge).chars().count();
+    }
+
+    if filter.active {
+        let match_count = lines.iter().filter(|l| filter.matches(l)).count();
+        badges.push(
+            format!(
+                "[FILTER: \"{}\" ({} matches) | ESC to clear]",
+                filter.query, match_count
+            )
+            .cyan()
+            .bold()
+            .to_string(),
+        );
+    }
+
+    if scroll_offset > 0 {
+        badges.push(
+            format!("[▲ SCROLLED +{} LINES | END TO RETURN]", scroll_offset)
+                .magenta()
+                .bold()
+                .to_string(),
+        );
+    }
+
+    let divider_or_badges = if !badges.is_empty() {
+        let badge_str = format!(" {} ", badges.join(" "));
+        let badge_len = strip_ansi(&badge_str).chars().count();
         let b_pad = inner_width.saturating_sub(badge_len);
         format!(
             "├{}{}{}┤\x1B[K\r\n",
             "─".repeat(2),
-            badge.yellow().bold(),
+            badge_str,
             "─".repeat(b_pad.saturating_sub(2))
         )
     } else {
         format!("├{}┤\x1B[K\r\n", "─".repeat(inner_width))
     };
-    out.write_all(divider_or_scroll.as_bytes())?;
+    out.write_all(divider_or_badges.as_bytes())?;
 
-    // Row term_h - 2: Inside-the-box Command Prompt row
-    let (input_row, cursor_x) = text_input.render_box_row(inner_width, "> ");
+    // Row term_h - 2: Inside-the-box Command or Search Prompt row
+    let (input_row, cursor_x) = match mode {
+        ConsoleMode::Command => text_input.render_box_row(inner_width, "> "),
+        ConsoleMode::Search => search_input.render_box_row(inner_width, "Search [/]: "),
+    };
     out.write_all(input_row.as_bytes())?;
 
     // Row term_h - 1: Box bottom border
@@ -473,5 +809,46 @@ mod tests {
         assert_eq!(lines_offset, vec!["line 1", "line 2", "line 3"]);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_colorize_log_levels() {
+        let info = colorize_log_line("[12:34:56 INFO]: Server started on port 25565");
+        assert!(info.contains("\x1B["));
+
+        let warn = colorize_log_line("[Server thread/WARN]: Can't keep up! Running behind");
+        assert!(warn.contains("\x1B["));
+
+        let error = colorize_log_line("[Server thread/ERROR]: Encountered unexpected exception");
+        assert!(error.contains("\x1B["));
+
+        let fatal = colorize_log_line("[FATAL]: Server failed to start");
+        assert!(fatal.contains("\x1B["));
+
+        let stack = colorize_log_line("    at net.minecraft.server.Main.main(Main.java:234)");
+        assert!(stack.contains("\x1B["));
+
+        let debug = colorize_log_line("[DEBUG]: Packet parsed cleanly");
+        assert!(debug.contains("\x1B["));
+    }
+
+    #[test]
+    fn test_filter_matching_and_highlighting() {
+        let mut filter = ConsoleFilter {
+            query: "exception".to_string(),
+            active: true,
+        };
+
+        assert!(filter.matches("Encountered unexpected Exception in thread"));
+        assert!(!filter.matches("Server started cleanly on port 25565"));
+
+        // Regex support
+        filter.query = r"port \d+".to_string();
+        assert!(filter.matches("Server started cleanly on port 25565"));
+        assert!(!filter.matches("Server crashed without port"));
+
+        // Highlighting
+        let highlighted = highlight_matches("Server started on port 25565", r"port \d+");
+        assert!(highlighted.contains("\x1B["));
     }
 }

@@ -17,4 +17,5 @@ zip = { workspace = true }
 tempfile = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
+toml.workspace = true
 

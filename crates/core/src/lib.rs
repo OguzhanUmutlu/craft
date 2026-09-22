@@ -1,5 +1,6 @@
 pub mod backup_config;
 pub mod cache;
+pub mod cluster_config;
 pub mod config;
 pub mod error;
 pub mod game;
@@ -11,12 +12,14 @@ pub mod properties;
 pub mod remote_config;
 pub mod trash;
 pub mod version;
+pub mod webhook_config;
 
 pub use backup_config::{
     AutoBackupPolicy, GDriveBackupConfig, GDriveBackupTarget, GlobalBackupRegistry,
     LocalBackupTarget, S3BackupConfig, S3BackupTarget,
 };
 pub use cache::{format_size, parse_size, CacheEntryMeta, CacheStats, CacheStore};
+pub use cluster_config::{ClusterNode, ClusterRole, ClustersRegistry, ServerCluster};
 pub use config::{
     default_game_id, get_default_world, get_dimension_worlds, set_default_world, set_end_world,
     set_nether_world, GlobalSettings, ServerConfig, ServersRegistry,
@@ -40,6 +43,7 @@ pub use trash::{TrashItem, TrashManager, TrashManifest};
 pub use version::{
     compare_versions, is_stable_version, sort_versions_descending, ReleaseTier, VersionToken,
 };
+pub use webhook_config::{WebhookEndpoint, WebhookEvent, WebhookKind, WebhooksRegistry};
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");
 

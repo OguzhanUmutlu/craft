@@ -1,18 +1,33 @@
 use craft_core::{CraftError, Result};
 use std::path::{Path, PathBuf};
 
+pub mod compatibility;
 pub mod hangar;
+pub mod manifest;
 pub mod map_resolver;
 pub mod modrinth;
 pub mod poggit;
+pub mod resolver;
 pub mod saves;
+pub mod update;
 pub mod world;
 
+pub use compatibility::{evaluate_compatibility, CompatibilityReport};
 pub use hangar::{HangarClient, HangarProject};
+pub use manifest::{
+    inspect_jar_manifest, DependencyRequirement, JarManifestInfo, JarManifestKind,
+};
 pub use map_resolver::resolve_map_download_url;
-pub use modrinth::{ModrinthClient, ModrinthFile, ModrinthHit};
+pub use modrinth::{ModrinthClient, ModrinthFile, ModrinthHit, ModrinthVersion};
 pub use poggit::{PoggitClient, PoggitPlugin};
+pub use resolver::{
+    resolve_ecosystem_alias, resolve_missing_dependencies, DependencyResolutionResult,
+    ResolvedDependency,
+};
 pub use saves::{list_saves_for_server, SaveItem};
+pub use update::{
+    apply_atomic_update, check_server_updates, compute_file_sha512, PluginUpdateCandidate,
+};
 pub use world::{
     get_curated_maps, inspect_world_metadata, install_cached_map, install_world_from_url,
     install_world_from_zip, list_cached_maps, list_installed_worlds, list_world_advancements,
@@ -234,12 +249,44 @@ impl PluginManager {
             .await
     }
 
+    pub async fn install_from_modrinth_compatible(
+        &self,
+        server_path: &Path,
+        project_id: &str,
+        loaders: &[&str],
+        game_versions: &[&str],
+    ) -> Result<PathBuf> {
+        let file_info = self
+            .modrinth
+            .get_latest_compatible_file(project_id, loaders, game_versions)
+            .await?;
+        let plugins_dir = server_path.join("plugins");
+        self.install_artifact_cached("plugins", &file_info.filename, &file_info.url, &plugins_dir)
+            .await
+    }
+
     pub async fn install_mod_from_modrinth(
         &self,
         server_path: &Path,
         project_id: &str,
     ) -> Result<PathBuf> {
         let file_info = self.modrinth.get_latest_file(project_id).await?;
+        let mods_dir = server_path.join("mods");
+        self.install_artifact_cached("mods", &file_info.filename, &file_info.url, &mods_dir)
+            .await
+    }
+
+    pub async fn install_mod_from_modrinth_compatible(
+        &self,
+        server_path: &Path,
+        project_id: &str,
+        loaders: &[&str],
+        game_versions: &[&str],
+    ) -> Result<PathBuf> {
+        let file_info = self
+            .modrinth
+            .get_latest_compatible_file(project_id, loaders, game_versions)
+            .await?;
         let mods_dir = server_path.join("mods");
         self.install_artifact_cached("mods", &file_info.filename, &file_info.url, &mods_dir)
             .await

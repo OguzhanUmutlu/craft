@@ -4,7 +4,41 @@ use craft_net::RconClient;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum BackupFormat {
+    TarZstd,
+    TarGz,
+}
+
+impl BackupFormat {
+    pub fn extension(&self) -> &'static str {
+        match self {
+            BackupFormat::TarZstd => "tar.zst",
+            BackupFormat::TarGz => "tar.gz",
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            BackupFormat::TarZstd => "Zstd",
+            BackupFormat::TarGz => "Gzip",
+        }
+    }
+
+    pub fn from_str_opt(s: &str) -> Option<Self> {
+        let lower = s.to_lowercase();
+        if lower == "zstd" || lower == "zst" || lower == "tar.zst" || lower == "tzst" {
+            Some(BackupFormat::TarZstd)
+        } else if lower == "gzip" || lower == "gz" || lower == "tar.gz" || lower == "tgz" {
+            Some(BackupFormat::TarGz)
+        } else {
+            None
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct BackupMetadata {
@@ -12,6 +46,7 @@ pub struct BackupMetadata {
     pub path: PathBuf,
     pub size_bytes: u64,
     pub created_at: String,
+    pub format: BackupFormat,
 }
 
 pub struct BackupEngine {
@@ -43,12 +78,15 @@ impl BackupEngine {
         server_path: &Path,
         rcon: Option<(&str, u16, &str)>, // (host, port, password)
         world_only: bool,
+        format: Option<BackupFormat>,
     ) -> Result<PathBuf> {
         if !server_path.exists() {
             return Err(CraftError::InvalidPath(
                 server_path.to_string_lossy().to_string(),
             ));
         }
+
+        let fmt = format.unwrap_or(BackupFormat::TarZstd);
 
         let mut rcon_client = None;
         if let Some((host, port, pass)) = rcon {
@@ -64,10 +102,10 @@ impl BackupEngine {
 
         let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
         let suffix = if world_only { "_world" } else { "" };
-        let archive_name = format!("{}_{}{}.tar.gz", server_name, timestamp, suffix);
+        let archive_name = format!("{}_{}{}.{}", server_name, timestamp, suffix, fmt.extension());
         let archive_path = target_dir.join(&archive_name);
 
-        let res = compress_server_directory(server_path, &archive_path, world_only);
+        let res = compress_server_directory(server_path, &archive_path, world_only, fmt);
 
         // Resume auto-saving if RCON was connected
         if let Some(mut client) = rcon_client {
@@ -85,24 +123,39 @@ impl BackupEngine {
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_file() && path.extension().map(|e| e == "gz").unwrap_or(false) {
+                if path.is_file() {
                     let filename = entry.file_name().to_string_lossy().to_string();
-                    let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
-                    let created_at = entry
-                        .metadata()
-                        .and_then(|m| m.created())
-                        .map(|c| {
-                            let dt: chrono::DateTime<Utc> = c.into();
-                            dt.format("%Y-%m-%d %H:%M:%S").to_string()
-                        })
-                        .unwrap_or_else(|_| "Unknown".to_string());
+                    let lower = filename.to_lowercase();
+                    let format_opt = if lower.ends_with(".tar.zst") || lower.ends_with(".tzst") {
+                        Some(BackupFormat::TarZstd)
+                    } else if lower.ends_with(".tar.gz")
+                        || lower.ends_with(".tgz")
+                        || path.extension().map(|e| e == "gz").unwrap_or(false)
+                    {
+                        Some(BackupFormat::TarGz)
+                    } else {
+                        None
+                    };
 
-                    list.push(BackupMetadata {
-                        filename,
-                        path,
-                        size_bytes,
-                        created_at,
-                    });
+                    if let Some(fmt) = format_opt {
+                        let size_bytes = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                        let created_at = entry
+                            .metadata()
+                            .and_then(|m| m.created())
+                            .map(|c| {
+                                let dt: chrono::DateTime<Utc> = c.into();
+                                dt.format("%Y-%m-%d %H:%M:%S").to_string()
+                            })
+                            .unwrap_or_else(|_| "Unknown".to_string());
+
+                        list.push(BackupMetadata {
+                            filename,
+                            path,
+                            size_bytes,
+                            created_at,
+                            format: fmt,
+                        });
+                    }
                 }
             }
         }
@@ -128,14 +181,52 @@ impl BackupEngine {
             )));
         }
 
-        let file = File::open(backup_file)?;
-        let gz = flate2::read::GzDecoder::new(file);
-        let mut archive = tar::Archive::new(gz);
+        // Detect archive compression via magic bytes
+        let mut f = File::open(backup_file)?;
+        let mut magic = [0u8; 4];
+        let bytes_read = f.read(&mut magic).unwrap_or(0);
+
+        let is_zstd = bytes_read >= 4 && magic == [0x28, 0xB5, 0x2F, 0xFD];
+        let is_gzip = bytes_read >= 2 && magic[0] == 0x1F && magic[1] == 0x8B;
 
         fs::create_dir_all(server_path)?;
-        archive
-            .unpack(server_path)
-            .map_err(|e| CraftError::Other(format!("Failed to unpack backup archive: {}", e)))?;
+        let file = File::open(backup_file)?;
+
+        if is_zstd {
+            let decoder = zstd::stream::read::Decoder::new(file)
+                .map_err(|e| CraftError::Other(format!("Failed to initialize zstd decoder: {}", e)))?;
+            let mut archive = tar::Archive::new(decoder);
+            archive
+                .unpack(server_path)
+                .map_err(|e| CraftError::Other(format!("Failed to unpack zstd backup archive: {}", e)))?;
+        } else if is_gzip {
+            let gz = flate2::read::GzDecoder::new(file);
+            let mut archive = tar::Archive::new(gz);
+            archive
+                .unpack(server_path)
+                .map_err(|e| CraftError::Other(format!("Failed to unpack gzip backup archive: {}", e)))?;
+        } else {
+            // Fallback: check file extension
+            let fname_lower = backup_file
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if fname_lower.ends_with(".zst") || fname_lower.ends_with(".tzst") {
+                let decoder = zstd::stream::read::Decoder::new(file)
+                    .map_err(|e| CraftError::Other(format!("Failed to initialize zstd decoder: {}", e)))?;
+                let mut archive = tar::Archive::new(decoder);
+                archive
+                    .unpack(server_path)
+                    .map_err(|e| CraftError::Other(format!("Failed to unpack backup archive: {}", e)))?;
+            } else {
+                let gz = flate2::read::GzDecoder::new(file);
+                let mut archive = tar::Archive::new(gz);
+                archive
+                    .unpack(server_path)
+                    .map_err(|e| CraftError::Other(format!("Failed to unpack backup archive: {}", e)))?;
+            }
+        }
 
         Ok(())
     }
@@ -247,13 +338,42 @@ fn is_world_or_config(rel_path: &Path, is_dir: bool) -> bool {
 
 fn compress_server_directory(
     source_dir: &Path,
-    output_tar_gz: &Path,
+    output_archive: &Path,
+    world_only: bool,
+    format: BackupFormat,
+) -> Result<()> {
+    let file = File::create(output_archive)?;
+    match format {
+        BackupFormat::TarZstd => {
+            let enc = zstd::stream::write::Encoder::new(file, 3)
+                .map_err(|e| CraftError::Other(format!("Failed to initialize zstd encoder: {}", e)))?;
+            let mut tar = tar::Builder::new(enc);
+            append_dir_to_tar(&mut tar, source_dir, world_only)?;
+            let enc = tar
+                .into_inner()
+                .map_err(|e| CraftError::Other(format!("Failed to finalize tar archive: {}", e)))?;
+            enc.finish()
+                .map_err(|e| CraftError::Other(format!("Failed to finalize zstd stream: {}", e)))?;
+        }
+        BackupFormat::TarGz => {
+            let enc = GzEncoder::new(file, Compression::default());
+            let mut tar = tar::Builder::new(enc);
+            append_dir_to_tar(&mut tar, source_dir, world_only)?;
+            let enc = tar
+                .into_inner()
+                .map_err(|e| CraftError::Other(format!("Failed to finalize tar archive: {}", e)))?;
+            enc.finish()
+                .map_err(|e| CraftError::Other(format!("Failed to finalize gzip stream: {}", e)))?;
+        }
+    }
+    Ok(())
+}
+
+fn append_dir_to_tar<W: std::io::Write>(
+    tar: &mut tar::Builder<W>,
+    source_dir: &Path,
     world_only: bool,
 ) -> Result<()> {
-    let file = File::create(output_tar_gz)?;
-    let enc = GzEncoder::new(file, Compression::default());
-    let mut tar = tar::Builder::new(enc);
-
     let mut stack = vec![source_dir.to_path_buf()];
 
     while let Some(current_dir) = stack.pop() {
@@ -298,9 +418,6 @@ fn compress_server_directory(
         }
     }
 
-    tar.finish()
-        .map_err(|e| CraftError::Other(format!("Failed to finalize archive: {}", e)))?;
-
     Ok(())
 }
 
@@ -326,13 +443,13 @@ mod tests {
 
         // 1. Full backup (should exclude logs, cache, session.lock, but include server.jar)
         let full_archive = tmp.path().join("full.tar.gz");
-        compress_server_directory(&server_dir, &full_archive, false).unwrap();
+        compress_server_directory(&server_dir, &full_archive, false, BackupFormat::TarGz).unwrap();
 
         let restore_dir = tmp.path().join("restore_full");
-        let file = File::open(&full_archive).unwrap();
-        let gz = flate2::read::GzDecoder::new(file);
-        let mut archive = tar::Archive::new(gz);
-        archive.unpack(&restore_dir).unwrap();
+        let engine = BackupEngine {
+            backups_dir: tmp.path().join("backups"),
+        };
+        engine.restore_backup(&full_archive, &restore_dir).unwrap();
 
         assert!(restore_dir.join("world/level.dat").exists());
         assert!(restore_dir.join("server.properties").exists());
@@ -343,18 +460,50 @@ mod tests {
 
         // 2. World-only backup (should only include world and config files, not server.jar)
         let world_archive = tmp.path().join("world.tar.gz");
-        compress_server_directory(&server_dir, &world_archive, true).unwrap();
+        compress_server_directory(&server_dir, &world_archive, true, BackupFormat::TarGz).unwrap();
 
         let restore_world = tmp.path().join("restore_world");
-        let file_w = File::open(&world_archive).unwrap();
-        let gz_w = flate2::read::GzDecoder::new(file_w);
-        let mut archive_w = tar::Archive::new(gz_w);
-        archive_w.unpack(&restore_world).unwrap();
+        engine.restore_backup(&world_archive, &restore_world).unwrap();
 
         assert!(restore_world.join("world/level.dat").exists());
         assert!(restore_world.join("server.properties").exists());
         assert!(!restore_world.join("server.jar").exists());
         assert!(!restore_world.join("logs/latest.log").exists());
+    }
+
+    #[test]
+    fn test_zstd_compression_and_auto_detection() {
+        let tmp = tempdir().unwrap();
+        let server_dir = tmp.path().join("server");
+        fs::create_dir_all(server_dir.join("world")).unwrap();
+        fs::write(server_dir.join("world/level.dat"), b"zstd_level_data").unwrap();
+        fs::write(server_dir.join("server.properties"), b"motd=ZstdServer").unwrap();
+
+        let backups_dir = tmp.path().join("backups");
+        let engine = BackupEngine {
+            backups_dir: backups_dir.clone(),
+        };
+
+        // Create zstd backup
+        let zstd_archive = backups_dir.join("test_server").join("test_server_20260101_120000.tar.zst");
+        fs::create_dir_all(zstd_archive.parent().unwrap()).unwrap();
+        compress_server_directory(&server_dir, &zstd_archive, false, BackupFormat::TarZstd).unwrap();
+
+        // Check list_backups
+        let list = engine.list_backups("test_server");
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].format, BackupFormat::TarZstd);
+        assert!(list[0].size_bytes > 0);
+
+        // Restore zstd backup
+        let restore_dir = tmp.path().join("restore_zstd");
+        engine.restore_backup(&zstd_archive, &restore_dir).unwrap();
+
+        assert!(restore_dir.join("world/level.dat").exists());
+        assert_eq!(
+            fs::read_to_string(restore_dir.join("server.properties")).unwrap(),
+            "motd=ZstdServer"
+        );
     }
 
     #[test]
@@ -366,7 +515,7 @@ mod tests {
 
         // Create a backup archive
         let archive_path = tmp.path().join("backup.tar.gz");
-        compress_server_directory(&server_dir, &archive_path, false).unwrap();
+        compress_server_directory(&server_dir, &archive_path, false, BackupFormat::TarGz).unwrap();
 
         // Simulate server running by locking it with ServerLockGuard
         let guard = craft_core::process::ServerLockGuard::acquire(&server_dir).unwrap();

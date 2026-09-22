@@ -1,3 +1,4 @@
+use crate::circuit_breaker::CrashCircuitBreaker;
 use crate::ring_buffer::RingBuffer;
 use craft_core::{
     auto_heal_server_file, auto_heal_server_jar, CraftError, CraftPaths, Result, ServerLockGuard,
@@ -6,6 +7,7 @@ use craft_core::{
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
@@ -18,6 +20,7 @@ struct ActiveServer {
     stdin: Arc<Mutex<Option<ChildStdin>>>,
     ring_buffer: Arc<Mutex<RingBuffer>>,
     log_broadcaster: broadcast::Sender<String>,
+    intentional_stop: Arc<AtomicBool>,
     _lock: Arc<ServerLockGuard>,
 }
 
@@ -25,14 +28,39 @@ struct ActiveServer {
 pub struct Supervisor {
     paths: CraftPaths,
     servers: Arc<Mutex<HashMap<PathBuf, ActiveServer>>>,
+    circuit_breakers: Arc<Mutex<HashMap<PathBuf, CrashCircuitBreaker>>>,
+    restart_tx: tokio::sync::mpsc::UnboundedSender<PathBuf>,
 }
 
 impl Supervisor {
     pub fn new(paths: CraftPaths) -> Self {
-        Self {
+        let (restart_tx, mut restart_rx) = tokio::sync::mpsc::unbounded_channel::<PathBuf>();
+        let sup = Self {
             paths,
             servers: Arc::new(Mutex::new(HashMap::new())),
-        }
+            circuit_breakers: Arc::new(Mutex::new(HashMap::new())),
+            restart_tx,
+        };
+
+        let worker_sup = sup.clone();
+        tokio::spawn(async move {
+            while let Some(path) = restart_rx.recv().await {
+                info!("Auto-restart worker: launching '{}'...", path.display());
+                if let Err(e) = worker_sup.start_server(&path).await {
+                    error!(
+                        "Auto-restart worker: failed to start '{}': {}",
+                        path.display(),
+                        e
+                    );
+                }
+            }
+        });
+
+        sup
+    }
+
+    pub fn paths(&self) -> &CraftPaths {
+        &self.paths
     }
 
     pub async fn auto_start_servers(&self) {
@@ -122,6 +150,21 @@ impl Supervisor {
                 server_path.display(),
                 pid_info
             )));
+        }
+
+        // Circuit breaker check
+        {
+            let mut cbs = self.circuit_breakers.lock().await;
+            let cb = cbs
+                .entry(canonical.clone())
+                .or_insert_with(|| CrashCircuitBreaker::new(canonical.clone()));
+            if cb.is_tripped() {
+                return Err(CraftError::Other(format!(
+                    "Crash circuit breaker is TRIPPED for server at '{}'! Rapid consecutive crashes detected. Auto-restart suspended. Run 'craft restart' or reset breaker to clear.",
+                    canonical.display()
+                )));
+            }
+            cb.record_start();
         }
 
         let lock_guard = ServerLockGuard::acquire(&canonical)?;
@@ -316,16 +359,166 @@ impl Supervisor {
             });
         }
 
+        let intentional_stop = Arc::new(AtomicBool::new(false));
+        let child_arc = Arc::new(Mutex::new(child));
         let active = ActiveServer {
-            child: Arc::new(Mutex::new(child)),
+            child: child_arc.clone(),
             stdin: Arc::new(Mutex::new(stdin)),
             ring_buffer,
-            log_broadcaster,
+            log_broadcaster: log_broadcaster.clone(),
+            intentional_stop: intentional_stop.clone(),
             _lock: Arc::new(lock_guard),
         };
 
-        let mut servers = self.servers.lock().await;
-        servers.insert(canonical, active);
+        {
+            let mut servers = self.servers.lock().await;
+            servers.insert(canonical.clone(), active);
+        }
+
+        // Spawn background crash monitor task
+        let sup = self.clone();
+        let monitor_child = child_arc.clone();
+        let monitor_stop = intentional_stop.clone();
+        let monitor_path = canonical.clone();
+        let monitor_broadcaster = log_broadcaster.clone();
+
+        tokio::spawn(async move {
+            let mut status_opt = None;
+            loop {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                let mut c = monitor_child.lock().await;
+                match c.try_wait() {
+                    Ok(Some(status)) => {
+                        status_opt = Some(status);
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(_) => break,
+                }
+            }
+
+            let is_intentional = monitor_stop.load(Ordering::SeqCst);
+            {
+                let mut servers = sup.servers.lock().await;
+                servers.remove(&monitor_path);
+            }
+
+            if is_intentional {
+                info!("Server at '{}' stopped intentionally.", monitor_path.display());
+                return;
+            }
+
+            let code = status_opt.and_then(|s| s.code()).unwrap_or(-1);
+            warn!("Server at '{}' exited unexpectedly with code {}", monitor_path.display(), code);
+
+            let server_name = ServersRegistry::load(&sup.paths)
+                .ok()
+                .and_then(|reg| reg.find_by_path(&monitor_path).map(|s| s.name.clone()))
+                .unwrap_or_else(|| {
+                    monitor_path
+                        .file_name()
+                        .and_then(|f| f.to_str())
+                        .unwrap_or("unknown")
+                        .to_string()
+                });
+
+            let should_auto_restart = {
+                if let Ok(reg) = ServersRegistry::load(&sup.paths) {
+                    reg.find_by_path(&monitor_path).map(|s| s.auto).unwrap_or(false)
+                } else {
+                    false
+                }
+            };
+
+            let decision = {
+                let mut cbs = sup.circuit_breakers.lock().await;
+                let cb = cbs
+                    .entry(monitor_path.clone())
+                    .or_insert_with(|| CrashCircuitBreaker::new(monitor_path.clone()));
+                cb.record_crash(code)
+            };
+
+            let crashes_count = match &decision {
+                crate::circuit_breaker::CircuitDecision::Trip { crashes, .. } => *crashes,
+                _ => 1,
+            };
+
+            // Dispatch ServerCrash webhook
+            crate::webhooks::WebhookDispatcher::dispatch(
+                crate::webhooks::WebhookPayload::server_crash(
+                    &server_name,
+                    &monitor_path,
+                    code,
+                    crashes_count,
+                ),
+                &sup.paths,
+            );
+
+            match decision {
+                crate::circuit_breaker::CircuitDecision::Trip { crashes, window_secs } => {
+                    let msg = format!(
+                        "[CRITICAL] Crash circuit breaker TRIPPED for server '{}'! Exited {} times in {}s (exit code: {}). Auto-restart suspended to prevent runaway.\n",
+                        monitor_path.display(), crashes, window_secs, code
+                    );
+                    error!("{}", msg.trim());
+                    let _ = monitor_broadcaster.send(msg);
+
+                    // Dispatch CircuitTrip webhook
+                    crate::webhooks::WebhookDispatcher::dispatch(
+                        crate::webhooks::WebhookPayload::circuit_trip(
+                            &server_name,
+                            &monitor_path,
+                            crashes,
+                            window_secs,
+                        ),
+                        &sup.paths,
+                    );
+                }
+                crate::circuit_breaker::CircuitDecision::Backoff(delay) => {
+                    if should_auto_restart {
+                        let msg = format!(
+                            "[WARN] Server '{}' exited unexpectedly (code: {}). Backing off for {}s before auto-restart...\n",
+                            monitor_path.display(), code, delay.as_secs()
+                        );
+                        warn!("{}", msg.trim());
+                        let _ = monitor_broadcaster.send(msg);
+
+                        // Dispatch AutoRestart webhook
+                        crate::webhooks::WebhookDispatcher::dispatch(
+                            crate::webhooks::WebhookPayload::auto_restart(
+                                &server_name,
+                                &monitor_path,
+                                delay.as_secs(),
+                            ),
+                            &sup.paths,
+                        );
+
+                        tokio::time::sleep(delay).await;
+
+                        info!("Queuing auto-restart of '{}' after backoff...", monitor_path.display());
+                        let _ = sup.restart_tx.send(monitor_path);
+                    } else {
+                        info!("Server '{}' is not configured for auto-start; leaving stopped.", monitor_path.display());
+                    }
+                }
+            }
+        });
+
+        // Dispatch ServerStart webhook
+        let s_name = ServersRegistry::load(&self.paths)
+            .ok()
+            .and_then(|reg| reg.find_by_path(&canonical).map(|s| s.name.clone()))
+            .unwrap_or_else(|| {
+                canonical
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("unknown")
+                    .to_string()
+            });
+        crate::webhooks::WebhookDispatcher::dispatch(
+            crate::webhooks::WebhookPayload::server_start(&s_name, &canonical),
+            &self.paths,
+        );
 
         Ok(())
     }
@@ -342,6 +535,7 @@ impl Supervisor {
         let (child, stdin) = {
             let servers = self.servers.lock().await;
             if let Some(active) = servers.get(&canonical) {
+                active.intentional_stop.store(true, Ordering::SeqCst);
                 (Some(active.child.clone()), Some(active.stdin.clone()))
             } else {
                 (None, None)
@@ -468,6 +662,21 @@ impl Supervisor {
                 let _ = craft_scripting::LuaEngine::run_post_stop(&canonical, cfg, -9);
             }
 
+            let s_name = ServersRegistry::load(&self.paths)
+                .ok()
+                .and_then(|reg| reg.find_by_path(&canonical).map(|s| s.name.clone()))
+                .unwrap_or_else(|| {
+                    canonical
+                        .file_name()
+                        .and_then(|f| f.to_str())
+                        .unwrap_or("unknown")
+                        .to_string()
+                });
+            crate::webhooks::WebhookDispatcher::dispatch(
+                crate::webhooks::WebhookPayload::server_stop(&s_name, &canonical, true),
+                &self.paths,
+            );
+
             Ok(())
         } else if let Some(pid) = craft_core::get_server_running_pid(&canonical) {
             info!(
@@ -480,12 +689,42 @@ impl Supervisor {
             for _ in 0..10 {
                 sleep(Duration::from_millis(500)).await;
                 if !craft_core::is_process_running(pid) {
+                    let s_name = ServersRegistry::load(&self.paths)
+                        .ok()
+                        .and_then(|reg| reg.find_by_path(&canonical).map(|s| s.name.clone()))
+                        .unwrap_or_else(|| {
+                            canonical
+                                .file_name()
+                                .and_then(|f| f.to_str())
+                                .unwrap_or("unknown")
+                                .to_string()
+                        });
+                    crate::webhooks::WebhookDispatcher::dispatch(
+                        crate::webhooks::WebhookPayload::server_stop(&s_name, &canonical, true),
+                        &self.paths,
+                    );
                     return Ok(());
                 }
             }
             if !force {
                 let _ = craft_core::kill_process(pid, true);
             }
+
+            let s_name = ServersRegistry::load(&self.paths)
+                .ok()
+                .and_then(|reg| reg.find_by_path(&canonical).map(|s| s.name.clone()))
+                .unwrap_or_else(|| {
+                    canonical
+                        .file_name()
+                        .and_then(|f| f.to_str())
+                        .unwrap_or("unknown")
+                        .to_string()
+                });
+            crate::webhooks::WebhookDispatcher::dispatch(
+                crate::webhooks::WebhookPayload::server_stop(&s_name, &canonical, true),
+                &self.paths,
+            );
+
             Ok(())
         } else {
             Err(CraftError::Other(format!(
@@ -544,5 +783,53 @@ impl Supervisor {
                 server_path.display()
             )))
         }
+    }
+
+    pub async fn reset_circuit_breaker(&self, server_path: &Path) {
+        let canonical = server_path
+            .canonicalize()
+            .unwrap_or_else(|_| server_path.to_path_buf());
+        let mut cbs = self.circuit_breakers.lock().await;
+        if let Some(cb) = cbs.get_mut(&canonical) {
+            cb.reset();
+        }
+    }
+
+    pub async fn get_circuit_breaker_infos(&self) -> Vec<crate::circuit_breaker::CircuitBreakerInfo> {
+        let mut list = Vec::new();
+        let cbs = self.circuit_breakers.lock().await;
+        let reg_opt = ServersRegistry::load(&self.paths).ok();
+        for (path, cb) in cbs.iter() {
+            let name = reg_opt
+                .as_ref()
+                .and_then(|r| r.find_by_path(path))
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| {
+                    path.file_name()
+                        .and_then(|f| f.to_str())
+                        .unwrap_or("unknown")
+                        .to_string()
+                });
+            list.push(cb.status_info(&name));
+        }
+        list
+    }
+
+    pub async fn get_server_pid(&self, path: &Path) -> Option<u32> {
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let servers = self.servers.lock().await;
+        if let Some(active) = servers.get(&canonical) {
+            let child = active.child.lock().await;
+            if let Some(pid) = child.id() {
+                return Some(pid);
+            }
+        }
+        craft_core::get_server_running_pid(&canonical)
+    }
+
+    pub async fn get_server_log_broadcaster(&self, path: &Path) -> Option<broadcast::Receiver<String>> {
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let servers = self.servers.lock().await;
+        servers.get(&canonical).map(|active| active.log_broadcaster.subscribe())
     }
 }

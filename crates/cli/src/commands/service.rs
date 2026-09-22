@@ -63,6 +63,44 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
                     for s in running {
                         println!("  - {}", s.display());
                     }
+
+                    // Query circuit breakers
+                    if let Ok(breakers) = client.get_circuit_breakers().await {
+                        let active_breakers: Vec<_> = breakers
+                            .iter()
+                            .filter(|b| b.state.contains("Open") || b.state.contains("HalfOpen"))
+                            .collect();
+                        if !active_breakers.is_empty() {
+                            println!("\n{}", "=== Circuit Breaker Activity ===".yellow().bold());
+                            for b in active_breakers {
+                                println!(
+                                    "  - {} | State: {} | Consecutive Crashes: {}",
+                                    b.server_name.yellow().bold(),
+                                    b.state.red(),
+                                    b.consecutive_crashes
+                                );
+                            }
+                        }
+                    }
+
+                    // Query backup schedules
+                    if let Ok(schedules) = client.get_backup_schedules().await {
+                        let active: Vec<_> = schedules.iter().filter(|s| s.enabled).collect();
+                        if !active.is_empty() {
+                            println!("\n{}", "=== Automated Backup Schedules ===".cyan().bold());
+                            for s in active {
+                                let last = s.last_backup.as_deref().unwrap_or("Never");
+                                println!(
+                                    "  - {} | Schedule: {} | Retention: {} | Format: {} | Last: {}",
+                                    s.server_name.green().bold(),
+                                    s.schedule.cyan(),
+                                    s.retention_count,
+                                    s.format,
+                                    last.dimmed()
+                                );
+                            }
+                        }
+                    }
                 }
             } else {
                 println!("{}", "Craft service daemon is STOPPED.".red().bold());
@@ -282,6 +320,59 @@ pub async fn handle_service(action: ServiceCommands, paths: &CraftPaths) -> Resu
                         "Scheduled task was either not found or failed to delete.".yellow()
                     );
                 }
+            }
+        }
+        ServiceCommands::CircuitBreakers { reset } => {
+            if !DaemonClient::is_daemon_running(paths) {
+                println!("{}", "Craft service daemon is not running.".yellow());
+                return Ok(());
+            }
+
+            let mut client = DaemonClient::connect(paths).await?;
+
+            if let Some(target) = reset {
+                let target_path = paths.resolve_server_path(None, Some(&target), true)?;
+                client.reset_circuit_breaker(&target_path).await?;
+                println!(
+                    "{}",
+                    format!(
+                        "[OK] Reset crash circuit breaker for server '{}' ({})",
+                        target,
+                        target_path.display()
+                    )
+                    .green()
+                    .bold()
+                );
+            } else {
+                let breakers = client.get_circuit_breakers().await?;
+                if breakers.is_empty() {
+                    println!("{}", "No circuit breakers registered or active.".green());
+                    return Ok(());
+                }
+
+                println!(
+                    "{}",
+                    "=== Server Crash Circuit Breakers ===".cyan().bold()
+                );
+                for b in breakers {
+                    let tripped_info = b.last_tripped.as_deref().unwrap_or("None");
+                    let state_color = if b.state.contains("Open") {
+                        b.state.red().bold()
+                    } else if b.state.contains("HalfOpen") {
+                        b.state.yellow().bold()
+                    } else {
+                        b.state.green()
+                    };
+                    println!(
+                        "  Server:      {}\n  Path:        {}\n  State:       {}\n  Crashes:     {}\n  Last Trip:   {}\n",
+                        b.server_name.cyan().bold(),
+                        b.path.display(),
+                        state_color,
+                        b.consecutive_crashes,
+                        tripped_info.dimmed()
+                    );
+                }
+                println!("Tip: Run 'craft service breakers --reset <server>' to clear a tripped breaker.");
             }
         }
     }

@@ -13,6 +13,7 @@ use commands::{
     backup::handle_backup,
     cache::handle_cache,
     catalog::handle_catalog,
+    cluster::handle_cluster,
     dashboard::{
         backups_menu, cache_menu, daemon_menu, gui_create_server_wizard_with_name,
         handle_dashboard, ping_menu, plugins_menu, quick_start_menu, remotes_menu,
@@ -25,6 +26,7 @@ use commands::{
     fix::handle_fix,
     load::handle_load,
     ls::handle_ls,
+    migrate::handle_migrate,
     mod_cmd::handle_mod,
     net::{handle_firewall, handle_loopback, handle_ping, handle_rcon},
     new::handle_new,
@@ -267,6 +269,9 @@ async fn main() {
                 handle_view(&name, path, &paths).await
             }
         }
+        Some(Commands::Log { action, name, path }) => {
+            commands::log::handle_log(&name, path, action, &paths).await
+        }
         Some(Commands::Ls { remote }) => {
             if let Some(alias) = remote {
                 execute_remote(&alias, "craft ls", false, &paths)
@@ -399,6 +404,32 @@ async fn main() {
                 handle_remote(crate::cli::RemoteCommands::Ls, &paths).await
             }
         }
+        Some(Commands::Migrate {
+            server,
+            to,
+            remote_name,
+            remote_port,
+            trash_source,
+            start,
+        }) => {
+            handle_migrate(
+                &server,
+                &to,
+                remote_name,
+                remote_port,
+                trash_source,
+                start,
+                &paths,
+            )
+            .await
+        }
+        Some(Commands::Cluster { action }) => {
+            if let Some(act) = action {
+                handle_cluster(act, &paths).await
+            } else {
+                handle_cluster(crate::cli::ClusterCommands::Ls, &paths).await
+            }
+        }
         Some(Commands::Deploy { action }) => handle_deploy(action, &paths).await,
         Some(Commands::Prop { server, action }) => handle_prop(&server, action, &paths).await,
         Some(Commands::World { server, action }) => handle_world(&server, action, &paths).await,
@@ -409,6 +440,12 @@ async fn main() {
         }
         Some(Commands::Software { action }) => {
             commands::software::handle_software(action, &paths).await
+        }
+        Some(Commands::Webhook { action }) => {
+            commands::webhook::handle_webhook(action, &paths).await
+        }
+        Some(Commands::Gateway { action }) => {
+            commands::gateway::handle_gateway(action, &paths).await
         }
     };
 
@@ -461,6 +498,8 @@ fn print_banner() {
     println!("  remote <add|ls|rm|test|setup>     Manage remote hosts over SSH");
     println!("  deploy <up|down|status|logs|exec> Deploy containerized stack with Docker");
     println!("  lua <script> [args...]            Execute Lua script with Craft API");
+    println!("  webhook <add|rm|ls|test>          Manage event notification webhooks");
+    println!("  gateway <status|enable|metrics>   Manage WebSocket gateway & metrics");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

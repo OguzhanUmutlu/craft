@@ -77,6 +77,18 @@ pub struct GlobalSettings {
     pub cache_max_bytes: u64,
     #[serde(default = "default_auto_update_catalog")]
     pub auto_update_catalog: bool,
+    #[serde(default = "default_gateway_enabled")]
+    pub gateway_enabled: bool,
+    #[serde(default = "default_gateway_bind")]
+    pub gateway_bind: String,
+    #[serde(default = "default_gateway_port")]
+    pub gateway_port: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gateway_token: Option<String>,
+    #[serde(default = "default_storage_threshold_bytes")]
+    pub storage_warning_threshold_bytes: u64,
+    #[serde(default = "default_storage_threshold_percent")]
+    pub storage_warning_threshold_percent: f64,
 }
 
 fn default_daemon_port() -> u16 {
@@ -97,6 +109,21 @@ fn default_cache_max_bytes() -> u64 {
 fn default_auto_update_catalog() -> bool {
     true
 }
+fn default_gateway_enabled() -> bool {
+    true
+}
+fn default_gateway_bind() -> String {
+    "127.0.0.1".to_string()
+}
+fn default_gateway_port() -> u16 {
+    9100
+}
+fn default_storage_threshold_bytes() -> u64 {
+    5 * 1024 * 1024 * 1024
+}
+fn default_storage_threshold_percent() -> f64 {
+    10.0
+}
 
 impl Default for GlobalSettings {
     fn default() -> Self {
@@ -107,6 +134,12 @@ impl Default for GlobalSettings {
             download_concurrency: default_download_concurrency(),
             cache_max_bytes: default_cache_max_bytes(),
             auto_update_catalog: default_auto_update_catalog(),
+            gateway_enabled: default_gateway_enabled(),
+            gateway_bind: default_gateway_bind(),
+            gateway_port: default_gateway_port(),
+            gateway_token: None,
+            storage_warning_threshold_bytes: default_storage_threshold_bytes(),
+            storage_warning_threshold_percent: default_storage_threshold_percent(),
         }
     }
 }

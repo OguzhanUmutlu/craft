@@ -4,90 +4,52 @@ This task list tracks ongoing development, bug fixes, enhancements, and UI polis
 
 ---
 
-## Active & Pending Tasks
+## Active Roadmap
 
-*(All current milestone tasks completed! Add newly identified features, improvements, or bug reports below)*
+See root [`todo.md`](../todo.md) for the authoritative **Future-Current-Done** phase tracker:
+- **Current Phase**:
+  - Phase 2: Automated Operations, Backups and Resilience
+- **Future Phases**:
+  - Phase 3: Observability, Live Console and TUI Ergonomics
+  - Phase 4: Ecosystem, Multi-Server Clusters and Remote Federation
+  - Phase 5: Plugin & Mod Lifecycle Automation and Dependency Resolution
+  - Phase 6: Enterprise Telemetry, Webhooks & Remote Gateway
+- **Done Phases**:
+  - Phase 1: Core Reliability, Safety and Parity
 
 ---
 
-## Completed Tasks
+## Completed Tasks Archive
 
-### 1. Live Console & Log Streaming
-- [x] **Eliminate Double-Spacing in Live Console**:
-  - In `crates/daemon/src/supervisor.rs`, stripped trailing `\r` and skipped empty or whitespace-only lines from server stdout/stderr streams.
-  - In `crates/daemon/src/supervisor.rs`, added persistent logging of server stdout/stderr to `<server_path>/logs/console.log`.
-  - In `crates/cli/src/commands/dashboard/screen/console.rs`, filtered empty lines during backlog parsing and live chunk splitting, ensuring no blank rows are rendered inside the box frame.
-- [x] **Bounded RAM & On-Demand Chunked Log File Reading**:
-  - Capped in-memory live log buffer to 200 items in `crates/cli/src/commands/dashboard/screen/console.rs`, discarding older items from RAM.
-  - Added backward seek reader reading the log file (`latest.log` or `console.log`) on-demand in 16 KB chunks from the end of the file when scrolled, never holding the full file in memory.
-- [x] **Interactive Console Scrolling**:
-  - Enabled Up/Down arrow key scrolling (when scrolled or with modifier keys) alongside PageUp, PageDown, Home, End, and mouse wheel scroll.
+### 1. Phase 1 - Core Reliability, Safety and Parity
+- [x] **Multi-Runtime Containerization (`craft dockerize`)**:
+  - Replaced hardcoded Java 21 template with multi-runtime archetype detection (Java 8/17/21, Bedrock, Factorio, Terraria, Palworld, Valheim, Custom).
+  - Configured game-specific ports and start script generation.
+- [x] **Self-Contained Multi-Stage Builds (`craft deploy`)**:
+  - Updated `deploy.rs` template and root `Dockerfile` to multi-stage build compiling Craft in Stage 1 when host binary is absent.
+- [x] **Non-Destructive Safe World Deletion (`craft world rm`)**:
+  - Enhanced `TrashManager` in `craft-core` to support directory trashing with recursive sizing and deterministic SHA-256 hashing.
+  - Migrated `craft world rm` to trash bin staging with restore command guidance and `--permanent` flag.
+  - Added `test_trash_directory_lifecycle` test.
+- [x] **Comprehensive Self-Healing Diagnostic Suite (`craft fix`)**:
+  - Added stale lock & PID cleanup when process is dead.
+  - Added Minecraft EULA acceptance in `eula.txt`.
+  - Enforced `0o755` executable permissions across all game archetypes.
+  - Added port collision detection against other servers and host ports.
+  - Added ghost registry path detection.
+- [x] **Auto-Run Service Guidance (`craft auto how`)**:
+  - Prominently recommended `craft service install` for automated OS background service configuration.
 
-### 2. Community Maps & Universal URL Resolver
-- [x] **Dynamic Viewport Width for Map Descriptions**:
-  - In `crates/cli/src/commands/dashboard/worlds_tui.rs`, calculated dynamic available space based on terminal content width (`get_content_width(80)`), eliminating premature 40-character `...` ellipses.
-- [x] **Universal Map Downloader & Resolver**:
-  - Created `crates/plugins/src/map_resolver.rs` supporting direct archives (`.zip`, `.mcworld`, `.tar.gz`), Google Drive, Dropbox (`dl=1`), GitHub releases/raw, and MediaFire download pages.
-  - Added Cloudflare Managed Challenge / Turnstile detection returning clear instructions to provide direct mirror links when anti-bot protection is triggered.
-  - Expanded curated map catalog with 10 community maps (SkyBlock, The Dropper, Diversity 3, Parkour Spiral, Medieval Village, Herobrine's Mansion, Terra Swoop Force, Castaway Island, Super Hostile: Sea of Flame, Futuristic Lobby).
-- [x] **Direct Link / Website URL Input in TUI**:
-  - Added `[u] Install Map from Direct Link or Website URL` option with folder name prompt and automated archive extraction into the server directory.
+### 2. Live Console & Log Streaming
+- [x] **Eliminate Double-Spacing in Live Console**: Stripped trailing `\r` and skipped empty lines.
+- [x] **Bounded RAM & Chunked Log Reading**: Capped live log buffer to 200 items; added 16 KB backward seek reader.
+- [x] **Interactive Console Scrolling**: Enabled Up/Down and PageUp/PageDown scrolling.
 
-### 3. ModalX Wrap Around Configuration
-- [x] **Configurable Selection Wrap Around**:
-  - In `tools/modalx/src/modals/select.rs` and `tools/modalx/src/modals/table.rs`, added `wrap_around: bool` (default `false`) and `with_wrap_around(bool)` builder method.
-  - Selection stays at top/bottom bounds by default instead of wrapping around, unless explicitly enabled.
+### 3. Community Maps & Universal URL Resolver
+- [x] **Universal Map Downloader**: Supported direct archives, Google Drive, Dropbox, GitHub, MediaFire.
+- [x] **Curated Community Map Catalog**: Added 10 pre-configured community maps.
 
-### 4. TUI Input & Dialog Fixes
-- [x] **Fix Double Colons (`::`) in Input Modals**:
-  - In `crates/cli/src/commands/dashboard/properties_tui.rs`, removed trailing `:` in prompt labels passed to `run_input_prompt`.
-  - In `tools/modalx/src/modals/form.rs`, trimmed trailing colons from `field.label` before appending `:` in `FormModal`.
-- [x] **Left / Right Arrow Key Navigation in `modalx`**:
-  - `SelectModal` (`tools/modalx/src/modals/select.rs`): Mapped `KeyAction::Right` to select (`SelectOutcome::Selected`), and `KeyAction::Left` to cancel/back (`SelectOutcome::Cancelled`).
-  - `TableModal` (`tools/modalx/src/modals/table.rs`): Mapped `KeyAction::Right` to select row, and `KeyAction::Left` to back/cancel.
-  - `ConfirmModal` (`tools/modalx/src/modals/confirm.rs`): Mapped `KeyAction::Left` explicitly to `[ Yes ]` (`selected_yes = true`) and `KeyAction::Right` explicitly to `[ No ]` (`selected_yes = false`).
-- [x] **JVM JDWP Debugger Setup In-Place Status Updates**:
-  - In `crates/cli/src/commands/dev.rs`, extracted `configure_jdwp_debug` to decouple server registry modification and start script regeneration from CLI stdout output.
-  - In `crates/cli/src/commands/dashboard/developer_tui.rs`, looped `jdwp_setup_menu` so toggling debugging or changing the debug port updates the header status and menu entries in-place without triggering disruptive popup modals (`DEBUGGER ENABLED`, `DEBUGGER DISABLED`, `PORT UPDATED`).
-
-### 5. Properties Menu & Descriptions
-- [x] **Comprehensive Minecraft Server Property Descriptions**:
-  - Expanded `ServerProperties::property_description(key)` in `crates/core/src/properties.rs` with detailed, accurate descriptions for all standard Minecraft Java & Bedrock properties.
-- [x] **Fix Premature Ellipses on Wide Terminals**:
-  - In `crates/cli/src/commands/dashboard/properties_tui.rs`, eliminated hardcoded `craft_core::truncate_ellipsis(..., 38)`. Descriptions now dynamically adapt to viewport width, allowing wide terminals to display full descriptions without ellipses.
-
-### 6. Visual Layout, Unicode Width & Zero-Emoji Policy
-- [x] **Eliminate Emojis & Badges from Categories**:
-  - Removed emoji icons and badges completely from `PropertyCategory` and properties menus, displaying only clean, plain category names.
-  - Zero emoji characters exist in any TUI rendering components.
-- [x] **Fix Box Frame Border Misalignment with `unicode-width`**:
-  - Added `unicode-width = "0.2"` to `tools/modalx/Cargo.toml`.
-  - In `tools/modalx/src/theme.rs` (`visible_len`) and `tools/modalx/src/frame.rs`, used display column width (`UnicodeWidthStr::width`) instead of scalar character count (`chars().count()`) to calculate padding and border placement.
-
-### 7. Remote Host Bootstrap Box Encapsulation
-- [x] **Progress Callback in `craft-remote`**:
-  - Updated `crates/remote/src/bootstrap/mod.rs` to provide `run_bootstrap_with_progress(session, progress: impl FnMut(&str))`.
-  - Refactored `linux.rs`, `macos.rs`, and `windows.rs` to emit progress events via the callback instead of printing raw text to stdout with `println!`.
-- [x] **Encapsulated Animated Bootstrap TUI**:
-  - In `crates/cli/src/commands/dashboard/remote_tui/host_servers.rs`, drove bootstrap execution inside `modalx::WaitingModal` with animated braille spinner and step completion checkmarks `✓` inside the box frame.
-
-### 8. Documentation & Packaging
-- [x] Create standalone `modalx` repository and sync with `git@github.com:OguzhanUmutlu/modalx.git`.
-- [x] Build comprehensive 21-page VitePress documentation suite for `modalx` under `tools/modalx/docs/`.
-- [x] Configure automated documentation deployment to Cloudflare Workers (`modalx.oguzhanumutlu.com`).
-- [x] Perform Unicode zero-emoji audit on documentation and README.
-
-### 9. Zstandard-Compressed Caching & Inside-the-Box Console Input
-- [x] **Universal ModalX `TextInput` Component**:
-  - Implemented `tools/modalx/src/input.rs` (`TextInput`, `TextInputAction`) with full readline editing, cursor movement, character insertion/deletion, word-jump, word deletion, command history, and `render_box_row` for rendering inside box frames with horizontal scrolling and cursor positioning.
-  - Added universal `Ctrl+Backspace` / `Alt+Backspace` word deletion in `tools/modalx/src/keys.rs` and `tools/modalx/src/modals/form.rs`.
-- [x] **Anchored Inside-the-Box Live Console Input**:
-  - Moved the interactive command input inside the box frame at row `term_h - 2` with divider/scroll badge at `term_h - 3` and box bottom at `term_h - 1`.
-  - Input remains anchored inside the box as logs scroll without row drift or boundary jumping.
-  - Removed `[Ctrl+Backspace] Delete Word` from the console subtitle.
-- [x] **Zstandard-Compressed Plugin & Map Caching**:
-  - Added `put_artifact_compressed`, `get_artifact_data`, `extract_artifact_to`, `has_artifact`, and `list_cached_artifacts` in `crates/core/src/cache.rs` with Zstandard level 3 compression and metadata tracking (`title`, `category`, `is_compressed`, `uncompressed_size`, `size_bytes`).
-  - Integrated compressed caching in `crates/plugins/src/lib.rs` (`install_artifact_cached`, `list_cached_plugins`, `install_cached_plugin`) and `crates/plugins/src/world.rs` (`install_world_from_url`, `list_cached_maps`, `install_cached_map`).
-- [x] **Install From Cache Menus in Dashboard**:
-  - Added `[3] Install From Cache` in Server Plugins menu (`crates/cli/src/commands/dashboard/server_control.rs`) displaying cached plugins, uncompressed sizes, and zstd compression savings.
-  - Added `[c] Install Map from Cache` in Curated Maps menu (`crates/cli/src/commands/dashboard/worlds_tui.rs`) displaying cached world archives and extracting them into the server.
+### 4. ModalX TUI & Readline TextInput
+- [x] **Universal TextInput**: Implemented Emacs/Readline keybindings and inside-the-box anchored prompt.
+- [x] **Display Width Alignment**: Integrated `unicode-width` to prevent border tearing on wide/multibyte characters.
+- [x] **Strict Zero-Emoji Aesthetics**: Plain typography across all modal dialogs.

@@ -25,8 +25,39 @@ impl DaemonServer {
         let pid = std::process::id();
         write_pid_file(&self.paths.pid_file, pid)?;
 
+        // Initialize telemetry uptime tracking
+        crate::telemetry::init_telemetry_start_time();
+
         // Auto-start configured servers
         self.supervisor.auto_start_servers().await;
+
+        // Launch in-process automated backup scheduler
+        let _scheduler_handle =
+            crate::scheduler::DaemonScheduler::start(self.paths.clone(), self.supervisor.clone());
+
+        // Load settings to check gateway and storage monitor config
+        let settings = craft_core::GlobalSettings::load(&self.paths).unwrap_or_default();
+
+        // Launch WebSocket & HTTP Gateway Server if enabled
+        if settings.gateway_enabled {
+            let bind = settings.gateway_bind.clone();
+            let port = settings.gateway_port;
+            let token = settings.gateway_token.clone();
+            let p_gw = self.paths.clone();
+            let s_gw = self.supervisor.clone();
+            let gw = crate::gateway::GatewayServer::new(bind, port, token, s_gw, p_gw);
+            if let Err(e) = gw.start() {
+                error!("Gateway server error: {}", e);
+            }
+        }
+
+        // Launch disk storage exhaustion background monitor
+        let p_storage = self.paths.clone();
+        let warn_threshold_bytes = settings.storage_warning_threshold_bytes;
+        let warn_threshold_percent = settings.storage_warning_threshold_percent;
+        tokio::spawn(async move {
+            run_storage_monitor(p_storage, warn_threshold_bytes, warn_threshold_percent).await;
+        });
 
         #[cfg(not(target_os = "windows"))]
         {
@@ -218,6 +249,40 @@ where
                 }
             }
             IpcRequest::DetachConsole { .. } => {}
+            IpcRequest::GetCircuitBreakers => {
+                let items = supervisor.get_circuit_breaker_infos().await;
+                write_frame(&mut stream, &IpcResponse::CircuitBreakersList { items }).await?;
+            }
+            IpcRequest::ResetCircuitBreaker { path } => {
+                supervisor.reset_circuit_breaker(&path).await;
+                write_frame(
+                    &mut stream,
+                    &IpcResponse::Success {
+                        message: format!("Reset circuit breaker for '{}'", path.display()),
+                    },
+                )
+                .await?;
+            }
+            IpcRequest::GetBackupSchedules => {
+                let mut items = Vec::new();
+                if let Ok(reg) = craft_core::GlobalBackupRegistry::load(supervisor.paths()) {
+                    for (name, policy) in reg.server_policies {
+                        let last_str = policy.last_backup_timestamp.and_then(|ts| {
+                            chrono::DateTime::from_timestamp(ts, 0)
+                                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                        });
+                        items.push(crate::scheduler::BackupScheduleInfo {
+                            server_name: name,
+                            enabled: policy.enabled,
+                            schedule: policy.schedule_display(),
+                            retention_count: policy.retention_count,
+                            format: policy.compression_format().to_string(),
+                            last_backup: last_str,
+                        });
+                    }
+                }
+                write_frame(&mut stream, &IpcResponse::BackupSchedulesList { items }).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -507,5 +572,112 @@ impl DaemonClient {
         }
 
         Ok(())
+    }
+
+    pub async fn get_circuit_breakers(
+        &mut self,
+    ) -> Result<Vec<crate::circuit_breaker::CircuitBreakerInfo>> {
+        match self.request(IpcRequest::GetCircuitBreakers).await? {
+            IpcResponse::CircuitBreakersList { items } => Ok(items),
+            IpcResponse::Error { error } => Err(CraftError::Ipc(error)),
+            _ => Err(CraftError::Ipc(
+                "Unexpected response from daemon".to_string(),
+            )),
+        }
+    }
+
+    pub async fn reset_circuit_breaker(&mut self, path: &Path) -> Result<()> {
+        match self
+            .request(IpcRequest::ResetCircuitBreaker {
+                path: path.to_path_buf(),
+            })
+            .await?
+        {
+            IpcResponse::Success { .. } => Ok(()),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc(
+                "Unexpected response from daemon".to_string(),
+            )),
+        }
+    }
+
+    pub async fn get_backup_schedules(
+        &mut self,
+    ) -> Result<Vec<crate::scheduler::BackupScheduleInfo>> {
+        match self.request(IpcRequest::GetBackupSchedules).await? {
+            IpcResponse::BackupSchedulesList { items } => Ok(items),
+            IpcResponse::Error { error } => Err(CraftError::Ipc(error)),
+            _ => Err(CraftError::Ipc(
+                "Unexpected response from daemon".to_string(),
+            )),
+        }
+    }
+}
+
+async fn run_storage_monitor(paths: CraftPaths, threshold_bytes: u64, threshold_percent: f64) {
+    use sysinfo::Disks;
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
+    let mut last_alert: Option<tokio::time::Instant> = None;
+
+    loop {
+        interval.tick().await;
+
+        let disks = Disks::new_with_refreshed_list();
+        let craft_dir = paths.home.clone();
+
+        let mut matched_mount: Option<std::path::PathBuf> = None;
+        let mut matched_avail = 0u64;
+        let mut matched_total = 0u64;
+        let mut longest_match = 0;
+
+        for disk in &disks {
+            let mount = disk.mount_point();
+            if craft_dir.starts_with(mount) {
+                let len = mount.as_os_str().len();
+                if len >= longest_match {
+                    longest_match = len;
+                    matched_mount = Some(mount.to_path_buf());
+                    matched_avail = disk.available_space();
+                    matched_total = disk.total_space();
+                }
+            }
+        }
+
+        if let Some(mount) = matched_mount {
+            let percent_free = if matched_total > 0 {
+                (matched_avail as f64 / matched_total as f64) * 100.0
+            } else {
+                100.0
+            };
+
+            let is_low_bytes = matched_avail < threshold_bytes;
+            let is_low_percent = percent_free < threshold_percent;
+
+            if is_low_bytes || is_low_percent {
+                let should_alert = match last_alert {
+                    None => true,
+                    Some(last) => last.elapsed() >= std::time::Duration::from_secs(3600),
+                };
+
+                if should_alert {
+                    warn!(
+                        "[WARN] Storage exhaustion alert: Disk '{}' has only {} ({:.1}%) free space remaining",
+                        mount.display(),
+                        craft_core::format_size(matched_avail),
+                        percent_free
+                    );
+
+                    let payload = crate::webhooks::WebhookPayload::storage_exhaustion(
+                        &mount,
+                        matched_avail,
+                        matched_total,
+                        percent_free,
+                    );
+                    crate::webhooks::WebhookDispatcher::dispatch(payload, &paths);
+
+                    last_alert = Some(tokio::time::Instant::now());
+                }
+            }
+        }
     }
 }

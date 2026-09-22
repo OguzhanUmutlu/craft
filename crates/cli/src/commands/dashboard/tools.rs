@@ -250,7 +250,7 @@ pub async fn backups_menu(paths: &CraftPaths) -> Result<()> {
                             )?;
                             let engine = BackupEngine::new(paths);
                             match engine
-                                .create_backup(&server.name, &server.path, None, world_only)
+                                .create_backup(&server.name, &server.path, None, world_only, None)
                                 .await
                             {
                                 Ok(file) => {

@@ -145,7 +145,7 @@ pub enum Commands {
     },
 
     /// View / attach to live console of a running server
-    #[command(alias = "attach", alias = "console", alias = "logs")]
+    #[command(alias = "attach", alias = "console")]
     View {
         /// Server name
         #[arg(default_value = "")]
@@ -157,6 +157,20 @@ pub enum Commands {
         #[arg(long)]
         remote: Option<String>,
     },
+
+    /// View, stream, or export server logs and diagnostics
+    #[command(alias = "logs")]
+    Log {
+        #[command(subcommand)]
+        action: Option<LogCommands>,
+        /// Server name
+        #[arg(default_value = "")]
+        name: String,
+        /// Server directory path
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
+
 
     /// List all registered servers and their status
     #[command(alias = "list", alias = "ps")]
@@ -325,6 +339,33 @@ pub enum Commands {
         action: Option<RemoteCommands>,
     },
 
+    /// Migrate a server to a remote host with atomic snapshot and verification
+    Migrate {
+        /// Local server name to migrate
+        server: String,
+        /// Target remote host alias (e.g. --to my-vps)
+        #[arg(long)]
+        to: String,
+        /// Optional target server name on the remote host (defaults to source name)
+        #[arg(long)]
+        remote_name: Option<String>,
+        /// Optional port to rebind the migrated server on the remote host
+        #[arg(long)]
+        remote_port: Option<u16>,
+        /// Move the local source server to non-destructive trash bin after successful migration
+        #[arg(long)]
+        trash_source: bool,
+        /// Automatically start the migrated server on the remote host supervisor
+        #[arg(long)]
+        start: bool,
+    },
+
+    /// Manage multi-server clusters, routing proxies, and topological startup ordering
+    Cluster {
+        #[command(subcommand)]
+        action: Option<ClusterCommands>,
+    },
+
     /// Deploy and manage Craft container stack with Docker Compose
     Deploy {
         #[command(subcommand)]
@@ -379,6 +420,20 @@ pub enum Commands {
         #[command(subcommand)]
         action: SoftwareCommands,
     },
+
+    /// Manage event-driven notification webhooks (Discord, Slack, GenericJson)
+    #[command(name = "webhook", alias = "webhooks")]
+    Webhook {
+        #[command(subcommand)]
+        action: WebhookCommands,
+    },
+
+    /// Manage remote WebSocket console gateway and Prometheus telemetry
+    #[command(name = "gateway", alias = "gw")]
+    Gateway {
+        #[command(subcommand)]
+        action: GatewayCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -430,6 +485,63 @@ pub enum SoftwareCommands {
         /// Destination directory path (defaults to ./<id>)
         #[arg(short, long)]
         path: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum WebhookCommands {
+    /// Add a new notification webhook endpoint
+    Add {
+        /// Unique endpoint name/identifier
+        name: String,
+        /// Target webhook URL
+        url: String,
+        /// Webhook type/platform: discord, slack, or generic
+        #[arg(long, default_value = "generic")]
+        kind: String,
+        /// List of subscribed events (crash, restart, circuit_trip, backup, storage, start, stop, all)
+        #[arg(long, value_delimiter = ',', default_value = "all")]
+        events: Vec<String>,
+        /// Optional secret for HMAC-SHA256 signature verification (X-Craft-Signature)
+        #[arg(long)]
+        secret: Option<String>,
+    },
+    /// Remove an existing webhook endpoint
+    #[command(alias = "rm")]
+    Remove {
+        /// Webhook endpoint name to remove
+        name: String,
+    },
+    /// List all configured webhook endpoints and subscriptions
+    #[command(alias = "ls")]
+    List,
+    /// Send a test notification ping to a webhook endpoint
+    Test {
+        /// Webhook endpoint name to test
+        name: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum GatewayCommands {
+    /// Display gateway server status and configuration
+    Status,
+    /// Enable or disable the gateway server
+    Enable {
+        /// Set to true to enable, false to disable
+        #[arg(default_value_t = true)]
+        enabled: bool,
+    },
+    /// Set or update the gateway authentication Bearer token
+    SetToken {
+        /// New Bearer token secret (or omit to generate a secure random token)
+        token: Option<String>,
+    },
+    /// Fetch and display Prometheus metrics from the daemon gateway
+    Metrics {
+        /// Display raw Prometheus metric lines
+        #[arg(long)]
+        raw: bool,
     },
 }
 
@@ -494,6 +606,13 @@ pub enum ServiceCommands {
     Install,
     /// Uninstall Craft daemon automated OS background service
     Uninstall,
+    /// View or reset crash circuit breakers for managed servers
+    #[command(alias = "breakers")]
+    CircuitBreakers {
+        /// Reset circuit breaker for specific server (by name or directory path)
+        #[arg(long)]
+        reset: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -519,10 +638,45 @@ pub enum AutoCommands {
 #[derive(Subcommand, Debug, Clone)]
 pub enum PluginCommands {
     /// Search for plugins across Modrinth, Hangar, and Poggit
-    Search { query: String },
-    /// Install a plugin from Modrinth by project ID or slug
+    Search {
+        query: String,
+        /// Filter by Minecraft game version (e.g. 1.21.1)
+        #[arg(long = "game-version", alias = "version")]
+        game_version: Option<String>,
+        /// Filter by platform loader (e.g. paper, spigot, velocity, bungeecord)
+        #[arg(long)]
+        loader: Option<String>,
+    },
+    /// Install a plugin from Modrinth by project ID or slug with dependency resolution
     Install {
         project_id: String,
+        /// Server name or path
+        server: String,
+        /// Explicit version number or release ID
+        #[arg(long)]
+        version: Option<String>,
+        /// Automatically resolve and download missing hard dependencies
+        #[arg(long, default_value_t = true)]
+        resolve_deps: bool,
+    },
+    /// Check for and apply atomic plugin updates from Modrinth
+    Update {
+        /// Server name or path
+        server: String,
+        /// Check for available updates without applying them
+        #[arg(long)]
+        check: bool,
+        /// Automatically proceed with updates without prompting
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
+    /// Inspect a plugin JAR archive and display its bytecode manifest metadata
+    Inspect {
+        /// Path to the plugin JAR file
+        file: PathBuf,
+    },
+    /// Run diagnostic audit on installed plugins to check dependencies, API versions, and collisions
+    Doctor {
         /// Server name or path
         server: String,
     },
@@ -543,10 +697,45 @@ pub enum PluginCommands {
 #[derive(Subcommand, Debug, Clone)]
 pub enum ModCommands {
     /// Search for mods on Modrinth
-    Search { query: String },
-    /// Install a mod from Modrinth to a modded server
+    Search {
+        query: String,
+        /// Filter by Minecraft game version (e.g. 1.21.1)
+        #[arg(long = "game-version", alias = "version")]
+        game_version: Option<String>,
+        /// Filter by mod loader (fabric, forge, neoforge, quilt)
+        #[arg(long)]
+        loader: Option<String>,
+    },
+    /// Install a mod from Modrinth to a modded server with dependency resolution
     Install {
         project_id: String,
+        /// Server name or path
+        server: String,
+        /// Explicit version number or release ID
+        #[arg(long)]
+        version: Option<String>,
+        /// Automatically resolve and download missing hard dependencies
+        #[arg(long, default_value_t = true)]
+        resolve_deps: bool,
+    },
+    /// Check for and apply atomic mod updates from Modrinth
+    Update {
+        /// Server name or path
+        server: String,
+        /// Check for available updates without applying them
+        #[arg(long)]
+        check: bool,
+        /// Automatically proceed with updates without prompting
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
+    /// Inspect a mod JAR archive and display its bytecode manifest metadata
+    Inspect {
+        /// Path to the mod JAR file
+        file: PathBuf,
+    },
+    /// Run diagnostic audit on installed mods to check dependencies and version bounds
+    Doctor {
         /// Server name or path
         server: String,
     },
@@ -597,6 +786,34 @@ pub enum DatapackCommands {
     },
 }
 
+#[derive(Subcommand, Debug, Clone)]
+pub enum LogCommands {
+    /// Export server logs, crash reports, configuration, and host diagnostic bundle into an archive
+    Export {
+        /// Server name
+        #[arg(default_value = "")]
+        name: String,
+        /// Server directory path
+        #[arg(long)]
+        path: Option<PathBuf>,
+        /// Custom output archive path (defaults to <server>-diagnostics-<timestamp>.tar.zst)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Compression format: zstd (default, ultra-fast) or gzip
+        #[arg(long, default_value = "zstd")]
+        format: String,
+    },
+    /// View / attach to live console of a running server
+    View {
+        /// Server name
+        #[arg(default_value = "")]
+        name: String,
+        /// Server directory path
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
+}
+
 #[derive(Subcommand)]
 pub enum BackupCommands {
     /// Create a compressed backup of a server
@@ -605,6 +822,9 @@ pub enum BackupCommands {
         /// Only backup world folders and configuration files (excludes logs, caches)
         #[arg(long)]
         world_only: bool,
+        /// Compression format: zstd (default, ultra-fast) or gzip
+        #[arg(short, long, default_value = "zstd")]
+        format: String,
     },
     /// List backups for a server
     List { server: String },
@@ -612,6 +832,34 @@ pub enum BackupCommands {
     Restore {
         server: String,
         backup_file: PathBuf,
+    },
+    /// Inspect or configure the automated backup policy for a server
+    Policy {
+        server: String,
+        /// Enable automated backups
+        #[arg(long)]
+        enable: Option<bool>,
+        /// Backup interval in hours (e.g. 6)
+        #[arg(long)]
+        interval: Option<u32>,
+        /// Cron expression (e.g. "0 3 * * *" or "every 6h")
+        #[arg(long)]
+        cron: Option<String>,
+        /// Retention count: maximum number of backups to keep
+        #[arg(long)]
+        retention: Option<usize>,
+        /// Compression format (zstd or gzip)
+        #[arg(long)]
+        format: Option<String>,
+        /// Enable/disable automated upload to Amazon S3
+        #[arg(long)]
+        s3: Option<bool>,
+        /// Enable/disable automated upload to Google Drive
+        #[arg(long)]
+        gdrive: Option<bool>,
+        /// Restrict automated backups to world folders only
+        #[arg(long)]
+        world_only: Option<bool>,
     },
 }
 
@@ -678,6 +926,74 @@ pub enum RemoteCommands {
         /// Custom remote deployment directory (default: /opt/craft or ~/craft-deploy)
         #[arg(long)]
         dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ClusterCommands {
+    /// Create a new multi-server cluster definition
+    Create {
+        /// Unique cluster name
+        name: String,
+        /// Primary proxy server name (optional)
+        #[arg(long)]
+        proxy: Option<String>,
+    },
+    /// Add a server to an existing cluster
+    Add {
+        /// Target cluster name
+        cluster: String,
+        /// Server name
+        server: String,
+        /// Cluster role: backend, proxy, or lobby
+        #[arg(long, default_value = "backend")]
+        role: String,
+        /// Optional remote host alias if hosted on a remote node
+        #[arg(long)]
+        remote: Option<String>,
+        /// Comma-separated list of servers this server depends on
+        #[arg(long, value_delimiter = ',')]
+        depends_on: Vec<String>,
+    },
+    /// Remove a server from a cluster
+    Remove {
+        /// Target cluster name
+        cluster: String,
+        /// Server name to remove
+        server: String,
+    },
+    /// List all configured clusters and their node topologies
+    #[command(alias = "list")]
+    Ls,
+    /// Display status and dependency DAG for a cluster
+    Status {
+        /// Target cluster name
+        cluster: String,
+    },
+    /// Start all servers in a cluster according to topological DAG dependency order
+    Start {
+        /// Target cluster name
+        cluster: String,
+    },
+    /// Stop all servers in a cluster in reverse dependency order (proxies first)
+    Stop {
+        /// Target cluster name
+        cluster: String,
+    },
+    /// Synchronize proxy routing configuration (Velocity or BungeeCord) to route to backend nodes
+    #[command(alias = "sync")]
+    SyncRouting {
+        /// Target cluster name
+        cluster: String,
+        /// Preview configuration changes without writing them to disk
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Delete a cluster definition
+    #[command(alias = "rm")]
+    Delete {
+        /// Target cluster name
+        cluster: String,
     },
 }
 
@@ -769,7 +1085,12 @@ mod tests {
             Cli::try_parse_from(["craft", "plugin", "install", "luckperms", "myserver"]).unwrap();
         match cli_p.command {
             Some(Commands::Plugin {
-                action: Some(PluginCommands::Install { project_id, server }),
+                action:
+                    Some(PluginCommands::Install {
+                        project_id,
+                        server,
+                        ..
+                    }),
             }) => {
                 assert_eq!(project_id, "luckperms");
                 assert_eq!(server, "myserver");
@@ -782,7 +1103,12 @@ mod tests {
             Cli::try_parse_from(["craft", "mod", "install", "fabric-api", "mymodded"]).unwrap();
         match cli_m.command {
             Some(Commands::Mod {
-                action: Some(ModCommands::Install { project_id, server }),
+                action:
+                    Some(ModCommands::Install {
+                        project_id,
+                        server,
+                        ..
+                    }),
             }) => {
                 assert_eq!(project_id, "fabric-api");
                 assert_eq!(server, "mymodded");
@@ -893,4 +1219,250 @@ mod tests {
             _ => panic!("Expected Deploy Vds command"),
         }
     }
+
+    #[test]
+    fn test_log_commands_parsing() {
+        let cli_export = Cli::try_parse_from([
+            "craft",
+            "log",
+            "export",
+            "paper-server",
+            "--format",
+            "zstd",
+        ])
+        .unwrap();
+        match cli_export.command {
+            Some(Commands::Log {
+                action: Some(LogCommands::Export { name, format, .. }),
+                ..
+            }) => {
+                assert_eq!(name, "paper-server");
+                assert_eq!(format, "zstd");
+            }
+            _ => panic!("Expected Log Export command"),
+        }
+
+        let cli_view = Cli::try_parse_from(["craft", "log", "view", "paper-server"]).unwrap();
+        match cli_view.command {
+            Some(Commands::Log {
+                action: Some(LogCommands::View { name, .. }),
+                ..
+            }) => {
+                assert_eq!(name, "paper-server");
+            }
+            _ => panic!("Expected Log View command"),
+        }
+
+        let cli_direct = Cli::try_parse_from(["craft", "log", "paper-server"]).unwrap();
+        match cli_direct.command {
+            Some(Commands::Log { name, action, .. }) => {
+                assert_eq!(name, "paper-server");
+                assert!(action.is_none());
+            }
+            _ => panic!("Expected direct Log command with name"),
+        }
+    }
+
+    #[test]
+    fn test_migrate_parsing() {
+        let cli = Cli::try_parse_from([
+            "craft",
+            "migrate",
+            "survival",
+            "--to",
+            "hetzner-vps",
+            "--remote-name",
+            "survival-prod",
+            "--remote-port",
+            "25570",
+            "--trash-source",
+            "--start",
+        ])
+        .unwrap();
+        match cli.command {
+            Some(Commands::Migrate {
+                server,
+                to,
+                remote_name,
+                remote_port,
+                trash_source,
+                start,
+            }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(to, "hetzner-vps");
+                assert_eq!(remote_name.as_deref(), Some("survival-prod"));
+                assert_eq!(remote_port, Some(25570));
+                assert!(trash_source);
+                assert!(start);
+            }
+            _ => panic!("Expected Migrate command"),
+        }
+    }
+
+    #[test]
+    fn test_cluster_parsing() {
+        let cli_create =
+            Cli::try_parse_from(["craft", "cluster", "create", "network", "--proxy", "velocity"])
+                .unwrap();
+        match cli_create.command {
+            Some(Commands::Cluster {
+                action: Some(ClusterCommands::Create { name, proxy }),
+            }) => {
+                assert_eq!(name, "network");
+                assert_eq!(proxy.as_deref(), Some("velocity"));
+            }
+            _ => panic!("Expected Cluster Create command"),
+        }
+
+        let cli_add = Cli::try_parse_from([
+            "craft",
+            "cluster",
+            "add",
+            "network",
+            "minigames",
+            "--role",
+            "backend",
+            "--depends-on",
+            "lobby,database",
+        ])
+        .unwrap();
+        match cli_add.command {
+            Some(Commands::Cluster {
+                action:
+                    Some(ClusterCommands::Add {
+                        cluster,
+                        server,
+                        role,
+                        depends_on,
+                        ..
+                    }),
+            }) => {
+                assert_eq!(cluster, "network");
+                assert_eq!(server, "minigames");
+                assert_eq!(role, "backend");
+                assert_eq!(depends_on, vec!["lobby", "database"]);
+            }
+            _ => panic!("Expected Cluster Add command"),
+        }
+
+        let cli_sync =
+            Cli::try_parse_from(["craft", "cluster", "sync-routing", "network", "--dry-run"])
+                .unwrap();
+        match cli_sync.command {
+            Some(Commands::Cluster {
+                action: Some(ClusterCommands::SyncRouting { cluster, dry_run }),
+            }) => {
+                assert_eq!(cluster, "network");
+                assert!(dry_run);
+            }
+            _ => panic!("Expected Cluster SyncRouting command"),
+        }
+    }
+
+    #[test]
+    fn test_plugin_commands_parsing() {
+        let cli_search = Cli::try_parse_from([
+            "craft",
+            "plugin",
+            "search",
+            "essentials",
+            "--game-version",
+            "1.21.1",
+            "--loader",
+            "paper",
+        ])
+        .unwrap();
+        match cli_search.command {
+            Some(Commands::Plugin {
+                action:
+                    Some(PluginCommands::Search {
+                        query,
+                        game_version,
+                        loader,
+                    }),
+            }) => {
+                assert_eq!(query, "essentials");
+                assert_eq!(game_version.as_deref(), Some("1.21.1"));
+                assert_eq!(loader.as_deref(), Some("paper"));
+            }
+            _ => panic!("Expected Plugin Search command"),
+        }
+
+        let cli_update =
+            Cli::try_parse_from(["craft", "plugin", "update", "lobby", "--check"]).unwrap();
+        match cli_update.command {
+            Some(Commands::Plugin {
+                action: Some(PluginCommands::Update { server, check, yes }),
+            }) => {
+                assert_eq!(server, "lobby");
+                assert!(check);
+                assert!(!yes);
+            }
+            _ => panic!("Expected Plugin Update command"),
+        }
+
+        let cli_inspect =
+            Cli::try_parse_from(["craft", "plugin", "inspect", "/tmp/Vault.jar"]).unwrap();
+        match cli_inspect.command {
+            Some(Commands::Plugin {
+                action: Some(PluginCommands::Inspect { file }),
+            }) => {
+                assert_eq!(file, PathBuf::from("/tmp/Vault.jar"));
+            }
+            _ => panic!("Expected Plugin Inspect command"),
+        }
+
+        let cli_doctor =
+            Cli::try_parse_from(["craft", "plugin", "doctor", "survival"]).unwrap();
+        match cli_doctor.command {
+            Some(Commands::Plugin {
+                action: Some(PluginCommands::Doctor { server }),
+            }) => {
+                assert_eq!(server, "survival");
+            }
+            _ => panic!("Expected Plugin Doctor command"),
+        }
+    }
+
+    #[test]
+    fn test_webhook_and_gateway_cli_parsing() {
+        let cli_wh_add = Cli::try_parse_from([
+            "craft", "webhook", "add", "alerts", "https://discord.com/api/webhooks/1/2",
+            "--kind", "discord", "--events", "crash,circuit_trip", "--secret", "mysecret"
+        ]).unwrap();
+        match cli_wh_add.command {
+            Some(Commands::Webhook {
+                action: WebhookCommands::Add { name, url, kind, events, secret },
+            }) => {
+                assert_eq!(name, "alerts");
+                assert_eq!(url, "https://discord.com/api/webhooks/1/2");
+                assert_eq!(kind, "discord");
+                assert_eq!(events, vec!["crash".to_string(), "circuit_trip".to_string()]);
+                assert_eq!(secret, Some("mysecret".to_string()));
+            }
+            _ => panic!("Expected Webhook Add command"),
+        }
+
+        let cli_wh_ls = Cli::try_parse_from(["craft", "webhook", "ls"]).unwrap();
+        match cli_wh_ls.command {
+            Some(Commands::Webhook { action: WebhookCommands::List }) => {}
+            _ => panic!("Expected Webhook List command"),
+        }
+
+        let cli_gw_status = Cli::try_parse_from(["craft", "gateway", "status"]).unwrap();
+        match cli_gw_status.command {
+            Some(Commands::Gateway { action: GatewayCommands::Status }) => {}
+            _ => panic!("Expected Gateway Status command"),
+        }
+
+        let cli_gw_metrics = Cli::try_parse_from(["craft", "gateway", "metrics", "--raw"]).unwrap();
+        match cli_gw_metrics.command {
+            Some(Commands::Gateway { action: GatewayCommands::Metrics { raw } }) => {
+                assert!(raw);
+            }
+            _ => panic!("Expected Gateway Metrics command"),
+        }
+    }
 }
+
+

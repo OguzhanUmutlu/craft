@@ -6,14 +6,34 @@ use craft_daemon::DaemonClient;
 pub async fn handle_auto(action: AutoCommands, paths: &CraftPaths) -> Result<()> {
     match action {
         AutoCommands::How => {
+            println!(
+                "{}",
+                "=== Craft Background Auto-Run Service Setup ==="
+                    .cyan()
+                    .bold()
+            );
+            println!(
+                "{}",
+                "Recommended: Run 'craft service install' to automatically configure and start"
+                    .green()
+                    .bold()
+            );
+            println!(
+                "{}",
+                "the background supervisor daemon as an OS-managed service for your user account."
+                    .green()
+            );
+            println!("\nCommands:");
+            println!("  {}  - Install and enable auto-start service", "craft service install".yellow().bold());
+            println!("  {}   - Start the service immediately", "craft service start".yellow());
+            println!("  {}  - View current service status", "craft service status".yellow());
+            println!("  {} - Uninstall the auto-start service", "craft service uninstall".yellow());
+
+            println!("\n{}", "--- Manual Configuration Reference ---".dimmed());
+
             #[cfg(target_os = "windows")]
             {
-                println!(
-                    "{}",
-                    "=== How to Enable Craft Auto-Run on Windows ==="
-                        .cyan()
-                        .bold()
-                );
+                println!("Windows Scheduled Task / Startup Shortcut:");
                 println!("1. Press Win + R, type 'shell:startup' and press Enter.");
                 println!("2. Create a shortcut in that folder pointing to your craft executable:");
                 println!("   Target: \"C:\\path\\to\\craft.exe\" service start --foreground");
@@ -22,13 +42,7 @@ pub async fn handle_auto(action: AutoCommands, paths: &CraftPaths) -> Result<()>
 
             #[cfg(target_os = "macos")]
             {
-                println!(
-                    "{}",
-                    "=== How to Enable Craft Auto-Run on macOS ==="
-                        .cyan()
-                        .bold()
-                );
-                println!("Create a LaunchAgent in ~/Library/LaunchAgents/com.craft.service.plist:");
+                println!("macOS LaunchAgent (~/Library/LaunchAgents/com.craft.service.plist):");
                 println!(
                     r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -52,14 +66,7 @@ pub async fn handle_auto(action: AutoCommands, paths: &CraftPaths) -> Result<()>
 
             #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
             {
-                println!(
-                    "{}",
-                    "=== How to Enable Craft Auto-Run on Linux ==="
-                        .cyan()
-                        .bold()
-                );
-                println!("Option A: User systemd service (recommended):");
-                println!("Create ~/.config/systemd/user/craft.service:");
+                println!("Linux user systemd service (~/.config/systemd/user/craft.service):");
                 println!(
                     r#"[Unit]
 Description=Craft Minecraft Server Management Daemon

@@ -128,6 +128,10 @@ pub struct AutoBackupPolicy {
     pub backup_method: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_backup_timestamp: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cron_expression: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
 }
 
 impl Default for AutoBackupPolicy {
@@ -141,7 +145,23 @@ impl Default for AutoBackupPolicy {
             world_only: false,
             backup_method: None,
             last_backup_timestamp: None,
+            cron_expression: None,
+            format: Some("zstd".to_string()),
         }
+    }
+}
+
+impl AutoBackupPolicy {
+    pub fn schedule_display(&self) -> String {
+        if let Some(ref cron) = self.cron_expression {
+            format!("cron({})", cron)
+        } else {
+            format!("every {}h", self.interval_hours)
+        }
+    }
+
+    pub fn compression_format(&self) -> &str {
+        self.format.as_deref().unwrap_or("zstd")
     }
 }
 

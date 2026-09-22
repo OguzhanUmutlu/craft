@@ -5,7 +5,20 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-const DOCKERFILE_TEMPLATE: &str = r#"FROM eclipse-temurin:21-jre-jammy
+const DOCKERFILE_TEMPLATE: &str = r#"# Stage 1: Build or extract Craft binary
+FROM rust:1.80-bullseye AS builder
+WORKDIR /workspace
+COPY . .
+RUN if [ -f target/release/craft ]; then \
+        cp target/release/craft /craft-bin; \
+    elif [ -f craft ]; then \
+        cp craft /craft-bin; \
+    else \
+        cargo build --release -p craft && cp target/release/craft /craft-bin; \
+    fi
+
+# Stage 2: Runtime environment
+FROM eclipse-temurin:21-jre-jammy
 
 LABEL org.opencontainers.image.title="Craft" \
       org.opencontainers.image.description="High-performance Minecraft Server Management & Background Daemon"
@@ -20,7 +33,7 @@ ENV PATH="/usr/local/bin:${PATH}"
 
 RUN mkdir -p /craft && chown -R craft:craft /craft
 
-COPY target/release/craft /usr/local/bin/craft
+COPY --from=builder /craft-bin /usr/local/bin/craft
 RUN chmod +x /usr/local/bin/craft
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

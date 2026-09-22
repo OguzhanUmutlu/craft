@@ -18,6 +18,8 @@ pub struct TrashItem {
     pub size_bytes: u64,
     pub content_hash: String,
     pub trash_filename: String,
+    #[serde(default)]
+    pub is_dir: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -96,24 +98,73 @@ impl TrashManager {
         Ok(hex::encode(result))
     }
 
-    /// Moves a file to the trash bin, logging its original location, metadata, and SHA-256 hash
-    pub fn trash_file(&self, original_path: &Path, server_name: Option<&str>) -> Result<TrashItem> {
+    /// Computes a deterministic SHA-256 hash for a directory based on relative paths and file contents
+    pub fn compute_dir_hash(path: &Path) -> Result<String> {
+        let mut hasher = Sha256::new();
+        let mut file_paths = Vec::new();
+
+        fn walk_dir(dir: &Path, list: &mut Vec<PathBuf>) -> std::io::Result<()> {
+            if dir.is_dir() {
+                for entry in fs::read_dir(dir)? {
+                    let entry = entry?;
+                    let p = entry.path();
+                    if p.is_dir() {
+                        walk_dir(&p, list)?;
+                    } else {
+                        list.push(p);
+                    }
+                }
+            }
+            Ok(())
+        }
+
+        let _ = walk_dir(path, &mut file_paths);
+        file_paths.sort();
+
+        for file_path in file_paths {
+            if let Ok(rel) = file_path.strip_prefix(path) {
+                hasher.update(rel.to_string_lossy().as_bytes());
+            }
+            if let Ok(meta) = fs::metadata(&file_path) {
+                hasher.update(&meta.len().to_le_bytes());
+            }
+            if let Ok(file_hash) = Self::compute_hash(&file_path) {
+                hasher.update(file_hash.as_bytes());
+            }
+        }
+
+        let result = hasher.finalize();
+        Ok(hex::encode(result))
+    }
+
+    /// Moves a file or directory to the trash bin, logging its original location, metadata, and hash
+    pub fn trash_path(&self, original_path: &Path, server_name: Option<&str>) -> Result<TrashItem> {
         if !original_path.exists() {
             return Err(CraftError::InvalidPath(format!(
-                "Cannot trash file '{}': file not found.",
+                "Cannot trash '{}': path not found.",
                 original_path.display()
             )));
         }
 
-        let meta = fs::metadata(original_path)?;
-        let size_bytes = meta.len();
+        let is_dir = original_path.is_dir();
+        let size_bytes = if is_dir {
+            dir_size_bytes(original_path).unwrap_or(0)
+        } else {
+            fs::metadata(original_path)?.len()
+        };
+
         let original_name = original_path
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or("backup.tar.gz")
+            .unwrap_or(if is_dir { "folder" } else { "file" })
             .to_string();
 
-        let content_hash = Self::compute_hash(original_path)?;
+        let content_hash = if is_dir {
+            Self::compute_dir_hash(original_path)?
+        } else {
+            Self::compute_hash(original_path)?
+        };
+
         let short_id = if content_hash.len() >= 12 {
             content_hash[..12].to_string()
         } else {
@@ -131,11 +182,16 @@ impl TrashManager {
         let trash_filename = format!("{}_{}", id, original_name);
         let trash_path = self.paths.trash_dir.join(&trash_filename);
 
-        // Move the file into trash directory
-        if fs::rename(original_path, &trash_path).is_err() {
-            // Fallback for cross-filesystem move
-            fs::copy(original_path, &trash_path)?;
-            fs::remove_file(original_path)?;
+        if is_dir {
+            if fs::rename(original_path, &trash_path).is_err() {
+                copy_dir_all(original_path, &trash_path)?;
+                fs::remove_dir_all(original_path)?;
+            }
+        } else {
+            if fs::rename(original_path, &trash_path).is_err() {
+                fs::copy(original_path, &trash_path)?;
+                fs::remove_file(original_path)?;
+            }
         }
 
         let item = TrashItem {
@@ -147,12 +203,18 @@ impl TrashManager {
             size_bytes,
             content_hash,
             trash_filename,
+            is_dir,
         };
 
         manifest.items.push(item.clone());
         self.save_manifest(&manifest)?;
 
         Ok(item)
+    }
+
+    /// Moves a file to the trash bin (legacy alias for trash_path)
+    pub fn trash_file(&self, original_path: &Path, server_name: Option<&str>) -> Result<TrashItem> {
+        self.trash_path(original_path, server_name)
     }
 
     /// Lists all items currently in the trash bin
@@ -170,7 +232,7 @@ impl TrashManager {
             .find(|i| i.id == id || i.original_name == id))
     }
 
-    /// Restores a trashed item back to its original location, verifying SHA-256 hash first
+    /// Restores a trashed item back to its original location
     pub fn restore_item(&self, id: &str) -> Result<PathBuf> {
         let mut manifest = self.load_manifest()?;
         let pos = manifest
@@ -184,18 +246,20 @@ impl TrashManager {
 
         if !trash_path.exists() {
             return Err(CraftError::Other(format!(
-                "Archive file '{}' was missing from trash directory",
+                "Item '{}' was missing from trash directory",
                 trash_path.display()
             )));
         }
 
-        // Verify SHA-256 hash integrity before restoring
-        let current_hash = Self::compute_hash(&trash_path)?;
-        if current_hash != item.content_hash {
-            return Err(CraftError::Other(format!(
-                "Integrity check failed for '{}'! SHA-256 mismatch (expected: {}, actual: {}). Restore aborted.",
-                item.original_name, item.content_hash, current_hash
-            )));
+        if !item.is_dir {
+            // Verify SHA-256 hash integrity before restoring file
+            let current_hash = Self::compute_hash(&trash_path)?;
+            if current_hash != item.content_hash {
+                return Err(CraftError::Other(format!(
+                    "Integrity check failed for '{}'! SHA-256 mismatch (expected: {}, actual: {}). Restore aborted.",
+                    item.original_name, item.content_hash, current_hash
+                )));
+            }
         }
 
         // Ensure parent directory exists
@@ -205,16 +269,22 @@ impl TrashManager {
 
         if item.original_path.exists() {
             return Err(CraftError::Other(format!(
-                "Cannot restore '{}': a file already exists at '{}'",
+                "Cannot restore '{}': already exists at '{}'",
                 item.original_name,
                 item.original_path.display()
             )));
         }
 
-        // Move back from trash to original location
-        if fs::rename(&trash_path, &item.original_path).is_err() {
-            fs::copy(&trash_path, &item.original_path)?;
-            fs::remove_file(&trash_path)?;
+        if item.is_dir {
+            if fs::rename(&trash_path, &item.original_path).is_err() {
+                copy_dir_all(&trash_path, &item.original_path)?;
+                fs::remove_dir_all(&trash_path)?;
+            }
+        } else {
+            if fs::rename(&trash_path, &item.original_path).is_err() {
+                fs::copy(&trash_path, &item.original_path)?;
+                fs::remove_file(&trash_path)?;
+            }
         }
 
         self.save_manifest(&manifest)?;
@@ -233,7 +303,11 @@ impl TrashManager {
         let item = manifest.items.remove(pos);
         let trash_path = self.paths.trash_dir.join(&item.trash_filename);
         if trash_path.exists() {
-            let _ = fs::remove_file(&trash_path);
+            if item.is_dir {
+                let _ = fs::remove_dir_all(&trash_path);
+            } else {
+                let _ = fs::remove_file(&trash_path);
+            }
         }
 
         self.save_manifest(&manifest)?;
@@ -248,7 +322,11 @@ impl TrashManager {
         for item in &manifest.items {
             let p = self.paths.trash_dir.join(&item.trash_filename);
             if p.exists() {
-                let _ = fs::remove_file(&p);
+                if item.is_dir {
+                    let _ = fs::remove_dir_all(&p);
+                } else {
+                    let _ = fs::remove_file(&p);
+                }
             }
         }
 
@@ -256,6 +334,38 @@ impl TrashManager {
         self.save_manifest(&empty_manifest)?;
         Ok(count)
     }
+}
+
+fn dir_size_bytes(dir: &Path) -> std::io::Result<u64> {
+    let mut total = 0;
+    if dir.is_dir() {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                total += dir_size_bytes(&path)?;
+            } else {
+                total += entry.metadata()?.len();
+            }
+        }
+    }
+    Ok(total)
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_all(&from, &to)?;
+        } else {
+            fs::copy(&from, &to)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -338,5 +448,37 @@ mod tests {
         let removed = manager.empty_trash().unwrap();
         assert_eq!(removed, 2);
         assert_eq!(manager.list_items().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_trash_directory_lifecycle() {
+        let temp = tempfile::tempdir().unwrap();
+        let paths = CraftPaths::from_base(temp.path().to_path_buf());
+        let manager = TrashManager::new(&paths);
+
+        // Create a dummy world folder with files and subfolders
+        let world_dir = temp.path().join("my-test-world");
+        fs::create_dir_all(world_dir.join("region")).unwrap();
+        fs::write(world_dir.join("level.dat"), b"fake level dat").unwrap();
+        fs::write(world_dir.join("region").join("r.0.0.mca"), b"fake chunk data").unwrap();
+
+        // 1. Trash the directory
+        let item = manager.trash_path(&world_dir, Some("srv1")).unwrap();
+        assert!(item.is_dir);
+        assert_eq!(item.original_name, "my-test-world");
+        assert!(!world_dir.exists());
+
+        let trash_dir_path = paths.trash_dir.join(&item.trash_filename);
+        assert!(trash_dir_path.is_dir());
+        assert!(trash_dir_path.join("level.dat").exists());
+        assert!(trash_dir_path.join("region").join("r.0.0.mca").exists());
+
+        // 2. Restore the directory
+        let restored_path = manager.restore_item(&item.id).unwrap();
+        assert_eq!(restored_path, world_dir);
+        assert!(world_dir.is_dir());
+        assert!(world_dir.join("level.dat").exists());
+        assert!(world_dir.join("region").join("r.0.0.mca").exists());
+        assert!(!trash_dir_path.exists());
     }
 }

@@ -175,7 +175,114 @@ impl ModrinthClient {
 
         Ok(primary_file)
     }
+
+    /// Fetches versions filtered by supported platform loaders and game versions
+    pub async fn get_versions_filtered(
+        &self,
+        project_id: &str,
+        loaders: &[&str],
+        game_versions: &[&str],
+    ) -> Result<Vec<ModrinthVersion>> {
+        let mut query_params = Vec::new();
+        if !loaders.is_empty() {
+            let loaders_json = serde_json::to_string(loaders).unwrap_or_default();
+            query_params.push(format!("loaders={}", urlencoding(&loaders_json)));
+        }
+        if !game_versions.is_empty() {
+            let gv_json = serde_json::to_string(game_versions).unwrap_or_default();
+            query_params.push(format!("game_versions={}", urlencoding(&gv_json)));
+        }
+
+        let query_str = if query_params.is_empty() {
+            String::new()
+        } else {
+            format!("?{}", query_params.join("&"))
+        };
+
+        let url = format!("https://api.modrinth.com/v2/project/{}/version{}", project_id, query_str);
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| CraftError::Download(format!("Modrinth filtered versions error: {}", e)))?;
+
+        let bytes = resp.bytes().await.map_err(|e| {
+            CraftError::Download(format!("Failed to read versions response: {}", e))
+        })?;
+
+        let versions: Vec<ModrinthVersion> = serde_json::from_slice(&bytes)
+            .map_err(|e| CraftError::Download(format!("Invalid versions response: {}", e)))?;
+
+        Ok(versions)
+    }
+
+    /// Retrieves the latest file compatible with specified loaders and game versions
+    pub async fn get_latest_compatible_file(
+        &self,
+        project_id: &str,
+        loaders: &[&str],
+        game_versions: &[&str],
+    ) -> Result<ModrinthFile> {
+        let versions = self.get_versions_filtered(project_id, loaders, game_versions).await?;
+        for v in versions {
+            if let Some(f) = v.files.into_iter().find(|f| f.primary) {
+                return Ok(f);
+            }
+        }
+        // Fallback to unconditional latest
+        self.get_latest_file(project_id).await
+    }
+
+    /// Batch checks updates against Modrinth using file SHA-512 hashes
+    pub async fn check_updates_by_hashes(
+        &self,
+        hashes: &[String],
+        loaders: &[String],
+        game_versions: &[String],
+    ) -> Result<std::collections::HashMap<String, ModrinthVersion>> {
+        if hashes.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let url = "https://api.modrinth.com/v2/version_files/update";
+        let mut body = serde_json::json!({
+            "hashes": hashes,
+            "algorithm": "sha512",
+        });
+
+        if !loaders.is_empty() {
+            body["loaders"] = serde_json::json!(loaders);
+        }
+        if !game_versions.is_empty() {
+            body["game_versions"] = serde_json::json!(game_versions);
+        }
+
+        let resp = self
+            .client
+            .post(url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| CraftError::Download(format!("Modrinth batch update error: {}", e)))?;
+
+        if !resp.status().is_success() {
+            return Err(CraftError::Download(format!(
+                "Modrinth update check returned status {}: {}",
+                resp.status(),
+                resp.text().await.unwrap_or_default()
+            )));
+        }
+
+        let map: std::collections::HashMap<String, ModrinthVersion> = resp
+            .json()
+            .await
+            .map_err(|e| CraftError::Download(format!("Failed to parse update check response: {}", e)))?;
+
+        Ok(map)
+    }
 }
+
 
 fn urlencoding(input: &str) -> String {
     let mut out = String::new();

@@ -147,6 +147,20 @@ impl<'a> SftpOps<'a> {
         Ok(content)
     }
 
+    pub fn write_file(&self, remote_path: &Path, data: &[u8]) -> Result<()> {
+        let sftp = self.session.sftp()?;
+        let mut file = sftp.create(remote_path).map_err(|e| {
+            CraftError::Other(format!(
+                "Failed to create remote file '{}': {}",
+                remote_path.display(),
+                e
+            ))
+        })?;
+        file.write_all(data)
+            .map_err(|e| CraftError::Other(format!("Failed to write remote file: {}", e)))?;
+        Ok(())
+    }
+
     pub fn list_dir(&self, remote_path: &Path) -> Result<Vec<(String, ssh2::FileStat)>> {
         let sftp = self.session.sftp()?;
         let entries = sftp.readdir(remote_path).map_err(|e| {

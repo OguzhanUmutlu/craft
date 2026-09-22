@@ -1842,7 +1842,7 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                 );
 
                 let archive_path = match engine
-                    .create_backup(&server.name, &server.path, None, world_only)
+                    .create_backup(&server.name, &server.path, None, world_only, None)
                     .await
                 {
                     Ok(p) => p,
@@ -2079,7 +2079,7 @@ pub(crate) async fn server_backups_panel(server_name: &str, paths: &CraftPaths) 
                                     &[format!("Creating snapshot for '{}'...", server.name)],
                                 );
                                 match engine
-                                    .create_backup(&server.name, &server.path, None, world_only)
+                                    .create_backup(&server.name, &server.path, None, world_only, None)
                                     .await
                                 {
                                     Ok(archive_path) => {

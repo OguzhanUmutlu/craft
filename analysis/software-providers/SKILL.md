@@ -1,0 +1,86 @@
+# Software Providers & Multi-Engine Parity Skill Guide
+
+> **Domain**: 21 Server Engines, Dynamic Declarative Providers, JVM GC Profiles & Bytecode Inspection  
+> **Primary Location**: `crates/providers/`
+
+---
+
+## 1. Unified Software Architecture
+
+Craft abstracts all server engines through the [`ServerSoftware`](file:///D/Projects/craft/crates/providers/src/traits.rs) trait:
+
+```rust
+pub trait ServerSoftware: Send + Sync {
+    fn id(&self) -> &'static str;
+    fn name(&self) -> &'static str;
+    fn edition(&self) -> ServerEdition; // Java, Bedrock, Proxy, Native
+    fn game_id(&self) -> &'static str;  // "minecraft", "factorio", "terraria", etc.
+    fn bundled_versions(&self) -> Vec<String>;
+    fn fetch_versions<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<Vec<String>>> + Send + 'a>>;
+    fn get_assets(&self, version: &str) -> Result<Vec<AssetDownload>>;
+    fn post_download<'a>(&'a self, server_path: &'a Path, version: &'a str) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
+    fn generate_start_script_with_flags(&self, server_path: &Path, version: &str, java_path: Option<&Path>, memory: &str, jvm_args: Option<&str>) -> Result<()>;
+}
+```
+
+---
+
+## 2. Supported Platforms Catalog (21 Platforms)
+
+1. **Modern Minecraft Java**: Paper, Purpur, Folia (regionized multithreading), Vanilla Java.
+2. **Modded Minecraft Java**: Fabric, Quilt, NeoForge (handles installer extraction and argument manifests).
+3. **Legacy Minecraft Java**: Spigot (BuildTools automation).
+4. **Bedrock Dedicated**: Vanilla BDS (handles `LD_LIBRARY_PATH`), PocketMine-MP (PHP binary bootstrapping), NukkitX.
+5. **Proxies**: Velocity (modern high-speed proxy), Waterfall, BungeeCord, GeyserMC (standalone Bedrock bridge), WaterdogPE.
+6. **Native Dedicated Games**: Factorio (UDP 34197), Terraria (TCP 7777), Palworld (UDP 8211 & 27015), Valheim (UDP 2456-2457).
+7. **Custom TOML Engines**: Declarative custom engines loaded from `craft.custom.toml`.
+
+---
+
+## 3. Bytecode Inspection & Java Matching
+
+To eliminate the common "UnsupportedClassVersionError" crashes:
+1. Opens `server.jar` as a ZIP stream without extracting it to disk.
+2. Reads the first `.class` file header checking for the magic bytes `0xCAFEBABE`.
+3. Reads bytes 6–7 to determine the class file major version:
+   - Major `52` = Java 8
+   - Major `61` = Java 17
+   - Major `65` = Java 21
+4. Evaluates installed JDK runtimes via [`find_best_java`](file:///D/Projects/craft/crates/core/src/java.rs) and automatically chooses the optimal runtime path for the start script.
+
+---
+
+## 4. Pre-Tuned Garbage Collection Profiles
+
+Craft automatically configures memory and GC parameters based on software archetype:
+- `--aikar`: Optimized G1GC tuning (`-XX:+UseG1GC`, `-XX:G1ReservePercent=20`, `-XX:MaxGCPauseMillis=200`, `-XX:InitiatingHeapOccupancyPercent=15`, `-XX:SurvivorRatio=32`).
+- `--zgc`: Generational Ultra-Low Latency ZGC (`-XX:+UseZGC`, `-XX:+ZGenerational`).
+- `--shenandoah`: Red Hat low-pause collector (`-XX:+UseShenandoahGC`).
+
+---
+
+## 5. Plugin & Mod Lifecycle, Manifest Inspection & Dependency Resolution
+
+Craft provides pure-Rust, in-memory JAR inspection and dependency lifecycle automation in `crates/plugins/`:
+
+### Bytecode Manifest Extraction (`JarManifestInfo`)
+Without requiring Java or unpacking archive trees to disk, Craft reads JAR entries using `zip::ZipArchive`:
+- **Paper / Spigot / Bukkit**: Parses `paper-plugin.yml` or `plugin.yml` using `serde_yaml` to extract `name`, `version`, `api-version`, `main`, `author`/`authors`, and `depend`/`softdepend`.
+- **Fabric Mod**: Parses `fabric.mod.json` using `serde_json` to extract `id`, `name`, `version`, `depends`, and `suggests`.
+- **Quilt Mod**: Parses `quilt.mod.json` to extract `quilt_loader` metadata, `id`, `version`, and `depends`.
+- **Forge / NeoForge**: Parses `META-INF/neoforge.mods.toml` or `META-INF/mods.toml` using `toml` to extract `modId`, `version`, `displayName`, and `[[dependencies.<modId>]]`.
+- **Proxies (Velocity & Bungee)**: Parses `velocity-plugin.json` (Velocity) and `bungee.yml` (BungeeCord/Waterfall).
+
+### Compatibility Evaluation (`evaluate_compatibility`)
+- **Loader Compatibility**: Verifies whether the JAR manifest kind matches the server's running software (e.g. Bukkit plugins cannot run on Fabric/Forge without compatibility bridges).
+- **Game Version Bounds**: Evaluates Minecraft version requirements against semantic version ranges (e.g., `>=1.20.4`, `1.21.x`, `~1.20`).
+- **Bukkit `api-version` Validation**: Compares the plugin's declared `api-version` (e.g. `1.13`, `1.20`) with the host server Minecraft version to detect legacy plugins lacking modern item/block material mappings.
+
+### Recursive Dependency Resolution (`resolve_missing_dependencies`)
+- **Ecosystem Alias Mapping**: Automatically normalizes common aliases (`vault`, `protocollib`, `luckperms`, `worldedit`, `worldguard`, `fabric-api`, `cloth-config`, `architectury-api`, `sodium`, etc.).
+- **Host Audit**: Checks existing JARs in `plugins/` or `mods/` by manifest name and filename stem.
+- **Upstream Resolution**: Queries Modrinth API (`get_latest_compatible_file`) with loader and version constraints, downloading missing libraries automatically when `--resolve-deps` is active.
+
+### SHA-512 Hash Matching & Atomic Updates (`apply_atomic_update`)
+- **Hash Verification**: Computes 128-character SHA-512 hashes (`compute_file_sha512`) across installed JARs and batches them to Modrinth's `POST /v2/version_files/update`.
+- **Atomic Swap with Rollback Protection**: Creates a temporary `.jar.upgrade_bak` staging file before replacing the target JAR. If download or file swap fails, the backup is restored immediately. On success, the old file is safely archived through `TrashManager`.
