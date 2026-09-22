@@ -447,6 +447,18 @@ async fn main() {
         Some(Commands::Gateway { action }) => {
             commands::gateway::handle_gateway(action, &paths).await
         }
+        Some(Commands::Optimize { name, profile, apply }) => {
+            commands::optimize::handle_optimize(&name, &profile, apply, &paths)
+        }
+        Some(Commands::Modpack { action }) => {
+            commands::modpack::handle_modpack(action, &paths).await
+        }
+        Some(Commands::Autoscale { name, enable, disable, idle_timeout, motd, status }) => {
+            commands::autoscale::handle_autoscale(&name, enable, disable, idle_timeout, motd, status, &paths).await
+        }
+        Some(Commands::Hibernate { name, wake }) => {
+            commands::hibernate::handle_hibernate(&name, wake, &paths).await
+        }
     };
 
     if let Err(e) = result {
@@ -500,6 +512,10 @@ fn print_banner() {
     println!("  lua <script> [args...]            Execute Lua script with Craft API");
     println!("  webhook <add|rm|ls|test>          Manage event notification webhooks");
     println!("  gateway <status|enable|metrics>   Manage WebSocket gateway & metrics");
+    println!("  optimize <server> [--apply]       Dynamically tune JVM memory & GC profiles");
+    println!("  modpack <inspect|install>         Universal modpack distribution engine");
+    println!("  autoscale [server] [--enable]     Manage idle hibernation & wake triggers");
+    println!("  hibernate <server> [--wake]       Manually sleep or wake server via SleepProxy");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

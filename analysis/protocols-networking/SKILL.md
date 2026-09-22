@@ -57,6 +57,17 @@ Craft implements all network query protocols natively in pure Rust without relyi
   - `Padding`: 2-byte null terminator (`0x00 0x00`)
 - **Safety**: Supports multi-packet response assembly for commands with outputs exceeding 4096 bytes.
 
+### 2.5. Pure-Rust TCP `SleepProxy` & Packet Wake-Up Service
+- **Transport**: TCP (binds to the sleeping server's port)
+- **Status State (`next_state = 1`)**:
+  - Responds to `0x00` Status Request with a JSON description containing the sleeping MOTD (`"[Craft] Server is sleeping. Connect to wake up!"`), 0 online players, and version identifier.
+  - Responds to `0x01` Ping with Pong echoing the 64-bit timestamp.
+- **Login State (`next_state = 2`)**:
+  - Intercepts player login handshake.
+  - Sends immediate server wake signal across an asynchronous `mpsc::Sender<String>` channel to the daemon supervisor.
+  - Disconnects player cleanly with a `0x00` Login Disconnect packet containing a descriptive chat JSON payload (`"[Craft] Server is starting up! Please reconnect in 15 seconds."`), avoiding TCP socket hanging and connection timeout errors on the client.
+- **Port Teardown**: Upon wake signal dispatch, `SleepProxyHandle::shutdown` terminates the TCP listener, allowing the actual dedicated server process to bind the port cleanly without collision.
+
 ---
 
 ## 3. Host Firewall & Security Automation

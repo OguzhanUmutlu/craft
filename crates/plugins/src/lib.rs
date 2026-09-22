@@ -5,6 +5,7 @@ pub mod compatibility;
 pub mod hangar;
 pub mod manifest;
 pub mod map_resolver;
+pub mod modpack;
 pub mod modrinth;
 pub mod poggit;
 pub mod resolver;
@@ -18,6 +19,10 @@ pub use manifest::{
     inspect_jar_manifest, DependencyRequirement, JarManifestInfo, JarManifestKind,
 };
 pub use map_resolver::resolve_map_download_url;
+pub use modpack::{
+    inspect_modpack_archive, install_modpack_archive, ModpackInspectSummary, ModpackInstallSummary,
+    ModpackKind,
+};
 pub use modrinth::{ModrinthClient, ModrinthFile, ModrinthHit, ModrinthVersion};
 pub use poggit::{PoggitClient, PoggitPlugin};
 pub use resolver::{

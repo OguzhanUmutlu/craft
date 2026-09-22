@@ -434,6 +434,78 @@ pub enum Commands {
         #[command(subcommand)]
         action: GatewayCommands,
     },
+
+    /// Dynamically tune JVM parameters, GC strategy, and memory profiles for a server
+    #[command(name = "optimize", alias = "tune")]
+    Optimize {
+        /// Server name
+        name: String,
+        /// Optimization profile (conservative, balanced, aggressive)
+        #[arg(short, long, default_value = "balanced")]
+        profile: String,
+        /// Automatically apply recommended settings to server configuration
+        #[arg(long)]
+        apply: bool,
+    },
+
+    /// Universal modpack distribution engine (Modrinth .mrpack & CurseForge)
+    #[command(name = "modpack", alias = "pack")]
+    Modpack {
+        #[command(subcommand)]
+        action: ModpackCommands,
+    },
+
+    /// Manage auto-scaling, packet-triggered wake-up, and idle hibernation
+    #[command(name = "autoscale", alias = "scale")]
+    Autoscale {
+        /// Server name (omit when listing status across all servers)
+        #[arg(default_value = "")]
+        name: String,
+        /// Enable idle hibernation
+        #[arg(long)]
+        enable: bool,
+        /// Disable idle hibernation
+        #[arg(long)]
+        disable: bool,
+        /// Set idle timeout in minutes before hibernating
+        #[arg(long)]
+        idle_timeout: Option<u64>,
+        /// Sleeping server MOTD
+        #[arg(long)]
+        motd: Option<String>,
+        /// Display current autoscale and hibernation status
+        #[arg(long)]
+        status: bool,
+    },
+
+    /// Manually hibernate a server into SleepProxy or wake it up
+    #[command(name = "hibernate", alias = "sleep")]
+    Hibernate {
+        /// Server name
+        name: String,
+        /// Wake the server up instead of hibernating
+        #[arg(long)]
+        wake: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ModpackCommands {
+    /// Inspect a Modrinth (.mrpack) or CurseForge modpack archive
+    Inspect {
+        /// Path to modpack archive (.mrpack or .zip)
+        archive: PathBuf,
+    },
+    /// Install a modpack archive into an existing or new server directory
+    Install {
+        /// Target server name
+        server: String,
+        /// Path to modpack archive (.mrpack or .zip)
+        archive: PathBuf,
+        /// Bypass local zstd cache store
+        #[arg(long)]
+        no_cache: bool,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -1461,6 +1533,59 @@ mod tests {
                 assert!(raw);
             }
             _ => panic!("Expected Gateway Metrics command"),
+        }
+    }
+
+    #[test]
+    fn test_phase7_cli_parsing() {
+        let cli_opt = Cli::try_parse_from(["craft", "optimize", "survival", "--profile", "aggressive", "--apply"]).unwrap();
+        match cli_opt.command {
+            Some(Commands::Optimize { name, profile, apply }) => {
+                assert_eq!(name, "survival");
+                assert_eq!(profile, "aggressive");
+                assert!(apply);
+            }
+            _ => panic!("Expected Optimize command"),
+        }
+
+        let cli_mp_inspect = Cli::try_parse_from(["craft", "modpack", "inspect", "pack.mrpack"]).unwrap();
+        match cli_mp_inspect.command {
+            Some(Commands::Modpack { action: ModpackCommands::Inspect { archive } }) => {
+                assert_eq!(archive, PathBuf::from("pack.mrpack"));
+            }
+            _ => panic!("Expected Modpack Inspect command"),
+        }
+
+        let cli_mp_install = Cli::try_parse_from(["craft", "modpack", "install", "lobby", "pack.mrpack", "--no-cache"]).unwrap();
+        match cli_mp_install.command {
+            Some(Commands::Modpack { action: ModpackCommands::Install { server, archive, no_cache } }) => {
+                assert_eq!(server, "lobby");
+                assert_eq!(archive, PathBuf::from("pack.mrpack"));
+                assert!(no_cache);
+            }
+            _ => panic!("Expected Modpack Install command"),
+        }
+
+        let cli_scale = Cli::try_parse_from(["craft", "autoscale", "lobby", "--enable", "--idle-timeout", "30"]).unwrap();
+        match cli_scale.command {
+            Some(Commands::Autoscale { name, enable, disable, idle_timeout, motd, status }) => {
+                assert_eq!(name, "lobby");
+                assert!(enable);
+                assert!(!disable);
+                assert_eq!(idle_timeout, Some(30));
+                assert_eq!(motd, None);
+                assert!(!status);
+            }
+            _ => panic!("Expected Autoscale command"),
+        }
+
+        let cli_hibernate = Cli::try_parse_from(["craft", "hibernate", "survival", "--wake"]).unwrap();
+        match cli_hibernate.command {
+            Some(Commands::Hibernate { name, wake }) => {
+                assert_eq!(name, "survival");
+                assert!(wake);
+            }
+            _ => panic!("Expected Hibernate command"),
         }
     }
 }

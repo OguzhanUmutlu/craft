@@ -17,6 +17,19 @@ pub enum IpcRequest {
     GetCircuitBreakers,
     ResetCircuitBreaker { path: PathBuf },
     GetBackupSchedules,
+    HibernateServer { server_name: String },
+    WakeServer { server_name: String },
+    GetAutoscaleStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoscaleServerStatus {
+    pub server_name: String,
+    pub enabled: bool,
+    pub is_sleeping: bool,
+    pub idle_timeout_mins: u64,
+    pub idle_seconds: u64,
+    pub player_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,5 +44,6 @@ pub enum IpcResponse {
     LogChunk { path: PathBuf, data: String },
     CircuitBreakersList { items: Vec<CircuitBreakerInfo> },
     BackupSchedulesList { items: Vec<BackupScheduleInfo> },
+    AutoscaleStatusList { items: Vec<AutoscaleServerStatus> },
     Error { error: String },
 }

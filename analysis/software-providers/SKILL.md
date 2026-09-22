@@ -84,3 +84,21 @@ Without requiring Java or unpacking archive trees to disk, Craft reads JAR entri
 ### SHA-512 Hash Matching & Atomic Updates (`apply_atomic_update`)
 - **Hash Verification**: Computes 128-character SHA-512 hashes (`compute_file_sha512`) across installed JARs and batches them to Modrinth's `POST /v2/version_files/update`.
 - **Atomic Swap with Rollback Protection**: Creates a temporary `.jar.upgrade_bak` staging file before replacing the target JAR. If download or file swap fails, the backup is restored immediately. On success, the old file is safely archived through `TrashManager`.
+
+---
+
+## 6. Dynamic Memory Optimizer & Universal Modpack Distribution
+
+### Dynamic Memory Profile Optimizer (`MemoryOptimizer`)
+- **Heuristic Sizing**: Slices host RAM into Conservative (50%), Balanced (70%), or Aggressive (82%) allocations while guaranteeing minimum OS headroom (1024–2048 MB).
+- **GC Matrix**: Dynamically assigns Generational ZGC (`-XX:+UseZGC -XX:+ZGenerational`) for modern Java 21+ heaps with >= 8GB, Aikar G1GC with customized young-gen boundaries, or Shenandoah low-pause collector.
+- **Proxy Capping**: Explicitly caps BungeeCord, Velocity, and Waterfall instances at 2048 MB maximum to avoid waste on large dedicated hardware nodes.
+- **Automated Configuration**: `craft optimize <server> [--apply]` automatically persists computed boundaries and arguments to `servers.toml`.
+
+### Universal Modpack Distribution Engine (`craft_plugins::modpack`)
+- **Multi-Format Ingestion**: Parses Modrinth `.mrpack` (`modrinth.index.json`) and CurseForge server packs (`manifest.json`) without external dependencies.
+- **Client Mod Filtering**: Automatically filters out client-only dependencies where `env.server == "unsupported"`.
+- **Integrity Validation**: Computes SHA-512 hashes during stream downloads, verifying matches against pack manifests.
+- **Zstandard Caching**: Deduplicates pack downloads in `CacheStore`, enabling fast multi-instance deployment.
+- **Overrides Deployment**: Extracts root overrides (`overrides/`) and server-specific configurations (`server-overrides/`), preserving file attributes.
+

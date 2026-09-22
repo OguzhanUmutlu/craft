@@ -74,8 +74,9 @@ Full multi-phased task breakdowns and 5–10 line technical specifications are t
 
 | Category | Phase | Focus Area | Status |
 | :--- | :--- | :--- | :--- |
-| **Current** | **Phase 7** | Dynamic Resource Optimization, Auto-Scaling & Modpack Distribution (Memory profile optimizer, modpack manifests, idle hibernation) | **WORKING ON** |
-| **Future** | **Phase 8** | Multi-Tenant Role-Based Access Control, Audit Trails & Web Dashboard (RBAC policies, immutable HMAC audit log, web dashboard) | **QUEUED** |
+| **Current** | **Phase 8** | Multi-Tenant Role-Based Access Control, Audit Trails & Web Dashboard (RBAC policies, immutable HMAC audit log, web dashboard) | **WORKING ON** |
+| **Future** | **Phase 9** | Distributed Multi-Cloud Storage Mesh & Disaster Recovery (Multi-cloud S3/GCS/R2 mesh, chunk dedup, automated DR playbooks) | **QUEUED** |
+| **Done** | **Phase 7** | Dynamic Resource Optimization, Auto-Scaling & Modpack Distribution (Memory profile optimizer, modpack manifests, idle hibernation) | **COMPLETED** |
 | **Done** | **Phase 6** | Enterprise Telemetry, Webhooks & Remote Gateway (Prometheus `/metrics`, Discord/Slack webhooks, WebSocket console) | **COMPLETED** |
 | **Done** | **Phase 5** | Plugin & Mod Lifecycle Automation and Dependency Resolution (Compatibility checks, atomic updates, dependency resolver) | **COMPLETED** |
 | **Done** | **Phase 4** | Ecosystem, Multi-Server Clusters and Remote Federation (Cross-node migration, cluster orchestration, routing sync) | **COMPLETED** |

@@ -1,3 +1,4 @@
+pub mod autoscale_config;
 pub mod backup_config;
 pub mod cache;
 pub mod cluster_config;
@@ -6,6 +7,7 @@ pub mod error;
 pub mod game;
 pub mod java;
 pub mod nbt;
+pub mod optimizer;
 pub mod path;
 pub mod process;
 pub mod properties;
@@ -13,6 +15,8 @@ pub mod remote_config;
 pub mod trash;
 pub mod version;
 pub mod webhook_config;
+
+pub use autoscale_config::{AutoscaleRegistry, ServerAutoscalePolicy};
 
 pub use backup_config::{
     AutoBackupPolicy, GDriveBackupConfig, GDriveBackupTarget, GlobalBackupRegistry,
@@ -31,6 +35,7 @@ pub use game::{
 };
 pub use java::{find_best_java, get_jar_java_version, get_java_installations, JavaInstallation};
 pub use nbt::{NbtFile, NbtTag};
+pub use optimizer::{GcStrategy, MemoryOptimizer, OptimizationProfile, OptimizationRecommendation};
 pub use path::CraftPaths;
 pub use process::{
     auto_heal_server_file, auto_heal_server_jar, get_server_running_pid, is_process_running,

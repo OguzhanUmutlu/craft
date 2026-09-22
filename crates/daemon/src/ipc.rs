@@ -35,6 +35,10 @@ impl DaemonServer {
         let _scheduler_handle =
             crate::scheduler::DaemonScheduler::start(self.paths.clone(), self.supervisor.clone());
 
+        // Launch in-process hibernation manager
+        let hibernation =
+            crate::hibernation::HibernationManager::start(self.paths.clone(), self.supervisor.clone());
+
         // Load settings to check gateway and storage monitor config
         let settings = craft_core::GlobalSettings::load(&self.paths).unwrap_or_default();
 
@@ -72,12 +76,14 @@ impl DaemonServer {
             );
 
             let supervisor = self.supervisor.clone();
+            let hib_mgr = hibernation.clone();
             loop {
                 match listener.accept().await {
                     Ok((stream, _)) => {
                         let sup = supervisor.clone();
+                        let hib = hib_mgr.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, sup).await {
+                            if let Err(e) = handle_connection(stream, sup, hib).await {
                                 warn!("IPC client disconnected with error: {}", e);
                             }
                         });
@@ -104,6 +110,7 @@ impl DaemonServer {
                 .map_err(|e| CraftError::Ipc(format!("Failed to create named pipe: {}", e)))?;
 
             let supervisor = self.supervisor.clone();
+            let hib_mgr = hibernation.clone();
             loop {
                 if let Err(e) = server.connect().await {
                     error!("Error connecting named pipe client: {}", e);
@@ -115,8 +122,9 @@ impl DaemonServer {
                 })?;
 
                 let sup = supervisor.clone();
+                let hib = hib_mgr.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(client, sup).await {
+                    if let Err(e) = handle_connection(client, sup, hib).await {
                         warn!("IPC client error: {}", e);
                     }
                 });
@@ -135,7 +143,11 @@ impl Drop for DaemonServer {
     }
 }
 
-async fn handle_connection<S>(mut stream: S, supervisor: Supervisor) -> Result<()>
+async fn handle_connection<S>(
+    mut stream: S,
+    supervisor: Supervisor,
+    hibernation: std::sync::Arc<crate::hibernation::HibernationManager>,
+) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -282,6 +294,32 @@ where
                     }
                 }
                 write_frame(&mut stream, &IpcResponse::BackupSchedulesList { items }).await?;
+            }
+            IpcRequest::HibernateServer { server_name } => {
+                let resp = match hibernation.hibernate_server(&server_name).await {
+                    Ok(()) => IpcResponse::Success {
+                        message: format!("Server '{}' hibernated successfully", server_name),
+                    },
+                    Err(e) => IpcResponse::Error {
+                        error: e.to_string(),
+                    },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::WakeServer { server_name } => {
+                let resp = match hibernation.wake_server(&server_name).await {
+                    Ok(()) => IpcResponse::Success {
+                        message: format!("Server '{}' woken up successfully", server_name),
+                    },
+                    Err(e) => IpcResponse::Error {
+                        error: e.to_string(),
+                    },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::GetAutoscaleStatus => {
+                let items = hibernation.get_autoscale_status().await.unwrap_or_default();
+                write_frame(&mut stream, &IpcResponse::AutoscaleStatusList { items }).await?;
             }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
@@ -612,7 +650,44 @@ impl DaemonClient {
             )),
         }
     }
+
+    pub async fn hibernate_server(&mut self, server_name: &str) -> Result<String> {
+        match self
+            .request(IpcRequest::HibernateServer {
+                server_name: server_name.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::Success { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn wake_server(&mut self, server_name: &str) -> Result<String> {
+        match self
+            .request(IpcRequest::WakeServer {
+                server_name: server_name.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::Success { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_autoscale_status(
+        &mut self,
+    ) -> Result<Vec<crate::protocol::AutoscaleServerStatus>> {
+        match self.request(IpcRequest::GetAutoscaleStatus).await? {
+            IpcResponse::AutoscaleStatusList { items } => Ok(items),
+            IpcResponse::Error { error } => Err(CraftError::Ipc(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
 }
+
 
 async fn run_storage_monitor(paths: CraftPaths, threshold_bytes: u64, threshold_percent: f64) {
     use sysinfo::Disks;

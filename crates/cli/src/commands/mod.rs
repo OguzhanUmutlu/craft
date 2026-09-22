@@ -1,4 +1,5 @@
 pub mod auto;
+pub mod autoscale;
 pub mod backup;
 pub mod cache;
 pub mod catalog;
@@ -10,13 +11,16 @@ pub mod dev;
 pub mod dockerize;
 pub mod fix;
 pub mod gateway;
+pub mod hibernate;
 pub mod load;
 pub mod log;
 pub mod ls;
 pub mod migrate;
 pub mod mod_cmd;
+pub mod modpack;
 pub mod net;
 pub mod new;
+pub mod optimize;
 pub mod plugin;
 pub mod prop;
 pub mod remote;
@@ -33,3 +37,4 @@ pub mod ver;
 pub mod view;
 pub mod webhook;
 pub mod world;
+

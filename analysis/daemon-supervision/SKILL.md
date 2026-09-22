@@ -173,4 +173,18 @@ The daemon runs a periodic background storage monitor task every 5 minutes:
 - Evaluates free disk space against configured thresholds (`storage_warning_threshold_bytes` [default 5 GB] and `storage_warning_threshold_percent` [default 10%]).
 - When storage drops below either threshold, dispatches `WebhookPayload::storage_exhaustion` with an hourly alert cooldown to avoid notification flooding.
 
+---
+
+## 12. Server Auto-Scaling, Inactivity Reaper & Hibernation Manager
+
+Craft includes an integrated hibernation and packet-triggered auto-scaling manager (`HibernationManager`):
+- **Configuration Storage**: `~/.craft/autoscale.toml` (`AutoscaleRegistry`) protected by advisory file locking (`autoscale.lock`).
+- **Periodic Idle Reaper**: Polls running servers every 15 seconds. If `hibernation_enabled = true` and the active player count remains 0 for longer than `idle_timeout_mins`, the daemon terminates the server gracefully and transitions the port to `craft_net::SleepProxy`.
+- **Packet Wake Trigger**: When an incoming player attempts a connection to `SleepProxy`, the proxy emits an event across a Tokio `mpsc` channel. The daemon immediately tears down the proxy, releases the port, and restarts the dedicated server via `Supervisor::start_server`.
+- **IPC Protocol Extension**:
+  - `HibernateServer { server_name }`: Forces immediate shutdown and `SleepProxy` binding.
+  - `WakeServer { server_name }`: Manually terminates proxy and relaunches server process.
+  - `GetAutoscaleStatus`: Returns snapshot of configured policies, sleeping state, idle seconds, and player counts.
+
+
 

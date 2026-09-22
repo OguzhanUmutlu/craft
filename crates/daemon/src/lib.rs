@@ -1,5 +1,6 @@
 pub mod circuit_breaker;
 pub mod gateway;
+pub mod hibernation;
 pub mod ipc;
 pub mod protocol;
 pub mod ring_buffer;
@@ -10,8 +11,9 @@ pub mod webhooks;
 
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};
 pub use gateway::GatewayServer;
+pub use hibernation::HibernationManager;
 pub use ipc::{DaemonClient, DaemonServer, DAEMON_PORT};
-pub use protocol::{IpcRequest, IpcResponse};
+pub use protocol::{AutoscaleServerStatus, IpcRequest, IpcResponse};
 pub use ring_buffer::RingBuffer;
 pub use scheduler::{BackupSchedule, BackupScheduleInfo, DaemonScheduler};
 pub use supervisor::Supervisor;

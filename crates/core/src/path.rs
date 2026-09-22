@@ -18,6 +18,7 @@ pub struct CraftPaths {
     pub remotes_file: PathBuf,
     pub clusters_file: PathBuf,
     pub webhooks_file: PathBuf,
+    pub autoscale_file: PathBuf,
     pub config_file: PathBuf,
     pub socket_file: PathBuf,
     pub pid_file: PathBuf,
@@ -38,6 +39,7 @@ impl CraftPaths {
         let remotes_file = home.join("remotes.toml");
         let clusters_file = home.join("clusters.toml");
         let webhooks_file = home.join("webhooks.toml");
+        let autoscale_file = home.join("autoscale.toml");
         let config_file = home.join("config.toml");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
@@ -56,6 +58,7 @@ impl CraftPaths {
             remotes_file,
             clusters_file,
             webhooks_file,
+            autoscale_file,
             config_file,
             socket_file,
             pid_file,
@@ -106,6 +109,7 @@ impl CraftPaths {
         let remotes_file = home.join("remotes.toml");
         let clusters_file = home.join("clusters.toml");
         let webhooks_file = home.join("webhooks.toml");
+        let autoscale_file = home.join("autoscale.toml");
         let config_file = home.join("config.toml");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
@@ -124,6 +128,7 @@ impl CraftPaths {
             remotes_file,
             clusters_file,
             webhooks_file,
+            autoscale_file,
             config_file,
             socket_file,
             pid_file,
