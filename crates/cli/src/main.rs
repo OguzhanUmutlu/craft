@@ -270,6 +270,9 @@ async fn main() {
         Some(Commands::Log { action, name, path }) => {
             commands::log::handle_log(&name, path, action, &paths).await
         }
+        Some(Commands::Forecast { action, server, remote, json }) => {
+            commands::forecast::handle_forecast(&server, remote, json, action, &paths).await
+        }
         Some(Commands::Ls { remote }) => {
             if let Some(alias) = remote {
                 execute_remote(&alias, "craft ls", false, &paths)

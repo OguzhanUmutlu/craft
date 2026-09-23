@@ -166,6 +166,35 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `craft log index [server] [-f]`
   - Full-screen centered interactive TUI panel (`Tools -> Log Search & Incident Forensics`) powered by ModalX.
 
+### 3.11. AI-Driven Workload Forecasting, Predictive Auto-Scaling & Autonomous Cost Optimization
+- **Storage Locations**:
+  - `~/.craft/forecasting.toml`: Declarative policy registry configuring proactive wake lead times, surge thresholds, and quiet windows.
+  - `~/.craft/run/locks/forecasting.lock`: Cross-process file lock guard for atomic policy updates.
+  - `~/.craft/diagnostics/workload/<server_name>.json`: Serialized time-series samples containing hourly player counts, MSPT statistics, and RSS memory footprints.
+- **Deterministic Seasonal Workload Forecasting (`SeasonalForecaster`)**:
+  - Decomposes player workload into a 24-hour diurnal curve and 7-day day-of-week seasonality multiplier.
+  - Multi-step projections over 1h, 6h, 12h, 24h, 7d horizons with quantiles (P10 lower bound, P50 expected, P90 peak surge).
+  - Confidence scoring dynamically scales with sample density (N / 168, capped at 1.0).
+  - Surge risk detection warns when projected peak exceeds current player counts by configurable deltas.
+  - Generates compact plain-text sparklines for TUI and CLI telemetry representations.
+- **Financial Cost Optimization Ledger (`CostOptimizationModel`)**:
+  - Quantifies computing resources saved through predictive hibernation and dynamic downscaling.
+  - Computes vCPU core-hours and RAM GiB-hours saved, baseline always-on cost, realized cost, net dollar savings, efficiency percentage, and projected monthly run-rate reductions.
+- **In-Process Daemon Forecasting Service (`WorkloadForecastingService`)**:
+  - Autonomous supervisor loop periodically records hourly telemetry samples from running servers.
+  - Proactive Wake-Up: Pre-warms hibernated servers 15-30 minutes ahead of predicted player surges, eliminating cold-start login latency.
+  - Quiet-Hour Downscaling: Automatically hibernates or throttles idle instances during historical off-peak hours.
+  - Typed IPC endpoints: `GetWorkloadForecast`, `GetCostOptimizationReport`, `SetWorkloadPolicy`, `TriggerProactiveScalingNow`.
+- **Remote Federation & Scripting Hook Bus**:
+  - Federated query dispatch: `RemoteCraftClient::get_remote_forecast` and `get_remote_cost_report` query remote edge nodes over pooled SSH connections.
+  - Lifecycle events: `LifecycleEvent::WorkloadSurgePredicted`, `CostOptimizationApplied`, `ProactiveWakeTriggered` dispatch to Lua scripts with predicted player counts, savings estimates, and scaling actions.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft forecast show [server] [--horizon N] [--remote alias] [--json]`
+  - `craft forecast cost [--server name] [--remote alias] [--json]`
+  - `craft forecast schedule [server] [--lead-mins N] [--quiet-start H] [--quiet-end H] [--enabled bool] [--json]`
+  - `craft forecast optimize [server] [--json]`
+  - Full-screen centered interactive TUI panel (`Tools -> Workload Forecasting & Cost Optimizer`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

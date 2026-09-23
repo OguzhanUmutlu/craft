@@ -171,6 +171,21 @@ pub enum Commands {
         path: Option<PathBuf>,
     },
 
+    /// AI-driven workload forecasting, predictive auto-scaling, and cost optimization
+    #[command(alias = "predict", alias = "costs")]
+    Forecast {
+        #[command(subcommand)]
+        action: Option<ForecastCommands>,
+        /// Target server name
+        #[arg(default_value = "")]
+        server: String,
+        /// Target remote host alias
+        #[arg(long)]
+        remote: Option<String>,
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
 
     /// List all registered servers and their status
     #[command(alias = "list", alias = "ps")]
@@ -1369,6 +1384,67 @@ pub enum LogCommands {
     },
 }
 
+#[derive(Subcommand, Debug, Clone)]
+pub enum ForecastCommands {
+    /// Show workload forecast, diurnal seasonality curves, and surge alerts
+    Show {
+        /// Target server name
+        #[arg(default_value = "")]
+        server: String,
+        /// Forecast horizon in hours (1..168, default: 24)
+        #[arg(short = 'H', long, default_value = "24")]
+        horizon: u32,
+        /// Target remote host alias
+        #[arg(long)]
+        remote: Option<String>,
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Generate financial cost optimization ledger and projected savings
+    Cost {
+        /// Filter by specific server (aggregates fleet if omitted)
+        #[arg(short = 's', long)]
+        server: Option<String>,
+        /// Target remote host alias
+        #[arg(long)]
+        remote: Option<String>,
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// View or configure proactive wake schedules and quiet windows
+    Schedule {
+        /// Target server name
+        #[arg(default_value = "")]
+        server: String,
+        /// Proactive wake-up lead time in minutes ahead of predicted surge
+        #[arg(long)]
+        lead_mins: Option<u32>,
+        /// Quiet window start hour in UTC (0..23)
+        #[arg(long)]
+        quiet_start: Option<u8>,
+        /// Quiet window end hour in UTC (0..23)
+        #[arg(long)]
+        quiet_end: Option<u8>,
+        /// Enable or disable predictive auto-scaling
+        #[arg(long)]
+        enabled: Option<bool>,
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Trigger proactive auto-scaling or downscaling evaluation immediately
+    Optimize {
+        /// Target server name
+        #[arg(default_value = "")]
+        server: String,
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 #[derive(Subcommand)]
 pub enum BackupCommands {
     /// Create a compressed backup of a server
@@ -1802,6 +1878,58 @@ mod tests {
                 action: Some(CatalogCommands::Info),
             }) => {}
             _ => panic!("Expected Catalog Info command"),
+        }
+    }
+
+    #[test]
+    fn test_forecast_cli_parsing() {
+        let cli_show = Cli::try_parse_from(["craft", "forecast", "show", "survival", "--horizon", "48", "--json"]).unwrap();
+        match cli_show.command {
+            Some(Commands::Forecast {
+                action: Some(ForecastCommands::Show { server, horizon, json, .. }),
+                ..
+            }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(horizon, 48);
+                assert!(json);
+            }
+            _ => panic!("Expected Forecast Show command"),
+        }
+
+        let cli_cost = Cli::try_parse_from(["craft", "forecast", "cost", "--server", "lobby"]).unwrap();
+        match cli_cost.command {
+            Some(Commands::Forecast {
+                action: Some(ForecastCommands::Cost { server, .. }),
+                ..
+            }) => {
+                assert_eq!(server.as_deref(), Some("lobby"));
+            }
+            _ => panic!("Expected Forecast Cost command"),
+        }
+
+        let cli_schedule = Cli::try_parse_from(["craft", "forecast", "schedule", "survival", "--lead-mins", "30", "--quiet-start", "2", "--quiet-end", "7"]).unwrap();
+        match cli_schedule.command {
+            Some(Commands::Forecast {
+                action: Some(ForecastCommands::Schedule { server, lead_mins, quiet_start, quiet_end, .. }),
+                ..
+            }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(lead_mins, Some(30));
+                assert_eq!(quiet_start, Some(2));
+                assert_eq!(quiet_end, Some(7));
+            }
+            _ => panic!("Expected Forecast Schedule command"),
+        }
+
+        let cli_opt = Cli::try_parse_from(["craft", "forecast", "optimize", "survival"]).unwrap();
+        match cli_opt.command {
+            Some(Commands::Forecast {
+                action: Some(ForecastCommands::Optimize { server, .. }),
+                ..
+            }) => {
+                assert_eq!(server, "survival");
+            }
+            _ => panic!("Expected Forecast Optimize command"),
         }
     }
 

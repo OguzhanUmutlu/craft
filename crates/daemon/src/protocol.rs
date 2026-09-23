@@ -43,6 +43,10 @@ pub enum IpcRequest {
     GetIncidentForensics { server_name: String, incident_id: Option<String> },
     ListIncidents { server_name: Option<String> },
     IngestLogsNow { server_name: Option<String> },
+    GetWorkloadForecast { server_name: String, horizon_hours: u32 },
+    GetCostOptimizationReport { server_name: Option<String> },
+    SetWorkloadPolicy { policy: craft_core::WorkloadPolicy },
+    TriggerProactiveScalingNow { server_name: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +91,10 @@ pub enum IpcResponse {
     IncidentForensics { timeline: craft_core::IncidentTimeline },
     IncidentList { incidents: Vec<IncidentSummary> },
     IngestResult { indexed_lines: usize, blocks_created: usize, duration_ms: u64 },
+    WorkloadForecastResult { forecast: craft_core::WorkloadForecast },
+    CostOptimizationReportResult { report: craft_core::CostOptimizationReport },
+    WorkloadPolicyResult { policies: Vec<craft_core::WorkloadPolicy> },
+    ProactiveScalingResult { message: String, applied_action: String },
     Error { error: String },
 }
 

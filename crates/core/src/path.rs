@@ -37,6 +37,9 @@ pub struct CraftPaths {
     pub pid_file: PathBuf,
     pub indices_dir: PathBuf,
     pub forensics_dir: PathBuf,
+    pub forecasting_file: PathBuf,
+    pub forecasting_lock: PathBuf,
+    pub workload_dir: PathBuf,
 }
 
 impl CraftPaths {
@@ -73,6 +76,9 @@ impl CraftPaths {
         let rollouts_lock = locks_dir.join("rollouts.lock");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
+        let forecasting_file = home.join("forecasting.toml");
+        let forecasting_lock = locks_dir.join("forecasting.lock");
+        let workload_dir = diagnostics_dir.join("workload");
 
         Self {
             home,
@@ -107,6 +113,9 @@ impl CraftPaths {
             pid_file,
             indices_dir,
             forensics_dir,
+            forecasting_file,
+            forecasting_lock,
+            workload_dir,
         }
     }
 
@@ -138,6 +147,7 @@ impl CraftPaths {
         let edge_dir = home.join("edge");
         let indices_dir = home.join("indices");
         let forensics_dir = home.join("forensics");
+        let workload_dir = diagnostics_dir.join("workload");
 
         // Ensure all primary directories exist
         for dir in [
@@ -156,6 +166,7 @@ impl CraftPaths {
             &edge_dir,
             &indices_dir,
             &forensics_dir,
+            &workload_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -179,6 +190,8 @@ impl CraftPaths {
         let rollouts_lock = locks_dir.join("rollouts.lock");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
+        let forecasting_file = home.join("forecasting.toml");
+        let forecasting_lock = locks_dir.join("forecasting.lock");
 
         Ok(Self {
             home,
@@ -213,6 +226,9 @@ impl CraftPaths {
             pid_file,
             indices_dir,
             forensics_dir,
+            forecasting_file,
+            forecasting_lock,
+            workload_dir,
         })
     }
 

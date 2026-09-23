@@ -14,6 +14,7 @@ pub mod dockerize;
 pub mod dr;
 pub mod edge;
 pub mod fix;
+pub mod forecast;
 pub mod gateway;
 pub mod hibernate;
 pub mod load;

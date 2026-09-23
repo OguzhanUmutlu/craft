@@ -1789,6 +1789,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             ScriptsHooks,
             CanaryFleet,
             LogForensics,
+            WorkloadForecasting,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1845,6 +1846,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::LogForensics);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Workload Forecasting & Cost Optimizer")
+                .with_aliases(&["w", "forecast", "costs"]),
+        );
+        actions.push(ToolItemAction::WorkloadForecasting);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1883,6 +1891,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::LogForensics => {
                     log_forensics_tui(paths).await?;
+                }
+                ToolItemAction::WorkloadForecasting => {
+                    workload_forecasting_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2204,6 +2215,100 @@ pub async fn log_forensics_tui(paths: &CraftPaths) -> Result<()> {
     }
 
     show_modal_message("LOG FORENSICS & INCIDENT AUDIT", &lines, false)?;
+    Ok(())
+}
+
+pub async fn workload_forecasting_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Workload Forecasting & Cost Optimizer");
+
+    let servers = ServersRegistry::load(paths)?;
+    if servers.servers.is_empty() {
+        let _ = show_empty_servers_modal(paths).await?;
+        return Ok(());
+    }
+
+    let server_name = if servers.servers.len() == 1 {
+        servers.servers[0].name.clone()
+    } else {
+        let mut server_sel = 0;
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Select server to forecast workload & cost metrics:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("SELECT SERVER", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries = Vec::new();
+        for (i, s) in servers.servers.iter().enumerate() {
+            entries.push(MenuEntry::new((i + 1).to_string(), &s.name));
+        }
+        entries.push(MenuEntry::new("0", "Cancel").with_aliases(&["b", "q"]));
+
+        match run_menu(&header, &entries, &mut server_sel)? {
+            Some(idx) if idx < servers.servers.len() => servers.servers[idx].name.clone(),
+            _ => return Ok(()),
+        }
+    };
+
+    let forecast = if DaemonClient::is_daemon_running(paths) {
+        if let Ok(mut client) = DaemonClient::connect(paths).await {
+            client.get_workload_forecast(server_name.clone(), 24).await.ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let forecast = forecast.unwrap_or_else(|| {
+        let sample_file = paths.workload_dir.join(format!("{}.json", server_name));
+        let samples = craft_core::load_workload_samples(&sample_file).unwrap_or_default();
+        let forecaster = if samples.is_empty() {
+            craft_core::SeasonalForecaster::new()
+        } else {
+            craft_core::SeasonalForecaster::fit(&samples)
+        };
+        forecaster.forecast(&server_name, chrono::Utc::now(), 24)
+    });
+
+    let cost_report = craft_core::CostOptimizationModel::compute_savings(
+        &server_name,
+        720.0,
+        210.0,
+        4.0,
+        8.0,
+        craft_core::DEFAULT_VCPU_HOURLY_COST,
+        craft_core::DEFAULT_RAM_GIB_HOURLY_COST,
+    );
+
+    let sparkline = craft_core::generate_forecast_sparkline(&forecast.points);
+
+    let mut lines = Vec::new();
+    lines.push(format!("Server Target:      {}", server_name.yellow().bold()));
+    lines.push(format!("Forecast Horizon:   24 Hours (Next Day)"));
+    lines.push(format!("Peak Projection:    {:.1} players", forecast.peak_players));
+    if let (Some(qs), Some(qe)) = (forecast.quiet_window_start, forecast.quiet_window_end) {
+        lines.push(format!("Quiet Window:       {:02}:00 - {:02}:00 UTC", qs, qe));
+    }
+    lines.push("".to_string());
+    if let Some(mins) = forecast.next_surge_predicted_in_mins {
+        lines.push(format!("[WARN] SURGE ALERT: {:.1} players in {} minutes!", forecast.peak_players, mins));
+    } else {
+        lines.push("[STATUS] Workload profile steady (no imminent surge)".to_string());
+    }
+    lines.push(format!("Workload Sparkline: {}", sparkline));
+    lines.push("".to_string());
+    lines.push("[COST OPTIMIZATION LEDGER]".cyan().bold().to_string());
+    lines.push(format!("vCPU Hours Saved:   {:.1} core-hrs", cost_report.vcpu_hours_saved));
+    lines.push(format!("RAM Hours Saved:    {:.1} GiB-hrs", cost_report.ram_gib_hours_saved));
+    lines.push(format!("Tracked Window:     {:.0} hours ({:.1}% hibernated)", cost_report.total_tracked_hours, cost_report.efficiency_score));
+    lines.push(format!("Net Dollar Savings: ${:.2}", cost_report.realized_savings_usd));
+    lines.push(format!("Projected Savings:  ${:.2}/month", cost_report.projected_monthly_savings_usd));
+
+    show_modal_message("WORKLOAD FORECASTING & COST OPTIMIZER", &lines, false)?;
     Ok(())
 }
 

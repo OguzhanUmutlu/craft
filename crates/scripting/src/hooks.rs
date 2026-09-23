@@ -26,6 +26,9 @@ pub enum LifecycleEvent {
     FleetNodeHealed,
     IncidentDetected,
     LogAlertTriggered,
+    WorkloadSurgePredicted,
+    CostOptimizationApplied,
+    ProactiveWakeTriggered,
 }
 
 impl LifecycleEvent {
@@ -46,6 +49,9 @@ impl LifecycleEvent {
             Self::FleetNodeHealed => "on_fleet_node_healed",
             Self::IncidentDetected => "on_incident_detected",
             Self::LogAlertTriggered => "on_log_alert_triggered",
+            Self::WorkloadSurgePredicted => "on_workload_surge_predicted",
+            Self::CostOptimizationApplied => "on_cost_optimization_applied",
+            Self::ProactiveWakeTriggered => "on_proactive_wake_triggered",
         }
     }
 
@@ -67,6 +73,9 @@ impl LifecycleEvent {
             "on_fleet_node_healed" | "fleet_node_healed" | "node_healed" | "heal" => Some(Self::FleetNodeHealed),
             "on_incident_detected" | "incident_detected" | "incident" => Some(Self::IncidentDetected),
             "on_log_alert_triggered" | "log_alert_triggered" | "log_alert" => Some(Self::LogAlertTriggered),
+            "on_workload_surge_predicted" | "workload_surge_predicted" | "surge_predicted" | "surge" => Some(Self::WorkloadSurgePredicted),
+            "on_cost_optimization_applied" | "cost_optimization_applied" | "cost_optimization" | "cost" => Some(Self::CostOptimizationApplied),
+            "on_proactive_wake_triggered" | "proactive_wake_triggered" | "proactive_wake" | "wake" => Some(Self::ProactiveWakeTriggered),
             _ => None,
         }
     }
@@ -88,6 +97,9 @@ impl LifecycleEvent {
             Self::FleetNodeHealed,
             Self::IncidentDetected,
             Self::LogAlertTriggered,
+            Self::WorkloadSurgePredicted,
+            Self::CostOptimizationApplied,
+            Self::ProactiveWakeTriggered,
         ]
     }
 }
@@ -140,6 +152,14 @@ pub struct HookContext {
     pub log_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub predicted_players: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_savings_estimate: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub horizon_minutes: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scaling_action: Option<String>,
 }
 
 impl HookContext {
@@ -484,5 +504,29 @@ mod tests {
         assert_eq!(ctx.incident_id.as_deref(), Some("inc-lobby-01-20260923"));
         assert_eq!(ctx.culprit_exception.as_deref(), Some("java.lang.NullPointerException"));
         assert_eq!(ctx.log_level.as_deref(), Some("FATAL"));
+    }
+
+    #[test]
+    fn test_workload_lifecycle_events_and_context() {
+        assert_eq!(LifecycleEvent::from_name("on_workload_surge_predicted"), Some(LifecycleEvent::WorkloadSurgePredicted));
+        assert_eq!(LifecycleEvent::from_name("surge"), Some(LifecycleEvent::WorkloadSurgePredicted));
+        assert_eq!(LifecycleEvent::from_name("on_cost_optimization_applied"), Some(LifecycleEvent::CostOptimizationApplied));
+        assert_eq!(LifecycleEvent::from_name("cost"), Some(LifecycleEvent::CostOptimizationApplied));
+        assert_eq!(LifecycleEvent::from_name("on_proactive_wake_triggered"), Some(LifecycleEvent::ProactiveWakeTriggered));
+        assert_eq!(LifecycleEvent::from_name("wake"), Some(LifecycleEvent::ProactiveWakeTriggered));
+
+        let mut ctx = HookContext::new(LifecycleEvent::WorkloadSurgePredicted);
+        ctx.server_name = Some("survival-eu".to_string());
+        ctx.predicted_players = Some(48.5);
+        ctx.cost_savings_estimate = Some(15.75);
+        ctx.horizon_minutes = Some(20);
+        ctx.scaling_action = Some("ProactiveWake".to_string());
+
+        assert_eq!(ctx.event, "on_workload_surge_predicted");
+        assert_eq!(ctx.server_name.as_deref(), Some("survival-eu"));
+        assert_eq!(ctx.predicted_players, Some(48.5));
+        assert_eq!(ctx.cost_savings_estimate, Some(15.75));
+        assert_eq!(ctx.horizon_minutes, Some(20));
+        assert_eq!(ctx.scaling_action.as_deref(), Some("ProactiveWake"));
     }
 }

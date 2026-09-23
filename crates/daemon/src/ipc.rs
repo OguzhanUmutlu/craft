@@ -66,6 +66,13 @@ impl DaemonServer {
         // Launch in-process Log Ingestion and Incident Forensics Engine
         let log_indexer = std::sync::Arc::new(crate::log_indexer::LogIngestionService::new(&self.paths));
 
+        // Launch in-process Workload Forecasting and Predictive Auto-Scaling Service
+        let forecasting = std::sync::Arc::new(crate::forecasting_service::WorkloadForecastingService::new(
+            &self.paths,
+            hibernation.clone(),
+        ));
+        forecasting.clone().start_worker();
+
         // Load settings to check gateway and storage monitor config
         let settings = craft_core::GlobalSettings::load(&self.paths).unwrap_or_default();
 
@@ -109,6 +116,7 @@ impl DaemonServer {
             let ts_mgr = self.tick_service.clone();
             let fh_mgr = fleet_healer.clone();
             let li_mgr = log_indexer.clone();
+            let fc_mgr = forecasting.clone();
             loop {
                 match listener.accept().await {
                     Ok((stream, _)) => {
@@ -119,8 +127,9 @@ impl DaemonServer {
                         let ts = ts_mgr.clone();
                         let fh = fh_mgr.clone();
                         let li = li_mgr.clone();
+                        let fc = fc_mgr.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb, ts, fh, li).await {
+                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb, ts, fh, li, fc).await {
                                 warn!("IPC client disconnected with error: {}", e);
                             }
                         });
@@ -153,6 +162,7 @@ impl DaemonServer {
             let ts_mgr = self.tick_service.clone();
             let fh_mgr = fleet_healer.clone();
             let li_mgr = log_indexer.clone();
+            let fc_mgr = forecasting.clone();
             loop {
                 if let Err(e) = server.connect().await {
                     error!("Error connecting named pipe client: {}", e);
@@ -170,8 +180,9 @@ impl DaemonServer {
                 let ts = ts_mgr.clone();
                 let fh = fh_mgr.clone();
                 let li = li_mgr.clone();
+                let fc = fc_mgr.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(client, sup, hib, ap, eb, ts, fh, li).await {
+                    if let Err(e) = handle_connection(client, sup, hib, ap, eb, ts, fh, li, fc).await {
                         warn!("IPC client error: {}", e);
                     }
                 });
@@ -199,6 +210,7 @@ async fn handle_connection<S>(
     tick_service: crate::tick_service::TickService,
     fleet_healer: std::sync::Arc<crate::fleet_healer::FleetHealer>,
     log_indexer: std::sync::Arc<crate::log_indexer::LogIngestionService>,
+    forecasting: std::sync::Arc<crate::forecasting_service::WorkloadForecastingService>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -619,6 +631,35 @@ where
                             blocks_created,
                             duration_ms,
                         }).await?;
+                    }
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::GetWorkloadForecast { server_name, horizon_hours } => {
+                match forecasting.get_forecast(&server_name, horizon_hours).await {
+                    Ok(forecast) => write_frame(&mut stream, &IpcResponse::WorkloadForecastResult { forecast }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::GetCostOptimizationReport { server_name } => {
+                match forecasting.get_cost_report(server_name.as_deref()).await {
+                    Ok(report) => write_frame(&mut stream, &IpcResponse::CostOptimizationReportResult { report }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::SetWorkloadPolicy { policy } => {
+                match forecasting.set_policy(policy) {
+                    Ok(()) => {
+                        let policies = forecasting.list_policies().unwrap_or_default();
+                        write_frame(&mut stream, &IpcResponse::WorkloadPolicyResult { policies }).await?
+                    }
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::TriggerProactiveScalingNow { server_name } => {
+                match forecasting.trigger_proactive_scaling(&server_name).await {
+                    Ok((message, applied_action)) => {
+                        write_frame(&mut stream, &IpcResponse::ProactiveScalingResult { message, applied_action }).await?
                     }
                     Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
                 }
@@ -1228,6 +1269,42 @@ impl DaemonClient {
             IpcResponse::IngestResult { indexed_lines, blocks_created, duration_ms } => {
                 Ok((indexed_lines, blocks_created, duration_ms))
             }
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_workload_forecast(
+        &mut self,
+        server_name: String,
+        horizon_hours: u32,
+    ) -> Result<craft_core::WorkloadForecast> {
+        match self.request(IpcRequest::GetWorkloadForecast { server_name, horizon_hours }).await? {
+            IpcResponse::WorkloadForecastResult { forecast } => Ok(forecast),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_cost_optimization_report(&mut self, server_name: Option<String>) -> Result<craft_core::CostOptimizationReport> {
+        match self.request(IpcRequest::GetCostOptimizationReport { server_name }).await? {
+            IpcResponse::CostOptimizationReportResult { report } => Ok(report),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_workload_policy(&mut self, policy: craft_core::WorkloadPolicy) -> Result<Vec<craft_core::WorkloadPolicy>> {
+        match self.request(IpcRequest::SetWorkloadPolicy { policy }).await? {
+            IpcResponse::WorkloadPolicyResult { policies } => Ok(policies),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn trigger_proactive_scaling(&mut self, server_name: String) -> Result<(String, String)> {
+        match self.request(IpcRequest::TriggerProactiveScalingNow { server_name }).await? {
+            IpcResponse::ProactiveScalingResult { message, applied_action } => Ok((message, applied_action)),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

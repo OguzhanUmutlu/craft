@@ -744,6 +744,37 @@ impl RemoteCraftClient {
             .map_err(|e| CraftError::Other(format!("Failed to parse remote log search results: {}", e)))?;
         Ok(result)
     }
+
+    /// Dispatches a workload forecast query to the remote host executing `craft forecast show <server> --horizon <hours> --json`
+    pub fn get_remote_forecast(&self, server: &str, horizon_hours: u32) -> Result<craft_core::WorkloadForecast> {
+        let cmd = format!("craft forecast show \"{}\" --horizon {} --json", server.replace('"', "\\\""), horizon_hours);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote workload forecast failed: {}", err.trim())));
+        }
+
+        let forecast: craft_core::WorkloadForecast = serde_json::from_str(&stdout)
+            .map_err(|e| CraftError::Other(format!("Failed to parse remote forecast results: {}", e)))?;
+        Ok(forecast)
+    }
+
+    /// Dispatches a cost optimization report query to the remote host executing `craft forecast cost --json`
+    pub fn get_remote_cost_report(&self, server: Option<&str>) -> Result<craft_core::CostOptimizationReport> {
+        let mut cmd = "craft forecast cost --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server \"{}\"", srv.replace('"', "\\\"")));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote cost report failed: {}", err.trim())));
+        }
+
+        let report: craft_core::CostOptimizationReport = serde_json::from_str(&stdout)
+            .map_err(|e| CraftError::Other(format!("Failed to parse remote cost report: {}", e)))?;
+        Ok(report)
+    }
 }
 
 #[cfg(test)]

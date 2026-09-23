@@ -8,6 +8,7 @@ pub mod crypto;
 pub mod dr_config;
 pub mod edge_config;
 pub mod error;
+pub mod forecasting;
 pub mod game;
 pub mod intelligence_config;
 pub mod java;
@@ -30,6 +31,13 @@ pub use audit::{AuditLedger, AuditLogEntry, AuditVerificationResult, DEFAULT_AUD
 pub use autoscale_config::{AutoscaleRegistry, ServerAutoscalePolicy};
 pub use crypto::{derive_key, ChaCha20, ChaCha20Poly1305, Poly1305};
 pub use dr_config::{DrFailoverReport, DrPlan, DrRecoveryResult, DrRunbook, DrSimulationResult};
+pub use forecasting::{
+    generate_forecast_sparkline, load_workload_samples, save_workload_samples, CostOptimizationModel,
+    CostOptimizationReport, DayOfWeekProfile, DiurnalHourProfile, ForecastPoint,
+    ForecastingRegistry, HourlyWorkloadSample, ResourceTier, ResourceThrottlingPlan,
+    SeasonalForecaster, WorkloadForecast, WorkloadPolicy, DEFAULT_RAM_GIB_HOURLY_COST,
+    DEFAULT_VCPU_HOURLY_COST,
+};
 pub use edge_config::{
     BackboneCondition, BackboneStatus, CrossRegionChatEnvelope, EdgeNode, EdgeRegistry,
     GeoRoutingPolicy, InventorySnapshot, ItemStackSnapshot, LatencyPlaybook, PlaybookPreset,
