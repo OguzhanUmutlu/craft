@@ -32,6 +32,7 @@ pub mod remote;
 pub mod restart;
 pub mod rm;
 pub mod run;
+pub mod script;
 pub mod service;
 pub mod software;
 pub mod stop;

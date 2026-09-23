@@ -279,6 +279,17 @@ impl Supervisor {
             .spawn()
             .map_err(|e| CraftError::Process(format!("Failed to spawn server process: {}", e)))?;
 
+        let s_name = server_entry
+            .as_ref()
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| {
+                canonical
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("server")
+                    .to_string()
+            });
+
         if let Some(pid) = child.id() {
             let _ = lock_guard.record_pid(pid);
             if let Some(ref cfg) = custom_config {
@@ -286,6 +297,22 @@ impl Supervisor {
                     warn!("Custom server on_post_start hook error: {}", e);
                 }
             }
+
+            let mut ctx = craft_scripting::HookContext::new(craft_scripting::LifecycleEvent::ServerStart);
+            ctx.server_name = Some(s_name);
+            ctx.server_path = Some(canonical.to_string_lossy().to_string());
+            ctx.pid = Some(pid);
+            if let Some(ref s) = server_entry {
+                ctx.port = s.port;
+                ctx.software = Some(s.software.clone());
+                ctx.version = Some(s.version.clone());
+            }
+            craft_scripting::HookBus::dispatch_async(
+                self.paths.clone(),
+                craft_scripting::LifecycleEvent::ServerStart,
+                ctx,
+                10,
+            );
         }
 
         let stdin = child.stdin.take();
@@ -405,6 +432,25 @@ impl Supervisor {
 
             if is_intentional {
                 info!("Server at '{}' stopped intentionally.", monitor_path.display());
+                let server_name = ServersRegistry::load(&sup.paths)
+                    .ok()
+                    .and_then(|reg| reg.find_by_path(&monitor_path).map(|s| s.name.clone()))
+                    .unwrap_or_else(|| {
+                        monitor_path
+                            .file_name()
+                            .and_then(|f| f.to_str())
+                            .unwrap_or("unknown")
+                            .to_string()
+                    });
+                let mut ctx = craft_scripting::HookContext::new(craft_scripting::LifecycleEvent::ServerStop);
+                ctx.server_name = Some(server_name);
+                ctx.server_path = Some(monitor_path.to_string_lossy().to_string());
+                craft_scripting::HookBus::dispatch_async(
+                    sup.paths.clone(),
+                    craft_scripting::LifecycleEvent::ServerStop,
+                    ctx,
+                    10,
+                );
                 return;
             }
 
@@ -454,6 +500,19 @@ impl Supervisor {
                 &sup.paths,
             );
 
+            // Dispatch ServerCrash hook
+            let mut crash_ctx = craft_scripting::HookContext::new(craft_scripting::LifecycleEvent::ServerCrash);
+            crash_ctx.server_name = Some(server_name.clone());
+            crash_ctx.server_path = Some(monitor_path.to_string_lossy().to_string());
+            crash_ctx.exit_code = Some(code);
+            crash_ctx.crashes = Some(crashes_count as u32);
+            craft_scripting::HookBus::dispatch_async(
+                sup.paths.clone(),
+                craft_scripting::LifecycleEvent::ServerCrash,
+                crash_ctx,
+                10,
+            );
+
             match decision {
                 crate::circuit_breaker::CircuitDecision::Trip { crashes, window_secs } => {
                     let msg = format!(
@@ -472,6 +531,18 @@ impl Supervisor {
                             window_secs,
                         ),
                         &sup.paths,
+                    );
+
+                    // Dispatch CircuitTrip hook
+                    let mut trip_ctx = craft_scripting::HookContext::new(craft_scripting::LifecycleEvent::CircuitTrip);
+                    trip_ctx.server_name = Some(server_name.clone());
+                    trip_ctx.server_path = Some(monitor_path.to_string_lossy().to_string());
+                    trip_ctx.crashes = Some(crashes as u32);
+                    craft_scripting::HookBus::dispatch_async(
+                        sup.paths.clone(),
+                        craft_scripting::LifecycleEvent::CircuitTrip,
+                        trip_ctx,
+                        10,
                     );
                 }
                 crate::circuit_breaker::CircuitDecision::Backoff(delay) => {

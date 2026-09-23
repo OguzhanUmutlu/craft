@@ -3,6 +3,7 @@ pub mod developer_tui;
 pub mod properties_tui;
 pub mod remote_tui;
 pub mod screen;
+pub mod scripts_tui;
 pub mod server_control;
 pub mod tools;
 pub mod trash_tui;
@@ -18,6 +19,7 @@ use craft_daemon::DaemonClient;
 
 pub use remote_tui::remote_servers_menu;
 pub use screen::*;
+pub use scripts_tui::*;
 pub use server_control::*;
 pub use tools::*;
 pub use trash_tui::*;

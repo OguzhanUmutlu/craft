@@ -1785,6 +1785,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             Ping,
             Daemon,
             Firewall,
+            ScriptsHooks,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1813,6 +1814,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::Firewall);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Lua Automation & Lifecycle Hooks")
+                .with_aliases(&["s", "script", "hooks"]),
+        );
+        actions.push(ToolItemAction::ScriptsHooks);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1839,6 +1847,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::Firewall => {
                     firewall_menu(paths).await?;
+                }
+                ToolItemAction::ScriptsHooks => {
+                    super::scripts_tui::scripts_hooks_menu(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {

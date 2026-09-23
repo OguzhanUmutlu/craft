@@ -24,6 +24,7 @@ cargo-timing.html
 !/tools/test_distribution.py
 !/tools/publish_ui.py
 !/tools/test_publication.py
+!/tools/test_scripting.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

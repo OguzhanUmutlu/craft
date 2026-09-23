@@ -22,6 +22,7 @@
 >      - [`analysis/software-providers/SKILL.md`](file:///D/Projects/craft/analysis/software-providers/SKILL.md): 21 server platforms, dynamic TOML engines, bytecode inspection, GC tuning.
 >      - [`analysis/uiux-tui/SKILL.md`](file:///D/Projects/craft/analysis/uiux-tui/SKILL.md): ModalX bounded box frames, `unicode-width` border alignment, readline `TextInput`, seek log reader.
 >      - [`analysis/security-safety/SKILL.md`](file:///D/Projects/craft/analysis/security-safety/SKILL.md): Process locking (`server.lock`), non-destructive `TrashManager`, self-healing `craft fix`.
+>      - [`analysis/scripting-automation/SKILL.md`](file:///D/Projects/craft/analysis/scripting-automation/SKILL.md): Embedded Lua 5.4 VM, execution deadline hooks, lifecycle hook bus, headless CLI automation.
 >    - Whenever code in a domain changes, immediately update the corresponding `SKILL.md` to preserve fresh, accurate technical depth.
 > 4. **ORGANIZED & NON-REDUNDANT DIRECTIVES**:
 >    - `GEMINI.md` is strictly an agent operational directives and workflow governance file.
@@ -74,6 +75,8 @@ Full multi-phased task breakdowns and 5–10 line technical specifications are t
 
 | Category | Phase | Focus Area | Status |
 | :--- | :--- | :--- | :--- |
+| **Current** | **Phase 18** | Real-Time Tick Profiling, Netty Packet Inspection & Latency Micro-Histograms (Tick duration percentiles, thread pool inspection, latency histograms) | **READY** |
+| **Done** | **Phase 17** | Embedded Lua Scripting Runtime Extensions, Headless Automation & Server Lifecycle Hooks (Headless CLI runner, event hook bus, stdlib expansion) | **COMPLETED** |
 | **Done** | **Phase 16** | Independent Publication Pipeline, Multi-Platform Release Automation & Unified Portal Sync (Independent publishing, GitHub workflow, portal sync) | **COMPLETED** |
 | **Done** | **Phase 15** | Independent Distribution Pipeline, Local Download Server & Standalone Installer Packaging (Separate distribution, Go server endpoints, installer) | **COMPLETED** |
 | **Done** | **Phase 14** | End-to-End DevTools Automation, Local Release Bundling & Visual Regression Verification (Release bundling, CDP test runner, visual audit) | **COMPLETED** |

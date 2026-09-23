@@ -529,6 +529,64 @@ pub enum Commands {
         #[command(subcommand)]
         action: EdgeCommands,
     },
+
+    /// Execute and manage Lua automation scripts and server lifecycle hooks
+    #[command(name = "script", alias = "scripts")]
+    Script {
+        #[command(subcommand)]
+        action: ScriptCommands,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum ScriptCommands {
+    /// Execute a standalone Lua automation script file
+    Run {
+        /// Path to the Lua script file (.lua)
+        path: PathBuf,
+        /// Contextual target server name (populates craft.server and loads server hooks)
+        #[arg(short = 's', long = "server")]
+        server: Option<String>,
+        /// Maximum execution timeout in seconds (default: 10)
+        #[arg(short = 't', long = "timeout", default_value = "10")]
+        timeout: u64,
+        /// Arguments passed to the script accessible via global 'arg' table
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Evaluate an inline Lua expression and print the formatted return value
+    Eval {
+        /// Lua code string to evaluate
+        code: String,
+        /// Contextual target server name
+        #[arg(short = 's', long = "server")]
+        server: Option<String>,
+        /// Maximum execution timeout in seconds (default: 10)
+        #[arg(short = 't', long = "timeout", default_value = "10")]
+        timeout: u64,
+    },
+    /// List registered global lifecycle hooks (~/.craft/hooks/) and per-server hooks
+    List {
+        /// Filter by target server name
+        #[arg(short = 's', long = "server")]
+        server: Option<String>,
+    },
+    /// Simulate a server lifecycle event to verify hook scripts without real downtime
+    Test {
+        /// Lifecycle event name (e.g. on_server_start, on_server_crash, on_backup_complete)
+        event: String,
+        /// Target server name for context
+        #[arg(short = 's', long = "server")]
+        server: Option<String>,
+    },
+    /// Scaffold a starter template for a global or per-server lifecycle hook script
+    New {
+        /// Hook or event name (e.g. on_server_crash, on_server_start, hooks)
+        hook_name: String,
+        /// Target server name (creates in server directory instead of global ~/.craft/hooks/)
+        #[arg(short = 's', long = "server")]
+        server: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]

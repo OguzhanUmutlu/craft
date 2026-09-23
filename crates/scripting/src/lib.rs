@@ -1,6 +1,7 @@
 pub mod config;
 pub mod definition;
 pub mod engine;
+pub mod hooks;
 pub mod package;
 pub mod properties_schema;
 pub mod starter;
@@ -8,6 +9,7 @@ pub mod starter;
 pub use config::{CustomRuntimeType, CustomServerConfig, CUSTOM_CONFIG_FILE};
 pub use definition::*;
 pub use engine::LuaEngine;
+pub use hooks::*;
 pub use mlua;
 pub use package::*;
 pub use properties_schema::*;
@@ -450,5 +452,122 @@ name = "Main"
         assert!(extracted_dir.join("scripts/assets.lua").exists());
         let bundle_reloaded = load_from_directory(&extracted_dir).expect("reload extracted");
         assert_eq!(bundle_reloaded.id(), "my-soft");
+    }
+
+    #[test]
+    fn test_craft_fs_extended() {
+        let dir = tempdir().expect("tempdir");
+        let src_file = dir.path().join("source.txt");
+        let dst_file = dir.path().join("copy.txt");
+        let src_path_str = src_file.to_string_lossy().replace('\\', "/");
+        let dst_path_str = dst_file.to_string_lossy().replace('\\', "/");
+
+        let engine = LuaEngine::new().expect("engine");
+        engine
+            .exec(&format!(
+                "craft.fs.write('{}', 'extended fs test')",
+                src_path_str
+            ))
+            .expect("write");
+
+        // size
+        let size: u64 = engine
+            .eval(&format!("return craft.fs.size('{}')", src_path_str))
+            .expect("size");
+        assert_eq!(size, 16);
+
+        // copy
+        let copied: bool = engine
+            .eval(&format!(
+                "return craft.fs.copy('{}', '{}')",
+                src_path_str, dst_path_str
+            ))
+            .expect("copy");
+        assert!(copied);
+        assert!(dst_file.exists());
+
+        // remove
+        let removed: bool = engine
+            .eval(&format!("return craft.fs.remove('{}')", dst_path_str))
+            .expect("remove");
+        assert!(removed);
+        assert!(!dst_file.exists());
+    }
+
+    #[test]
+    fn test_craft_servers_and_backup_api() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path().join(".craft");
+        std::fs::create_dir_all(&root).unwrap();
+        let paths = craft_core::CraftPaths::from_base(root);
+
+        let engine = LuaEngine::new_with_paths(&paths).expect("engine");
+        let servers: mlua::Table = engine
+            .eval("return craft.servers.list()")
+            .expect("servers list");
+        assert_eq!(servers.len().unwrap_or(0), 0);
+
+        let backups: mlua::Table = engine
+            .eval("return craft.backup.list('lobby')")
+            .expect("backup list");
+        assert_eq!(backups.len().unwrap_or(0), 0);
+    }
+
+    #[test]
+    fn test_craft_audit_api() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path().join(".craft");
+        std::fs::create_dir_all(&root).unwrap();
+        let paths = craft_core::CraftPaths::from_base(root);
+
+        let engine = LuaEngine::new_with_paths(&paths).expect("engine");
+        let ok: bool = engine
+            .eval("return craft.audit.log('server_start', 'admin', 'test audit')")
+            .expect("audit log");
+        assert!(ok);
+        assert!(paths.audit_file.exists());
+    }
+
+    #[test]
+    fn test_eval_timeout_guard() {
+        let engine = LuaEngine::new().expect("engine");
+        // Infinite loop should time out
+        let res: std::result::Result<i32, _> =
+            engine.eval_with_timeout("while true do end return 1", 1);
+        assert!(res.is_err());
+        let err_msg = res.err().unwrap().to_string();
+        assert!(err_msg.contains("timed out"));
+    }
+
+    #[test]
+    fn test_hook_bus_discovery_and_dispatch() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path().join(".craft");
+        std::fs::create_dir_all(&root).unwrap();
+        let paths = craft_core::CraftPaths::from_base(root);
+
+        let hooks_dir = HookBus::ensure_hooks_dir(&paths).expect("hooks dir");
+        let hook_file = hooks_dir.join("on_server_crash.lua");
+        std::fs::write(
+            &hook_file,
+            "craft.log('HOOK EXECUTED: crash on ' .. ctx.server_name)",
+        )
+        .expect("write hook");
+
+        let discovered = HookBus::discover_hooks(&paths, None);
+        let crash_hook = discovered
+            .iter()
+            .find(|h| h.name == "on_server_crash.lua")
+            .expect("found");
+        assert!(crash_hook.active);
+
+        let mut ctx = HookContext::new(LifecycleEvent::ServerCrash);
+        ctx.server_name = Some("lobby".to_string());
+        ctx.exit_code = Some(1);
+
+        let results = HookBus::dispatch(&paths, LifecycleEvent::ServerCrash, &ctx, 5);
+        assert_eq!(results.len(), 1);
+        assert!(results[0].success);
+        assert_eq!(results[0].hook_name, "on_server_crash.lua");
     }
 }

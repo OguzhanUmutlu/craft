@@ -1048,6 +1048,21 @@ async fn run_storage_monitor(paths: CraftPaths, threshold_bytes: u64, threshold_
                     );
                     crate::webhooks::WebhookDispatcher::dispatch(payload, &paths);
 
+                    let mut storage_ctx = craft_scripting::HookContext::new(craft_scripting::LifecycleEvent::StorageLow);
+                    storage_ctx.free_bytes = Some(matched_avail);
+                    storage_ctx.total_bytes = Some(matched_total);
+                    storage_ctx.details = Some(format!(
+                        "Disk '{}' has only {:.1}% free space remaining",
+                        mount.display(),
+                        percent_free
+                    ));
+                    craft_scripting::HookBus::dispatch_async(
+                        paths.clone(),
+                        craft_scripting::LifecycleEvent::StorageLow,
+                        storage_ctx,
+                        10,
+                    );
+
                     last_alert = Some(tokio::time::Instant::now());
                 }
             }

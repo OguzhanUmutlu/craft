@@ -330,6 +330,16 @@ impl DaemonScheduler {
         let format = BackupFormat::from_str_opt(policy.compression_format())
             .unwrap_or(BackupFormat::TarZstd);
 
+        let mut start_ctx = craft_scripting::HookContext::new(craft_scripting::LifecycleEvent::BackupStart);
+        start_ctx.server_name = Some(server_name.clone());
+        start_ctx.server_path = Some(server_cfg.path.to_string_lossy().to_string());
+        craft_scripting::HookBus::dispatch_async(
+            paths.clone(),
+            craft_scripting::LifecycleEvent::BackupStart,
+            start_ctx,
+            10,
+        );
+
         let backup_result = engine
             .create_backup(
                 &server_name,
@@ -342,15 +352,27 @@ impl DaemonScheduler {
 
         match backup_result {
             Ok(archive_path) => {
-                let size_mb = std::fs::metadata(&archive_path)
-                    .map(|m| (m.len() as f64) / (1024.0 * 1024.0))
-                    .unwrap_or(0.0);
+                let meta = std::fs::metadata(&archive_path).ok();
+                let size_bytes = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+                let size_mb = (size_bytes as f64) / (1024.0 * 1024.0);
 
                 info!(
                     "[OK] Scheduler: Backup created for '{}': {} ({:.2} MB)",
                     server_name,
                     archive_path.display(),
                     size_mb
+                );
+
+                let mut comp_ctx = craft_scripting::HookContext::new(craft_scripting::LifecycleEvent::BackupComplete);
+                comp_ctx.server_name = Some(server_name.clone());
+                comp_ctx.server_path = Some(server_cfg.path.to_string_lossy().to_string());
+                comp_ctx.backup_file = Some(archive_path.to_string_lossy().to_string());
+                comp_ctx.backup_bytes = Some(size_bytes);
+                craft_scripting::HookBus::dispatch_async(
+                    paths.clone(),
+                    craft_scripting::LifecycleEvent::BackupComplete,
+                    comp_ctx,
+                    10,
                 );
 
                 // Enforce local retention

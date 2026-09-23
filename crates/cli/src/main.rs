@@ -475,6 +475,9 @@ async fn main() {
         Some(Commands::Edge { action }) => {
             commands::edge::handle_edge(action, &paths).await
         }
+        Some(Commands::Script { action }) => {
+            commands::script::handle_script(&paths, &action).await
+        }
     };
 
     if let Err(e) = result {
