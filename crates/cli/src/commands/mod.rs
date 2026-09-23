@@ -30,6 +30,7 @@ pub mod optimize;
 pub mod plugin;
 pub mod profile;
 pub mod prop;
+pub mod quota;
 pub mod raft;
 pub mod remote;
 pub mod restart;

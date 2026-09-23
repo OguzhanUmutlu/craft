@@ -86,3 +86,44 @@ Every administrative invocation across the CLI, daemon REST API, and WebSocket c
   `AuditLedger::verify_chain` parses the log line-by-line, recalculates SHA-256 digests and validates HMAC signatures. Any line deletion, insertion, or in-place edit immediately breaks the hash chain, pinpointing the exact corrupted index.
 - **Lock-Guarded Appends**:
   Log writing acquires an exclusive file lock (`~/.craft/locks/audit.lock`) before reading the last recorded hash and appending new serializations.
+
+---
+
+## 6. Linux Cgroups v2 Resource Isolation, Dynamic Throttling & Fair-Share Scheduling
+
+Craft provides kernel-native Linux cgroups v2 resource isolation, hard CPU/memory quotas, and fair-share scheduling across multi-tenant deployments without Docker runtime overhead.
+
+```
+[ Active Process (PID) ]
+             │
+             ▼
+[ /sys/fs/cgroup/craft/<server_name>/ ]
+  ├── memory.max (hard OOM kill boundary)
+  ├── memory.high (soft throttle threshold & reclaim)
+  ├── cpu.max (quota and period: "$QUOTA $PERIOD")
+  ├── cpu.weight (CFS fair-share scheduling weight 1..=10000)
+  ├── io.weight (BFQ / blk-iocost I/O scheduling weight 1..=10000)
+  ├── pids.max (fork bomb mitigation)
+  └── cgroup.procs (active task assignment)
+```
+
+### Invariants & Architectural Capabilities:
+1. **Resilient Fallback Mode (`CgroupV2Driver`)**:
+   - Tests availability of `/sys/fs/cgroup/cgroup.controllers`. If permitted, creates `/sys/fs/cgroup/craft/<server>`.
+   - On unprivileged containers, macOS, Windows, or testing sandboxes, falls back transparently to userspace mock hierarchy under `~/.craft/cgroups/mock_sys_fs/`, ensuring 100% of all quota validations, budget calculations, and CLI commands function without permissions errors.
+2. **Tenant Quota Budgeting (`QuotaRegistry`)**:
+   - Stored in `~/.craft/quotas/quotas.toml` with `quotas.lock` advisory locking (`fs2`).
+   - Tracks tenant limits: `max_servers`, `max_memory_bytes`, `max_cpu_percent`, `max_storage_bytes`.
+   - Strictly enforces budget allocation; rejects over-committing server allocations that exceed tenant limits unless `allow_burst` is enabled.
+3. **Priority Tiers & Fair-Share Rebalancing**:
+   - Four priority tiers:
+     - `GatewayProxy`: CPU weight 500, IO weight 500 (guaranteed low latency for Velocity, BungeeCord, HAProxy).
+     - `StandardWorld`: CPU weight 100, IO weight 100 (standard CFS slice for game servers).
+     - `BackgroundWorker`: CPU weight 50, IO weight 50 (batch tasks like Dynmap, world pre-gen).
+     - `BatchTask`: CPU weight 20, IO weight 20 (backup compression, snapshot export).
+   - In-process `QuotaService::enforce_fair_share` re-allocates weights dynamically during host saturation.
+4. **Hot-Reloadable Limits**:
+   - Cgroups v2 limits can be modified on running servers instantly via `craft quota set <server> --cpu <percent> --memory <mb>` without restarting the game server process.
+5. **Lifecycle Hooks & Auditing**:
+   - `LifecycleEvent::ResourceQuotaExceeded`, `CgroupThrottled`, `FairShareAdjusted` fire into the embedded Lua hook bus with live metrics context (`memory_current_bytes`, `cpu_throttled_usec`, `throttle_ratio`, `tenant_id`).
+

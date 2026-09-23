@@ -299,7 +299,7 @@ impl Supervisor {
             }
 
             let mut ctx = craft_scripting::HookContext::new(craft_scripting::LifecycleEvent::ServerStart);
-            ctx.server_name = Some(s_name);
+            ctx.server_name = Some(s_name.clone());
             ctx.server_path = Some(canonical.to_string_lossy().to_string());
             ctx.pid = Some(pid);
             if let Some(ref s) = server_entry {
@@ -313,6 +313,7 @@ impl Supervisor {
                 ctx,
                 10,
             );
+            let _ = crate::quota_service::QuotaService::on_server_started(&self.paths, &s_name, pid);
         }
 
         let stdin = child.stdin.take();
@@ -442,6 +443,7 @@ impl Supervisor {
                             .unwrap_or("unknown")
                             .to_string()
                     });
+                let _ = crate::quota_service::QuotaService::on_server_stopped(&sup.paths, &server_name);
                 let mut ctx = craft_scripting::HookContext::new(craft_scripting::LifecycleEvent::ServerStop);
                 ctx.server_name = Some(server_name);
                 ctx.server_path = Some(monitor_path.to_string_lossy().to_string());
@@ -467,6 +469,7 @@ impl Supervisor {
                         .unwrap_or("unknown")
                         .to_string()
                 });
+            let _ = crate::quota_service::QuotaService::on_server_stopped(&sup.paths, &server_name);
 
             let should_auto_restart = {
                 if let Ok(reg) = ServersRegistry::load(&sup.paths) {

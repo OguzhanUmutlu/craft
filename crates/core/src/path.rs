@@ -54,6 +54,10 @@ pub struct CraftPaths {
     pub raft_wal_dir: PathBuf,
     pub raft_snapshots_dir: PathBuf,
     pub raft_lock: PathBuf,
+    pub quotas_dir: PathBuf,
+    pub quotas_file: PathBuf,
+    pub quotas_lock: PathBuf,
+    pub cgroups_dir: PathBuf,
 }
 
 impl CraftPaths {
@@ -107,6 +111,10 @@ impl CraftPaths {
         let raft_wal_dir = raft_dir.join("wal");
         let raft_snapshots_dir = raft_dir.join("snapshots");
         let raft_lock = locks_dir.join("raft.lock");
+        let quotas_dir = home.join("quotas");
+        let quotas_file = quotas_dir.join("quotas.toml");
+        let quotas_lock = locks_dir.join("quotas.lock");
+        let cgroups_dir = home.join("cgroups");
 
         Self {
             home,
@@ -158,6 +166,10 @@ impl CraftPaths {
             raft_wal_dir,
             raft_snapshots_dir,
             raft_lock,
+            quotas_dir,
+            quotas_file,
+            quotas_lock,
+            cgroups_dir,
         }
     }
 
@@ -198,6 +210,8 @@ impl CraftPaths {
         let raft_dir = home.join("raft");
         let raft_wal_dir = raft_dir.join("wal");
         let raft_snapshots_dir = raft_dir.join("snapshots");
+        let quotas_dir = home.join("quotas");
+        let cgroups_dir = home.join("cgroups");
 
         // Ensure all primary directories exist
         for dir in [
@@ -225,6 +239,8 @@ impl CraftPaths {
             &raft_dir,
             &raft_wal_dir,
             &raft_snapshots_dir,
+            &quotas_dir,
+            &cgroups_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -256,6 +272,8 @@ impl CraftPaths {
         let sdn_lock = locks_dir.join("sdn.lock");
         let raft_state_file = raft_dir.join("state.toml");
         let raft_lock = locks_dir.join("raft.lock");
+        let quotas_file = quotas_dir.join("quotas.toml");
+        let quotas_lock = locks_dir.join("quotas.lock");
 
         Ok(Self {
             home,
@@ -307,6 +325,10 @@ impl CraftPaths {
             raft_wal_dir,
             raft_snapshots_dir,
             raft_lock,
+            quotas_dir,
+            quotas_file,
+            quotas_lock,
+            cgroups_dir,
         })
     }
 

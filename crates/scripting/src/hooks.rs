@@ -38,6 +38,9 @@ pub enum LifecycleEvent {
     RaftLeaderElected,
     RaftSplitBrainDetected,
     RaftLockContended,
+    ResourceQuotaExceeded,
+    CgroupThrottled,
+    FairShareAdjusted,
 }
 
 impl LifecycleEvent {
@@ -70,6 +73,9 @@ impl LifecycleEvent {
             Self::RaftLeaderElected => "on_raft_leader_elected",
             Self::RaftSplitBrainDetected => "on_raft_split_brain_detected",
             Self::RaftLockContended => "on_raft_lock_contended",
+            Self::ResourceQuotaExceeded => "on_resource_quota_exceeded",
+            Self::CgroupThrottled => "on_cgroup_throttled",
+            Self::FairShareAdjusted => "on_fair_share_adjusted",
         }
     }
 
@@ -103,6 +109,9 @@ impl LifecycleEvent {
             "on_raft_leader_elected" | "raft_leader_elected" | "leader_elected" => Some(Self::RaftLeaderElected),
             "on_raft_split_brain_detected" | "raft_split_brain_detected" | "split_brain_detected" | "split_brain" => Some(Self::RaftSplitBrainDetected),
             "on_raft_lock_contended" | "raft_lock_contended" | "lock_contended" => Some(Self::RaftLockContended),
+            "on_resource_quota_exceeded" | "resource_quota_exceeded" | "quota_exceeded" => Some(Self::ResourceQuotaExceeded),
+            "on_cgroup_throttled" | "cgroup_throttled" | "throttled" => Some(Self::CgroupThrottled),
+            "on_fair_share_adjusted" | "fair_share_adjusted" | "fair_share" => Some(Self::FairShareAdjusted),
             _ => None,
         }
     }
@@ -136,6 +145,9 @@ impl LifecycleEvent {
             Self::RaftLeaderElected,
             Self::RaftSplitBrainDetected,
             Self::RaftLockContended,
+            Self::ResourceQuotaExceeded,
+            Self::CgroupThrottled,
+            Self::FairShareAdjusted,
         ]
     }
 }
@@ -222,6 +234,18 @@ pub struct HookContext {
     pub lock_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fencing_token: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cgroup_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_current_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_limit_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_throttled_usec: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub throttle_ratio: Option<f64>,
 }
 
 impl HookContext {

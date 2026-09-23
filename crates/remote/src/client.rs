@@ -831,6 +831,50 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    pub fn get_remote_server_quota(&self, server: &str) -> Result<String> {
+        let cmd = format!("craft quota get {} --json", server);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote quota query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn set_remote_server_quota(
+        &self,
+        server: &str,
+        cpu: Option<u32>,
+        memory_mb: Option<u64>,
+        priority: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!("craft quota set {} --json", server);
+        if let Some(c) = cpu {
+            cmd.push_str(&format!(" --cpu {}", c));
+        }
+        if let Some(m) = memory_mb {
+            cmd.push_str(&format!(" --memory {}", m));
+        }
+        if let Some(p) = priority {
+            cmd.push_str(&format!(" --priority {}", p));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote quota update failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn list_remote_quotas(&self) -> Result<String> {
+        let (code, stdout, stderr) = self.session.exec("craft quota list --json")?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote quota listing failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

@@ -850,6 +850,71 @@ where
                     }
                 }
             }
+            IpcRequest::GetServerQuota { server } => {
+                match crate::quota_service::QuotaService::get_server_quota(supervisor.paths(), &server) {
+                    Ok(summary) => {
+                        write_frame(&mut stream, &IpcResponse::ServerQuotaResult { summary }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::SetServerQuota { limits } => {
+                match crate::quota_service::QuotaService::set_server_quota(supervisor.paths(), limits) {
+                    Ok(summary) => {
+                        write_frame(&mut stream, &IpcResponse::ServerQuotaResult { summary }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::GetTenantQuota { tenant } => {
+                match crate::quota_service::QuotaService::get_tenant_quota(supervisor.paths(), &tenant) {
+                    Ok((quota, allocated_memory_mb, allocated_cpu_percent, server_count)) => {
+                        write_frame(&mut stream, &IpcResponse::TenantQuotaResult {
+                            quota,
+                            allocated_memory_mb,
+                            allocated_cpu_percent,
+                            server_count,
+                        }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::SetTenantQuota { quota } => {
+                match crate::quota_service::QuotaService::set_tenant_quota(supervisor.paths(), quota) {
+                    Ok(()) => {
+                        write_frame(&mut stream, &IpcResponse::Success { message: "Tenant quota updated successfully".to_string() }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::ListQuotaUsage { tenant } => {
+                match crate::quota_service::QuotaService::list_quota_usage(supervisor.paths(), tenant.as_deref()) {
+                    Ok(items) => {
+                        write_frame(&mut stream, &IpcResponse::QuotaUsageListResult { items }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::EnforceFairShareNow => {
+                match crate::quota_service::QuotaService::enforce_fair_share(supervisor.paths()) {
+                    Ok((rebalanced_count, message)) => {
+                        write_frame(&mut stream, &IpcResponse::FairShareEnforcedResult { rebalanced_count, message }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -1689,6 +1754,74 @@ impl DaemonClient {
     ) -> Result<Vec<craft_core::RaftLogEntry>> {
         match self.request(IpcRequest::GetRaftLogs { limit }).await? {
             IpcResponse::RaftLogsResult { entries } => Ok(entries),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_server_quota(
+        &mut self,
+        server: String,
+    ) -> Result<craft_core::QuotaUsageSummary> {
+        match self.request(IpcRequest::GetServerQuota { server }).await? {
+            IpcResponse::ServerQuotaResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_server_quota(
+        &mut self,
+        limits: craft_core::ServerResourceLimit,
+    ) -> Result<craft_core::QuotaUsageSummary> {
+        match self.request(IpcRequest::SetServerQuota { limits }).await? {
+            IpcResponse::ServerQuotaResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_tenant_quota(
+        &mut self,
+        tenant: String,
+    ) -> Result<(craft_core::TenantQuota, u64, u32, usize)> {
+        match self.request(IpcRequest::GetTenantQuota { tenant }).await? {
+            IpcResponse::TenantQuotaResult {
+                quota,
+                allocated_memory_mb,
+                allocated_cpu_percent,
+                server_count,
+            } => Ok((quota, allocated_memory_mb, allocated_cpu_percent, server_count)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_tenant_quota(&mut self, quota: craft_core::TenantQuota) -> Result<()> {
+        match self.request(IpcRequest::SetTenantQuota { quota }).await? {
+            IpcResponse::Success { .. } => Ok(()),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_quota_usage(
+        &mut self,
+        tenant: Option<String>,
+    ) -> Result<Vec<craft_core::QuotaUsageSummary>> {
+        match self.request(IpcRequest::ListQuotaUsage { tenant }).await? {
+            IpcResponse::QuotaUsageListResult { items } => Ok(items),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn enforce_fair_share_now(&mut self) -> Result<(usize, String)> {
+        match self.request(IpcRequest::EnforceFairShareNow).await? {
+            IpcResponse::FairShareEnforcedResult {
+                rebalanced_count,
+                message,
+            } => Ok((rebalanced_count, message)),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

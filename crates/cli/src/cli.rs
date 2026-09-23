@@ -572,6 +572,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: RaftCommands,
     },
+
+    /// Linux cgroups v2 resource quotas, CPU/memory throttling, and fair-share scheduling
+    #[command(name = "quota", alias = "cgroup", alias = "limits")]
+    Quota {
+        #[command(subcommand)]
+        action: QuotaCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1171,6 +1178,111 @@ pub enum RaftCommands {
         /// Maximum number of log entries to display
         #[arg(short, long, default_value_t = 20)]
         limit: usize,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum QuotaCommands {
+    /// List all server resource quotas, active cgroups, and throttling telemetry
+    List {
+        /// Filter by tenant ID
+        #[arg(short, long)]
+        tenant: Option<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect resource limits and cgroups v2 statistics for a specific server
+    Get {
+        /// Target server name or path
+        server: String,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Set or update resource quota limits for a server (hot-applied to cgroups v2)
+    Set {
+        /// Target server name or path
+        server: String,
+        /// Maximum CPU percentage (e.g. 150 = 1.5 cores, mapped to cpu.max)
+        #[arg(long)]
+        cpu: Option<u32>,
+        /// Hard memory limit in MB (mapped to memory.max)
+        #[arg(long)]
+        memory: Option<u64>,
+        /// Soft memory throttle threshold in MB (mapped to memory.high)
+        #[arg(long)]
+        memory_high: Option<u64>,
+        /// CFS / cgroups v2 fair-share CPU weight (1 to 10000, mapped to cpu.weight)
+        #[arg(long)]
+        cpu_weight: Option<u32>,
+        /// Fair-share I/O weight (1 to 10000, mapped to io.weight)
+        #[arg(long)]
+        io_weight: Option<u32>,
+        /// Maximum tasks/threads limit (mapped to pids.max)
+        #[arg(long)]
+        pids_max: Option<u32>,
+        /// Priority tier (gateway, standard, worker, batch)
+        #[arg(long)]
+        priority: Option<String>,
+        /// Assign to tenant ID
+        #[arg(long)]
+        tenant: Option<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Manage tenant-level resource quota budgets
+    Tenant {
+        #[command(subcommand)]
+        action: TenantQuotaCommands,
+    },
+    /// Enforce fair-share scheduling arbitration across active cgroups
+    Balance {
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum TenantQuotaCommands {
+    /// List all tenant quota allocations and aggregate utilization
+    List {
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Get quota details and utilization for a specific tenant
+    Get {
+        /// Tenant ID
+        tenant: String,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Set or update tenant quota allocations
+    Set {
+        /// Tenant ID
+        tenant: String,
+        /// Maximum allowed server instances for this tenant
+        #[arg(long, alias = "servers")]
+        max_servers: Option<usize>,
+        /// Aggregate memory limit in MB across all tenant servers
+        #[arg(long, alias = "memory")]
+        max_memory: Option<u64>,
+        /// Aggregate CPU quota percentage across all tenant servers
+        #[arg(long, alias = "cpu")]
+        max_cpu: Option<u32>,
+        /// Aggregate storage limit in GB across all tenant servers
+        #[arg(long)]
+        max_storage_gb: Option<u64>,
+        /// Allow CPU bursting beyond base quota
+        #[arg(long)]
+        allow_burst: Option<bool>,
         /// Emit machine-readable JSON output
         #[arg(long)]
         json: bool,
@@ -3101,6 +3213,48 @@ mod tests {
                 assert!(!json);
             }
             _ => panic!("Expected Raft Logs command"),
+        }
+    }
+
+    #[test]
+    fn test_quota_cli_parsing() {
+        // List command with alias cgroup
+        let cli_list = Cli::try_parse_from(["craft", "cgroup", "list", "--tenant", "tenant-1", "--json"]).unwrap();
+        match cli_list.command {
+            Some(Commands::Quota {
+                action: QuotaCommands::List { tenant, json },
+            }) => {
+                assert_eq!(tenant, Some("tenant-1".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Quota List command"),
+        }
+
+        // Set command
+        let cli_set = Cli::try_parse_from([
+            "craft", "quota", "set", "lobby-server", "--cpu", "150", "--memory", "2048", "--priority", "gateway",
+        ]).unwrap();
+        match cli_set.command {
+            Some(Commands::Quota {
+                action: QuotaCommands::Set { server, cpu, memory, priority, .. },
+            }) => {
+                assert_eq!(server, "lobby-server");
+                assert_eq!(cpu, Some(150));
+                assert_eq!(memory, Some(2048));
+                assert_eq!(priority, Some("gateway".to_string()));
+            }
+            _ => panic!("Expected Quota Set command"),
+        }
+
+        // Balance command
+        let cli_balance = Cli::try_parse_from(["craft", "limits", "balance", "--json"]).unwrap();
+        match cli_balance.command {
+            Some(Commands::Quota {
+                action: QuotaCommands::Balance { json },
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Quota Balance command"),
         }
     }
 }

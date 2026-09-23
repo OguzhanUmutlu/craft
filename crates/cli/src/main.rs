@@ -490,6 +490,9 @@ async fn main() {
         Some(Commands::Raft { action }) => {
             commands::raft::handle_raft(action, &paths).await
         }
+        Some(Commands::Quota { action }) => {
+            commands::quota::handle_quota(action, &paths).await
+        }
     };
 
     if let Err(e) = result {
@@ -556,6 +559,7 @@ fn print_banner() {
     println!("  profile <tick|packets|histogram>  Real-time tick profiling, Netty inspection & histograms");
     println!("  sdn <status|up|down|policy|peers> Zero-trust mesh & eBPF microsegmentation");
     println!("  raft <status|propose|lock|logs>   Distributed Raft consensus & dynamic arbitration");
+    println!("  quota <list|get|set|tenant|balance> Cgroups v2 resource quotas & fair-share scheduling");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

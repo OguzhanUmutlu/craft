@@ -27,11 +27,16 @@ pub mod rollout;
 pub mod sdn;
 pub mod timeseries;
 pub mod trash;
+pub mod cgroups;
 pub mod version;
 pub mod webhook_config;
 
 pub use audit::{AuditLedger, AuditLogEntry, AuditVerificationResult, DEFAULT_AUDIT_SECRET, GENESIS_HASH};
 pub use autoscale_config::{AutoscaleRegistry, ServerAutoscalePolicy};
+pub use cgroups::{
+    CgroupStatSnapshot, CgroupV2Driver, QuotaRegistry, QuotaUsageSummary, ServerPriority,
+    ServerResourceLimit, TenantQuota,
+};
 pub use crypto::{derive_key, ChaCha20, ChaCha20Poly1305, Poly1305};
 pub use dr_config::{DrFailoverReport, DrPlan, DrRecoveryResult, DrRunbook, DrSimulationResult};
 pub use forecasting::{

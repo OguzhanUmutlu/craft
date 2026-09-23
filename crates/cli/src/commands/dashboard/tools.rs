@@ -1793,6 +1793,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             ModpackCI,
             ZeroTrustMesh,
             RaftConsensus,
+            ResourceQuotas,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1877,6 +1878,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::RaftConsensus);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Resource Quotas & Cgroups v2 Scheduling")
+                .with_aliases(&["quota", "cgroup", "limits", "fairshare"]),
+        );
+        actions.push(ToolItemAction::ResourceQuotas);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1927,6 +1935,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::RaftConsensus => {
                     raft_consensus_tui(paths).await?;
+                }
+                ToolItemAction::ResourceQuotas => {
+                    resource_quotas_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2608,6 +2619,119 @@ pub async fn raft_consensus_tui(paths: &CraftPaths) -> Result<()> {
     );
 
     show_modal_message("RAFT CONSENSUS & CLUSTER ARBITRATION", &lines, false)?;
+    Ok(())
+}
+
+pub async fn resource_quotas_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Resource Quotas");
+
+    let usage = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        client
+            .list_quota_usage(None)
+            .await
+            .unwrap_or_else(|_| craft_daemon::QuotaService::list_quota_usage(paths, None).unwrap_or_default())
+    } else {
+        craft_daemon::QuotaService::list_quota_usage(paths, None)?
+    };
+
+    let driver = craft_core::CgroupV2Driver::new(paths);
+    let mut lines = Vec::new();
+
+    lines.push(format!(
+        "Host Cgroup Root:   {}",
+        driver.cgroup_root().display().to_string().white().bold()
+    ));
+    lines.push(format!(
+        "Execution Driver:   {}",
+        if driver.is_mock() {
+            "[MOCK / USERSPACE EMULATION]".yellow().to_string()
+        } else {
+            "[KERNEL CGROUPS V2 NATIVE]".green().bold().to_string()
+        }
+    ));
+    lines.push(format!(
+        "Active Cgroups:     {}",
+        driver.list_active_cgroups().len().to_string().cyan().bold()
+    ));
+    lines.push(format!(
+        "Managed Servers:    {}",
+        usage.len().to_string().white().bold()
+    ));
+    lines.push("".to_string());
+
+    if usage.is_empty() {
+        lines.push("[INFO] No server resource quotas configured yet.".dimmed().to_string());
+        lines.push("Run 'craft quota set <server> --cpu 150 --memory 2048' to enforce quotas.".dimmed().to_string());
+    } else {
+        lines.push("[SERVER RESOURCE ALLOCATIONS & UTILIZATION]".cyan().bold().to_string());
+        for item in usage.iter().take(6) {
+            let cpu_str = match item.limits.cpu_max_quota {
+                Some(q) => format!("{}%", q),
+                None => "unlimited".to_string(),
+            };
+            let mem_str = match item.limits.memory_max_bytes {
+                Some(m) => craft_core::format_size(m),
+                None => "unlimited".to_string(),
+            };
+            let cur_mem = if item.stats.memory_current_bytes > 0 {
+                craft_core::format_size(item.stats.memory_current_bytes)
+            } else {
+                "0 B".to_string()
+            };
+            let status_badge = match item.health_indicator.as_str() {
+                "[PRISTINE]" => "[PRISTINE]".green().to_string(),
+                "[NORMAL]" => "[NORMAL]".white().to_string(),
+                "[THROTTLED]" => "[THROTTLED]".yellow().bold().to_string(),
+                "[OOM_RISK]" => "[OOM_RISK]".red().bold().to_string(),
+                _ => item.health_indicator.clone(),
+            };
+
+            lines.push(format!(
+                " * {} ({}) | CPU: {} (wgt {}) | Mem: {}/{} | {}",
+                item.server_name.white().bold(),
+                item.limits.priority.name().dimmed(),
+                cpu_str,
+                item.limits.cpu_weight,
+                cur_mem,
+                mem_str,
+                status_badge
+            ));
+        }
+        if usage.len() > 6 {
+            lines.push(format!("   ... and {} more servers", usage.len() - 6).dimmed().to_string());
+        }
+    }
+
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push(
+        "  craft quota list                 List all active server cgroups and utilization"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft quota get <server>         Inspect detailed CPU/memory/IO metrics"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft quota set <server> ...     Hot-apply CPU, memory limits and priority"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft quota tenant list|set      Manage tenant aggregate resource budgets"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft quota balance              Enforce fair-share scheduling arbitration"
+            .green()
+            .to_string(),
+    );
+
+    show_modal_message("RESOURCE QUOTAS & CGROUPS V2 SCHEDULING", &lines, false)?;
     Ok(())
 }
 

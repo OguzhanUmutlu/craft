@@ -94,6 +94,22 @@ pub enum IpcRequest {
     GetRaftLogs {
         limit: Option<usize>,
     },
+    GetServerQuota {
+        server: String,
+    },
+    SetServerQuota {
+        limits: craft_core::ServerResourceLimit,
+    },
+    GetTenantQuota {
+        tenant: String,
+    },
+    SetTenantQuota {
+        quota: craft_core::TenantQuota,
+    },
+    ListQuotaUsage {
+        tenant: Option<String>,
+    },
+    EnforceFairShareNow,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -174,6 +190,22 @@ pub enum IpcResponse {
     },
     RaftLogsResult {
         entries: Vec<craft_core::RaftLogEntry>,
+    },
+    ServerQuotaResult {
+        summary: craft_core::QuotaUsageSummary,
+    },
+    TenantQuotaResult {
+        quota: craft_core::TenantQuota,
+        allocated_memory_mb: u64,
+        allocated_cpu_percent: u32,
+        server_count: usize,
+    },
+    QuotaUsageListResult {
+        items: Vec<craft_core::QuotaUsageSummary>,
+    },
+    FairShareEnforcedResult {
+        rebalanced_count: usize,
+        message: String,
     },
     Error { error: String },
 }
