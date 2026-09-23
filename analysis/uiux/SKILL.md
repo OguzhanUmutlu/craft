@@ -251,3 +251,26 @@ The application includes a standalone Python automation controller (`tools/devto
    - Evaluates React state and DOM nodes via `Runtime.evaluate`.
    - Streams browser console warnings and exceptions to identify silent React re-render loops or syntax issues.
    - Collects layout thrashing and paint metrics via `Performance.getMetrics`.
+
+---
+
+## 9. Interactive Parity Subsystems (Phase 13)
+
+Craft Desktop Studio expands into full CLI parity through 5 specialized interactive components:
+1. **Server Creation Wizard (`CreateServerModal.tsx`)**:
+   - 4-step progressive modal dynamically bound to `craft_providers::get_all_softwares()`.
+   - Provisions server directories and dependencies via `craft_cli::commands::new::handle_new` with automated EULA and JVM arguments.
+2. **Plugin Store & Lifecycle Hub (`PluginManagerView.tsx`)**:
+   - Tabbed view combining bytecode manifest inspection (`craft_plugins::inspect_jar_manifest`) for installed jars with online Modrinth API discovery.
+   - Non-destructive uninstallation routing through `TrashManager::trash_path`.
+3. **Backup & Disaster Recovery Hub (`BackupManagerView.tsx`)**:
+   - Archive management for `.tar.zst` and `.tar.gz` snapshots via `craft_backup::BackupEngine`.
+   - Atomic hot snapshots and strict running-server restore locks.
+4. **Configuration Studio (`ConfigEditorView.tsx`)**:
+   - Visual key-value forms for `server.properties` with type-safe controls (booleans, integers, enums) and raw text editor with line numbers.
+   - JVM tuning presets: Conservative (50%), Balanced (70%), Aggressive (82%) with Generational ZGC and Aikar G1GC flags.
+5. **Universal CLI Command Runner (`CliRunnerModal.tsx`)**:
+   - Built-in terminal emulator modal capable of executing arbitrary Craft CLI commands (`craft fix`, `craft optimize`, `craft audit verify`) with stdout/stderr capture and clipboard export.
+6. **Real-Time SLP Telemetry**:
+   - Socket polling via `craft_net::ping_server_auto` hydrates running server cards with live player counts, latency (ms), and dynamic MOTD with a 200ms non-blocking timeout.
+

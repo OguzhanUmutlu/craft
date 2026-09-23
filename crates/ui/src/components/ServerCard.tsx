@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, RotateCw, Terminal, Activity, Archive } from 'lucide-react';
+import { Play, Square, RotateCw, Terminal, Activity, Archive, Package, Sliders } from 'lucide-react';
 import { ServerOverview } from '../types';
 
 interface ServerCardProps {
@@ -9,6 +9,9 @@ interface ServerCardProps {
   onRestart: (name: string) => void;
   onOpenConsole: (name: string) => void;
   onOpenDiagnostics: (name: string) => void;
+  onOpenPlugins?: (name: string) => void;
+  onOpenBackups?: (name: string) => void;
+  onOpenConfig?: (name: string) => void;
 }
 
 export const ServerCard: React.FC<ServerCardProps> = ({
@@ -18,6 +21,9 @@ export const ServerCard: React.FC<ServerCardProps> = ({
   onRestart,
   onOpenConsole,
   onOpenDiagnostics,
+  onOpenPlugins,
+  onOpenBackups,
+  onOpenConfig,
 }) => {
   const isOnline = server.running;
 
@@ -90,12 +96,26 @@ export const ServerCard: React.FC<ServerCardProps> = ({
           <Terminal size={12} /> Console
         </button>
 
+        {onOpenPlugins && (
+          <button className="btn" style={{ padding: '4px 8px' }} onClick={() => onOpenPlugins(server.name)} title="Plugins">
+            <Package size={12} />
+          </button>
+        )}
+
+        {onOpenBackups && (
+          <button className="btn" style={{ padding: '4px 8px' }} onClick={() => onOpenBackups(server.name)} title="Backups">
+            <Archive size={12} />
+          </button>
+        )}
+
+        {onOpenConfig && (
+          <button className="btn" style={{ padding: '4px 8px' }} onClick={() => onOpenConfig(server.name)} title="Configuration">
+            <Sliders size={12} />
+          </button>
+        )}
+
         <button className="btn" style={{ padding: '4px 8px' }} onClick={() => onOpenDiagnostics(server.name)} title="JFR Diagnostics">
           <Activity size={12} />
-        </button>
-
-        <button className="btn" style={{ padding: '4px 8px' }} title="Hot Backup">
-          <Archive size={12} />
         </button>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, Terminal, Activity, Globe, Database, Shield } from 'lucide-react';
+import { Layers, Terminal, Activity, Package, Archive, Sliders, Globe, Database, Shield } from 'lucide-react';
 import { ViewTab } from '../types';
 
 interface NavRailProps {
@@ -12,6 +12,9 @@ export const NavRail: React.FC<NavRailProps> = ({ activeTab, onTabChange }) => {
     { id: 'fleet', label: 'Fleet Overview', icon: <Layers size={18} /> },
     { id: 'console', label: 'Live Console', icon: <Terminal size={18} /> },
     { id: 'diagnostics', label: 'AI Diagnostics', icon: <Activity size={18} /> },
+    { id: 'plugins', label: 'Plugins & Mods', icon: <Package size={18} /> },
+    { id: 'backups', label: 'Backup & DR Hub', icon: <Archive size={18} /> },
+    { id: 'config', label: 'Configuration Studio', icon: <Sliders size={18} /> },
     { id: 'edge', label: 'Edge Mesh', icon: <Globe size={18} /> },
     { id: 'storage', label: 'Storage & DR', icon: <Database size={18} /> },
     { id: 'audit', label: 'Audit Trail', icon: <Shield size={18} /> },

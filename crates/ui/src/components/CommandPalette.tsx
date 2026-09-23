@@ -9,6 +9,8 @@ interface CommandPaletteProps {
   onNavigate: (tab: ViewTab) => void;
   onStartServer: (name: string) => void;
   onStopServer: (name: string) => void;
+  onCreateServer?: () => void;
+  onOpenCliRunner?: () => void;
 }
 
 interface CommandItem {
@@ -26,12 +28,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onNavigate,
   onStartServer,
   onStopServer,
+  onCreateServer,
+  onOpenCliRunner,
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands: CommandItem[] = [
+    {
+      id: 'cmd-create-server',
+      title: 'Provision New Server Instance',
+      category: 'Actions',
+      icon: <Terminal size={14} />,
+      action: () => { onClose(); onCreateServer?.(); }
+    },
+    {
+      id: 'cmd-cli-runner',
+      title: 'Open Universal CLI Command Runner',
+      category: 'Tools',
+      icon: <Terminal size={14} />,
+      action: () => { onClose(); onOpenCliRunner?.(); }
+    },
     {
       id: 'nav-fleet',
       title: 'Go to Fleet Overview',
@@ -52,6 +70,27 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       category: 'Navigation',
       icon: <Activity size={14} />,
       action: () => { onNavigate('diagnostics'); onClose(); }
+    },
+    {
+      id: 'nav-plugins',
+      title: 'Go to Plugins & Mods Store',
+      category: 'Navigation',
+      icon: <Terminal size={14} />,
+      action: () => { onNavigate('plugins'); onClose(); }
+    },
+    {
+      id: 'nav-backups',
+      title: 'Go to Backup & Snapshot Resilience Hub',
+      category: 'Navigation',
+      icon: <Archive size={14} />,
+      action: () => { onNavigate('backups'); onClose(); }
+    },
+    {
+      id: 'nav-config',
+      title: 'Go to Configuration & Properties Studio',
+      category: 'Navigation',
+      icon: <Terminal size={14} />,
+      action: () => { onNavigate('config'); onClose(); }
     },
     {
       id: 'nav-edge',

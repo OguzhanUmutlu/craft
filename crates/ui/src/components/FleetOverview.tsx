@@ -11,6 +11,10 @@ interface FleetOverviewProps {
   onRestartServer: (name: string) => void;
   onOpenConsole: (name: string) => void;
   onOpenDiagnostics: (name: string) => void;
+  onCreateServer?: () => void;
+  onOpenPlugins?: (name: string) => void;
+  onOpenBackups?: (name: string) => void;
+  onOpenConfig?: (name: string) => void;
 }
 
 export const FleetOverview: React.FC<FleetOverviewProps> = ({
@@ -21,6 +25,10 @@ export const FleetOverview: React.FC<FleetOverviewProps> = ({
   onRestartServer,
   onOpenConsole,
   onOpenDiagnostics,
+  onCreateServer,
+  onOpenPlugins,
+  onOpenBackups,
+  onOpenConfig,
 }) => {
   const [filter, setFilter] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -75,7 +83,7 @@ export const FleetOverview: React.FC<FleetOverviewProps> = ({
               <List size={14} />
             </button>
           </div>
-          <button className="btn btn-primary">
+          <button className="btn btn-primary" onClick={onCreateServer} title="Create Server">
             <Plus size={14} /> Create Server
           </button>
         </div>
@@ -115,6 +123,9 @@ export const FleetOverview: React.FC<FleetOverviewProps> = ({
               onRestart={onRestartServer}
               onOpenConsole={onOpenConsole}
               onOpenDiagnostics={onOpenDiagnostics}
+              onOpenPlugins={onOpenPlugins}
+              onOpenBackups={onOpenBackups}
+              onOpenConfig={onOpenConfig}
             />
           ))}
         </div>

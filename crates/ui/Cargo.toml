@@ -19,6 +19,9 @@ craft-cli.workspace = true
 craft-daemon.workspace = true
 craft-net.workspace = true
 craft-providers.workspace = true
+craft-plugins.workspace = true
+craft-backup.workspace = true
+reqwest.workspace = true
 
 tauri = { version = "2.11" }
 serde = { workspace = true }

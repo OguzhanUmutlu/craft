@@ -1,13 +1,13 @@
-import React from 'react';
-import { Search, Minus, Square, X, Server } from 'lucide-react';
+import { Search, Minus, Square, X, Server, Terminal } from 'lucide-react';
 import { SystemInfo } from '../types';
 
 interface TopBarProps {
   systemInfo: SystemInfo | null;
   onOpenCommandPalette: () => void;
+  onOpenCliRunner?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ systemInfo, onOpenCommandPalette }) => {
+export const TopBar: React.FC<TopBarProps> = ({ systemInfo, onOpenCommandPalette, onOpenCliRunner }) => {
   return (
     <header className="top-bar" data-tauri-drag-region>
       <div className="top-bar-left">
@@ -21,6 +21,16 @@ export const TopBar: React.FC<TopBarProps> = ({ systemInfo, onOpenCommandPalette
           <span>Quick Open or Execute...</span>
           <span className="kbd-badge">Ctrl K</span>
         </div>
+        {onOpenCliRunner && (
+          <button
+            className="btn"
+            style={{ padding: '4px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={onOpenCliRunner}
+            title="Open Universal CLI Runner"
+          >
+            <Terminal size={13} style={{ color: 'var(--accent-cyan)' }} /> CLI Terminal
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
