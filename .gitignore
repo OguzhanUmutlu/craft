@@ -19,7 +19,12 @@ cargo-timing.html
 !/tools/analysis.md
 !/tools/catalog/
 !/tools/devtools/
+!/tools/package_local.py
+!/tools/package_ui.py
+!/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
+__pycache__/
+*.pyc
 /screenshots/
 *.log
 *.sock
@@ -121,6 +126,7 @@ dist/
 /releases/**/*.gz
 /releases/**/*-amd64
 /releases/**/*-arm64
+/releases/**/craft-studio/
 !/releases/**/versions.json
 !/releases/**/*.sha256
 /executables/dist/

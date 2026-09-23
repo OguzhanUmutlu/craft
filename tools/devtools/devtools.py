@@ -334,6 +334,70 @@ class DevToolsController:
         finally:
             client.close()
 
+    def set_viewport(self, width: int, height: int):
+        """Sets the browser viewport dimensions via Emulation.setDeviceMetricsOverride."""
+        ws_url = self.get_target_ws_url()
+        client = SimpleWebSocketClient(ws_url, timeout=10.0)
+        try:
+            req_id = self._next_id()
+            cmd = json.dumps({
+                "id": req_id,
+                "method": "Emulation.setDeviceMetricsOverride",
+                "params": {
+                    "width": width,
+                    "height": height,
+                    "deviceScaleFactor": 1,
+                    "mobile": False,
+                }
+            })
+            client.send_text(cmd)
+            while True:
+                msg = client.recv_text()
+                data = json.loads(msg)
+                if data.get("id") == req_id:
+                    print(f"[OK] Viewport set to {width}x{height}.")
+                    return data
+        finally:
+            client.close()
+
+    def audit_zero_emoji(self) -> list:
+        """Audits the rendered DOM to strictly verify zero emojis exist anywhere."""
+        script = """
+        (() => {
+            const emojiRegex = /(\\p{Extended_Pictographic}|\\p{Emoji_Presentation})/u;
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            const violations = [];
+            let node;
+            while (node = walker.nextNode()) {
+                const text = (node.nodeValue || '').trim();
+                if (text && emojiRegex.test(text)) {
+                    violations.push({
+                        text: text.slice(0, 50),
+                        tag: node.parentElement ? node.parentElement.tagName.toLowerCase() : 'unknown'
+                    });
+                }
+            }
+            return violations;
+        })()
+        """
+        return self.evaluate_javascript(script) or []
+
+    def get_dom_node_count(self) -> int:
+        """Returns the total number of DOM elements in the document."""
+        res = self.evaluate_javascript("document.querySelectorAll('*').length")
+        return int(res) if res is not None else 0
+
+    def wait_for_selector(self, selector: str, timeout_secs: float = 5.0) -> bool:
+        """Polls until a DOM element matching selector exists or timeout expires."""
+        start = time.time()
+        while time.time() - start < timeout_secs:
+            res = self.evaluate_javascript(f"!!document.querySelector('{selector}')")
+            if res:
+                return True
+            time.sleep(0.2)
+        return False
+
+
 
 def cmd_start(args):
     """Starts Vite dev server and desktop studio application with DevTools remote debugging."""
