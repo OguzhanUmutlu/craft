@@ -14,6 +14,7 @@ pub mod dev;
 pub mod dockerize;
 pub mod dr;
 pub mod edge;
+pub mod ebpf;
 pub mod fix;
 pub mod forecast;
 pub mod gateway;

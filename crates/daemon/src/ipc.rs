@@ -1131,6 +1131,70 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::EbpfStartProfiling {
+                server_name,
+                probe_type,
+                duration_secs,
+                sample_rate_hz,
+            } => {
+                let resp = match crate::ebpf_service::EbpfObservabilityService::global(supervisor.paths())
+                    .start_profiling(&server_name, probe_type, duration_secs, sample_rate_hz)
+                {
+                    Ok(descriptor) => IpcResponse::EbpfProfilingStarted { descriptor },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::EbpfGetStatus { server_name } => {
+                let resp = match crate::ebpf_service::EbpfObservabilityService::global(supervisor.paths())
+                    .get_status(&server_name)
+                {
+                    Ok((descriptor, socket_telemetry, syscall_aggregations)) => {
+                        IpcResponse::EbpfStatusResult {
+                            descriptor,
+                            socket_telemetry,
+                            syscall_aggregations,
+                        }
+                    }
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::EbpfGetFlameGraph { server_name, format } => {
+                let resp = match crate::ebpf_service::EbpfObservabilityService::global(supervisor.paths())
+                    .get_flamegraph(&server_name, &format)
+                {
+                    Ok((content, root_node)) => IpcResponse::EbpfFlameGraphResult {
+                        server_name,
+                        format,
+                        content,
+                        root_node,
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::EbpfGetGcTelemetry { server_name, limit } => {
+                let resp = match crate::ebpf_service::EbpfObservabilityService::global(supervisor.paths())
+                    .get_gc_telemetry(&server_name, limit)
+                {
+                    Ok(events) => IpcResponse::EbpfGcTelemetryResult { server_name, events },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::EbpfStopProfiling { server_name, probe_id } => {
+                let resp = match crate::ebpf_service::EbpfObservabilityService::global(supervisor.paths())
+                    .stop_profiling(&server_name, probe_id.as_deref())
+                {
+                    Ok(descriptor) => IpcResponse::EbpfProfilingStopped {
+                        descriptor,
+                        message: "Kernel probe detached successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -2358,6 +2422,80 @@ impl DaemonClient {
     ) -> Result<(bool, String, Vec<craft_core::AnycastRouteAnnouncement>)> {
         match self.request(IpcRequest::AnycastRouteManage { action, route }).await? {
             IpcResponse::AnycastRouteManageResult { success, message, routes } => Ok((success, message, routes)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn start_ebpf_profiling(
+        &mut self,
+        server_name: String,
+        probe_type: craft_core::EbpfProbeType,
+        duration_secs: u64,
+        sample_rate_hz: u32,
+    ) -> Result<craft_core::EbpfProbeDescriptor> {
+        match self.request(IpcRequest::EbpfStartProfiling {
+            server_name,
+            probe_type,
+            duration_secs,
+            sample_rate_hz,
+        }).await? {
+            IpcResponse::EbpfProfilingStarted { descriptor } => Ok(descriptor),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_ebpf_status(
+        &mut self,
+        server_name: String,
+    ) -> Result<(
+        Option<craft_core::EbpfProbeDescriptor>,
+        Option<craft_net::SocketBufferTelemetry>,
+        std::collections::HashMap<String, (u64, f64)>,
+    )> {
+        match self.request(IpcRequest::EbpfGetStatus { server_name }).await? {
+            IpcResponse::EbpfStatusResult {
+                descriptor,
+                socket_telemetry,
+                syscall_aggregations,
+            } => Ok((descriptor, socket_telemetry, syscall_aggregations)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_ebpf_flamegraph(
+        &mut self,
+        server_name: String,
+        format: String,
+    ) -> Result<(String, craft_core::FlameGraphNode)> {
+        match self.request(IpcRequest::EbpfGetFlameGraph { server_name, format }).await? {
+            IpcResponse::EbpfFlameGraphResult { content, root_node, .. } => Ok((content, root_node)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_ebpf_gc_telemetry(
+        &mut self,
+        server_name: String,
+        limit: usize,
+    ) -> Result<Vec<craft_core::JvmGcEvent>> {
+        match self.request(IpcRequest::EbpfGetGcTelemetry { server_name, limit }).await? {
+            IpcResponse::EbpfGcTelemetryResult { events, .. } => Ok(events),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn stop_ebpf_profiling(
+        &mut self,
+        server_name: String,
+        probe_id: Option<String>,
+    ) -> Result<(craft_core::EbpfProbeDescriptor, String)> {
+        match self.request(IpcRequest::EbpfStopProfiling { server_name, probe_id }).await? {
+            IpcResponse::EbpfProfilingStopped { descriptor, message } => Ok((descriptor, message)),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

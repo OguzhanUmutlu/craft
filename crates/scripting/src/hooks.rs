@@ -57,6 +57,10 @@ pub enum LifecycleEvent {
     LiveMigrationFreezeStarted,
     LiveMigrationCompleted,
     LiveMigrationRolledBack,
+    EbpfProbeAttached,
+    JvmSafepointSpikeDetected,
+    GcPauseThresholdExceeded,
+    ThreadContentionSurge,
 }
 
 impl LifecycleEvent {
@@ -108,6 +112,10 @@ impl LifecycleEvent {
             Self::LiveMigrationFreezeStarted => "on_live_migration_freeze_started",
             Self::LiveMigrationCompleted => "on_live_migration_completed",
             Self::LiveMigrationRolledBack => "on_live_migration_rolled_back",
+            Self::EbpfProbeAttached => "on_ebpf_probe_attached",
+            Self::JvmSafepointSpikeDetected => "on_jvm_safepoint_spike_detected",
+            Self::GcPauseThresholdExceeded => "on_gc_pause_threshold_exceeded",
+            Self::ThreadContentionSurge => "on_thread_contention_surge",
         }
     }
 
@@ -160,6 +168,10 @@ impl LifecycleEvent {
             "on_live_migration_freeze_started" | "live_migration_freeze_started" | "freeze_started" => Some(Self::LiveMigrationFreezeStarted),
             "on_live_migration_completed" | "live_migration_completed" | "migration_completed" => Some(Self::LiveMigrationCompleted),
             "on_live_migration_rolled_back" | "live_migration_rolled_back" | "migration_rolled_back" => Some(Self::LiveMigrationRolledBack),
+            "on_ebpf_probe_attached" | "ebpf_probe_attached" | "probe_attached" => Some(Self::EbpfProbeAttached),
+            "on_jvm_safepoint_spike_detected" | "jvm_safepoint_spike_detected" | "safepoint_spike" => Some(Self::JvmSafepointSpikeDetected),
+            "on_gc_pause_threshold_exceeded" | "gc_pause_threshold_exceeded" | "gc_threshold" | "gc_pause" => Some(Self::GcPauseThresholdExceeded),
+            "on_thread_contention_surge" | "thread_contention_surge" | "contention_surge" | "lock_surge" => Some(Self::ThreadContentionSurge),
             _ => None,
         }
     }
@@ -212,6 +224,10 @@ impl LifecycleEvent {
             Self::LiveMigrationFreezeStarted,
             Self::LiveMigrationCompleted,
             Self::LiveMigrationRolledBack,
+            Self::EbpfProbeAttached,
+            Self::JvmSafepointSpikeDetected,
+            Self::GcPauseThresholdExceeded,
+            Self::ThreadContentionSurge,
         ]
     }
 }
@@ -364,6 +380,20 @@ pub struct HookContext {
     pub freeze_ms: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dirty_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub probe_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub probe_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gc_phase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pause_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub safepoint_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_symbol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contention_ms: Option<f64>,
 }
 
 impl HookContext {
@@ -437,6 +467,34 @@ impl HookContext {
             "Live migration '{}' for server '{}' completed with {}ms freeze duration",
             migration_id, server_name, freeze_ms
         ));
+        ctx
+    }
+
+    pub fn for_ebpf_probe_attached(server_name: &str, probe_id: &str, probe_type: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::EbpfProbeAttached);
+        ctx.server_name = Some(server_name.to_string());
+        ctx.probe_id = Some(probe_id.to_string());
+        ctx.probe_type = Some(probe_type.to_string());
+        ctx.details = Some(format!("eBPF probe '{}' attached to '{}' (type: {})", probe_id, server_name, probe_type));
+        ctx
+    }
+
+    pub fn for_gc_pause_exceeded(server_name: &str, phase: &str, pause_ms: f64, safepoint_ms: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::GcPauseThresholdExceeded);
+        ctx.server_name = Some(server_name.to_string());
+        ctx.gc_phase = Some(phase.to_string());
+        ctx.pause_ms = Some(pause_ms);
+        ctx.safepoint_ms = Some(safepoint_ms);
+        ctx.details = Some(format!("JVM GC pause exceeded threshold: {:.2}ms (phase: {}, safepoint: {:.2}ms)", pause_ms, phase, safepoint_ms));
+        ctx
+    }
+
+    pub fn for_thread_contention(server_name: &str, lock_symbol: &str, contention_ms: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::ThreadContentionSurge);
+        ctx.server_name = Some(server_name.to_string());
+        ctx.lock_symbol = Some(lock_symbol.to_string());
+        ctx.contention_ms = Some(contention_ms);
+        ctx.details = Some(format!("Thread lock contention surge on '{}': {:.2}ms", lock_symbol, contention_ms));
         ctx
     }
 }
@@ -1024,5 +1082,38 @@ mod tests {
         assert_eq!(mig_ctx.server_name.as_deref(), Some("survival"));
         assert_eq!(mig_ctx.freeze_ms, Some(42));
         assert_eq!(mig_ctx.dirty_bytes, Some(10485760));
+
+        // Test Phase 31 eBPF & JVM GC lifecycle events
+        assert_eq!(
+            LifecycleEvent::from_name("on_ebpf_probe_attached"),
+            Some(LifecycleEvent::EbpfProbeAttached)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_jvm_safepoint_spike_detected"),
+            Some(LifecycleEvent::JvmSafepointSpikeDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_gc_pause_threshold_exceeded"),
+            Some(LifecycleEvent::GcPauseThresholdExceeded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_thread_contention_surge"),
+            Some(LifecycleEvent::ThreadContentionSurge)
+        );
+
+        let ebpf_ctx = HookContext::for_ebpf_probe_attached("hub", "probe-abc", "syscall_read");
+        assert_eq!(ebpf_ctx.event, "on_ebpf_probe_attached");
+        assert_eq!(ebpf_ctx.probe_id.as_deref(), Some("probe-abc"));
+        assert_eq!(ebpf_ctx.probe_type.as_deref(), Some("syscall_read"));
+
+        let gc_ctx = HookContext::for_gc_pause_exceeded("hub", "young_gen", 45.2, 5.1);
+        assert_eq!(gc_ctx.event, "on_gc_pause_threshold_exceeded");
+        assert_eq!(gc_ctx.pause_ms, Some(45.2));
+        assert_eq!(gc_ctx.safepoint_ms, Some(5.1));
+
+        let lock_ctx = HookContext::for_thread_contention("hub", "MinecraftServer.tick()", 18.5);
+        assert_eq!(lock_ctx.event, "on_thread_contention_surge");
+        assert_eq!(lock_ctx.lock_symbol.as_deref(), Some("MinecraftServer.tick()"));
+        assert_eq!(lock_ctx.contention_ms, Some(18.5));
     }
 }

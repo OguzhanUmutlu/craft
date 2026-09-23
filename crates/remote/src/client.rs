@@ -1217,6 +1217,48 @@ impl RemoteCraftClient {
         Ok(stdout.trim().to_string())
     }
 
+    /// Starts an eBPF profiling session on the remote host
+    pub fn start_remote_ebpf_profiling(
+        &self,
+        server: &str,
+        probe_type: &str,
+        duration_secs: u64,
+        sample_rate_hz: u32,
+    ) -> Result<String> {
+        let cmd = format!(
+            "craft bpf trace {} --event {} --duration {} --rate {} --json",
+            server, probe_type, duration_secs, sample_rate_hz
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote eBPF profiling start failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Queries the eBPF probe status and syscall telemetry on the remote host
+    pub fn get_remote_ebpf_status(&self, server: &str) -> Result<String> {
+        let cmd = format!("craft bpf status {} --json", server);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote eBPF status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Fetches a folded or SVG flame graph from the remote host
+    pub fn get_remote_ebpf_flamegraph(&self, server: &str, format: &str) -> Result<String> {
+        let cmd = format!("craft bpf flamegraph {} --format {} --json", server, format);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote eBPF flamegraph query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
     /// Formats an exec command with an active W3C traceparent environment prefix if provided
     pub fn exec_with_trace_context(
         &self,

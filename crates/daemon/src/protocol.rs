@@ -198,6 +198,27 @@ pub enum IpcRequest {
         action: String,
         route: craft_core::AnycastRouteAnnouncement,
     },
+    EbpfStartProfiling {
+        server_name: String,
+        probe_type: craft_core::EbpfProbeType,
+        duration_secs: u64,
+        sample_rate_hz: u32,
+    },
+    EbpfGetStatus {
+        server_name: String,
+    },
+    EbpfGetFlameGraph {
+        server_name: String,
+        format: String,
+    },
+    EbpfGetGcTelemetry {
+        server_name: String,
+        limit: usize,
+    },
+    EbpfStopProfiling {
+        server_name: String,
+        probe_id: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -388,6 +409,28 @@ pub enum IpcResponse {
         success: bool,
         message: String,
         routes: Vec<craft_core::AnycastRouteAnnouncement>,
+    },
+    EbpfProfilingStarted {
+        descriptor: craft_core::EbpfProbeDescriptor,
+    },
+    EbpfStatusResult {
+        descriptor: Option<craft_core::EbpfProbeDescriptor>,
+        socket_telemetry: Option<craft_net::SocketBufferTelemetry>,
+        syscall_aggregations: std::collections::HashMap<String, (u64, f64)>,
+    },
+    EbpfFlameGraphResult {
+        server_name: String,
+        format: String,
+        content: String,
+        root_node: craft_core::FlameGraphNode,
+    },
+    EbpfGcTelemetryResult {
+        server_name: String,
+        events: Vec<craft_core::JvmGcEvent>,
+    },
+    EbpfProfilingStopped {
+        descriptor: craft_core::EbpfProbeDescriptor,
+        message: String,
     },
     Error { error: String },
 }

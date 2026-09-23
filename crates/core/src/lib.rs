@@ -7,6 +7,7 @@ pub mod cluster_config;
 pub mod config;
 pub mod crypto;
 pub mod dr_config;
+pub mod ebpf;
 pub mod edge_config;
 pub mod error;
 pub mod forecasting;
@@ -52,6 +53,10 @@ pub use cgroups::{
 };
 pub use crypto::{derive_key, ChaCha20, ChaCha20Poly1305, Poly1305};
 pub use dr_config::{DrFailoverReport, DrPlan, DrRecoveryResult, DrRunbook, DrSimulationResult};
+pub use ebpf::{
+    EbpfProbeDescriptor, EbpfProbeStatus, EbpfProbeType, EbpfRegistry, FlameGraphNode, GcPhase,
+    JvmGcEvent, SyscallInterceptionRecord, ThreadContentionFrame,
+};
 pub use forecasting::{
     generate_forecast_sparkline, load_workload_samples, save_workload_samples, CostOptimizationModel,
     CostOptimizationReport, DayOfWeekProfile, DiurnalHourProfile, ForecastPoint,

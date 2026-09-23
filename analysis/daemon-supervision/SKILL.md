@@ -213,6 +213,33 @@ Craft features an integrated autopilot supervisor engine (`AutopilotEngine`) tha
   - IPC: `IpcRequest::GetIntelligenceStatus`, `TriggerDiagnosticRun`, `ExecuteRemediation`, `UpdateIntelligencePolicy`.
   - REST: `GET /api/ai/status`, `GET /api/ai/diagnostics/:server`, `POST /api/ai/remediate/:server`.
 
+---
+
+## 14. Autonomous eBPF Kernel Observability & Deep JVM GC Telemetry
+
+Craft integrates pure-Rust kernel-level observability, zero-overhead syscall profiling, and JVM runtime introspection via `EbpfObservabilityService`:
+- **In-Process Singleton Service**: `EbpfObservabilityService::global(paths)` orchestrates tracepoint attach/detach lifecycles, collects socket buffer queue telemetry, and records JVM GC pauses.
+- **Tracepoint Probe Lifecycle & Atomic Persistence**:
+  - Attaches non-invasive probes targeting server PIDs (`read`, `write`, `futex`, `epoll`, `safepoint`, `gc`, `socket`, `all`).
+  - Persisted atomically under advisory exclusive file locks (`ebpf.lock`) in `~/.craft/ebpf/probes.toml`.
+  - High-frequency sampling (default 99 Hz) with sub-microsecond syscall latency accounting and lock contention tracking.
+- **Hierarchical Stack Flame Graph Generation**:
+  - Folded stack ingestion (`FlameGraphBuilder::add_sample`) aggregates hierarchical frame weights.
+  - Generates both plain-text ASCII hierarchical tree visualizers and standalone SVG flame graphs.
+  - Automatically exported to `~/.craft/ebpf/flamegraphs/<server>.svg`.
+- **Deep JVM GC & Safepoint Telemetry**:
+  - Measures total pause duration, memory reclaimed across Young/Old generations, and safepoint synchronization time.
+  - Automatically raises alerts and lifecycle hook events when safepoint sync pause exceeds 50ms.
+- **Prometheus Metrics Exposition**:
+  - `craft_ebpf_probes_active`, `craft_ebpf_events_total`, `craft_ebpf_flamegraphs_generated_total`.
+  - `craft_jvm_gc_pauses_total`, `craft_jvm_gc_pause_duration_seconds_total`, `craft_jvm_safepoint_sync_spikes_total`.
+- **Typed IPC Protocol Commands**:
+  - `EbpfStartProfiling { server_name, probe_type, duration_secs, sample_rate_hz }` -> `EbpfProfilingStarted { descriptor }`
+  - `EbpfGetStatus { server_name }` -> `EbpfStatusResult { descriptor, socket_telemetry, syscall_aggregations }`
+  - `EbpfGetFlameGraph { server_name, format }` -> `EbpfFlameGraphResult { content, root_node }`
+  - `EbpfGetGcTelemetry { server_name, limit }` -> `EbpfGcTelemetryResult { events }`
+  - `EbpfStopProfiling { server_name, probe_id }` -> `EbpfProfilingStopped { descriptor, message }`
+
 
 
 

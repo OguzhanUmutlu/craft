@@ -411,5 +411,55 @@ Craft incorporates a zero-downtime TCP connection splicing engine and BGP routin
   - Continuously monitors node health score (0-100), MSPT, and packet loss.
   - If health score drops below threshold (default 60), the engine recommends route withdrawal or AS path prepending to prevent traffic blackholing.
 
+---
+
+## 12. Autonomous eBPF Kernel Observability, Zero-Overhead Syscall Profiling & Deep JVM GC Telemetry
+
+Craft delivers kernel-level non-invasive continuous profiling, off-heap socket buffer pressure evaluation, and deep JVM GC runtime introspection:
+
+### 12.1. Pure-Rust Tracepoint & Syscall Profiling (`EbpfProbeEngine`)
+- **Zero-Overhead Syscall Interception**:
+  - Intercepts essential game server kernel tracepoints: `sys_read`, `sys_write`, `sys_futex`, `sys_epoll_wait`.
+  - Measures precise kernel entry and exit durations to calculate moving average latencies without JVM stop-the-world sampling jitter.
+  - In-memory bounded ring buffer (10,000 records) discards oldest entries on saturation, guaranteeing constant-bounded overhead (<0.5% CPU at 20.0 TPS).
+- **Advisory File-Locked Registry**:
+  - Probes are tracked in `EbpfRegistry` and serialized to `~/.craft/ebpf/probes.toml` under `ebpf.lock` advisory lock protection.
+
+### 12.2. Off-Heap Socket Buffer Telemetry (`SocketBufferTelemetry`)
+- **Kernel Socket Queue Depth**:
+  - Monitors TCP socket receive and transmit buffers (`rx_queue_bytes`, `tx_queue_bytes`) against allocated socket buffers (`so_rcvbuf_bytes`, `so_sndbuf_bytes`).
+  - Accurately identifies network congestion before application-level socket timeouts occur.
+- **Pressure Level Classification**:
+  - `Pristine`: RX/TX depth < 40%.
+  - `Moderate`: RX/TX depth between 40% and 70%.
+  - `Elevated`: RX/TX depth between 70% and 85%.
+  - `Critical`: RX/TX depth > 85%, indicating imminent TCP window stalls and network thread blocking.
+
+### 12.3. Hierarchical Stack Flame Graph Generation (`FlameGraphBuilder`)
+- **Collapsed Stack Ingestion**:
+  - Accepts standard folded stack strings (`Server thread;MinecraftServer.tick();ChunkProvider.loadChunk 100`).
+  - Reconstructs a multi-level stack tree (`FlameGraphNode`) and recursively computes execution percentage shares.
+- **Multi-Format Visualizers**:
+  - `render_ascii`: Emits an indented ASCII branch hierarchy tree (`|--`, `` `-- ``) with percentage tags and sample weights.
+  - `render_svg`: Generates a fully standalone SVG vector flame graph styled with the Catppuccin warm palette, zoomable layers, and interactive mouseover tooltips.
+
+### 12.4. Deep JVM GC & Safepoint Telemetry
+- **Garbage Collection Runtime Introspection**:
+  - Ingests fine-grained GC phase events (`young_gen`, `concurrent_mark`, `remark`, `full_gc`, `mixed_gc`).
+  - Correlates heap space reclaimed (`reclaimed_bytes()`) with pause duration (`pause_ms()`).
+- **Safepoint Synchronization Spike Thresholding**:
+  - Tracks the duration required for all threads to reach safepoints (`safepoint_sync_time_ns`).
+  - Any safepoint synchronization pause exceeding 50ms is flagged as `[WARN]` and automatically triggers `JvmSafepointSpikeDetected` alerts across the event hook bus.
+
+### 12.5. Operator Controls & TUI Integration
+- **CLI Commands**:
+  - `craft bpf trace <server> [-d 30] [-e all] [-r 99] [--json]`: Attach kernel tracepoint probe.
+  - `craft bpf status <server> [--json]`: Inspect active probe state, socket buffer depth, and syscall latency.
+  - `craft bpf flamegraph <server> [-f ascii|svg] [-o <path>] [--json]`: Render or export flame graphs.
+  - `craft bpf gc <server> [-n 10] [-w] [--json]`: Inspect JVM GC events and safepoint sync pauses.
+  - `craft bpf stop <server> [--probe-id <id>] [--json]`: Detach profiling probe.
+  - Command aliases: `craft ebpf ...` and `craft prof ...`.
+- **ModalX Centered TUI**: Integrated into `craft manage` -> `Tools` -> `Autonomous eBPF Observability & Deep JVM GC Telemetry`.
+
 
 

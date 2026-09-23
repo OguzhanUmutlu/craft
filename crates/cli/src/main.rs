@@ -549,6 +549,9 @@ async fn main() {
                 .await
             }
         },
+        Some(Commands::Bpf { action }) => {
+            commands::ebpf::handle_bpf(action, &paths).await
+        }
     };
 
     if let Err(e) = result {
@@ -620,6 +623,7 @@ fn print_banner() {
     println!("  anvil <status|inspect|bench>      Hardware-accelerated Anvil storage & io_uring");
     println!("  migrate <server|live|status>      Cold or zero-downtime live server migration");
     println!("  anycast route <announce|withdraw> Global Anycast BGP route announcements");
+    println!("  bpf <trace|status|flamegraph|gc>  Autonomous eBPF kernel observability & JVM GC telemetry");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

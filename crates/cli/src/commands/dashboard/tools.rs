@@ -1798,6 +1798,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             AnvilStorage,
             NumaDpdk,
             LiveMigration,
+            EbpfObservability,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1917,6 +1918,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::LiveMigration);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Autonomous eBPF Observability & Deep JVM GC Telemetry",
+            )
+            .with_aliases(&["ebpf", "bpf", "flamegraph", "gc"]),
+        );
+        actions.push(ToolItemAction::EbpfObservability);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1982,6 +1993,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::LiveMigration => {
                     live_migration_tui(paths).await?;
+                }
+                ToolItemAction::EbpfObservability => {
+                    ebpf_observability_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3148,6 +3162,91 @@ pub async fn live_migration_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft anycast route <announce|withdraw>      Steer BGP Anycast routes dynamically".green().to_string());
 
     show_modal_message("ZERO-DOWNTIME LIVE MIGRATION & ANYCAST", &lines, false)?;
+    Ok(())
+}
+
+pub async fn ebpf_observability_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("eBPF Observability & GC Telemetry");
+
+    let reg = craft_core::ebpf::EbpfRegistry::load(paths).unwrap_or_default();
+
+    let mut lines = Vec::new();
+    lines.push(
+        "AUTONOMOUS eBPF KERNEL OBSERVABILITY & DEEP JVM GC TELEMETRY"
+            .bold()
+            .to_string(),
+    );
+    lines.push(
+        "Zero-Overhead Syscall Profiling, Socket Pressure & Safepoint Telemetry"
+            .dimmed()
+            .to_string(),
+    );
+    lines.push("".to_string());
+
+    let active_probes = reg.active_probes();
+    let total_events: u64 = reg.probes.values().map(|p| p.event_count).sum();
+
+    lines.push(format!(
+        "Active eBPF Probes:  {} attached ({} total registered)",
+        active_probes.len(),
+        reg.probes.len()
+    ));
+    lines.push(format!(
+        "Events Intercepted:  {} kernel tracepoint records",
+        total_events
+    ));
+
+    if !active_probes.is_empty() {
+        lines.push("".to_string());
+        lines.push("Active Kernel Probes:".dimmed().to_string());
+        for p in active_probes.iter().take(3) {
+            lines.push(format!(
+                "  * {} [{}] -> Server '{}' (PID: {}, Rate: {} Hz)",
+                p.id.cyan(),
+                p.probe_type,
+                p.server_name,
+                p.pid,
+                p.sample_rate_hz
+            ));
+        }
+    } else {
+        lines.push("Status:              [IDLE] No active eBPF tracepoint probes attached".to_string());
+    }
+
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push(
+        "  craft bpf trace <server> [-d 30] [-e all] [-r 99] Attach kernel tracepoint probe"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft bpf status <server> [--json]                Inspect socket pressure & syscall latency"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft bpf flamegraph <server> [-f ascii|svg]       Export hierarchical stack flame graph"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft bpf gc <server> [-n 10] [--watch]           Inspect JVM GC pauses & safepoint spikes"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft bpf stop <server> [--probe-id <id>]         Detach eBPF kernel profiling probe"
+            .green()
+            .to_string(),
+    );
+
+    show_modal_message(
+        "eBPF KERNEL OBSERVABILITY & JVM GC TELEMETRY",
+        &lines,
+        false,
+    )?;
     Ok(())
 }
 

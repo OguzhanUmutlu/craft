@@ -610,6 +610,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: AnycastCommands,
     },
+
+    /// Autonomous eBPF kernel observability, zero-overhead syscall profiling & deep JVM GC telemetry
+    #[command(name = "bpf", alias = "ebpf", alias = "prof")]
+    Bpf {
+        #[command(subcommand)]
+        action: BpfCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1683,6 +1690,74 @@ pub enum AnycastCommands {
         /// Autonomous System Number (ASN)
         #[arg(long)]
         asn: Option<u32>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum BpfCommands {
+    /// Attach an eBPF tracepoint probe or trace syscalls for a server
+    Trace {
+        /// Target server name
+        server: String,
+        /// Profiling duration in seconds (default: 30)
+        #[arg(short = 'd', long = "duration", default_value = "30")]
+        duration: u64,
+        /// Event type to profile: read, write, futex, epoll, safepoint, gc, socket, or all (default: all)
+        #[arg(short = 'e', long = "event", default_value = "all")]
+        event: String,
+        /// Sampling rate in Hertz (default: 99)
+        #[arg(short = 'r', long = "rate", default_value = "99")]
+        rate: u32,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Query active eBPF probe status and syscall telemetry for a server
+    Status {
+        /// Target server name
+        server: String,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Export or inspect collapsed hierarchical stack flame graphs
+    Flamegraph {
+        /// Target server name
+        server: String,
+        /// Output file path (defaults to stdout or ~/.craft/ebpf/flamegraphs/<server>.svg)
+        #[arg(short = 'o', long = "out")]
+        out: Option<PathBuf>,
+        /// Output format: ascii or svg (default: ascii)
+        #[arg(short = 'f', long = "format", default_value = "ascii")]
+        format: String,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect deep JVM garbage collection pauses and safepoint synchronizations
+    Gc {
+        /// Target server name
+        server: String,
+        /// Maximum number of recent GC events to display (default: 10)
+        #[arg(short = 'n', long = "limit", default_value = "10")]
+        limit: usize,
+        /// Continuously watch for real-time GC pause spikes
+        #[arg(short = 'w', long = "watch")]
+        watch: bool,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Detach an active eBPF kernel profiling probe
+    Stop {
+        /// Target server name
+        server: String,
+        /// Specific probe ID to detach (optional, detaches first active probe if omitted)
+        #[arg(long = "probe-id")]
+        probe_id: Option<String>,
         /// Output as JSON
         #[arg(long)]
         json: bool,

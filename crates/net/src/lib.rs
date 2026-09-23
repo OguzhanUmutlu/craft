@@ -1,6 +1,7 @@
 pub mod a2s;
 pub mod chunk_packet;
 pub mod dpdk;
+pub mod ebpf_engine;
 pub mod ebpf_filter;
 pub mod edge_probe;
 pub mod edge_router;
@@ -27,6 +28,9 @@ pub use chunk_packet::{
 pub use dpdk::{
     DpdkDriver, DpdkDriverConfig, DpdkDriverStats, JitterCalculator, PacketDescriptor,
     PacketRingBuffer,
+};
+pub use ebpf_engine::{
+    EbpfProbeEngine, FlameGraphBuilder, SocketBufferPressureLevel, SocketBufferTelemetry,
 };
 pub use ebpf_filter::{DropStatistics, EbpfFilterCompiler, PacketFilterEngine, PacketVerdict, RawPacketHeader};
 pub use edge_probe::{EdgeLatencyProber, EdgeProbeResult};

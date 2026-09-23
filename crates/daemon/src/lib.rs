@@ -2,6 +2,7 @@ pub mod anvil_service;
 pub mod autopilot;
 pub mod circuit_breaker;
 pub mod dpdk_service;
+pub mod ebpf_service;
 pub mod edge_broker;
 pub mod fleet_healer;
 pub mod forecasting_service;
@@ -28,6 +29,7 @@ pub mod webhooks;
 
 pub use anvil_service::AnvilService;
 pub use dpdk_service::DpdkNumaService;
+pub use ebpf_service::EbpfObservabilityService;
 pub use migration_service::MigrationService;
 pub use multi_raft_service::MultiRaftService;
 

@@ -76,6 +76,10 @@ pub struct CraftPaths {
     pub migration_snapshots_dir: PathBuf,
     pub migrations_file: PathBuf,
     pub migrations_lock: PathBuf,
+    pub ebpf_dir: PathBuf,
+    pub ebpf_flamegraphs_dir: PathBuf,
+    pub ebpf_probes_file: PathBuf,
+    pub ebpf_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -151,6 +155,10 @@ impl CraftPaths {
         let migration_snapshots_dir = migrations_dir.join("snapshots");
         let migrations_file = migrations_dir.join("migrations.toml");
         let migrations_lock = locks_dir.join("migrations.lock");
+        let ebpf_dir = home.join("ebpf");
+        let ebpf_flamegraphs_dir = ebpf_dir.join("flamegraphs");
+        let ebpf_probes_file = ebpf_dir.join("probes.toml");
+        let ebpf_lock = locks_dir.join("ebpf.lock");
 
         Self {
             home,
@@ -224,6 +232,10 @@ impl CraftPaths {
             migration_snapshots_dir,
             migrations_file,
             migrations_lock,
+            ebpf_dir,
+            ebpf_flamegraphs_dir,
+            ebpf_probes_file,
+            ebpf_lock,
         }
     }
 
@@ -274,6 +286,8 @@ impl CraftPaths {
         let numa_dir = home.join("numa");
         let migrations_dir = home.join("migrations");
         let migration_snapshots_dir = migrations_dir.join("snapshots");
+        let ebpf_dir = home.join("ebpf");
+        let ebpf_flamegraphs_dir = ebpf_dir.join("flamegraphs");
 
         // Ensure all primary directories exist
         for dir in [
@@ -311,6 +325,8 @@ impl CraftPaths {
             &numa_dir,
             &migrations_dir,
             &migration_snapshots_dir,
+            &ebpf_dir,
+            &ebpf_flamegraphs_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -354,6 +370,8 @@ impl CraftPaths {
         let numa_lock = locks_dir.join("numa.lock");
         let migrations_file = migrations_dir.join("migrations.toml");
         let migrations_lock = locks_dir.join("migrations.lock");
+        let ebpf_probes_file = ebpf_dir.join("probes.toml");
+        let ebpf_lock = locks_dir.join("ebpf.lock");
 
         Ok(Self {
             home,
@@ -427,7 +445,16 @@ impl CraftPaths {
             migration_snapshots_dir,
             migrations_file,
             migrations_lock,
+            ebpf_dir,
+            ebpf_flamegraphs_dir,
+            ebpf_probes_file,
+            ebpf_lock,
         })
+    }
+
+    /// Returns the flamegraph SVG file path for a specific server or profiling session
+    pub fn ebpf_flamegraph_path(&self, server: &str) -> PathBuf {
+        self.ebpf_flamegraphs_dir.join(format!("{}.svg", server))
     }
 
     /// Returns the staging directory path for a specific server's live migration
