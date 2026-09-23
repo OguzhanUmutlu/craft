@@ -127,3 +127,60 @@ Craft provides kernel-native Linux cgroups v2 resource isolation, hard CPU/memor
 5. **Lifecycle Hooks & Auditing**:
    - `LifecycleEvent::ResourceQuotaExceeded`, `CgroupThrottled`, `FairShareAdjusted` fire into the embedded Lua hook bus with live metrics context (`memory_current_bytes`, `cpu_throttled_usec`, `throttle_ratio`, `tenant_id`).
 
+---
+
+## 7. Immutable Cryptographic Supply Chain Verification & Hermetic Sandboxing
+
+Craft implements end-to-end cryptographic supply chain verification, in-toto Statement v1, SLSA provenance Level 3, and hermetic build sandboxing across game server runtimes, plugins, modpacks, and companion distributions:
+
+```
+[ Target Artifact (JAR / Binary) ]
+               │
+               │  craft attest verify <artifact>
+               ▼
+[ Local Sidecar Discovery (~/.craft/supply_chain/attestations/<sha256>.json) ]
+               │
+               ├─► 1. In-Toto Statement v1 Subject Hash Validation (SHA-256 match)
+               ├─► 2. DSSE Pre-Authentication Encoding (PAE) Signature Verification
+               │      PAE = "DSSEv1" + len(type) + type + len(payload) + payload
+               ├─► 3. SLSA Level 3 Build Provenance Evaluation (Hermetic, Isolated)
+               ├─► 4. Rekor Transparency Log RFC 6962 Merkle Tree Inclusion Proof
+               │      Leaf Hash = SHA256(0x00 || CanonicalPayload)
+               │      Inner Node = SHA256(0x01 || Left || Right)
+               └─► 5. Policy Enforcement (Strict vs. Audit Mode)
+                      [PASS] Launch Permitted / [VIOLATION] Execution Blocked
+```
+
+### Invariants & Architectural Capabilities:
+1. **In-Toto Statement v1 & SLSA Provenance**:
+   - Predicate types: `https://slsa.dev/provenance/v0.2` and `https://slsa.dev/provenance/v1.0`.
+   - Validates that artifact subject SHA-256 digest matches physical target bytes.
+   - Enforces SLSA Level 3 requirements: hermetic build isolation (`parameters.hermetic == true`), isolated network builder, and complete material provenance.
+2. **Dead Simple Signing Envelope (DSSE) & PAE Framing**:
+   - Implements pure-Rust Pre-Authentication Encoding (PAE) to eliminate canonicalization ambiguities:
+     $$\text{PAE}(t, p) = \text{"DSSEv1 "} \parallel \text{len}(t) \parallel \text{" "} \parallel t \parallel \text{" "} \parallel \text{len}(p) \parallel \text{" "} \parallel p$$
+   - Supports Sigstore Cosign bundles, ECDSA P-256 (SHA-256) and Ed25519 signatures, verifying signatures against registered `TrustAnchor` certificates and public keys stored in `~/.craft/supply_chain/trust_anchors.json`.
+3. **Rekor Transparency Log & RFC 6962 Binary Merkle Proofs**:
+   - Evaluates transparency log inclusion proofs (`RekorInclusionProof`) without requiring internet access.
+   - Root hash validation executes RFC 6962 binary Merkle tree traversal:
+     - Leaf hashing prefixes raw entries with `0x00`.
+     - Internal node hashing prefixes concatenated left and right child digests with `0x01`.
+   - Verifies computed root hash against signed trust anchor checkpoints.
+4. **Hermetic Build Sandboxing (`HermeticBuildRunner`)**:
+   - Environment sanitization: strips all host environment variables, setting strict baseline defaults (`PATH=/usr/bin:/bin`, `HOME=/build`, `SOURCE_DATE_EPOCH=1704067200`, `TZ=UTC`, `LC_ALL=C.UTF-8`).
+   - Network isolation: creates isolated network namespaces or loopback restrictions (`unshare --net`).
+   - Deterministic packaging: normalizes file permissions (`0o755` for directories/executables, `0o644` for files) and enforces fixed mtimes (`1704067200`) to guarantee bit-for-bit reproducible release archives.
+   - Seccomp-BPF system call filtering: restricts dangerous system calls (`ptrace`, `reboot`, `kexec_load`, `mount`, `chroot`).
+5. **Policy Enforcement Modes & Advisory Locking**:
+   - `SupplyChainPolicy` stored in `~/.craft/supply_chain/policy.json` under advisory file lock `~/.craft/run/locks/supply_chain.lock`.
+   - Enforcement modes:
+     - `Strict`: rejects artifact execution immediately if unsigned, mismatched, or failing SLSA/Rekor criteria.
+     - `Audit`: logs warnings and records violations without aborting runtime execution.
+     - `Disabled`: bypasses supply chain checks.
+6. **Daemon Supervisor & IPC Commands**:
+   - `SupplyChainService` coordinates in-process verification, background attestation downloads, and Prometheus metrics (`craft_supply_chain_verifications_total`, `craft_supply_chain_violations_total`, `craft_supply_chain_strict_blocked_total`, `craft_supply_chain_trust_anchors_active`).
+   - IPC commands: `SupplyChainVerify`, `SupplyChainGetPolicy`, `SupplyChainSetPolicy`, `SupplyChainInspectAttestation`, `HermeticBuildRun`.
+7. **Lifecycle Event Hooks**:
+   - `HookBus` dispatches: `SupplyChainVerified`, `SupplyChainViolationBlocked`, `HermeticBuildCompleted` with context (`artifact_sha256`, `slsa_level`, `signer_identity`, `build_digest`, `violation_reasons`).
+
+

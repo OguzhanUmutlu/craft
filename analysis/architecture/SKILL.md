@@ -51,6 +51,11 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 ├── trash/
 │   ├── manifest.toml      # Transactional trash manifest
 │   └── <id>_<name>/       # Recoverable staged files and directories
+├── supply_chain/          # Cryptographic trust anchors, policies & attestations
+│   ├── trust_anchors.json # Registered root certs and public keys
+│   ├── policy.json        # Strict / Audit / Disabled verification policy
+│   ├── registry.json      # Local artifact attestation registry
+│   └── attestations/      # In-toto DSSE attestation JSON sidecars (<sha256>.json)
 ├── migrations/            # Zero-downtime live migration plans and checkpoints
 │   ├── migrations.toml    # Live migration registry and active plans
 │   └── checkpoints/       # CRIU process and memory checkpoint snapshots (<server>/)
@@ -87,6 +92,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `audit.lock` guards append operations to the continuous HMAC audit log.
   - `mesh.lock` synchronizes multi-cloud storage mesh targets and replication policies.
   - `intelligence.lock` guards autonomous autopilot policies and remediation thresholds.
+  - `supply_chain.lock` synchronizes supply chain policies, trust anchors, and attestation registries.
   - `<server_dir>/server.lock` ensures a server instance cannot be launched simultaneously by multiple processes.
 
 ### 3.3. `RbacRegistry` & `AuditLedger`
@@ -381,6 +387,40 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `craft migrate list [--json]`
   - `craft anycast route --prefix <prefix> --node <node> --action <announce|withdraw|prepended> [--as-path-prepend <n>] [--json]`
   - Full-screen centered interactive TUI panel (`Tools -> Zero-Downtime Live Migration & Anycast Steering`) powered by ModalX.
+
+### 3.17 Immutable Cryptographic Supply Chain Verification, Hermetic Isolation & Reproducible Artifact Signing (Phase 32)
+
+- **In-Toto Statement v1 & SLSA Level 3 Build Provenance**:
+  - Pure-Rust implementation of In-Toto Statement v1 (`InTotoStatement`) encapsulating `Subject` SHA-256 digests and predicates across SLSA v0.2 and v1.0 specifications (`SlsaPredicate`).
+  - Strict validation verifies that physical artifact byte digests match attestation subject digests, asserting hermetic build environments and isolated network build steps.
+- **Dead Simple Signing Envelope (DSSE) & Pre-Authentication Encoding (PAE)**:
+  - Prevents canonicalization and parser mismatch attacks by wrapping payload data in DSSE envelopes (`DsseEnvelope`).
+  - Cryptographic signatures are calculated exclusively over deterministic PAE byte buffers:
+    $$\text{PAE}(t, p) = \text{"DSSEv1 "} \parallel \text{len}(t) \parallel \text{" "} \parallel t \parallel \text{" "} \parallel \text{len}(p) \parallel \text{" "} \parallel p$$
+  - Supports Sigstore/Cosign bundles with ECDSA P-256 and Ed25519 signature schemes, verified against local `TrustAnchor` entries stored in `~/.craft/supply_chain/trust_anchors.json`.
+- **RFC 6962 Rekor Transparency Log Merkle Tree Inclusion Proofs**:
+  - Pure-Rust verification of binary Merkle tree inclusion proofs (`RekorInclusionProof`) without outbound internet dependencies.
+  - Hashes leaf entries with domain separation byte `0x00` and intermediate node concatenations with byte `0x01`, evaluating left/right path directions up to the verified log root hash.
+- **Hermetic Build Sandboxing & Bit-for-Bit Deterministic Packaging**:
+  - `HermeticBuildRunner` establishes sanitized execution environments: wipes ambient host environment variables, injects canonical `SOURCE_DATE_EPOCH=1704067200`, `PATH=/usr/bin:/bin`, `TZ=UTC`, and confines network access to loopback.
+  - Normalizes filesystem permissions (`0o755` executable/dir, `0o644` file) and produces bit-for-bit reproducible Zip release packages with fixed entry modification timestamps.
+  - Generates seccomp-bpf filter descriptions restricting unauthorized syscalls.
+- **In-Process Daemon Supervisor (`SupplyChainService`)**:
+  - Manages active verification policies (`Strict`, `Audit`, `Disabled`) persisted under `~/.craft/supply_chain/policy.json` with advisory file locking (`supply_chain.lock`).
+  - Dispatches sidecar discovery searching for `<artifact>.attestation.json` and `~/.craft/supply_chain/attestations/<sha256>.json`.
+  - Exposes 5 typed IPC requests: `SupplyChainVerify`, `SupplyChainGetPolicy`, `SupplyChainSetPolicy`, `SupplyChainInspectAttestation`, `HermeticBuildRun`.
+  - Exposes Prometheus metrics: `craft_supply_chain_verifications_total`, `craft_supply_chain_violations_total`, `craft_supply_chain_strict_blocked_total`, `craft_supply_chain_trust_anchors_active`.
+- **Remote Federation & Scripting Hook Bus**:
+  - `RemoteCraftClient` provides `verify_remote_artifact`, `get_remote_supply_chain_policy`, and `set_remote_supply_chain_policy` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `SupplyChainVerified`, `SupplyChainViolationBlocked`, `HermeticBuildCompleted` with structured attestation context.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft attest verify <path> [--attestation <path>] [--trust-anchors <path>] [--json]`
+  - `craft attest inspect <attestation-path> [--json]`
+  - `craft attest policy [get|set <strict|audit|disabled>] [--json]`
+  - `craft attest sign <path> --key <key-path> [--key-type <type>] [--output <path>] [--json]`
+  - `craft attest hermetic <build-dir> <command...> [--output <path>] [--json]`
+  - Aliases: `craft verify`, `craft provenance`, `craft supply-chain`.
+  - Full-screen centered interactive TUI panel (`Tools -> Supply Chain Provenance & Verification`) powered by ModalX.
 
 ---
 

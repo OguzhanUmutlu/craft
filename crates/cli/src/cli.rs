@@ -617,6 +617,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: BpfCommands,
     },
+
+    /// Immutable cryptographic supply chain verification, hermetic build isolation & reproducible artifact signing
+    #[command(name = "attest", alias = "verify", alias = "provenance", alias = "supply-chain")]
+    Attest {
+        #[command(subcommand)]
+        action: AttestCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1758,6 +1765,77 @@ pub enum BpfCommands {
         /// Specific probe ID to detach (optional, detaches first active probe if omitted)
         #[arg(long = "probe-id")]
         probe_id: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum AttestCommands {
+    /// Verify cryptographic provenance and SLSA attestation for a jar or binary artifact
+    Verify {
+        /// Path to target artifact file (jar, tar, zip, binary)
+        artifact: PathBuf,
+        /// Explicit path to provenance attestation or Sigstore bundle file (optional)
+        #[arg(short = 'a', long = "attestation")]
+        attestation: Option<PathBuf>,
+        /// Enforce strict block mode regardless of configured policy
+        #[arg(long)]
+        strict: bool,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect decoded in-toto Statement v1 and SLSA predicate metadata
+    Inspect {
+        /// Identifier (path to attestation file or artifact SHA-256)
+        identifier: String,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect or modify the active cryptographic supply chain policy
+    Policy {
+        /// Update enforcement mode: audit, strict, or disabled
+        #[arg(long = "set-mode")]
+        set_mode: Option<String>,
+        /// Update minimum required SLSA level: 0, 1, 2, 3, or 4
+        #[arg(long = "min-slsa")]
+        min_slsa: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Sign an artifact with an in-toto SLSA provenance statement and generate DSSE envelope
+    Sign {
+        /// Path to target artifact file
+        artifact: PathBuf,
+        /// Output path for generated attestation file (default: <artifact>.json)
+        #[arg(short = 'o', long = "out")]
+        out: Option<PathBuf>,
+        /// Signing key ID
+        #[arg(short = 'k', long = "key-id", default_value = "default-builder-key")]
+        key_id: String,
+        /// Builder ID for SLSA predicate (default: craft-hermetic-builder)
+        #[arg(short = 'b', long = "builder", default_value = "craft-hermetic-builder")]
+        builder: String,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Execute a hermetic isolated build with environment scrubbing and reproducible packaging
+    Hermetic {
+        /// Target build directory containing sources
+        build_dir: PathBuf,
+        /// Command to execute inside isolated environment
+        command: String,
+        /// Arguments to pass to the build command
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+        /// Allow outbound network egress during build
+        #[arg(long)]
+        allow_network: bool,
         /// Output as JSON
         #[arg(long)]
         json: bool,

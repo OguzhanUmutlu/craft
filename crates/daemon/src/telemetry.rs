@@ -179,6 +179,7 @@ pub async fn generate_prometheus_metrics(
     out.push_str(&crate::multi_raft_service::MultiRaftService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::migration_service::MigrationService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::ebpf_service::EbpfObservabilityService::global(paths).generate_prometheus_metrics());
+    out.push_str(&crate::supply_chain_service::SupplyChainService::global(paths).generate_prometheus_metrics());
 
     out
 }

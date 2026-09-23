@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod anvil;
+pub mod attest;
 pub mod audit;
 pub mod auto;
 pub mod autoscale;

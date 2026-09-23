@@ -80,6 +80,12 @@ pub struct CraftPaths {
     pub ebpf_flamegraphs_dir: PathBuf,
     pub ebpf_probes_file: PathBuf,
     pub ebpf_lock: PathBuf,
+    pub supply_chain_dir: PathBuf,
+    pub supply_chain_trust_anchors_file: PathBuf,
+    pub supply_chain_attestations_dir: PathBuf,
+    pub supply_chain_policy_file: PathBuf,
+    pub supply_chain_registry_file: PathBuf,
+    pub supply_chain_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -159,6 +165,12 @@ impl CraftPaths {
         let ebpf_flamegraphs_dir = ebpf_dir.join("flamegraphs");
         let ebpf_probes_file = ebpf_dir.join("probes.toml");
         let ebpf_lock = locks_dir.join("ebpf.lock");
+        let supply_chain_dir = home.join("supply_chain");
+        let supply_chain_trust_anchors_file = supply_chain_dir.join("trust_anchors.json");
+        let supply_chain_attestations_dir = supply_chain_dir.join("attestations");
+        let supply_chain_policy_file = supply_chain_dir.join("policy.toml");
+        let supply_chain_registry_file = supply_chain_dir.join("registry.toml");
+        let supply_chain_lock = locks_dir.join("supply_chain.lock");
 
         Self {
             home,
@@ -236,6 +248,12 @@ impl CraftPaths {
             ebpf_flamegraphs_dir,
             ebpf_probes_file,
             ebpf_lock,
+            supply_chain_dir,
+            supply_chain_trust_anchors_file,
+            supply_chain_attestations_dir,
+            supply_chain_policy_file,
+            supply_chain_registry_file,
+            supply_chain_lock,
         }
     }
 
@@ -288,6 +306,8 @@ impl CraftPaths {
         let migration_snapshots_dir = migrations_dir.join("snapshots");
         let ebpf_dir = home.join("ebpf");
         let ebpf_flamegraphs_dir = ebpf_dir.join("flamegraphs");
+        let supply_chain_dir = home.join("supply_chain");
+        let supply_chain_attestations_dir = supply_chain_dir.join("attestations");
 
         // Ensure all primary directories exist
         for dir in [
@@ -327,6 +347,8 @@ impl CraftPaths {
             &migration_snapshots_dir,
             &ebpf_dir,
             &ebpf_flamegraphs_dir,
+            &supply_chain_dir,
+            &supply_chain_attestations_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -372,6 +394,10 @@ impl CraftPaths {
         let migrations_lock = locks_dir.join("migrations.lock");
         let ebpf_probes_file = ebpf_dir.join("probes.toml");
         let ebpf_lock = locks_dir.join("ebpf.lock");
+        let supply_chain_trust_anchors_file = supply_chain_dir.join("trust_anchors.json");
+        let supply_chain_policy_file = supply_chain_dir.join("policy.toml");
+        let supply_chain_registry_file = supply_chain_dir.join("registry.toml");
+        let supply_chain_lock = locks_dir.join("supply_chain.lock");
 
         Ok(Self {
             home,
@@ -449,7 +475,18 @@ impl CraftPaths {
             ebpf_flamegraphs_dir,
             ebpf_probes_file,
             ebpf_lock,
+            supply_chain_dir,
+            supply_chain_trust_anchors_file,
+            supply_chain_attestations_dir,
+            supply_chain_policy_file,
+            supply_chain_registry_file,
+            supply_chain_lock,
         })
+    }
+
+    /// Returns the attestation file path for a given artifact SHA-256 digest
+    pub fn supply_chain_attestation_path(&self, sha256: &str) -> PathBuf {
+        self.supply_chain_attestations_dir.join(format!("{}.json", sha256))
     }
 
     /// Returns the flamegraph SVG file path for a specific server or profiling session

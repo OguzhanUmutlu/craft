@@ -1799,6 +1799,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             NumaDpdk,
             LiveMigration,
             EbpfObservability,
+            SupplyChain,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1928,6 +1929,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::EbpfObservability);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Cryptographic Supply Chain & Hermetic Verification",
+            )
+            .with_aliases(&["attest", "provenance", "slsa", "supply"]),
+        );
+        actions.push(ToolItemAction::SupplyChain);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1996,6 +2007,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::EbpfObservability => {
                     ebpf_observability_tui(paths).await?;
+                }
+                ToolItemAction::SupplyChain => {
+                    supply_chain_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3244,6 +3258,107 @@ pub async fn ebpf_observability_tui(paths: &CraftPaths) -> Result<()> {
 
     show_modal_message(
         "eBPF KERNEL OBSERVABILITY & JVM GC TELEMETRY",
+        &lines,
+        false,
+    )?;
+    Ok(())
+}
+
+pub async fn supply_chain_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Supply Chain & Cryptographic Verification");
+
+    let reg = craft_core::supply_chain::SupplyChainRegistry::load(paths).unwrap_or_default();
+
+    let mut lines = Vec::new();
+    lines.push(
+        "IMMUTABLE CRYPTOGRAPHIC SUPPLY CHAIN & HERMETIC PROVENANCE"
+            .bold()
+            .to_string(),
+    );
+    lines.push(
+        "SLSA Provenance Attestation, Sigstore Bundles & In-Toto Statements"
+            .dimmed()
+            .to_string(),
+    );
+    lines.push("".to_string());
+
+    lines.push(format!("Enforcement Mode:     {}", reg.policy.enforcement_mode));
+    lines.push(format!("Minimum SLSA Level:   {}", reg.policy.minimum_slsa_level));
+    lines.push(format!(
+        "Require Reproducible: {}",
+        if reg.policy.require_reproducible {
+            "Yes"
+        } else {
+            "No"
+        }
+    ));
+    lines.push(format!(
+        "Require TLog Proof:   {}",
+        if reg.policy.require_transparency_log {
+            "Yes"
+        } else {
+            "No"
+        }
+    ));
+    lines.push(format!(
+        "Trust Anchors:        {} registered keys",
+        reg.trust_anchors.len()
+    ));
+    lines.push(format!(
+        "Verified Artifacts:   {} cached verdicts",
+        reg.verdicts.len()
+    ));
+
+    if !reg.verdicts.is_empty() {
+        lines.push("".to_string());
+        lines.push("Recent Artifact Verdicts:".dimmed().to_string());
+        for (sha, v) in reg.verdicts.iter().take(3) {
+            let status_str = if v.verified {
+                "[VERIFIED]".green()
+            } else {
+                "[VIOLATION]".red()
+            };
+            lines.push(format!(
+                "  * {} [{}] -> {} ({})",
+                v.artifact_name.cyan(),
+                v.slsa_level,
+                status_str,
+                &sha[..8.min(sha.len())]
+            ));
+        }
+    }
+
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push(
+        "  craft attest verify <artifact> [--strict]          Cryptographically verify SLSA provenance"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft attest inspect <artifact|attestation>        Inspect decoded in-toto Statement v1"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft attest policy [--set-mode strict]            Query or modify policy rules"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft attest sign <artifact> [-k key-id]           Sign artifact with SLSA statement"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft attest hermetic <dir> <cmd> [args...]        Execute hermetic build in sandbox"
+            .green()
+            .to_string(),
+    );
+
+    show_modal_message(
+        "CRYPTOGRAPHIC SUPPLY CHAIN & HERMETIC VERIFICATION",
         &lines,
         false,
     )?;

@@ -219,6 +219,24 @@ pub enum IpcRequest {
         server_name: String,
         probe_id: Option<String>,
     },
+    SupplyChainVerify {
+        artifact_path: PathBuf,
+        attestation_path: Option<PathBuf>,
+        strict: bool,
+    },
+    SupplyChainGetPolicy,
+    SupplyChainSetPolicy {
+        policy: craft_core::SupplyChainPolicy,
+    },
+    SupplyChainInspectAttestation {
+        identifier: String,
+    },
+    HermeticBuildRun {
+        build_dir: PathBuf,
+        command: String,
+        args: Vec<String>,
+        allow_network: bool,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -431,6 +449,19 @@ pub enum IpcResponse {
     EbpfProfilingStopped {
         descriptor: craft_core::EbpfProbeDescriptor,
         message: String,
+    },
+    SupplyChainVerdict {
+        verdict: craft_core::VerificationVerdict,
+    },
+    SupplyChainPolicyResult {
+        policy: craft_core::SupplyChainPolicy,
+        trust_anchors_count: usize,
+    },
+    SupplyChainAttestationResult {
+        attestation: Option<craft_core::InTotoStatement>,
+    },
+    HermeticBuildResult {
+        manifest: craft_core::HermeticBuildManifest,
     },
     Error { error: String },
 }

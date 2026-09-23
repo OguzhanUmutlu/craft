@@ -29,6 +29,7 @@ pub mod rbac;
 pub mod remote_config;
 pub mod rollout;
 pub mod sdn;
+pub mod supply_chain;
 pub mod timeseries;
 pub mod trash;
 pub mod cgroups;
@@ -111,6 +112,15 @@ pub use rollout::{
 pub use sdn::{
     FilterAction, FilterProtocol, IsolationZone, LocalNodeConfig, MicrosegmentationPolicy,
     MicrosegmentationRule, SdnMeshConfig, SdnRegistry, WireguardPeer,
+};
+pub use supply_chain::{
+    compute_file_sha256, create_inclusion_proof, dsse_pae, evaluate_supply_chain,
+    sign_in_toto_statement, BuildCompleteness, BuildInvocation, BuildMaterial, BuildMetadata,
+    BuilderInfo, ConfigSource, DsseEnvelope, DsseSignature, EnforcementMode,
+    HermeticBuildManifest, InTotoStatement, InclusionProof, SigstoreBundle, SlsaLevel,
+    SlsaPredicate, Subject, SupplyChainPolicy, SupplyChainRegistry, TransparencyLogEntry,
+    TrustAnchor, VerificationMaterial, VerificationVerdict, DSSE_PAYLOAD_TYPE,
+    IN_TOTO_STATEMENT_V1, SLSA_PREDICATE_V02,
 };
 pub use timeseries::{RegressionResult, RollingTimeSeries, SawtoothMetrics, TimeSeriesSample};
 pub use tracing_core::{

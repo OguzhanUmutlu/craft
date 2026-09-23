@@ -1272,6 +1272,60 @@ impl RemoteCraftClient {
         };
         self.session.exec(&full_cmd)
     }
+
+    /// Verifies a remote artifact cryptographic provenance against the remote policy
+    pub fn verify_remote_artifact(
+        &self,
+        artifact_path: &str,
+        attestation_path: Option<&str>,
+        strict: bool,
+    ) -> Result<String> {
+        let mut cmd = format!("craft attest verify {}", artifact_path);
+        if let Some(att) = attestation_path {
+            cmd.push_str(&format!(" --attestation {}", att));
+        }
+        if strict {
+            cmd.push_str(" --strict");
+        }
+        cmd.push_str(" --json");
+
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote artifact verification failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Fetches the remote host's cryptographic supply chain policy
+    pub fn get_remote_supply_chain_policy(&self) -> Result<String> {
+        let (code, stdout, stderr) = self.session.exec("craft attest policy --json")?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote supply chain policy query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Sets the remote host's supply chain enforcement mode
+    pub fn set_remote_supply_chain_policy(
+        &self,
+        mode: &str,
+        min_slsa: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!("craft attest policy --set-mode {}", mode);
+        if let Some(lvl) = min_slsa {
+            cmd.push_str(&format!(" --min-slsa {}", lvl));
+        }
+        cmd.push_str(" --json");
+
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote supply chain policy update failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

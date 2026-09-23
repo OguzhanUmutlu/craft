@@ -61,6 +61,9 @@ pub enum LifecycleEvent {
     JvmSafepointSpikeDetected,
     GcPauseThresholdExceeded,
     ThreadContentionSurge,
+    SupplyChainVerified,
+    SupplyChainViolationBlocked,
+    HermeticBuildCompleted,
 }
 
 impl LifecycleEvent {
@@ -116,6 +119,9 @@ impl LifecycleEvent {
             Self::JvmSafepointSpikeDetected => "on_jvm_safepoint_spike_detected",
             Self::GcPauseThresholdExceeded => "on_gc_pause_threshold_exceeded",
             Self::ThreadContentionSurge => "on_thread_contention_surge",
+            Self::SupplyChainVerified => "on_supply_chain_verified",
+            Self::SupplyChainViolationBlocked => "on_supply_chain_violation_blocked",
+            Self::HermeticBuildCompleted => "on_hermetic_build_completed",
         }
     }
 
@@ -172,6 +178,9 @@ impl LifecycleEvent {
             "on_jvm_safepoint_spike_detected" | "jvm_safepoint_spike_detected" | "safepoint_spike" => Some(Self::JvmSafepointSpikeDetected),
             "on_gc_pause_threshold_exceeded" | "gc_pause_threshold_exceeded" | "gc_threshold" | "gc_pause" => Some(Self::GcPauseThresholdExceeded),
             "on_thread_contention_surge" | "thread_contention_surge" | "contention_surge" | "lock_surge" => Some(Self::ThreadContentionSurge),
+            "on_supply_chain_verified" | "supply_chain_verified" | "verified" => Some(Self::SupplyChainVerified),
+            "on_supply_chain_violation_blocked" | "supply_chain_violation_blocked" | "violation_blocked" => Some(Self::SupplyChainViolationBlocked),
+            "on_hermetic_build_completed" | "hermetic_build_completed" | "hermetic_build" => Some(Self::HermeticBuildCompleted),
             _ => None,
         }
     }
@@ -228,6 +237,9 @@ impl LifecycleEvent {
             Self::JvmSafepointSpikeDetected,
             Self::GcPauseThresholdExceeded,
             Self::ThreadContentionSurge,
+            Self::SupplyChainVerified,
+            Self::SupplyChainViolationBlocked,
+            Self::HermeticBuildCompleted,
         ]
     }
 }
@@ -394,6 +406,16 @@ pub struct HookContext {
     pub lock_symbol: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contention_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slsa_level: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signer_identity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_digest: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub violation_reasons: Option<Vec<String>>,
 }
 
 impl HookContext {

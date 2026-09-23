@@ -1195,6 +1195,66 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::SupplyChainVerify {
+                artifact_path,
+                attestation_path,
+                strict,
+            } => {
+                let service = crate::supply_chain_service::SupplyChainService::global(supervisor.paths());
+                let resp = match service.verify_artifact(
+                    &artifact_path,
+                    attestation_path.as_deref(),
+                    strict,
+                ) {
+                    Ok(verdict) => IpcResponse::SupplyChainVerdict { verdict },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SupplyChainGetPolicy => {
+                let service = crate::supply_chain_service::SupplyChainService::global(supervisor.paths());
+                let resp = match service.get_policy() {
+                    Ok((policy, trust_anchors_count)) => {
+                        IpcResponse::SupplyChainPolicyResult {
+                            policy,
+                            trust_anchors_count,
+                        }
+                    }
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SupplyChainSetPolicy { policy } => {
+                let service = crate::supply_chain_service::SupplyChainService::global(supervisor.paths());
+                let resp = match service.set_policy(policy) {
+                    Ok(()) => IpcResponse::Success {
+                        message: "Supply chain policy updated successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SupplyChainInspectAttestation { identifier } => {
+                let service = crate::supply_chain_service::SupplyChainService::global(supervisor.paths());
+                let resp = match service.inspect_attestation(&identifier) {
+                    Ok(attestation) => IpcResponse::SupplyChainAttestationResult { attestation },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::HermeticBuildRun {
+                build_dir,
+                command,
+                args,
+                allow_network,
+            } => {
+                let service = crate::supply_chain_service::SupplyChainService::global(supervisor.paths());
+                let resp = match service.run_hermetic_build(&build_dir, &command, &args, allow_network).await {
+                    Ok(manifest) => IpcResponse::HermeticBuildResult { manifest },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -2496,6 +2556,89 @@ impl DaemonClient {
     ) -> Result<(craft_core::EbpfProbeDescriptor, String)> {
         match self.request(IpcRequest::EbpfStopProfiling { server_name, probe_id }).await? {
             IpcResponse::EbpfProfilingStopped { descriptor, message } => Ok((descriptor, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn verify_supply_chain_artifact(
+        &mut self,
+        artifact_path: std::path::PathBuf,
+        attestation_path: Option<std::path::PathBuf>,
+        strict: bool,
+    ) -> Result<craft_core::VerificationVerdict> {
+        match self
+            .request(IpcRequest::SupplyChainVerify {
+                artifact_path,
+                attestation_path,
+                strict,
+            })
+            .await?
+        {
+            IpcResponse::SupplyChainVerdict { verdict } => Ok(verdict),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_supply_chain_policy(
+        &mut self,
+    ) -> Result<(craft_core::SupplyChainPolicy, usize)> {
+        match self.request(IpcRequest::SupplyChainGetPolicy).await? {
+            IpcResponse::SupplyChainPolicyResult {
+                policy,
+                trust_anchors_count,
+            } => Ok((policy, trust_anchors_count)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_supply_chain_policy(
+        &mut self,
+        policy: craft_core::SupplyChainPolicy,
+    ) -> Result<String> {
+        match self
+            .request(IpcRequest::SupplyChainSetPolicy { policy })
+            .await?
+        {
+            IpcResponse::Success { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn inspect_supply_chain_attestation(
+        &mut self,
+        identifier: String,
+    ) -> Result<Option<craft_core::InTotoStatement>> {
+        match self
+            .request(IpcRequest::SupplyChainInspectAttestation { identifier })
+            .await?
+        {
+            IpcResponse::SupplyChainAttestationResult { attestation } => Ok(attestation),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_hermetic_build(
+        &mut self,
+        build_dir: std::path::PathBuf,
+        command: String,
+        args: Vec<String>,
+        allow_network: bool,
+    ) -> Result<craft_core::HermeticBuildManifest> {
+        match self
+            .request(IpcRequest::HermeticBuildRun {
+                build_dir,
+                command,
+                args,
+                allow_network,
+            })
+            .await?
+        {
+            IpcResponse::HermeticBuildResult { manifest } => Ok(manifest),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }
