@@ -459,6 +459,12 @@ async fn main() {
         Some(Commands::Hibernate { name, wake }) => {
             commands::hibernate::handle_hibernate(&name, wake, &paths).await
         }
+        Some(Commands::User { action }) => {
+            commands::user::handle_user(action, &paths)
+        }
+        Some(Commands::Audit { action }) => {
+            commands::audit::handle_audit(action, &paths)
+        }
     };
 
     if let Err(e) = result {
@@ -516,6 +522,8 @@ fn print_banner() {
     println!("  modpack <inspect|install>         Universal modpack distribution engine");
     println!("  autoscale [server] [--enable]     Manage idle hibernation & wake triggers");
     println!("  hibernate <server> [--wake]       Manually sleep or wake server via SleepProxy");
+    println!("  user <add|ls|rm|passwd>           Manage multi-tenant users, roles & scopes");
+    println!("  audit <ls|verify>                 Cryptographically verify HMAC audit chain");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

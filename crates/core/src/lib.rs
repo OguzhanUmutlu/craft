@@ -1,3 +1,4 @@
+pub mod audit;
 pub mod autoscale_config;
 pub mod backup_config;
 pub mod cache;
@@ -11,12 +12,15 @@ pub mod optimizer;
 pub mod path;
 pub mod process;
 pub mod properties;
+pub mod rbac;
 pub mod remote_config;
 pub mod trash;
 pub mod version;
 pub mod webhook_config;
 
+pub use audit::{AuditLedger, AuditLogEntry, AuditVerificationResult, DEFAULT_AUDIT_SECRET, GENESIS_HASH};
 pub use autoscale_config::{AutoscaleRegistry, ServerAutoscalePolicy};
+pub use rbac::{Permission, RbacRegistry, Role, UserAccount};
 
 pub use backup_config::{
     AutoBackupPolicy, GDriveBackupConfig, GDriveBackupTarget, GlobalBackupRegistry,

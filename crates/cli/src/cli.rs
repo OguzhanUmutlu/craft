@@ -487,6 +487,68 @@ pub enum Commands {
         #[arg(long)]
         wake: bool,
     },
+
+    /// Manage multi-tenant users, roles, and server access permissions
+    #[command(name = "user", alias = "users", alias = "rbac")]
+    User {
+        #[command(subcommand)]
+        action: UserCommands,
+    },
+
+    /// Inspect and cryptographically verify the append-only audit ledger
+    #[command(name = "audit")]
+    Audit {
+        #[command(subcommand)]
+        action: AuditCommands,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum UserCommands {
+    /// Add a new user account with role and optional server scoping
+    Add {
+        /// Username
+        username: String,
+        /// Role (SuperAdmin, ServerOperator, BackupAuditor, Viewer)
+        #[arg(short, long, default_value = "Viewer")]
+        role: String,
+        /// Password (will prompt securely if omitted)
+        #[arg(short, long)]
+        password: Option<String>,
+        /// Comma-separated list of assigned servers (empty for all servers)
+        #[arg(short, long, value_delimiter = ',')]
+        servers: Vec<String>,
+    },
+    /// List all registered users, roles, and server assignments
+    #[command(alias = "list")]
+    Ls,
+    /// Remove an existing user account
+    #[command(alias = "remove")]
+    Rm {
+        /// Username to remove
+        username: String,
+    },
+    /// Change password for a user account
+    Passwd {
+        /// Username
+        username: String,
+        /// New password (will prompt securely if omitted)
+        #[arg(short, long)]
+        password: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum AuditCommands {
+    /// List recent audit log entries
+    #[command(alias = "list")]
+    Ls {
+        /// Maximum number of recent entries to show (default: 50)
+        #[arg(short, long, default_value = "50")]
+        limit: usize,
+    },
+    /// Cryptographically verify the HMAC hash chain of the audit ledger
+    Verify,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -1586,6 +1648,67 @@ mod tests {
                 assert!(wake);
             }
             _ => panic!("Expected Hibernate command"),
+        }
+    }
+
+    #[test]
+    fn test_phase8_cli_parsing() {
+        let cli_user_add = Cli::try_parse_from([
+            "craft", "user", "add", "alice", "--role", "ServerOperator",
+            "--password", "s3cret", "--servers", "survival,creative"
+        ]).unwrap();
+        match cli_user_add.command {
+            Some(Commands::User {
+                action: UserCommands::Add {
+                    username,
+                    role,
+                    password,
+                    servers,
+                },
+            }) => {
+                assert_eq!(username, "alice");
+                assert_eq!(role, "ServerOperator");
+                assert_eq!(password, Some("s3cret".to_string()));
+                assert_eq!(servers, vec!["survival".to_string(), "creative".to_string()]);
+            }
+            _ => panic!("Expected User Add command"),
+        }
+
+        let cli_user_ls = Cli::try_parse_from(["craft", "user", "ls"]).unwrap();
+        match cli_user_ls.command {
+            Some(Commands::User { action: UserCommands::Ls }) => {}
+            _ => panic!("Expected User Ls command"),
+        }
+
+        let cli_user_rm = Cli::try_parse_from(["craft", "user", "rm", "bob"]).unwrap();
+        match cli_user_rm.command {
+            Some(Commands::User { action: UserCommands::Rm { username } }) => {
+                assert_eq!(username, "bob");
+            }
+            _ => panic!("Expected User Rm command"),
+        }
+
+        let cli_user_passwd = Cli::try_parse_from(["craft", "user", "passwd", "charlie", "--password", "newpass"]).unwrap();
+        match cli_user_passwd.command {
+            Some(Commands::User { action: UserCommands::Passwd { username, password } }) => {
+                assert_eq!(username, "charlie");
+                assert_eq!(password, Some("newpass".to_string()));
+            }
+            _ => panic!("Expected User Passwd command"),
+        }
+
+        let cli_audit_ls = Cli::try_parse_from(["craft", "audit", "ls", "--limit", "25"]).unwrap();
+        match cli_audit_ls.command {
+            Some(Commands::Audit { action: AuditCommands::Ls { limit } }) => {
+                assert_eq!(limit, 25);
+            }
+            _ => panic!("Expected Audit Ls command"),
+        }
+
+        let cli_audit_verify = Cli::try_parse_from(["craft", "audit", "verify"]).unwrap();
+        match cli_audit_verify.command {
+            Some(Commands::Audit { action: AuditCommands::Verify }) => {}
+            _ => panic!("Expected Audit Verify command"),
         }
     }
 }

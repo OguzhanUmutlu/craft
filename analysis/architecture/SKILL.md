@@ -49,7 +49,9 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 │   └── <id>_<name>/       # Recoverable staged files and directories
 ├── servers.toml           # Registered local server instances
 ├── remotes.toml           # Federated remote SSH host configurations
-└── clusters.toml          # Multi-server cluster topologies and DAGs
+├── clusters.toml          # Multi-server cluster topologies and DAGs
+├── rbac.toml              # Multi-tenant user accounts, roles & scopes
+└── audit.log              # Append-only continuous HMAC-SHA256 audit ledger
 ```
 
 ---
@@ -72,9 +74,15 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `servers.lock` guards server registry additions and removals.
   - `remotes.lock` synchronizes SSH host configuration mutations.
   - `clusters.lock` prevents concurrent cluster topology updates.
+  - `rbac.lock` synchronizes multi-tenant user and role definitions.
+  - `audit.lock` guards append operations to the continuous HMAC audit log.
   - `<server_dir>/server.lock` ensures a server instance cannot be launched simultaneously by multiple processes.
 
-### 3.3. `ClustersRegistry` & Topological DAG Scheduling
+### 3.3. `RbacRegistry` & `AuditLedger`
+- **`RbacRegistry` (`~/.craft/rbac.toml`)**: Manages `UserAccount` entries with 1,000-round SHA-256 salted hashes, `Role` hierarchies, granular `Permission` sets, and per-user `assigned_servers` filtering. Auto-initializes default `admin:admin` account if empty.
+- **`AuditLedger` (`~/.craft/audit.log`)**: Records every CLI, REST, and WebSocket mutation with continuous SHA-256 hash chains starting at `GENESIS_HASH` and HMAC-SHA256 signatures. Supports verification against tampering with `AuditLedger::verify_chain`.
+
+### 3.4. `ClustersRegistry` & Topological DAG Scheduling
 - **Location**: `~/.craft/clusters.toml`
 - **Format**: TOML array of `ServerCluster` structs (`name`, `nodes`, `proxy_entry`) with node definitions (`name`, `role`, `remote`, `depends_on`).
 - **Roles**: `backend`, `proxy`, `lobby`.
@@ -84,7 +92,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Detects cyclic dependencies and returns descriptive errors.
   - `ServerCluster::resolve_shutdown_order()` reverses the sequence, ensuring proxies disconnect players before backend worlds terminate.
 
-### 3.4. Cross-Node Federated Migration (`ServerMigrator`)
+### 3.5. Cross-Node Federated Migration (`ServerMigrator`)
 - **Protocol**:
   1. Validates source server is stopped (`server.lock` and PID verification).
   2. Verifies remote host SSH connection and `craft` binary installation.

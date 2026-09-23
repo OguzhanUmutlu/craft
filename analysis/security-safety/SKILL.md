@@ -46,3 +46,43 @@ The `craft fix` command executes automated diagnostic checks:
 4. **Native Permissions**: Ensures `0o755` executable permissions are set on `start.sh`, `bedrock_server`, PHP binaries, Factorio, Terraria, Valheim, and Palworld binaries.
 5. **Port Collision Detection**: Checks `server.properties` ports against other registered servers and detects if the port is already bound by another host process.
 6. **Ghost Registry Cleanup**: Flags registered server paths that no longer exist on disk.
+
+---
+
+## 4. Multi-Tenant Role-Based Access Control (`RbacRegistry`)
+
+Craft implements granular multi-tenant access control backed by `~/.craft/rbac.toml`:
+- **Role Hierarchies**:
+  - `SuperAdmin`: Unrestricted privileges across all servers, user management, audit trails, and configuration updates.
+  - `ServerOperator`: Server lifecycle operations (`start`, `stop`, `restart`, `console`, `files`, `backups`) restricted to explicitly assigned server instances.
+  - `BackupAuditor`: Read-only access to backups and audit logs, with permissions to trigger manual snapshots and inspect archives.
+  - `Viewer`: Read-only observation of server status, read-only live console log feeds, and server directory listings.
+- **Granular Permissions**:
+  `ServerStart`, `ServerStop`, `ServerRestart`, `ServerDelete`, `ServerFixForce`, `ServerConsoleView`, `ServerConsoleInput`, `BackupCreate`, `BackupRestore`, `BackupDelete`, `FileBrowse`, `FileEdit`, `FileDelete`, `AuditLogView`, `UserManage`.
+- **Per-User Server Scoping**:
+  `assigned_servers: Option<Vec<String>>` permits fine-grained scoping. If `None` or containing `*`, access is global across all managed instances.
+- **Key-Stretching Password Security**:
+  Passphrases are salted with 16 random bytes and stretched over 1,000 iterative rounds of SHA-256 hashing (`hash_password`), mitigating brute-force and dictionary attacks.
+- **Transactional File Concurrency**:
+  Mutations to `~/.craft/rbac.toml` acquire exclusive advisory locks (`~/.craft/locks/rbac.lock`) via `fs2` and perform atomic write-and-rename cycles.
+
+---
+
+## 5. Append-Only Cryptographic Audit Ledger (`AuditLedger`)
+
+Every administrative invocation across the CLI, daemon REST API, and WebSocket console is immutably appended to `~/.craft/audit.log`:
+- **Continuous Hash Chain**:
+  Each entry embeds `previous_hash`, `entry_hash`, and a pure-Rust `signature` calculated via HMAC-SHA256 over the current entry hash using the daemon master secret:
+  ```
+  Genesis [0000...0000]
+         │
+         ▼
+  Entry 1 [ Hash_1 = SHA256(prev_hash | ts | actor | action | status | ...), Sig_1 = HMAC(Hash_1) ]
+         │
+         ▼
+  Entry 2 [ Hash_2 = SHA256(Hash_1 | ts | actor | action | status | ...),    Sig_2 = HMAC(Hash_2) ]
+  ```
+- **Tamper Detection (`verify_chain`)**:
+  `AuditLedger::verify_chain` parses the log line-by-line, recalculates SHA-256 digests and validates HMAC signatures. Any line deletion, insertion, or in-place edit immediately breaks the hash chain, pinpointing the exact corrupted index.
+- **Lock-Guarded Appends**:
+  Log writing acquires an exclusive file lock (`~/.craft/locks/audit.lock`) before reading the last recorded hash and appending new serializations.

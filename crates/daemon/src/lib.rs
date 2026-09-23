@@ -7,6 +7,7 @@ pub mod ring_buffer;
 pub mod scheduler;
 pub mod supervisor;
 pub mod telemetry;
+pub mod web_dashboard;
 pub mod webhooks;
 
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};
@@ -18,4 +19,5 @@ pub use ring_buffer::RingBuffer;
 pub use scheduler::{BackupSchedule, BackupScheduleInfo, DaemonScheduler};
 pub use supervisor::Supervisor;
 pub use telemetry::{generate_prometheus_metrics, init_telemetry_start_time};
+pub use web_dashboard::DASHBOARD_HTML;
 pub use webhooks::{WebhookDispatcher, WebhookPayload};

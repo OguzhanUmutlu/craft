@@ -1,3 +1,4 @@
+pub mod audit;
 pub mod auto;
 pub mod autoscale;
 pub mod backup;
@@ -33,6 +34,7 @@ pub mod stop;
 pub mod template;
 pub mod trash;
 pub mod update;
+pub mod user;
 pub mod ver;
 pub mod view;
 pub mod webhook;
