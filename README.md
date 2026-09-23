@@ -38,20 +38,58 @@ Craft can provision, run, attach to, supervise, ping, back up, containerize, and
   - `craft template datapack` -> Scaffolds modern Minecraft datapack.
   - `craft dockerize` -> Generates production multi-stage `Dockerfile` and `docker-compose.yml`.
 
+- **Optional Desktop GUI Studio (`craft-studio`)**:
+  - Native, beautiful graphical desktop studio powered by Tauri v2 and React 18.
+  - Decoupled architecture: extends the Craft CLI with zero bloat to the minimal single binary.
+  - Multi-step Server Provisioning Wizard, Live Interactive Console, Modrinth Plugin Store & Bytecode Inspector, Hot Backup Resilience Hub, JVM Tuning Optimizer, Universal CLI Command Runner, Multi-Cloud Storage Mesh, and Global Edge Latency Prober.
+
 ---
 
-## Installation & Building
+## Installation
+
+### 1. Craft CLI (Minimal Standalone Binary)
+Ultra-fast, single native binary (<12 MB) with zero GUI dependencies (<35ms installation):
+```bash
+# Universal 1-line installer (Linux & macOS)
+curl -sSL https://dl.craft.oguzhanumutlu.com/install.sh | bash
+
+# Standalone native installer (Linux, macOS, Windows)
+craft-installer
+```
+
+### 2. Craft Desktop Studio (Optional GUI)
+Full native desktop studio bundling companion CLI for complete visual management:
+```bash
+# Universal 1-line installer with --ui flag
+curl -sSL https://dl.craft.oguzhanumutlu.com/install.sh | bash -s -- --ui
+
+# Standalone native installer with --gui flag
+craft-installer --gui
+```
+*Direct release archives (`.tar.gz` for Linux/macOS, `.zip` for Windows) are published under dedicated GitHub Release tags `studio-v*`.*
+
+---
+
+## Building from Source
 
 ### Requirements
 - [Rust & Cargo](https://rustup.rs/) (version 1.80+)
+- [Node.js & npm](https://nodejs.org/) (version 20+, for Desktop Studio frontend)
 
-### Building from Source
+### Build CLI Only
 ```bash
 git clone https://github.com/OguzhanUmutlu/craft.git
 cd craft
-cargo build --release
+cargo build --release -p craft
 ```
 The optimized executable will be located at `target/release/craft`.
+
+### Build Desktop Studio
+```bash
+cd crates/ui && npm run build && cd ../..
+cargo build --release -p craft-ui -p craft
+python3 tools/package_ui.py --skip-build
+```
 
 You can also use the bundled wrapper scripts in `bin/`:
 ```bash

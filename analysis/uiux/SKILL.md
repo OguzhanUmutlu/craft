@@ -353,3 +353,29 @@ Craft Desktop Studio features an independent, fully decoupled distribution pipel
 
 4. **Automated End-to-End Verification (`tools/test_distribution.py`)**:
    - Automated integration harness validating Go server HTTP routing, SHA-256 matching, `craft-installer --gui` extraction, binary execution (`craft --help`), and dynamic `install.sh --ui` scripting across isolated sandbox environments.
+
+---
+
+## 12. Independent Publication Pipeline, Multi-Platform Release Automation & Unified Portal Sync (Phase 16)
+
+Craft Desktop Studio fulfills complete publication independence, multi-platform release CI/CD automation, and unified documentation portal parity, cementing the architectural decoupling of the optional GUI from the lightweight single-binary CLI:
+
+1. **Independent Release Tagging & Namespace**:
+   - Desktop releases are published under dedicated tag namespace `studio-vX.Y.Z` (e.g. `studio-v1.0.0`).
+   - Guarantees that CLI release cycles (`vX.Y.Z`) and desktop GUI releases remain independently versioned, preventing CLI update checks from fetching multi-megabyte GUI bundles.
+
+2. **Automated Release Publishing Automation (`tools/publish_ui.py`)**:
+   - Validates existence, byte sizes, and internal structure of all cross-platform release archives.
+   - Computes streaming SHA-256 digests and emits standalone `releases/versions-ui.json` and synchronized `releases/versions.json`.
+   - Generates standardized release notes (`release-notes-studio-vX.Y.Z.md`) with download tables, verified checksums, and 1-line installation snippets.
+   - Supports `--dry-run` validation audit mode and automated live GitHub Releases creation via `gh release create`.
+
+3. **Multi-Platform GitHub Actions CI/CD Pipeline (`.github/workflows/release-studio.yml`)**:
+   - Matrix builds across Linux (`ubuntu-22.04`), macOS (`macos-14`), and Windows (`windows-2022`).
+   - Builds production Vite bundle in `crates/ui`, compiles `craft-ui` and companion `craft` CLI with Thin LTO and warning denial (`-D warnings`).
+   - Assembles native archives (`.tar.gz` for Unix, `.zip` for Windows) and aggregates artifacts into GitHub Releases under the `studio-v*` tag.
+
+4. **Public Documentation & Documentation Portal Parity**:
+   - Root `README.md` prominently features Craft Desktop Studio as an optional desktop GUI extension with quick installation methods (`curl .../install.sh | bash -s -- --ui`, `craft-installer --gui`, direct release archives).
+   - React documentation portal (`docs/src/components/Documentation.tsx`) includes a dedicated `craft-studio` documentation page under category `Desktop GUI` detailing overview, decoupled architecture, quick launch, installation guides, and interactive subsystem features.
+

@@ -28,7 +28,8 @@ import {
   Settings,
   FolderTree,
   Network,
-  Download
+  Download,
+  Monitor
 } from 'lucide-react';
 
 export interface DocPage {
@@ -187,17 +188,104 @@ export default function Documentation({ onBackToHome, initialPage = 'getting-sta
             </table>
           </div>
 
+          <h3 className="text-lg font-bold text-white mt-8 mb-2">1. Quick Installation (CLI Only)</h3>
+          <p className="text-xs text-slate-400">
+            For headless servers and terminal operators. Ultra-fast single binary (&lt;12 MB) installed in under 35ms:
+          </p>
+          <CodeBlock id="inst-cli-sh" code={`curl -sSL https://dl.craft.oguzhanumutlu.com/install.sh | bash`} />
+          <p className="text-xs text-slate-400 mt-2">
+            Or via the standalone native installer:
+          </p>
+          <CodeBlock id="inst-cli-bin" code={`craft-installer --yes`} />
+
+          <h3 className="text-lg font-bold text-white mt-8 mb-2">2. Craft Desktop Studio (Optional GUI)</h3>
+          <p className="text-xs text-slate-400">
+            Full native desktop GUI studio bundling the companion CLI. Ideal for desktop operators wanting visual server wizards, live console streaming, plugin store, and hot backups:
+          </p>
+          <CodeBlock id="inst-studio-sh" code={`# Universal 1-line installer with --ui flag\ncurl -sSL https://dl.craft.oguzhanumutlu.com/install.sh | bash -s -- --ui\n\n# Or via standalone native installer\ncraft-installer --gui --yes`} />
+
           <h3 className="text-lg font-bold text-white mt-8 mb-2">Compiling from Source</h3>
           <p className="text-xs text-slate-400">
             If you have Rust toolchain installed, you can build and install the latest commit directly:
           </p>
-          <CodeBlock id="inst-cargo" code={`git clone https://github.com/OguzhanUmutlu/craft.git\ncd craft\ncargo build --release -p craft\nsudo cp target/release/craft /usr/local/bin/`} />
+          <CodeBlock id="inst-cargo" code={`git clone https://github.com/OguzhanUmutlu/craft.git\ncd craft\n# Build CLI binary\ncargo build --release -p craft\nsudo cp target/release/craft /usr/local/bin/\n\n# Build Desktop Studio\ncd crates/ui && npm run build && cd ../..\ncargo build --release -p craft-ui -p craft\npython3 tools/package_ui.py --skip-build`} />
 
           <h3 className="text-lg font-bold text-white mt-8 mb-2">Shell Autocompletion</h3>
           <p className="text-xs text-slate-400">
             Generate native autocompletion scripts for your shell for instant tab-completion of server names and flags:
           </p>
           <CodeBlock id="inst-comp" code={`# Bash\ncraft completion bash > ~/.local/share/bash-completion/completions/craft\n\n# Zsh\ncraft completion zsh > ~/.zfunc/_craft\n\n# Fish\ncraft completion fish > ~/.config/fish/completions/craft.fish`} />
+        </div>
+      ),
+    },
+    {
+      id: 'craft-studio',
+      title: 'Craft Desktop Studio',
+      category: 'Desktop GUI',
+      icon: Monitor,
+      description: 'Modern native desktop GUI studio extending Craft CLI with visual server wizards, live console, plugin store, and hot backups.',
+      content: (
+        <div className="space-y-6">
+          <p className="text-sm text-slate-300 leading-relaxed">
+            <strong className="text-white">Craft Desktop Studio</strong> is an optional, high-performance native desktop GUI
+            powered by <code className="text-emerald-400 font-mono">Tauri v2</code>, <code className="text-emerald-400 font-mono">React 18</code>, and <code className="text-emerald-400 font-mono">TypeScript TSX</code>.
+            It is completely decoupled from the lightweight single-binary CLI toolchain, bundling an embedded CLI companion to provide seamless graphical operations with zero compromise on CLI speed.
+          </p>
+
+          <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 space-y-2">
+            <span className="font-semibold text-white">Quick Launch:</span>
+            <CodeBlock id="studio-launch" code="craft-studio" />
+            <p className="text-slate-400">Launch the studio from terminal or desktop application menu.</p>
+          </div>
+
+          <h3 className="text-lg font-bold text-white mt-8 mb-2">Installation Options</h3>
+          <div className="space-y-3">
+            <p className="text-xs text-slate-400">One-line universal installer passing the <code className="text-emerald-400 font-mono">--ui</code> flag:</p>
+            <CodeBlock id="studio-inst-1" code={`curl -sSL https://dl.craft.oguzhanumutlu.com/install.sh | bash -s -- --ui`} />
+            <p className="text-xs text-slate-400">Standalone native installer:</p>
+            <CodeBlock id="studio-inst-2" code={`craft-installer --gui`} />
+            <p className="text-xs text-slate-400">Direct release archives are published under dedicated GitHub Release tags <code className="text-emerald-400 font-mono">studio-v*</code>.</p>
+          </div>
+
+          <h3 className="text-lg font-bold text-white mt-8 mb-2">Interactive Subsystems</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+              <h4 className="text-sm font-semibold text-white mb-1">Server Provisioning Wizard</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                4-step progressive modal to select software (Paper, Purpur, Velocity, Fabric, Bedrock), pick versions, configure ports, memory allocation, and accept Minecraft EULA with 1 click.
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+              <h4 className="text-sm font-semibold text-white mb-1">Live Console Stream</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                High-contrast ANSI terminal connected to background daemon with live command input injection, history scrolling, and freeze view.
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+              <h4 className="text-sm font-semibold text-white mb-1">Modrinth Plugin Store</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                In-memory bytecode manifest inspection for installed jars (`plugin.yml`, `fabric.mod.json`), combined with online Modrinth search and 1-click installation.
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+              <h4 className="text-sm font-semibold text-white mb-1">Backup & Resilience Hub</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Zero-downtime hot snapshots (.tar.zst), automated retention policy management, and safety lock guards that strictly prevent restoring over active processes.
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+              <h4 className="text-sm font-semibold text-white mb-1">Properties & JVM Tuning</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Visual type-safe editor for server.properties plus JVM memory presets (Conservative 50%, Balanced 70%, Aggressive 82%) with Generational ZGC and Aikar G1GC flags.
+              </p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
+              <h4 className="text-sm font-semibold text-white mb-1">Universal CLI Runner</h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Embedded command terminal capable of executing any Craft CLI command (craft fix, craft optimize, craft audit verify) directly inside the studio.
+              </p>
+            </div>
+          </div>
         </div>
       ),
     },

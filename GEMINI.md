@@ -74,6 +74,7 @@ Full multi-phased task breakdowns and 5–10 line technical specifications are t
 
 | Category | Phase | Focus Area | Status |
 | :--- | :--- | :--- | :--- |
+| **Done** | **Phase 16** | Independent Publication Pipeline, Multi-Platform Release Automation & Unified Portal Sync (Independent publishing, GitHub workflow, portal sync) | **COMPLETED** |
 | **Done** | **Phase 15** | Independent Distribution Pipeline, Local Download Server & Standalone Installer Packaging (Separate distribution, Go server endpoints, installer) | **COMPLETED** |
 | **Done** | **Phase 14** | End-to-End DevTools Automation, Local Release Bundling & Visual Regression Verification (Release bundling, CDP test runner, visual audit) | **COMPLETED** |
 | **Done** | **Phase 13** | Desktop Studio Feature Parity & Interactive Subsystems (Server Wizard, Plugin Store, Backup Hub, Config Editor & Universal CLI Runner) | **COMPLETED** |

@@ -16,11 +16,14 @@
   "release_date": "2026-09-23",
   "assets": {
     "craft-studio-linux-amd64.tar.gz": {
-      "platform": "linux-amd64",
       "filename": "craft-studio-linux-amd64.tar.gz",
       "size": 12821007,
       "sha256": "49848226d440086fdfcd4cc343c1e2b4cab7160aaf97146c46400c89e196095d",
-      "url": "/download/ui/craft-studio-linux-amd64.tar.gz"
+      "platform": "linux-amd64",
+      "download_url": "/download/ui/craft-studio-linux-amd64.tar.gz"
     }
-  }
+  },
+  "studio_version": "1.0.0",
+  "studio_tag": "studio-v1.0.0",
+  "studio_release_date": "2026-09-23"
 }

@@ -22,6 +22,8 @@ cargo-timing.html
 !/tools/package_local.py
 !/tools/package_ui.py
 !/tools/test_distribution.py
+!/tools/publish_ui.py
+!/tools/test_publication.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/
@@ -129,5 +131,7 @@ dist/
 /releases/**/*-arm64
 /releases/**/craft-studio/
 !/releases/**/versions.json
+!/releases/**/versions-ui.json
+!/releases/**/release-notes-*.md
 !/releases/**/*.sha256
 /executables/dist/
