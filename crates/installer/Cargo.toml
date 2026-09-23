@@ -17,3 +17,11 @@ zstd = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 directories = { workspace = true }
+tar = { workspace = true }
+flate2 = { workspace = true }
+zip = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

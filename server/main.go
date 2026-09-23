@@ -69,6 +69,11 @@ func main() {
 	mux.HandleFunc("GET /healthz", srv.handleHealthz)
 	mux.HandleFunc("GET /api/v1/version", srv.handleVersion)
 	mux.HandleFunc("GET /api/v1/download/{platform}", srv.handleDownload)
+	mux.HandleFunc("GET /api/versions/ui", srv.handleUIVersions)
+	mux.HandleFunc("GET /api/v1/versions/ui", srv.handleUIVersions)
+	mux.HandleFunc("GET /download/ui", srv.handleDownloadUI)
+	mux.HandleFunc("GET /download/ui/{platform}", srv.handleDownloadUIPlatform)
+	mux.HandleFunc("GET /api/v1/download/ui/{platform}", srv.handleDownloadUIPlatform)
 	mux.HandleFunc("GET /install.sh", srv.handleInstallSh)
 	mux.HandleFunc("GET /install.ps1", srv.handleInstallPs1)
 
@@ -152,14 +157,16 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	baseURL := s.getBaseURL(r)
 	resp := map[string]any{
-		"app":         "Craft Binary Distribution Server",
-		"version":     AppVersion,
-		"status":      "online",
-		"uptime":      time.Since(s.startTime).String(),
-		"docs_url":    "https://github.com/OguzhanUmutlu/craft",
-		"install_sh":  baseURL + "/install.sh",
-		"install_ps1": baseURL + "/install.ps1",
-		"api_version": baseURL + "/api/v1/version",
+		"app":             "Craft Binary Distribution Server",
+		"version":         AppVersion,
+		"status":          "online",
+		"uptime":          time.Since(s.startTime).String(),
+		"docs_url":        "https://github.com/OguzhanUmutlu/craft",
+		"install_sh":      baseURL + "/install.sh",
+		"install_ps1":     baseURL + "/install.ps1",
+		"api_version":     baseURL + "/api/v1/version",
+		"download_ui":     baseURL + "/download/ui",
+		"api_versions_ui": baseURL + "/api/versions/ui",
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -258,6 +265,130 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	stat, _ := file.Stat()
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", cleanPlatform))
 	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+
+	io.Copy(w, file)
+}
+
+func (s *Server) handleUIVersions(w http.ResponseWriter, r *http.Request) {
+	baseURL := s.getBaseURL(r)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	platforms := []string{
+		"craft-studio-linux-amd64.tar.gz",
+		"craft-studio-linux-arm64.tar.gz",
+		"craft-studio-darwin-arm64.tar.gz",
+		"craft-studio-darwin-amd64.tar.gz",
+		"craft-studio-windows-amd64.zip",
+	}
+
+	assets := make(map[string]any)
+	for _, p := range platforms {
+		filePath := filepath.Join(s.config.ReleasesDir, p)
+		info, err := os.Stat(filePath)
+		var size int64 = 0
+		available := false
+		if err == nil && !info.IsDir() {
+			size = info.Size()
+			available = true
+		}
+
+		assets[p] = map[string]any{
+			"url":       fmt.Sprintf("%s/download/ui/%s", baseURL, p),
+			"size":      size,
+			"available": available,
+			"sha256":    s.checksums[p],
+		}
+	}
+
+	resp := map[string]any{
+		"version":      AppVersion,
+		"release_date": "2026-09-23",
+		"notes":        "Craft Desktop Studio standalone release - graphical server manager with embedded CLI companion",
+		"assets":       assets,
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleDownloadUI(w http.ResponseWriter, r *http.Request) {
+	platform := r.URL.Query().Get("platform")
+	if platform == "" {
+		ua := strings.ToLower(r.UserAgent())
+		switch {
+		case strings.Contains(ua, "darwin") || strings.Contains(ua, "macintosh") || strings.Contains(ua, "mac os"):
+			if strings.Contains(ua, "arm64") || strings.Contains(ua, "aarch64") {
+				platform = "darwin-arm64"
+			} else {
+				platform = "darwin-arm64"
+			}
+		case strings.Contains(ua, "windows"):
+			platform = "windows-amd64"
+		default:
+			platform = "linux-amd64"
+		}
+	}
+
+	s.serveUIArchive(w, r, platform)
+}
+
+func (s *Server) handleDownloadUIPlatform(w http.ResponseWriter, r *http.Request) {
+	platform := r.PathValue("platform")
+	if platform == "" {
+		http.Error(w, "Platform parameter required", http.StatusBadRequest)
+		return
+	}
+	s.serveUIArchive(w, r, platform)
+}
+
+func (s *Server) serveUIArchive(w http.ResponseWriter, r *http.Request, platform string) {
+	cleanPlatform := filepath.Base(platform)
+	targetFile := filepath.Join(s.config.ReleasesDir, cleanPlatform)
+
+	if _, err := os.Stat(targetFile); os.IsNotExist(err) {
+		candidates := []string{
+			cleanPlatform,
+			"craft-studio-" + cleanPlatform + ".tar.gz",
+			"craft-studio-" + cleanPlatform + ".zip",
+			"craft-studio-" + cleanPlatform,
+			cleanPlatform + ".tar.gz",
+			cleanPlatform + ".zip",
+			"craft-studio-linux-amd64.tar.gz",
+		}
+		found := false
+		for _, cand := range candidates {
+			candPath := filepath.Join(s.config.ReleasesDir, cand)
+			if _, err := os.Stat(candPath); err == nil {
+				targetFile = candPath
+				cleanPlatform = cand
+				found = true
+				break
+			}
+		}
+		if !found {
+			http.Error(w, fmt.Sprintf("Craft Studio archive for '%s' not found on server", platform), http.StatusNotFound)
+			return
+		}
+	}
+
+	file, err := os.Open(targetFile)
+	if err != nil {
+		http.Error(w, "Error opening release file", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	stat, _ := file.Stat()
+	contentType := "application/octet-stream"
+	if strings.HasSuffix(cleanPlatform, ".tar.gz") {
+		contentType = "application/gzip"
+	} else if strings.HasSuffix(cleanPlatform, ".zip") {
+		contentType = "application/zip"
+	}
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", cleanPlatform))
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 

@@ -52,6 +52,15 @@ case "$ARCH" in
     ;;
 esac
 
+INSTALL_MODE="cli"
+for arg in "$@"; do
+  case "$arg" in
+    --ui|--gui)
+      INSTALL_MODE="ui"
+      ;;
+  esac
+done
+
 TARGET_NAME="craft-${OS_TYPE}-${ARCH_TYPE}"
 DOWNLOAD_URL="${BASE_URL}/api/v1/download/${TARGET_NAME}"
 
@@ -90,6 +99,55 @@ fetch_file() {
     exit 1
   fi
 }
+
+if [ "$INSTALL_MODE" = "ui" ]; then
+  echo -e "${BLUE}==> Selected package:${NC} ${CYAN}Craft Desktop Studio${NC}"
+  TARGET_ARCHIVE="craft-studio-${OS_TYPE}-${ARCH_TYPE}.tar.gz"
+  UI_DOWNLOAD_URL="${BASE_URL}/download/ui?platform=${OS_TYPE}-${ARCH_TYPE}"
+
+  TMP_ARCHIVE="${TMP_DIR}/${TARGET_ARCHIVE}"
+  echo -e "${BLUE}==> Fetching Craft Desktop Studio archive...${NC}"
+  fetch_file "$UI_DOWNLOAD_URL" "$TMP_ARCHIVE" false
+
+  APP_DIR="${HOME}/.local/share/craft-studio"
+  BIN_DIR="${HOME}/.local/bin"
+  if [ -w "/usr/local/bin" ] && [ -w "/opt" ] && [ "$EUID" -eq 0 ]; then
+    APP_DIR="/opt/craft-studio"
+    BIN_DIR="/usr/local/bin"
+  fi
+
+  mkdir -p "$APP_DIR" "$BIN_DIR"
+  echo -e "${BLUE}==> Extracting package to ${APP_DIR}...${NC}"
+  tar -xzf "$TMP_ARCHIVE" -C "$APP_DIR" --strip-components=1 2>/dev/null || tar -xzf "$TMP_ARCHIVE" -C "$APP_DIR"
+
+  chmod +x "${APP_DIR}/craft-studio" "${APP_DIR}/craft-studio-bin" "${APP_DIR}/craft" 2>/dev/null || true
+
+  ln -sf "${APP_DIR}/craft-studio" "${BIN_DIR}/craft-studio"
+  ln -sf "${APP_DIR}/craft" "${BIN_DIR}/craft"
+
+  DESKTOP_DIR="${HOME}/.local/share/applications"
+  if [ -d "$DESKTOP_DIR" ] || mkdir -p "$DESKTOP_DIR" 2>/dev/null; then
+    if [ -f "${APP_DIR}/craft-studio.desktop" ]; then
+      cp -f "${APP_DIR}/craft-studio.desktop" "${DESKTOP_DIR}/"
+    fi
+  fi
+
+  ICON_DIR="${HOME}/.local/share/icons/hicolor/128x128/apps"
+  if mkdir -p "$ICON_DIR" 2>/dev/null; then
+    if [ -f "${APP_DIR}/icons/128x128.png" ]; then
+      cp -f "${APP_DIR}/icons/128x128.png" "${ICON_DIR}/craft-studio.png"
+    fi
+  fi
+
+  echo -e "${GREEN}${BOLD}[OK] Craft Desktop Studio installed successfully!${NC}"
+  echo -e "  Launcher:  ${CYAN}${BIN_DIR}/craft-studio${NC}"
+  echo -e "  CLI tool:  ${CYAN}${BIN_DIR}/craft${NC}"
+  echo -e "  Location:  ${CYAN}${APP_DIR}${NC}"
+  echo ""
+  echo -e "Launch Craft Studio with:"
+  echo -e "  ${YELLOW}craft-studio${NC}"
+  exit 0
+fi
 
 INSTALLED=false
 

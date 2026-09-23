@@ -698,8 +698,14 @@ dependencies = [
  "clap",
  "colored",
  "directories",
+ "flate2",
+ "hex",
  "reqwest 0.12.28",
+ "sha2",
+ "tar",
+ "tempfile",
  "tokio",
+ "zip",
  "zstd",
 ]
 

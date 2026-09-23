@@ -316,4 +316,40 @@ Craft Desktop Studio includes a fully automated end-to-end testing, local releas
      - DOM Node Count: 371 nodes (Strict limit: < 1,500 nodes).
      - 0 unhandled console errors or exceptions.
 
+---
 
+## 11. Decoupled Desktop Studio Distribution Architecture & Standalone Packaging (Phase 15)
+
+Craft Desktop Studio features an independent, fully decoupled distribution pipeline ensuring the lightweight standalone CLI distribution remains untainted (~4.9 MB) while operators can easily deploy the full graphical studio on any host:
+
+1. **Go Distribution Server Architecture (`server/main.go`)**:
+   - **Dedicated Desktop Endpoints**:
+     - `GET /download/ui`: Platform-adaptive download router. Inspects `?platform=<p>` query parameters and falls back to `User-Agent` operating system detection to serve `craft-studio-<os>-<arch>.tar.gz` (or `.zip` on Windows) with correct `Content-Disposition`, `Content-Type` (`application/gzip` / `application/zip`), and `Content-Length`.
+     - `GET /download/ui/{platform}`: Direct platform or file download handler with candidate name normalization (e.g. `linux-amd64` resolves to `craft-studio-linux-amd64.tar.gz`).
+     - `GET /api/versions/ui` & `GET /api/v1/versions/ui`: Desktop Studio version catalog endpoint exposing release dates, notes, and per-platform asset objects (URL, byte size, availability flag, and SHA-256 digests).
+     - `GET /api/v1/download/ui/{platform}`: Programmatic API download mirror.
+   - **Dynamic Installer Script Templating (`server/install.sh`)**:
+     - Extended to support `--ui` and `--gui` flags: `curl -sSL http://.../install.sh | bash -s -- --ui`.
+     - Automatically routes to `${BASE_URL}/download/ui?platform=${OS_TYPE}-${ARCH_TYPE}`, unpacks to `~/.local/share/craft-studio`, creates symlinks in `~/.local/bin` (or `/usr/local/bin`), and configures XDG menu entries and icons.
+     - When `--ui` is omitted, maintains the ultra-fast (<35ms) raw or zstd single-binary CLI install.
+   - **Automated Checksum Sync**:
+     - Background SHA-256 generator scans `.tar.gz`, `.zip`, `.zst`, and executables, caching cryptographic digests in memory and emitting verified `.sha256` files.
+
+2. **Standalone Release Packaging Pipeline (`tools/package_ui.py`)**:
+   - Assembles production bundles for Linux (`.tar.gz`), macOS (`.tar.gz`), and Windows (`.zip`) with zero pip dependencies.
+   - Embeds the desktop executable (`craft-studio-bin`), companion CLI tool (`craft`), environment-configuring launcher script (`craft-studio` / `craft-studio.cmd`), XDG desktop entry (`craft-studio.desktop`), and multi-resolution icons.
+   - Emits verified `.sha256` digest files and updates `versions.json`.
+   - `--stage-server <dir>` automatically stages distribution archives directly into `server/releases/` for local testing and production distribution.
+
+3. **Standalone Native Installer Engine (`crates/installer/src/main.rs`)**:
+   - Equipped with `--gui` / `--ui` flag alongside the standard CLI installation mode.
+   - Pure-Rust in-memory archive extraction engine:
+     - Magic byte detection: `[0x1F, 0x8B]` for `.tar.gz` (via `flate2` + `tar`), `[0x50, 0x4B]` for `.zip` (via `zip`), `[0x28, 0xB5, 0x2F, 0xFD]` for `.zst` (via `zstd`).
+     - Strips top-level root folders if present and extracts contents directly into target destination (`~/.local/share/craft-studio` or `/opt/craft-studio`).
+     - Verifies runtime advisory locks (`~/.craft/.servers.lock`) to ensure non-destructive installation.
+     - Sets POSIX executable permissions (`0o755`) on `craft-studio`, `craft-studio-bin`, and `craft`.
+     - Automatically creates bin symlinks and installs desktop integration (`.desktop` in `~/.local/share/applications/` and icon in `~/.local/share/icons/hicolor/128x128/apps/`).
+     - Maintains single-binary CLI mode with <35ms installation time when `--gui` is not specified.
+
+4. **Automated End-to-End Verification (`tools/test_distribution.py`)**:
+   - Automated integration harness validating Go server HTTP routing, SHA-256 matching, `craft-installer --gui` extraction, binary execution (`craft --help`), and dynamic `install.sh --ui` scripting across isolated sandbox environments.
