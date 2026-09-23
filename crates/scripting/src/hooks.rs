@@ -41,6 +41,9 @@ pub enum LifecycleEvent {
     ResourceQuotaExceeded,
     CgroupThrottled,
     FairShareAdjusted,
+    TraceSpanRecorded,
+    OtlpExportFailed,
+    TraceSamplingSurge,
 }
 
 impl LifecycleEvent {
@@ -76,6 +79,9 @@ impl LifecycleEvent {
             Self::ResourceQuotaExceeded => "on_resource_quota_exceeded",
             Self::CgroupThrottled => "on_cgroup_throttled",
             Self::FairShareAdjusted => "on_fair_share_adjusted",
+            Self::TraceSpanRecorded => "on_trace_span_recorded",
+            Self::OtlpExportFailed => "on_otlp_export_failed",
+            Self::TraceSamplingSurge => "on_trace_sampling_surge",
         }
     }
 
@@ -112,6 +118,9 @@ impl LifecycleEvent {
             "on_resource_quota_exceeded" | "resource_quota_exceeded" | "quota_exceeded" => Some(Self::ResourceQuotaExceeded),
             "on_cgroup_throttled" | "cgroup_throttled" | "throttled" => Some(Self::CgroupThrottled),
             "on_fair_share_adjusted" | "fair_share_adjusted" | "fair_share" => Some(Self::FairShareAdjusted),
+            "on_trace_span_recorded" | "trace_span_recorded" | "span_recorded" => Some(Self::TraceSpanRecorded),
+            "on_otlp_export_failed" | "otlp_export_failed" | "export_failed" => Some(Self::OtlpExportFailed),
+            "on_trace_sampling_surge" | "trace_sampling_surge" | "sampling_surge" => Some(Self::TraceSamplingSurge),
             _ => None,
         }
     }
@@ -148,6 +157,9 @@ impl LifecycleEvent {
             Self::ResourceQuotaExceeded,
             Self::CgroupThrottled,
             Self::FairShareAdjusted,
+            Self::TraceSpanRecorded,
+            Self::OtlpExportFailed,
+            Self::TraceSamplingSurge,
         ]
     }
 }
@@ -246,6 +258,18 @@ pub struct HookContext {
     pub cpu_throttled_usec: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub throttle_ratio: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_span_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_duration_micros: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span_status: Option<String>,
 }
 
 impl HookContext {
@@ -678,5 +702,43 @@ mod tests {
         assert_eq!(ctx.raft_role.as_deref(), Some("Leader"));
         assert_eq!(ctx.lock_name.as_deref(), Some("global-lock"));
         assert_eq!(ctx.fencing_token, Some(12884901889));
+    }
+
+    #[test]
+    fn test_tracing_lifecycle_events_and_context() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_trace_span_recorded"),
+            Some(LifecycleEvent::TraceSpanRecorded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("span_recorded"),
+            Some(LifecycleEvent::TraceSpanRecorded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_otlp_export_failed"),
+            Some(LifecycleEvent::OtlpExportFailed)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("export_failed"),
+            Some(LifecycleEvent::OtlpExportFailed)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_trace_sampling_surge"),
+            Some(LifecycleEvent::TraceSamplingSurge)
+        );
+
+        let mut ctx = HookContext::new(LifecycleEvent::TraceSpanRecorded);
+        ctx.trace_id = Some("4bf92f3577b34da6a3ce929d0e0e4736".to_string());
+        ctx.span_id = Some("00f067aa0ba902b7".to_string());
+        ctx.span_name = Some("craft.server.tick".to_string());
+        ctx.span_duration_micros = Some(45000);
+        ctx.span_status = Some("Error".to_string());
+
+        assert_eq!(ctx.event, "on_trace_span_recorded");
+        assert_eq!(ctx.trace_id.as_deref(), Some("4bf92f3577b34da6a3ce929d0e0e4736"));
+        assert_eq!(ctx.span_id.as_deref(), Some("00f067aa0ba902b7"));
+        assert_eq!(ctx.span_name.as_deref(), Some("craft.server.tick"));
+        assert_eq!(ctx.span_duration_micros, Some(45000));
+        assert_eq!(ctx.span_status.as_deref(), Some("Error"));
     }
 }

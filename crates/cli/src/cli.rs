@@ -579,6 +579,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: QuotaCommands,
     },
+
+    /// Distributed real-time tracing, OpenTelemetry (OTel) export, and W3C trace context propagation
+    #[command(name = "trace", alias = "tracing", alias = "otel")]
+    Trace {
+        #[command(subcommand)]
+        action: TraceCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1283,6 +1290,66 @@ pub enum TenantQuotaCommands {
         /// Allow CPU bursting beyond base quota
         #[arg(long)]
         allow_burst: Option<bool>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum TraceCommands {
+    /// Show current tracing status, buffer metrics, sampler state, and OTLP exporter health
+    Status {
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// List recorded distributed traces with optional duration and service filters
+    List {
+        /// Filter traces matching a service name
+        #[arg(short, long)]
+        service: Option<String>,
+        /// Filter traces with minimum duration in milliseconds
+        #[arg(short = 'd', long = "min-duration-ms")]
+        min_duration_ms: Option<u64>,
+        /// Maximum number of traces to display
+        #[arg(short = 'l', long = "limit", default_value = "20")]
+        limit: usize,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect full causal span tree and attributes for a specific Trace ID
+    Get {
+        /// 16-byte hex Trace ID
+        trace_id: String,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Force an immediate OTLP/HTTP push export of all buffered spans
+    Export {
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Configure runtime tracing settings (sampler, sample ratio, OTLP endpoint)
+    Config {
+        /// Enable or disable distributed tracing
+        #[arg(long)]
+        enabled: Option<bool>,
+        /// Sampler strategy (always_on, always_off, ratio)
+        #[arg(long)]
+        sampler: Option<String>,
+        /// Sampling probability ratio between 0.0 and 1.0
+        #[arg(long)]
+        sample_ratio: Option<f64>,
+        /// OpenTelemetry OTLP/HTTP collector endpoint (e.g., http://localhost:4318/v1/traces)
+        #[arg(long)]
+        otlp_endpoint: Option<String>,
+        /// Default service name for this node (default: craft-daemon)
+        #[arg(long)]
+        service_name: Option<String>,
         /// Emit machine-readable JSON output
         #[arg(long)]
         json: bool,
@@ -3257,6 +3324,80 @@ mod tests {
             _ => panic!("Expected Quota Balance command"),
         }
     }
+
+    #[test]
+    fn test_trace_cli_parsing() {
+        // Trace status with alias otel
+        let cli_status = Cli::try_parse_from(["craft", "otel", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Trace {
+                action: TraceCommands::Status { json },
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Trace Status command"),
+        }
+
+        // Trace list with alias tracing
+        let cli_list = Cli::try_parse_from([
+            "craft", "tracing", "list", "--service", "craft-daemon", "--min-duration-ms", "50", "--limit", "10", "--json",
+        ]).unwrap();
+        match cli_list.command {
+            Some(Commands::Trace {
+                action: TraceCommands::List { service, min_duration_ms, limit, json },
+            }) => {
+                assert_eq!(service, Some("craft-daemon".to_string()));
+                assert_eq!(min_duration_ms, Some(50));
+                assert_eq!(limit, 10);
+                assert!(json);
+            }
+            _ => panic!("Expected Trace List command"),
+        }
+
+        // Trace get
+        let cli_get = Cli::try_parse_from([
+            "craft", "trace", "get", "4bf92f3577b34da6a3ce929d0e0e4736",
+        ]).unwrap();
+        match cli_get.command {
+            Some(Commands::Trace {
+                action: TraceCommands::Get { trace_id, json },
+            }) => {
+                assert_eq!(trace_id, "4bf92f3577b34da6a3ce929d0e0e4736");
+                assert!(!json);
+            }
+            _ => panic!("Expected Trace Get command"),
+        }
+
+        // Trace export
+        let cli_export = Cli::try_parse_from(["craft", "trace", "export", "--json"]).unwrap();
+        match cli_export.command {
+            Some(Commands::Trace {
+                action: TraceCommands::Export { json },
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Trace Export command"),
+        }
+
+        // Trace config
+        let cli_cfg = Cli::try_parse_from([
+            "craft", "trace", "config", "--enabled", "true", "--sampler", "ratio", "--sample-ratio", "0.25", "--otlp-endpoint", "http://localhost:4318/v1/traces",
+        ]).unwrap();
+        match cli_cfg.command {
+            Some(Commands::Trace {
+                action: TraceCommands::Config { enabled, sampler, sample_ratio, otlp_endpoint, service_name, json },
+            }) => {
+                assert_eq!(enabled, Some(true));
+                assert_eq!(sampler, Some("ratio".to_string()));
+                assert_eq!(sample_ratio, Some(0.25));
+                assert_eq!(otlp_endpoint, Some("http://localhost:4318/v1/traces".to_string()));
+                assert_eq!(service_name, None);
+                assert!(!json);
+            }
+            _ => panic!("Expected Trace Config command"),
+        }
+    }
 }
+
 
 

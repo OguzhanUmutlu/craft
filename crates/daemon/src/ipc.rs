@@ -915,6 +915,35 @@ where
                     }
                 }
             }
+            IpcRequest::GetTracingStatus => {
+                let status = crate::tracing_service::TracingService::global(supervisor.paths()).get_status();
+                write_frame(&mut stream, &IpcResponse::TracingStatusResult { status }).await?;
+            }
+            IpcRequest::QueryTraces { service, name, min_duration_micros, error_only, limit } => {
+                let spans = crate::tracing_service::TracingService::global(supervisor.paths())
+                    .query_traces(service, name, min_duration_micros, error_only, limit);
+                write_frame(&mut stream, &IpcResponse::TracesQueryResult { spans }).await?;
+            }
+            IpcRequest::GetTraceDetails { trace_id } => {
+                let trace_tree = crate::tracing_service::TracingService::global(supervisor.paths())
+                    .get_trace_details(&trace_id);
+                write_frame(&mut stream, &IpcResponse::TraceDetailsResult { trace_tree }).await?;
+            }
+            IpcRequest::ExportTracesNow { limit } => {
+                let (exported_count, destination) = crate::tracing_service::TracingService::global(supervisor.paths())
+                    .export_traces_now(limit).await;
+                write_frame(&mut stream, &IpcResponse::TracesExportedResult { exported_count, destination }).await?;
+            }
+            IpcRequest::SetTracingConfig { config } => {
+                match crate::tracing_service::TracingService::global(supervisor.paths()).set_config(config) {
+                    Ok(cfg) => {
+                        write_frame(&mut stream, &IpcResponse::TracingConfigResult { config: cfg }).await?;
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?;
+                    }
+                }
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -1822,6 +1851,65 @@ impl DaemonClient {
                 rebalanced_count,
                 message,
             } => Ok((rebalanced_count, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_tracing_status(&mut self) -> Result<craft_core::TracingStatusSummary> {
+        match self.request(IpcRequest::GetTracingStatus).await? {
+            IpcResponse::TracingStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn query_traces(
+        &mut self,
+        service: Option<String>,
+        name: Option<String>,
+        min_duration_micros: Option<u64>,
+        error_only: bool,
+        limit: Option<usize>,
+    ) -> Result<Vec<craft_core::RecordedSpan>> {
+        match self
+            .request(IpcRequest::QueryTraces {
+                service,
+                name,
+                min_duration_micros,
+                error_only,
+                limit,
+            })
+            .await?
+        {
+            IpcResponse::TracesQueryResult { spans } => Ok(spans),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_trace_details(&mut self, trace_id: String) -> Result<Option<craft_core::TraceTree>> {
+        match self.request(IpcRequest::GetTraceDetails { trace_id }).await? {
+            IpcResponse::TraceDetailsResult { trace_tree } => Ok(trace_tree),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn export_traces_now(&mut self, limit: Option<usize>) -> Result<(usize, String)> {
+        match self.request(IpcRequest::ExportTracesNow { limit }).await? {
+            IpcResponse::TracesExportedResult {
+                exported_count,
+                destination,
+            } => Ok((exported_count, destination)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_tracing_config(&mut self, config: craft_core::TracingConfig) -> Result<craft_core::TracingConfig> {
+        match self.request(IpcRequest::SetTracingConfig { config }).await? {
+            IpcResponse::TracingConfigResult { config } => Ok(config),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

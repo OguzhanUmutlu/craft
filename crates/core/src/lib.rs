@@ -28,6 +28,7 @@ pub mod sdn;
 pub mod timeseries;
 pub mod trash;
 pub mod cgroups;
+pub mod tracing_core;
 pub mod version;
 pub mod webhook_config;
 
@@ -82,6 +83,12 @@ pub use sdn::{
     MicrosegmentationRule, SdnMeshConfig, SdnRegistry, WireguardPeer,
 };
 pub use timeseries::{RegressionResult, RollingTimeSeries, SawtoothMetrics, TimeSeriesSample};
+pub use tracing_core::{
+    generate_random_bytes, ActiveSpan, OtlpJsonExporter, RecordedSpan, SamplerStrategy,
+    SpanAttributeValue, SpanEvent, SpanId, SpanKind, SpanLink, SpanRingBuffer, SpanStatus,
+    SpanStatusCode, TraceContext, TraceId, TraceSampler, TraceTree, TraceTreeNode, Tracer,
+    TracingConfig, TracingRegistry, TracingStatusSummary,
+};
 
 pub use backup_config::{
     AutoBackupPolicy, GDriveBackupConfig, GDriveBackupTarget, GlobalBackupRegistry,

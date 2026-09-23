@@ -173,6 +173,8 @@ pub async fn generate_prometheus_metrics(
         writeln!(out, "craft_server_circuit_breaker_state{{server=\"{}\"}} {}", s_name, cb_state).unwrap();
     }
 
+    out.push_str(&crate::tracing_service::TracingService::global(paths).generate_prometheus_metrics());
+
     out
 }
 

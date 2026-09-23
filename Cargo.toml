@@ -79,6 +79,21 @@ bytes = "1.10"
 zstd = "0.13"
 mlua = { version = "0.12", default-features = false, features = ["lua54", "vendored", "serialize", "send"] }
 
+[profile.dev]
+debug = 1
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+[profile.test]
+debug = 1
+incremental = false
+
+[profile.test.package."*"]
+opt-level = 2
+debug = false
+
 [profile.release]
 opt-level = 3
 lto = "thin"

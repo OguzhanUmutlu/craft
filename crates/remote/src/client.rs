@@ -875,6 +875,104 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    pub fn get_remote_tracing_status(&self) -> Result<String> {
+        let (code, stdout, stderr) = self.session.exec("craft trace status --json")?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote tracing status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn query_remote_traces(
+        &self,
+        service: Option<&str>,
+        min_duration_ms: Option<u64>,
+        limit: Option<usize>,
+    ) -> Result<String> {
+        let mut cmd = "craft trace list --json".to_string();
+        if let Some(s) = service {
+            cmd.push_str(&format!(" --service {}", s));
+        }
+        if let Some(m) = min_duration_ms {
+            cmd.push_str(&format!(" --min-duration-ms {}", m));
+        }
+        if let Some(l) = limit {
+            cmd.push_str(&format!(" --limit {}", l));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote trace query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn get_remote_trace_details(&self, trace_id: &str) -> Result<String> {
+        let cmd = format!("craft trace get {} --json", trace_id);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote trace details query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn export_remote_traces(&self) -> Result<String> {
+        let (code, stdout, stderr) = self.session.exec("craft trace export --json")?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote trace export failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn set_remote_tracing_config(
+        &self,
+        enabled: Option<bool>,
+        sampler: Option<&str>,
+        sample_ratio: Option<f64>,
+        otlp_endpoint: Option<&str>,
+        service_name: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = "craft trace config --json".to_string();
+        if let Some(en) = enabled {
+            cmd.push_str(&format!(" --enabled {}", en));
+        }
+        if let Some(s) = sampler {
+            cmd.push_str(&format!(" --sampler {}", s));
+        }
+        if let Some(r) = sample_ratio {
+            cmd.push_str(&format!(" --sample-ratio {}", r));
+        }
+        if let Some(ep) = otlp_endpoint {
+            cmd.push_str(&format!(" --otlp-endpoint {}", ep));
+        }
+        if let Some(sn) = service_name {
+            cmd.push_str(&format!(" --service-name {}", sn));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote tracing config update failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Formats an exec command with an active W3C traceparent environment prefix if provided
+    pub fn exec_with_trace_context(
+        &self,
+        cmd: &str,
+        traceparent: Option<&str>,
+    ) -> Result<(i32, String, String)> {
+        let full_cmd = if let Some(tp) = traceparent {
+            format!("CRAFT_TRACEPARENT=\"{}\" {}", tp, cmd)
+        } else {
+            cmd.to_string()
+        };
+        self.session.exec(&full_cmd)
+    }
 }
 
 #[cfg(test)]

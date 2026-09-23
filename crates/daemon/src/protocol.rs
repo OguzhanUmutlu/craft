@@ -110,6 +110,23 @@ pub enum IpcRequest {
         tenant: Option<String>,
     },
     EnforceFairShareNow,
+    GetTracingStatus,
+    QueryTraces {
+        service: Option<String>,
+        name: Option<String>,
+        min_duration_micros: Option<u64>,
+        error_only: bool,
+        limit: Option<usize>,
+    },
+    GetTraceDetails {
+        trace_id: String,
+    },
+    ExportTracesNow {
+        limit: Option<usize>,
+    },
+    SetTracingConfig {
+        config: craft_core::TracingConfig,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -206,6 +223,22 @@ pub enum IpcResponse {
     FairShareEnforcedResult {
         rebalanced_count: usize,
         message: String,
+    },
+    TracingStatusResult {
+        status: craft_core::TracingStatusSummary,
+    },
+    TracesQueryResult {
+        spans: Vec<craft_core::RecordedSpan>,
+    },
+    TraceDetailsResult {
+        trace_tree: Option<craft_core::TraceTree>,
+    },
+    TracesExportedResult {
+        exported_count: usize,
+        destination: String,
+    },
+    TracingConfigResult {
+        config: craft_core::TracingConfig,
     },
     Error { error: String },
 }

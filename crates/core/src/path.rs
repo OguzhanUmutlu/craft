@@ -58,6 +58,10 @@ pub struct CraftPaths {
     pub quotas_file: PathBuf,
     pub quotas_lock: PathBuf,
     pub cgroups_dir: PathBuf,
+    pub tracing_dir: PathBuf,
+    pub tracing_file: PathBuf,
+    pub tracing_lock: PathBuf,
+    pub traces_spans_dir: PathBuf,
 }
 
 impl CraftPaths {
@@ -115,6 +119,10 @@ impl CraftPaths {
         let quotas_file = quotas_dir.join("quotas.toml");
         let quotas_lock = locks_dir.join("quotas.lock");
         let cgroups_dir = home.join("cgroups");
+        let tracing_dir = home.join("tracing");
+        let tracing_file = tracing_dir.join("tracing.toml");
+        let tracing_lock = locks_dir.join("tracing.lock");
+        let traces_spans_dir = tracing_dir.join("spans");
 
         Self {
             home,
@@ -170,6 +178,10 @@ impl CraftPaths {
             quotas_file,
             quotas_lock,
             cgroups_dir,
+            tracing_dir,
+            tracing_file,
+            tracing_lock,
+            traces_spans_dir,
         }
     }
 
@@ -212,6 +224,8 @@ impl CraftPaths {
         let raft_snapshots_dir = raft_dir.join("snapshots");
         let quotas_dir = home.join("quotas");
         let cgroups_dir = home.join("cgroups");
+        let tracing_dir = home.join("tracing");
+        let traces_spans_dir = tracing_dir.join("spans");
 
         // Ensure all primary directories exist
         for dir in [
@@ -241,6 +255,8 @@ impl CraftPaths {
             &raft_snapshots_dir,
             &quotas_dir,
             &cgroups_dir,
+            &tracing_dir,
+            &traces_spans_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -274,6 +290,8 @@ impl CraftPaths {
         let raft_lock = locks_dir.join("raft.lock");
         let quotas_file = quotas_dir.join("quotas.toml");
         let quotas_lock = locks_dir.join("quotas.lock");
+        let tracing_file = tracing_dir.join("tracing.toml");
+        let tracing_lock = locks_dir.join("tracing.lock");
 
         Ok(Self {
             home,
@@ -329,6 +347,10 @@ impl CraftPaths {
             quotas_file,
             quotas_lock,
             cgroups_dir,
+            tracing_dir,
+            tracing_file,
+            tracing_lock,
+            traces_spans_dir,
         })
     }
 

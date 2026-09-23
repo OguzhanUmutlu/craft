@@ -42,6 +42,7 @@ pub mod service;
 pub mod software;
 pub mod stop;
 pub mod template;
+pub mod trace;
 pub mod trash;
 pub mod update;
 pub mod user;

@@ -493,6 +493,9 @@ async fn main() {
         Some(Commands::Quota { action }) => {
             commands::quota::handle_quota(action, &paths).await
         }
+        Some(Commands::Trace { action }) => {
+            commands::trace::handle_trace(action, &paths).await
+        }
     };
 
     if let Err(e) = result {

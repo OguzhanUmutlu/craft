@@ -18,6 +18,7 @@ pub mod sdn_service;
 pub mod supervisor;
 pub mod telemetry;
 pub mod tick_service;
+pub mod tracing_service;
 pub mod web_dashboard;
 pub mod webhooks;
 
@@ -41,6 +42,7 @@ pub use sdn_service::{KeyRotationSummary, SdnService, SdnTopologySummary};
 pub use supervisor::Supervisor;
 pub use telemetry::{generate_prometheus_metrics, init_telemetry_start_time};
 pub use tick_service::{ServerTelemetryState, TickService};
+pub use tracing_service::TracingService;
 pub use web_dashboard::DASHBOARD_HTML;
 pub use webhooks::{WebhookDispatcher, WebhookPayload};
 

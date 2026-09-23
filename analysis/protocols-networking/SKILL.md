@@ -201,3 +201,87 @@ Phase 18 introduces real-time tick duration profiling, sliding-window MSPT analy
   - `craft profile overview <server>`: Unified diagnostic overview combining all telemetry.
 - **ModalX Centered TUI**: Integrated into `craft manage` -> `Tools` -> `Tick Profiling & Network Telemetry`.
 
+---
+
+## 9. Distributed Real-Time Tracing, OpenTelemetry Export & W3C Context Propagation
+
+Craft incorporates a zero-dependency, pure-Rust distributed tracing engine compliant with the **W3C Trace Context** standard and OpenTelemetry (OTel) OTLP/HTTP specifications.
+
+### 9.1. W3C Traceparent Wire Format & Non-Zero Invariants
+- **Format**: `version-trace_id-span_id-trace_flags` (e.g., `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01`).
+  - `version`: Fixed 2-hex-digit protocol version (`00`). Rejects `ff`.
+  - `trace_id`: 16-byte (32-hex-character) lowercase unique distributed identifier. Cannot be all zeros (`00000000000000000000000000000000`).
+  - `span_id`: 8-byte (16-hex-character) lowercase local operation identifier. Cannot be all zeros (`0000000000000000`).
+  - `trace_flags`: 8-bit hex field. Bit 0 indicates sampling status (`01` = recorded/sampled, `00` = not sampled).
+- **Tracestate**: Supports vendor key-value pairs formatted as comma-separated lists (`craft=node1,rojo=2`).
+- **Inter-Process & SSH Propagation**:
+  - Injected via environment variable `CRAFT_TRACEPARENT` across remote SSH sessions (`RemoteCraftClient::exec_with_trace_context`).
+  - Child processes and subprocess executions inherit the parent distributed trace ID while instantiating fresh child span IDs.
+
+### 9.2. Pure-Rust Tracer Engine & RAII Span Guard
+- **`Tracer` & `TraceSampler`**:
+  - Provides thread-safe, lock-free span lifecycle management.
+  - Configurable sampling strategies: `AlwaysOn`, `AlwaysOff`, and `Ratio(f64)` (evaluated against pseudo-random high-entropy bytes).
+- **RAII `ActiveSpan`**:
+  - Automatically records span start timestamp upon creation and computes total nanosecond elapsed duration upon drop or explicit `finish()`.
+  - Supports structured attributes (`SpanAttributeValue::String|Int|Float|Bool`), inline lifecycle events (`SpanEvent`), and causal span links (`SpanLink`).
+  - Records span status codes (`Unset`, `Ok`, `Error`) with optional error messages.
+
+### 9.3. Bounded Circular Span Ring Buffer (`SpanRingBuffer`)
+- **Memory Footprint & Zero TPS Penalty**:
+  - Implemented as a bounded `VecDeque<RecordedSpan>` with fixed capacity (default 10,000 spans) protected by mutex.
+  - $O(1)$ push and drain operations ensure zero performance penalty on 20.0 TPS game loops.
+  - When capacity is saturated, oldest spans are discarded (FIFO) and an atomic drop counter (`AtomicU64`) is incremented.
+
+### 9.4. OpenTelemetry OTLP/HTTP JSON Exporter (`OtlpJsonExporter`)
+- **Payload Schema**:
+  - Serializes recorded span batches into standard OTLP/HTTP JSON (`/v1/traces`):
+  ```json
+  {
+    "resourceSpans": [{
+      "resource": {
+        "attributes": [
+          {"key": "service.name", "value": {"stringValue": "craft-daemon"}},
+          {"key": "telemetry.sdk.language", "value": {"stringValue": "rust"}}
+        ]
+      },
+      "scopeSpans": [{
+        "scope": {"name": "craft.tracing", "version": "1.0.0"},
+        "spans": [...]
+      }]
+    }]
+  }
+  ```
+- **Collector Interoperability**: Direct push export compatibility with Jaeger, Grafana Tempo, SigNoz, and OpenTelemetry Collector.
+- **Offline Fallback**: When no HTTP endpoint is defined or collector is offline, batches are written to `.craft/tracing/spans/trace_export_<timestamp>.json`.
+
+### 9.5. Causal Tree Reconstruction (`TraceTree`)
+- Reconstructs arbitrary batches of out-of-order `RecordedSpan` entries into an acyclic directed causal tree (`TraceTreeNode`).
+- Distinguishes root spans from internal child spans and formats ASCII dependency graphs:
+```
+`-- [SERVER] game_loop (craft-daemon) [dur: 15.20ms] [OK]
+    |-- [INTERNAL] tick_world (craft-daemon) [dur: 10.10ms] [OK]
+    |   `-- [CLIENT] save_chunk (craft-daemon) [dur: 3.40ms] [OK]
+    `-- [PRODUCER] network_flush (craft-daemon) [dur: 4.20ms] [OK]
+```
+
+### 9.6. Daemon IPC, Scripting Hooks & CLI Interface
+- **Daemon IPC**:
+  - `GetTracingStatus` -> `TracingStatusResult`
+  - `QueryTraces` -> `TracesQueryResult`
+  - `GetTraceDetails` -> `TraceDetailsResult`
+  - `ExportTracesNow` -> `TracesExportedResult`
+  - `SetTracingConfig` -> `TracingConfigResult`
+- **Scripting Lifecycle Hook Events**:
+  - `TraceSpanRecorded`: Dispatched whenever a span completes with duration and attributes.
+  - `OtlpExportFailed`: Dispatched on OTLP collector network timeouts or HTTP 5xx responses.
+  - `TraceSamplingSurge`: Dispatched when buffer drops exceed configured thresholds.
+- **CLI Commands**:
+  - `craft trace status [--json]`: Inspect buffer capacity, sample ratio, and OTLP collector endpoint.
+  - `craft trace list [--service <s>] [-d <ms>] [-l <limit>]`: Query recent recorded spans.
+  - `craft trace get <trace-id>`: Render complete ASCII causal span tree with attributes and events.
+  - `craft trace export [--json]`: Force immediate batch push to OTLP collector.
+  - `craft trace config [--enabled <bool>] [--sample-ratio <f64>] [--otlp-endpoint <url>]`: Hot-reconfigure tracing engine.
+  - Subcommand aliases: `craft tracing ...` and `craft otel ...`.
+- **ModalX Centered TUI**: Integrated in `craft manage` -> `Tools` -> `Distributed Tracing & OpenTelemetry (OTel)`.
+

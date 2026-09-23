@@ -1794,6 +1794,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             ZeroTrustMesh,
             RaftConsensus,
             ResourceQuotas,
+            DistributedTracing,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1885,6 +1886,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::ResourceQuotas);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Distributed Tracing & OpenTelemetry (OTel)")
+                .with_aliases(&["trace", "tracing", "otel"]),
+        );
+        actions.push(ToolItemAction::DistributedTracing);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1938,6 +1946,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::ResourceQuotas => {
                     resource_quotas_tui(paths).await?;
+                }
+                ToolItemAction::DistributedTracing => {
+                    distributed_tracing_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2732,6 +2743,106 @@ pub async fn resource_quotas_tui(paths: &CraftPaths) -> Result<()> {
     );
 
     show_modal_message("RESOURCE QUOTAS & CGROUPS V2 SCHEDULING", &lines, false)?;
+    Ok(())
+}
+
+pub async fn distributed_tracing_tui(paths: &CraftPaths) -> Result<()> {
+    let _nav = NavGuard::enter("Distributed Tracing & OTel");
+
+    let status = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        match client.get_tracing_status().await {
+            Ok(s) => s,
+            Err(_) => craft_daemon::TracingService::global(paths).get_status(),
+        }
+    } else {
+        craft_daemon::TracingService::global(paths).get_status()
+    };
+
+    let spans = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        match client.query_traces(None, None, None, false, Some(8)).await {
+            Ok(s) => s,
+            Err(_) => {
+                craft_daemon::TracingService::global(paths)
+                    .query_traces(None, None, None, false, Some(8))
+            }
+        }
+    } else {
+        craft_daemon::TracingService::global(paths)
+            .query_traces(None, None, None, false, Some(8))
+    };
+
+    let mut lines = Vec::new();
+    lines.push("DISTRIBUTED REAL-TIME TRACING & OPENTELEMETRY".bold().to_string());
+    lines.push("W3C traceparent Propagation & Bounded Circular Span Ring Buffer".dimmed().to_string());
+    lines.push("".to_string());
+
+    lines.push(format!(
+        "Engine Status:     {}",
+        if status.enabled { "[ACTIVE] Tracing Enabled".green() } else { "[DISABLED]".yellow() }
+    ));
+    lines.push(format!("Service Name:      {}", status.service_name.cyan()));
+    lines.push(format!(
+        "Sample Ratio:      {:.2}",
+        status.sample_ratio
+    ));
+    lines.push(format!(
+        "Ring Buffer:       {}/{} spans (dropped: {})",
+        status.spans_buffered,
+        status.buffer_capacity,
+        if status.spans_dropped > 0 { status.spans_dropped.to_string().yellow() } else { "0".normal() }
+    ));
+    lines.push(format!(
+        "Total Recorded:    {}",
+        status.spans_recorded
+    ));
+    lines.push(format!(
+        "OTLP Exporter:     {} (endpoint: {})",
+        if status.otlp_endpoint.is_some() { "Configured".green() } else { "Disabled".dimmed() },
+        status.otlp_endpoint.as_deref().unwrap_or("[none]")
+    ));
+
+    lines.push("".to_string());
+    lines.push("Recent Recorded Spans:".bold().to_string());
+    if spans.is_empty() {
+        lines.push("  [INFO] No recorded spans in ring buffer.".dimmed().to_string());
+    } else {
+        for span in spans.iter().take(6) {
+            let dur_str = if span.duration_micros < 1000 {
+                format!("{}µs", span.duration_micros)
+            } else {
+                format!("{:.2}ms", span.duration_micros as f64 / 1000.0)
+            };
+            let status_badge = match span.status.code.as_str() {
+                "OK" => "[OK]".green(),
+                "ERROR" => "[ERR]".red(),
+                _ => "[---]".dimmed(),
+            };
+            let tid_hex = span.trace_id.to_hex();
+            let tid_short = if tid_hex.len() >= 8 {
+                &tid_hex[..8]
+            } else {
+                "trace"
+            };
+            lines.push(format!(
+                "  {} {:<22} {:<14} {:>8} ({})",
+                status_badge,
+                span.name,
+                span.service_name.cyan(),
+                dur_str.yellow(),
+                tid_short
+            ));
+        }
+    }
+
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft trace status               Display runtime sampler and buffer health".green().to_string());
+    lines.push("  craft trace list [--service <s>] Query recorded traces in ring buffer".green().to_string());
+    lines.push("  craft trace get <trace-id>       Inspect ASCII causal span tree & attributes".green().to_string());
+    lines.push("  craft trace export               Trigger immediate OTLP/HTTP batch export".green().to_string());
+    lines.push("  craft trace config --enabled ... Hot-reconfigure sampling & OTLP endpoint".green().to_string());
+
+    show_modal_message("DISTRIBUTED TRACING & OPENTELEMETRY", &lines, false)?;
     Ok(())
 }
 
