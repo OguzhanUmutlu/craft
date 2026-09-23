@@ -879,6 +879,166 @@ impl GatewayServer {
             }
         }
 
+        // Route: GET /api/edge/status
+        if method == "GET" && path == "/api/edge/status" {
+            let user = match self.authenticate_request(auth_token.as_deref()).await {
+                Some(u) => u,
+                None => {
+                    let resp = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Authentication required\"}\n";
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                    return;
+                }
+            };
+
+            if !user.has_permission(Permission::ServerConsoleView, None) {
+                let resp = "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Forbidden: Requires ServerConsoleView permission\"}\n";
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            }
+
+            let reg = craft_core::EdgeRegistry::load(&self.paths).unwrap_or_default();
+            let resp_json = serde_json::json!({
+                "nodes": reg.list_nodes(),
+                "policy": reg.policy,
+            });
+            let body = resp_json.to_string();
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(resp.as_bytes()).await;
+            return;
+        }
+
+        // Route: POST /api/edge/nodes
+        if method == "POST" && path == "/api/edge/nodes" {
+            let user = match self.authenticate_request(auth_token.as_deref()).await {
+                Some(u) => u,
+                None => {
+                    let resp = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Authentication required\"}\n";
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                    return;
+                }
+            };
+
+            if !user.has_permission(Permission::UserManage, None) {
+                let resp = "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Forbidden: Requires UserManage permission\"}\n";
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            }
+
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            let node_res: std::result::Result<craft_core::EdgeNode, _> = serde_json::from_str(&body_str);
+            match node_res {
+                Ok(node) => {
+                    let mod_res = craft_core::EdgeRegistry::modify(&self.paths, |reg| reg.add_node(node));
+                    match mod_res {
+                        Ok(()) => {
+                            let resp = "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"success\":true,\"message\":\"Edge node added\"}\n";
+                            let _ = stream.write_all(resp.as_bytes()).await;
+                        }
+                        Err(e) => {
+                            let err_json = serde_json::json!({ "error": e.to_string() }).to_string();
+                            let resp = format!("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{}", err_json);
+                            let _ = stream.write_all(resp.as_bytes()).await;
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err_json = serde_json::json!({ "error": format!("Invalid JSON payload: {}", e) }).to_string();
+                    let resp = format!("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{}", err_json);
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                }
+            }
+            return;
+        }
+
+        // Route: DELETE /api/edge/nodes/:name
+        if method == "DELETE" && path.starts_with("/api/edge/nodes/") {
+            let node_name = path.trim_start_matches("/api/edge/nodes/");
+            let user = match self.authenticate_request(auth_token.as_deref()).await {
+                Some(u) => u,
+                None => {
+                    let resp = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Authentication required\"}\n";
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                    return;
+                }
+            };
+
+            if !user.has_permission(Permission::UserManage, None) {
+                let resp = "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Forbidden: Requires UserManage permission\"}\n";
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            }
+
+            let mod_res = craft_core::EdgeRegistry::modify(&self.paths, |reg| reg.remove_node(node_name));
+            match mod_res {
+                Ok(true) => {
+                    let resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"success\":true,\"message\":\"Edge node removed\"}\n";
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                }
+                Ok(false) => {
+                    let resp = "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Edge node not found\"}\n";
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                }
+                Err(e) => {
+                    let err_json = serde_json::json!({ "error": e.to_string() }).to_string();
+                    let resp = format!("HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{}", err_json);
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                }
+            }
+            return;
+        }
+
+        // Route: POST /api/edge/optimize/:server
+        if method == "POST" && path.starts_with("/api/edge/optimize/") {
+            let server_name = path.trim_start_matches("/api/edge/optimize/");
+            let user = match self.authenticate_request(auth_token.as_deref()).await {
+                Some(u) => u,
+                None => {
+                    let resp = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Authentication required\"}\n";
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                    return;
+                }
+            };
+
+            if !user.can_access_server(server_name) || !user.has_permission(Permission::ServerConsoleInput, Some(server_name)) {
+                let resp = "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Forbidden: Requires ServerConsoleInput permission\"}\n";
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            }
+
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            let payload: serde_json::Value = serde_json::from_str(&body_str).unwrap_or_default();
+            let preset = payload.get("preset").and_then(|v| v.as_str()).unwrap_or("balanced");
+
+            match crate::edge_broker::EdgeStateBroker::apply_playbook_to_server(&self.paths, server_name, preset) {
+                Ok(pb) => {
+                    let resp_json = serde_json::json!({
+                        "success": true,
+                        "server": server_name,
+                        "preset": pb.preset.to_string(),
+                        "view_distance": pb.view_distance,
+                        "simulation_distance": pb.simulation_distance,
+                    });
+                    let body = resp_json.to_string();
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                }
+                Err(e) => {
+                    let err_json = serde_json::json!({ "error": e.to_string() }).to_string();
+                    let resp = format!("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{}", err_json);
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                }
+            }
+            return;
+        }
+
         // Route: GET /ws/console
         if method == "GET" && path == "/ws/console" {
             let user = match self.authenticate_request(auth_token.as_deref()).await {

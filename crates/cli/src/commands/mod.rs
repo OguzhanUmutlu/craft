@@ -12,6 +12,7 @@ pub mod deploy;
 pub mod dev;
 pub mod dockerize;
 pub mod dr;
+pub mod edge;
 pub mod fix;
 pub mod gateway;
 pub mod hibernate;

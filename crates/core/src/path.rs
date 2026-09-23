@@ -27,6 +27,9 @@ pub struct CraftPaths {
     pub intelligence_file: PathBuf,
     pub diagnostics_dir: PathBuf,
     pub intelligence_lock: PathBuf,
+    pub edge_file: PathBuf,
+    pub edge_lock: PathBuf,
+    pub edge_dir: PathBuf,
     pub config_file: PathBuf,
     pub socket_file: PathBuf,
     pub pid_file: PathBuf,
@@ -45,6 +48,7 @@ impl CraftPaths {
         let chunks_dir = cache_dir.join("chunks");
         let dr_dir = home.join("dr");
         let diagnostics_dir = home.join("diagnostics");
+        let edge_dir = home.join("edge");
 
         let servers_file = home.join("servers.toml");
         let remotes_file = home.join("remotes.toml");
@@ -56,6 +60,8 @@ impl CraftPaths {
         let mesh_file = home.join("mesh.toml");
         let intelligence_file = home.join("intelligence.toml");
         let intelligence_lock = locks_dir.join("intelligence.lock");
+        let edge_file = home.join("edge.toml");
+        let edge_lock = locks_dir.join("edge.lock");
         let config_file = home.join("config.toml");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
@@ -83,6 +89,9 @@ impl CraftPaths {
             intelligence_file,
             diagnostics_dir,
             intelligence_lock,
+            edge_file,
+            edge_lock,
+            edge_dir,
             config_file,
             socket_file,
             pid_file,
@@ -114,6 +123,7 @@ impl CraftPaths {
         let chunks_dir = cache_dir.join("chunks");
         let dr_dir = home.join("dr");
         let diagnostics_dir = home.join("diagnostics");
+        let edge_dir = home.join("edge");
 
         // Ensure all primary directories exist
         for dir in [
@@ -129,6 +139,7 @@ impl CraftPaths {
             &logs_dir,
             &dr_dir,
             &diagnostics_dir,
+            &edge_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -145,6 +156,8 @@ impl CraftPaths {
         let mesh_file = home.join("mesh.toml");
         let intelligence_file = home.join("intelligence.toml");
         let intelligence_lock = locks_dir.join("intelligence.lock");
+        let edge_file = home.join("edge.toml");
+        let edge_lock = locks_dir.join("edge.lock");
         let config_file = home.join("config.toml");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
@@ -172,6 +185,9 @@ impl CraftPaths {
             intelligence_file,
             diagnostics_dir,
             intelligence_lock,
+            edge_file,
+            edge_lock,
+            edge_dir,
             config_file,
             socket_file,
             pid_file,

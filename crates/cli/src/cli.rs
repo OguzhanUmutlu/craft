@@ -522,6 +522,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: AiCommands,
     },
+
+    /// Global edge mesh, multi-region server sync, and player traffic routing
+    #[command(name = "edge", alias = "geo", alias = "mesh-routing")]
+    Edge {
+        #[command(subcommand)]
+        action: EdgeCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -574,6 +581,109 @@ pub enum AiCommands {
         /// Critical MSPT threshold in milliseconds
         #[arg(long)]
         crit_mspt: Option<f64>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum EdgeCommands {
+    /// Display global edge mesh topology, registered nodes, and backbone telemetry
+    Status,
+
+    /// Register a new edge ingress proxy node
+    Add {
+        /// Edge node unique name
+        name: String,
+        /// Geographic region (e.g. us-east, us-west, eu-central, ap-southeast)
+        #[arg(short, long)]
+        region: String,
+        /// Public ingress endpoint (e.g. 198.51.100.1:25565 or edge-us.craft.internal:25565)
+        #[arg(short, long)]
+        endpoint: String,
+        /// Traffic steering weight (1-1000)
+        #[arg(short, long, default_value = "100")]
+        weight: u32,
+        /// Optional metadata tags
+        #[arg(short, long, value_delimiter = ',')]
+        tags: Vec<String>,
+    },
+
+    /// Unregister an edge proxy node
+    Rm {
+        /// Edge node unique name
+        name: String,
+    },
+
+    /// Probe RTT latency, jitter, and packet loss across all edge nodes
+    Probe {
+        /// Number of probe samples per node
+        #[arg(short, long, default_value = "3")]
+        count: usize,
+        /// Probe connection timeout in milliseconds
+        #[arg(short, long, default_value = "2000")]
+        timeout_ms: u64,
+    },
+
+    /// Generate and synchronize multi-region Velocity, BungeeCord, and HAProxy edge routing
+    SyncRouting {
+        /// Target server cluster name (or all servers if omitted)
+        #[arg(short, long)]
+        cluster: Option<String>,
+        /// Preview generated configuration files without writing to disk
+        #[arg(long)]
+        dry_run: bool,
+        /// Custom destination directory for generated configs
+        #[arg(short, long)]
+        out_dir: Option<String>,
+    },
+
+    /// Initiate or issue a cross-region player session handoff token
+    Handoff {
+        /// Player username
+        player: String,
+        /// Player unique UUID
+        #[arg(long)]
+        player_uuid: Option<String>,
+        /// Source origin server
+        #[arg(long)]
+        from: String,
+        /// Target destination server
+        #[arg(long)]
+        to: String,
+        /// Source region
+        #[arg(long)]
+        source_region: Option<String>,
+        /// Target region
+        #[arg(long)]
+        target_region: Option<String>,
+        /// Handoff session TTL in seconds
+        #[arg(long, default_value = "30")]
+        ttl: u64,
+    },
+
+    /// Broadcast an authenticated cross-region chat envelope
+    Chat {
+        /// Chat channel name (e.g. global, staff, trade)
+        channel: String,
+        /// Message content
+        message: String,
+        /// Sender username
+        #[arg(short, long)]
+        sender: Option<String>,
+        /// Originating region
+        #[arg(short, long)]
+        region: Option<String>,
+    },
+
+    /// Apply an automated latency optimization playbook to a server
+    Optimize {
+        /// Target server name
+        server: String,
+        /// Latency preset: performance, balanced, fidelity, degraded_safe
+        #[arg(short, long, default_value = "balanced")]
+        preset: String,
+        /// Preview playbook parameters without modifying configurations
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -2016,6 +2126,104 @@ mod tests {
                 assert_eq!(warn_mspt, Some(35.5));
             }
             _ => panic!("Expected AI Policy command"),
+        }
+    }
+
+    #[test]
+    fn test_phase11_cli_parsing() {
+        let cli_status = Cli::try_parse_from(["craft", "edge", "status"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Edge { action: EdgeCommands::Status }) => {}
+            _ => panic!("Expected Edge Status command"),
+        }
+
+        let cli_add = Cli::try_parse_from([
+            "craft", "edge", "add", "edge-us-east",
+            "--region", "us-east",
+            "--endpoint", "198.51.100.1:25565",
+            "--weight", "150",
+            "--tags", "primary,east",
+        ])
+        .unwrap();
+        match cli_add.command {
+            Some(Commands::Edge {
+                action: EdgeCommands::Add {
+                    name,
+                    region,
+                    endpoint,
+                    weight,
+                    tags,
+                },
+            }) => {
+                assert_eq!(name, "edge-us-east");
+                assert_eq!(region, "us-east");
+                assert_eq!(endpoint, "198.51.100.1:25565");
+                assert_eq!(weight, 150);
+                assert_eq!(tags, vec!["primary", "east"]);
+            }
+            _ => panic!("Expected Edge Add command"),
+        }
+
+        let cli_probe = Cli::try_parse_from(["craft", "edge", "probe", "--count", "5"]).unwrap();
+        match cli_probe.command {
+            Some(Commands::Edge { action: EdgeCommands::Probe { count, .. } }) => {
+                assert_eq!(count, 5);
+            }
+            _ => panic!("Expected Edge Probe command"),
+        }
+
+        let cli_sync = Cli::try_parse_from(["craft", "edge", "sync-routing", "--dry-run"]).unwrap();
+        match cli_sync.command {
+            Some(Commands::Edge { action: EdgeCommands::SyncRouting { dry_run, .. } }) => {
+                assert!(dry_run);
+            }
+            _ => panic!("Expected Edge SyncRouting command"),
+        }
+
+        let cli_handoff = Cli::try_parse_from([
+            "craft", "edge", "handoff", "Player1",
+            "--from", "lobby-1",
+            "--to", "survival-1",
+            "--ttl", "60",
+        ])
+        .unwrap();
+        match cli_handoff.command {
+            Some(Commands::Edge {
+                action: EdgeCommands::Handoff {
+                    player,
+                    from,
+                    to,
+                    ttl,
+                    ..
+                },
+            }) => {
+                assert_eq!(player, "Player1");
+                assert_eq!(from, "lobby-1");
+                assert_eq!(to, "survival-1");
+                assert_eq!(ttl, 60);
+            }
+            _ => panic!("Expected Edge Handoff command"),
+        }
+
+        let cli_opt = Cli::try_parse_from([
+            "craft", "edge", "optimize", "survival-1",
+            "--preset", "performance",
+            "--dry-run",
+        ])
+        .unwrap();
+        match cli_opt.command {
+            Some(Commands::Edge {
+                action: EdgeCommands::Optimize {
+                    server,
+                    preset,
+                    dry_run,
+                },
+            }) => {
+                assert_eq!(server, "survival-1");
+                assert_eq!(preset, "performance");
+                assert!(dry_run);
+            }
+            _ => panic!("Expected Edge Optimize command"),
         }
     }
 }

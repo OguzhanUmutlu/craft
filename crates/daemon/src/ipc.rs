@@ -47,6 +47,9 @@ impl DaemonServer {
             ap_engine.run_autonomous_loop(ap_sup, 5).await;
         });
 
+        // Launch in-process Edge State Broker
+        let edge_broker = std::sync::Arc::new(crate::edge_broker::EdgeStateBroker::new());
+
         // Load settings to check gateway and storage monitor config
         let settings = craft_core::GlobalSettings::load(&self.paths).unwrap_or_default();
 
@@ -86,14 +89,16 @@ impl DaemonServer {
             let supervisor = self.supervisor.clone();
             let hib_mgr = hibernation.clone();
             let ap_mgr = autopilot.clone();
+            let eb_mgr = edge_broker.clone();
             loop {
                 match listener.accept().await {
                     Ok((stream, _)) => {
                         let sup = supervisor.clone();
                         let hib = hib_mgr.clone();
                         let ap = ap_mgr.clone();
+                        let eb = eb_mgr.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, sup, hib, ap).await {
+                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb).await {
                                 warn!("IPC client disconnected with error: {}", e);
                             }
                         });
@@ -122,6 +127,7 @@ impl DaemonServer {
             let supervisor = self.supervisor.clone();
             let hib_mgr = hibernation.clone();
             let ap_mgr = autopilot.clone();
+            let eb_mgr = edge_broker.clone();
             loop {
                 if let Err(e) = server.connect().await {
                     error!("Error connecting named pipe client: {}", e);
@@ -135,8 +141,9 @@ impl DaemonServer {
                 let sup = supervisor.clone();
                 let hib = hib_mgr.clone();
                 let ap = ap_mgr.clone();
+                let eb = eb_mgr.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(client, sup, hib, ap).await {
+                    if let Err(e) = handle_connection(client, sup, hib, ap, eb).await {
                         warn!("IPC client error: {}", e);
                     }
                 });
@@ -160,6 +167,7 @@ async fn handle_connection<S>(
     supervisor: Supervisor,
     hibernation: std::sync::Arc<crate::hibernation::HibernationManager>,
     autopilot: std::sync::Arc<crate::autopilot::AutopilotEngine>,
+    edge_broker: std::sync::Arc<crate::edge_broker::EdgeStateBroker>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -415,6 +423,77 @@ where
                     write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?;
                 } else {
                     write_frame(&mut stream, &IpcResponse::Success { message: "Policy updated successfully".to_string() }).await?;
+                }
+            }
+            IpcRequest::GetEdgeMeshStatus => {
+                let reg = craft_core::EdgeRegistry::load(supervisor.paths()).unwrap_or_default();
+                let nodes = reg.list_nodes().to_vec();
+                let backbone = edge_broker.get_backbone_conditions().await;
+                write_frame(&mut stream, &IpcResponse::EdgeMeshStatus { nodes, backbone }).await?;
+            }
+            IpcRequest::RegisterEdgeNode { node } => {
+                let res = craft_core::EdgeRegistry::modify(supervisor.paths(), |reg| {
+                    reg.add_node(node)
+                });
+                match res {
+                    Ok(()) => write_frame(&mut stream, &IpcResponse::Success { message: "Edge node registered successfully".to_string() }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::RemoveEdgeNode { name } => {
+                let res = craft_core::EdgeRegistry::modify(supervisor.paths(), |reg| {
+                    reg.remove_node(&name)
+                });
+                match res {
+                    Ok(true) => write_frame(&mut stream, &IpcResponse::Success { message: format!("Edge node '{}' removed", name) }).await?,
+                    Ok(false) => write_frame(&mut stream, &IpcResponse::Error { error: format!("Edge node '{}' not found", name) }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::TriggerEdgeHandoff { handoff } => {
+                match edge_broker.register_handoff(handoff).await {
+                    Ok(token) => write_frame(&mut stream, &IpcResponse::EdgeHandoffResult {
+                        success: true,
+                        message: format!("Session handoff issued with token '{}'", token),
+                        handoff: None,
+                    }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::EdgeHandoffResult {
+                        success: false,
+                        message: e.to_string(),
+                        handoff: None,
+                    }).await?,
+                }
+            }
+            IpcRequest::ConsumeEdgeHandoff { token } => {
+                match edge_broker.consume_handoff(&token).await {
+                    Ok(handoff) => write_frame(&mut stream, &IpcResponse::EdgeHandoffResult {
+                        success: true,
+                        message: "Session handoff successfully consumed".to_string(),
+                        handoff: Some(handoff),
+                    }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::EdgeHandoffResult {
+                        success: false,
+                        message: e.to_string(),
+                        handoff: None,
+                    }).await?,
+                }
+            }
+            IpcRequest::BroadcastEdgeChat { envelope } => {
+                let secret = craft_core::DEFAULT_CHAT_SECRET;
+                match edge_broker.broadcast_chat(envelope, secret).await {
+                    Ok(delivered) => write_frame(&mut stream, &IpcResponse::EdgeChatBroadcastResult { delivered_nodes: delivered }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::ApplyLatencyPlaybook { server_name, preset } => {
+                match crate::edge_broker::EdgeStateBroker::apply_playbook_to_server(supervisor.paths(), &server_name, &preset) {
+                    Ok(pb) => write_frame(&mut stream, &IpcResponse::LatencyPlaybookApplied {
+                        server_name: server_name.clone(),
+                        view_distance: pb.view_distance,
+                        simulation_distance: pb.simulation_distance,
+                        message: format!("Applied latency playbook '{}' to server '{}'", pb.preset, server_name),
+                    }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
                 }
             }
             IpcRequest::ShutdownDaemon => {
@@ -826,6 +905,81 @@ impl DaemonClient {
     ) -> Result<()> {
         match self.request(IpcRequest::UpdateIntelligencePolicy { server, policy }).await? {
             IpcResponse::Success { .. } => Ok(()),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_edge_mesh_status(
+        &mut self,
+    ) -> Result<(Vec<craft_core::EdgeNode>, Vec<craft_core::BackboneCondition>)> {
+        match self.request(IpcRequest::GetEdgeMeshStatus).await? {
+            IpcResponse::EdgeMeshStatus { nodes, backbone } => Ok((nodes, backbone)),
+            IpcResponse::Error { error } => Err(CraftError::Ipc(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn register_edge_node(&mut self, node: craft_core::EdgeNode) -> Result<()> {
+        match self.request(IpcRequest::RegisterEdgeNode { node }).await? {
+            IpcResponse::Success { .. } => Ok(()),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn remove_edge_node(&mut self, name: String) -> Result<()> {
+        match self.request(IpcRequest::RemoveEdgeNode { name }).await? {
+            IpcResponse::Success { .. } => Ok(()),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn trigger_edge_handoff(
+        &mut self,
+        handoff: craft_core::PlayerSessionHandoff,
+    ) -> Result<String> {
+        match self.request(IpcRequest::TriggerEdgeHandoff { handoff }).await? {
+            IpcResponse::EdgeHandoffResult { success: true, message, .. } => Ok(message),
+            IpcResponse::EdgeHandoffResult { success: false, message, .. } => Err(CraftError::Other(message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn consume_edge_handoff(
+        &mut self,
+        token: String,
+    ) -> Result<craft_core::PlayerSessionHandoff> {
+        match self.request(IpcRequest::ConsumeEdgeHandoff { token }).await? {
+            IpcResponse::EdgeHandoffResult { success: true, handoff: Some(h), .. } => Ok(h),
+            IpcResponse::EdgeHandoffResult { message, .. } => Err(CraftError::Other(message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn broadcast_edge_chat(
+        &mut self,
+        envelope: craft_core::CrossRegionChatEnvelope,
+    ) -> Result<usize> {
+        match self.request(IpcRequest::BroadcastEdgeChat { envelope }).await? {
+            IpcResponse::EdgeChatBroadcastResult { delivered_nodes } => Ok(delivered_nodes),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn apply_latency_playbook(
+        &mut self,
+        server_name: String,
+        preset: String,
+    ) -> Result<(u32, u32, String)> {
+        match self.request(IpcRequest::ApplyLatencyPlaybook { server_name, preset }).await? {
+            IpcResponse::LatencyPlaybookApplied { view_distance, simulation_distance, message, .. } => {
+                Ok((view_distance, simulation_distance, message))
+            }
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

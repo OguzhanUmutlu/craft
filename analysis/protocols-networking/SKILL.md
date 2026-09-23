@@ -100,3 +100,46 @@ The gateway service exposes a unified TCP listener on port 8124 handling both HT
   - Client command injection payloads accept: `{"command": "say Hello"}` or plain text strings.
   - WebSocket Ping/Pong keep-alive frames are processed transparently with automatic replies.
 
+---
+
+## 6. Global Edge Mesh & Multi-Sample Latency Probing
+
+Craft implements an active multi-region edge mesh topology backed by `~/.craft/edge.toml` under `edge.lock` advisory file locks:
+- **Multi-Sample TCP Prober (`EdgeLatencyProber`)**:
+  - Emits $N$ consecutive TCP handshakes (configurable timeout, default 1500ms) to measure min, max, and average round-trip time (RTT).
+  - Calculates packet loss percentage: $\frac{\text{failed\_samples}}{\text{total\_samples}} \times 100$.
+  - Computes sample standard deviation (jitter) in milliseconds:
+    $$\sigma = \sqrt{\frac{1}{N - 1} \sum_{i=1}^N (x_i - \bar{x})^2}$$
+- **Optimal Route Selection**:
+  - Evaluates registered edge nodes against `GeoRoutingPolicy`:
+    - `LowestLatency`: Selects candidate with minimum average RTT.
+    - `GeographicProximity`: Evaluates region affinity (e.g. `us-east` preferred over `ap-southeast`).
+    - `WeightedRoundRobin`: Balances load proportionally based on node weight thresholds.
+    - `Failover`: Evaluates primary node first, falling back to backup nodes upon consecutive probe timeouts.
+- **Backbone Condition Matrix**:
+  - Classifies regional network stability into discrete health tiers:
+    - `Optimal`: Latency $< 45$ ms, Jitter $< 5$ ms, Loss $= 0\%$.
+    - `Elevated`: Latency $< 100$ ms, Jitter $< 20$ ms, Loss $< 2\%$.
+    - `Degraded`: Latency $< 200$ ms, Jitter $< 50$ ms, Loss $< 5\%$.
+    - `Critical`: Latency $\ge 200$ ms or Loss $\ge 5\%$.
+
+---
+
+## 7. Dynamic Proxy Route Generation & Single-Use Player State Handoffs
+
+- **Dynamic Edge Route Generator (`EdgeRouteGenerator`)**:
+  - Generates drop-in routing configurations without external scripting or template engines:
+    - **Velocity (`velocity.toml`)**: Formats `[servers]` mapping backend server targets with clean try order fallbacks.
+    - **BungeeCord (`config.yml`)**: Emits YAML `servers:` nodes with hostnames, MOTDs, and restricted access flags.
+    - **HAProxy L4 (`haproxy.cfg`)**: Emits `frontend` and `backend` sections configured in `mode tcp` with TCP keep-alive, balance roundrobin, and health check intervals.
+    - **Envoy L4 (`envoy.yaml`)**: Generates Envoy static cluster configurations with TCP proxy filters and cluster endpoints.
+- **Single-Use Player State Handoffs (`EdgeStateBroker`)**:
+  - Orchestrates seamless cross-region player transfers between clusters.
+  - Issues time-bounded (60-second TTL) single-use cryptographic transfer tokens (`PlayerSessionHandoff`).
+  - Encapsulates inventory snapshots (`InventorySnapshot`), potion effects, health, experience levels, and game mode.
+  - Atomic one-time consumption guard: Once claimed by the destination server daemon, the handoff token is permanently invalidated, strictly preventing inventory duplication attacks.
+  - HMAC-SHA256 authenticated cross-region chat envelopes (`CrossRegionChatEnvelope`) provide tamper-proof inter-server communication.
+- **Dynamic Latency Optimization Playbooks (`LatencyPlaybook`)**:
+  - Presets: `CompetitivePvP` (low latency, high tick fidelity), `MegaSMP` (dynamic view distance throttling), `CrossRegionEconomy` (buffered chat synchronization).
+  - Autonomously tunes `server.properties` parameters (`view-distance`, `simulation-distance`, `network-compression-threshold`) to cushion servers during backbone degradation.
+

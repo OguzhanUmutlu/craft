@@ -24,6 +24,13 @@ pub enum IpcRequest {
     TriggerDiagnosticRun { server: String, duration_secs: u64 },
     ExecuteRemediation { server: String, action: craft_core::RemediationAction, dry_run: bool },
     UpdateIntelligencePolicy { server: String, policy: craft_core::IntelligencePolicy },
+    GetEdgeMeshStatus,
+    RegisterEdgeNode { node: craft_core::EdgeNode },
+    RemoveEdgeNode { name: String },
+    TriggerEdgeHandoff { handoff: craft_core::PlayerSessionHandoff },
+    ConsumeEdgeHandoff { token: String },
+    BroadcastEdgeChat { envelope: craft_core::CrossRegionChatEnvelope },
+    ApplyLatencyPlaybook { server_name: String, preset: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,5 +59,9 @@ pub enum IpcResponse {
     IntelligenceReports { items: Vec<craft_core::DiagnosticReport> },
     DiagnosticRunCompleted { report: craft_core::DiagnosticReport, markdown: String },
     RemediationResult { message: String },
+    EdgeMeshStatus { nodes: Vec<craft_core::EdgeNode>, backbone: Vec<craft_core::BackboneCondition> },
+    EdgeHandoffResult { success: bool, message: String, handoff: Option<craft_core::PlayerSessionHandoff> },
+    EdgeChatBroadcastResult { delivered_nodes: usize },
+    LatencyPlaybookApplied { server_name: String, view_distance: u32, simulation_distance: u32, message: String },
     Error { error: String },
 }

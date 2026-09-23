@@ -6,6 +6,7 @@ pub mod cluster_config;
 pub mod config;
 pub mod crypto;
 pub mod dr_config;
+pub mod edge_config;
 pub mod error;
 pub mod game;
 pub mod intelligence_config;
@@ -27,6 +28,11 @@ pub use audit::{AuditLedger, AuditLogEntry, AuditVerificationResult, DEFAULT_AUD
 pub use autoscale_config::{AutoscaleRegistry, ServerAutoscalePolicy};
 pub use crypto::{derive_key, ChaCha20, ChaCha20Poly1305, Poly1305};
 pub use dr_config::{DrFailoverReport, DrPlan, DrRecoveryResult, DrRunbook, DrSimulationResult};
+pub use edge_config::{
+    BackboneCondition, BackboneStatus, CrossRegionChatEnvelope, EdgeNode, EdgeRegistry,
+    GeoRoutingPolicy, InventorySnapshot, ItemStackSnapshot, LatencyPlaybook, PlaybookPreset,
+    PlayerSessionHandoff, PotionEffectSnapshot, RoutingStrategy, DEFAULT_CHAT_SECRET,
+};
 pub use intelligence_config::{
     format_report_markdown, AnomalyRecord, AnomalySeverity, AnomalyType, AutopilotMode,
     DiagnosticReport, IntelligencePolicy, IntelligenceRegistry, RemediationAction,
