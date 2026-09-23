@@ -9,6 +9,7 @@ pub mod gateway;
 pub mod hibernation;
 pub mod ipc;
 pub mod log_indexer;
+pub mod migration_service;
 pub mod modpack_service;
 pub mod protocol;
 pub mod multi_raft_service;
@@ -27,6 +28,7 @@ pub mod webhooks;
 
 pub use anvil_service::AnvilService;
 pub use dpdk_service::DpdkNumaService;
+pub use migration_service::MigrationService;
 pub use multi_raft_service::MultiRaftService;
 
 pub use autopilot::AutopilotEngine;

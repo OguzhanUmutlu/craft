@@ -358,4 +358,58 @@ Craft incorporates a zero-dependency, pure-Rust distributed tracing engine compl
   - Subcommand aliases: `craft dpdk ...` and `craft pinning ...`.
 - **ModalX Centered TUI**: Integrated in `craft manage` -> `Tools` -> `Kernel-Bypassed DPDK & NUMA Memory Pinning`.
 
+---
+
+## 11. Zero-Downtime TCP Connection Splicing & Dynamic BGP Anycast Steering
+
+Craft incorporates a zero-downtime TCP connection splicing engine and BGP routing automation subsystem enabling transparent live game server migration across cluster nodes with zero player disconnection timeouts.
+
+### 11.1. In-Memory Freeze Buffer & Sequence Tracking (`ConnectionSplicer`)
+- **Connection Splicing Lifecycle**:
+  - When live migration enters `Freezing`, the splicer intercepts the upstream and downstream TCP socket streams for each connected player.
+  - Active sessions are represented by `PlayerSocketHandoffFrame`:
+    - `player_uuid`: Unique player identifier (UUIDv4).
+    - `username`: Player display name.
+    - `client_addr`: Client IP:port socket address.
+    - `server_addr`: Bound server socket address.
+    - `inbound_seq_num`: Client-to-server TCP sequence number.
+    - `outbound_seq_num`: Server-to-client TCP sequence number.
+    - `window_scale`: Negotiated TCP window scaling factor.
+    - `tls_master_key`: Optional decrypted session key for encrypted proxies.
+- **Freeze-Window Buffering**:
+  - While the source process suspends and memory state transfers, incoming client packets are queued in an in-memory buffer (`VecDeque<u8>`).
+  - No TCP RST or FIN packets are transmitted to the client; the TCP window is optionally advertised as zero to pause client transmission without tearing down the socket.
+- **Socket Drain & Replay**:
+  - Upon target node activation, buffered packets are drained (`drain_buffer`) and replayed into the target socket stream with sequence continuity, preventing client disconnects.
+
+### 11.2. Binary Migration Wire Protocol Framing
+- **Magic Identifier**: `CRAFT_MIGRATION_MAGIC: [u8; 4] = [0x43, 0x4D, 0x49, 0x47]` (`CMIG`).
+- **Wire Message Types**:
+  - `Handshake { migration_id, server_name, source_node, target_node, total_memory_bytes }`
+  - `PreCopyChunk { migration_id, round, chunk_index, total_chunks, chunk: MemoryPageChunk }`
+  - `FreezeNotice { migration_id, freeze_sla_ms }`
+  - `StateManifest { migration_id, manifest: ServerCheckpointManifest }`
+  - `ResumeAck { migration_id, success, error }`
+  - `AbortNotice { migration_id, reason }`
+- **Encoding & Validation**:
+  - `encode_migration_message(&msg) -> Result<Vec<u8>, CraftError>` writes 4-byte magic, 4-byte big-endian payload length, and serialized payload.
+  - `decode_migration_message(&bytes) -> Result<MigrationWireMessage, CraftError>` validates magic header and verifies payload length before deserialization.
+
+### 11.3. Autonomous BGP Anycast Steering Engine (`AnycastBgpEngine`)
+- **Anycast BGP Mechanics**:
+  - Game server IP prefixes (e.g., `/32` IPv4 or `/128` IPv6 Anycast VIPs) are announced to upstream BGP routers from multiple edge nodes.
+  - Traffic routes via ECMP (Equal-Cost Multi-Path) to the closest healthy node.
+  - During live migration, traffic steering is achieved by adjusting BGP attributes or switching announcements:
+    - Prepend AS paths (`as_path_prepend: 3`) on the draining source node to gracefully direct new connections to the target.
+    - Announce the VIP on the target node.
+    - Withdraw the VIP from the source node once socket handoff is finalized.
+- **Multi-Daemon Configuration Synthesis**:
+  - `generate_bird_config`: Generates BIRD 2.x protocol bgp stanza with `import all`, `export filter`, and local/remote AS definitions.
+  - `generate_frr_config`: Generates FRRouting `router bgp` and `address-family ipv4/ipv6 unicast` configuration.
+  - `generate_exabgp_config`: Generates ExaBGP neighbor definition with process runner.
+- **Dynamic Route Health Evaluation (`evaluate_route_health`)**:
+  - Continuously monitors node health score (0-100), MSPT, and packet loss.
+  - If health score drops below threshold (default 60), the engine recommends route withdrawal or AS path prepending to prevent traffic blackholing.
+
+
 

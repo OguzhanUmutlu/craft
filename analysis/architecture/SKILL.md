@@ -51,6 +51,9 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 ├── trash/
 │   ├── manifest.toml      # Transactional trash manifest
 │   └── <id>_<name>/       # Recoverable staged files and directories
+├── migrations/            # Zero-downtime live migration plans and checkpoints
+│   ├── migrations.toml    # Live migration registry and active plans
+│   └── checkpoints/       # CRIU process and memory checkpoint snapshots (<server>/)
 ├── servers.toml           # Registered local server instances
 ├── remotes.toml           # Federated remote SSH host configurations
 ├── clusters.toml          # Multi-server cluster topologies and DAGs
@@ -342,6 +345,42 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `craft raft partition create --group <id> --name <name> -s <start> -e <end> [--leader <id>] [--peers <ids...>] [--json]`
   - `craft raft partition remove --group <id> [--json]`
   - Full-screen centered interactive TUI panel (`Tools -> Raft Consensus & Cluster Arbitration`) displaying Multi-Raft partitions, leaders, and compaction controls powered by ModalX.
+
+### 3.16 Distributed Heterogeneous Cluster Orchestration, Zero-Downtime Live Migration & Global Anycast Session Continuity (Phase 30)
+
+- **Iterative Pre-Copy Memory Convergence**:
+  - Live migration is managed via `LiveMigrationPlan` through structured states: `Initializing -> PreCopying -> Freezing -> Checkpointing -> StateTransfer -> ResumingTarget -> SocketHandoff -> AnycastSwitched -> Completed` (or `Failed`/`RolledBack`).
+  - `DirtyMemoryTracker` provides bitmask dirty tracking across page-aligned 4 KB allocations, recording dirty byte offsets and calculating iterative round stats (`PreCopyRound`).
+  - Pre-copy evaluation (`evaluate_pre_copy_convergence`) determines whether dirty memory has reduced below the convergence threshold ($\le 10$ MB) or round limit (round $\ge 3$) to trigger the sub-150ms execution freeze window:
+    $$\text{should\_freeze} = (\text{dirty\_bytes} \le \text{convergence\_threshold}) \lor (\text{round} \ge \text{max\_rounds})$$
+  - Each pre-copy page chunk (`MemoryPageChunk`) is compressed with Zstandard and validated with 32-bit CRC32 checksums.
+- **Sub-150ms Freeze Window & CRIU Process Checkpointing**:
+  - During the freeze window, the source process is suspended (`MigrationStage::Freezing`) to record final memory deltas, active thread registers, and file descriptor mappings into `ServerCheckpointManifest`.
+  - The manifest serializes process memory pages, open file paths, and player session states (`PlayerSessionDescriptor`), allowing bit-for-bit process restoration on the target node.
+  - If target resume or state transfer fails, `MigrationService` automatically aborts and unpauses the source process within the SLA threshold, avoiding server corruption.
+- **Pure-Rust Connection Splicing & Socket Handoff (`craft-net`)**:
+  - `ConnectionSplicer` maintains per-player TCP state (`PlayerSocketHandoffFrame`), tracking inbound/outbound sequence numbers, window scaling, and TLS master keys.
+  - Freeze-window packet buffering intercepts incoming client packets, queueing them in an in-memory buffer without dropping connections.
+  - Upon target activation, queued frames are spliced and replayed into the target server socket with sequence continuity, preventing client-side disconnection timeouts.
+  - Binary migration wire protocol framing uses magic header `CRAFT_MIGRATION_MAGIC: [u8; 4] = [0x43, 0x4D, 0x49, 0x47]` (`CMIG`), encoding messages: `Handshake`, `PreCopyChunk`, `FreezeNotice`, `StateManifest`, `ResumeAck`, `AbortNotice`.
+- **Global Anycast BGP Prefix Steering (`AnycastBgpEngine`)**:
+  - Dynamic routing engine generates production-grade BGP configuration files for BIRD, FRR, and ExaBGP daemons.
+  - BGP communities (`BgpCommunity`: Standard `no-export`, `no-advertise`, or custom AS:Value) and AS path prepending allow fine-grained traffic engineering.
+  - Dynamic route health evaluation monitors node health score, MSPT, and packet loss, dynamically switching announced prefixes between source and target nodes once socket handoff completes.
+- **In-Process Daemon Migration Supervisor (`MigrationService`)**:
+  - Manages active migration jobs, checkpoint persistence under `~/.craft/migrations/`, advisory file locking (`migrations.lock`), and background execution tasks.
+  - IPC commands: `MigrationStartLive`, `MigrationGetStatus`, `MigrationAbort`, `MigrationList`, `AnycastRouteManage`.
+  - Prometheus metrics: `craft_migration_active`, `craft_migration_duration_seconds`, `craft_migration_pre_copy_bytes_total`, `craft_migration_freeze_time_ms`, `craft_migration_completed_total`, `craft_migration_failed_total`, `craft_anycast_routes_active`.
+- **Remote Federation & Scripting Hook Bus**:
+  - `RemoteCraftClient` provides `start_remote_live_migration`, `get_remote_migration_status`, and `manage_remote_anycast_route` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `LiveMigrationInitiated`, `LiveMigrationFreezeStarted`, `LiveMigrationCompleted`, `LiveMigrationRolledBack`.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft migrate live <server> --target-node <node> [--sla-freeze-ms <ms>] [--max-pre-copy-rounds <n>] [--convergence-threshold-mb <mb>] [--bgp-steer] [--json]`
+  - `craft migrate status <migration-id> [--json]`
+  - `craft migrate abort <migration-id> [--reason <reason>] [--json]`
+  - `craft migrate list [--json]`
+  - `craft anycast route --prefix <prefix> --node <node> --action <announce|withdraw|prepended> [--as-path-prepend <n>] [--json]`
+  - Full-screen centered interactive TUI panel (`Tools -> Zero-Downtime Live Migration & Anycast Steering`) powered by ModalX.
 
 ---
 

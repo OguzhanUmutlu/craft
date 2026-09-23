@@ -1797,6 +1797,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             DistributedTracing,
             AnvilStorage,
             NumaDpdk,
+            LiveMigration,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1909,6 +1910,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::NumaDpdk);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Zero-Downtime Live Migration & Anycast Steering")
+                .with_aliases(&["migrate", "live", "anycast", "bgp"]),
+        );
+        actions.push(ToolItemAction::LiveMigration);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1971,6 +1979,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::NumaDpdk => {
                     numa_dpdk_tui(paths).await?;
+                }
+                ToolItemAction::LiveMigration => {
+                    live_migration_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3075,6 +3086,71 @@ pub async fn numa_dpdk_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("KERNEL-BYPASSED DPDK & NUMA MEMORY PINNING", &lines, false)?;
     Ok(())
 }
+
+pub async fn live_migration_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Live Migration & Anycast");
+
+    let plans = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        client.list_migrations().await.unwrap_or_default()
+    } else {
+        craft_daemon::MigrationService::global(paths).list_migrations().unwrap_or_default()
+    };
+
+    let reg = craft_core::MigrationRegistry::load(paths).unwrap_or_default();
+
+    let mut lines = Vec::new();
+    lines.push("DISTRIBUTED LIVE MIGRATION & GLOBAL ANYCAST STEERING".bold().to_string());
+    lines.push("Iterative Dirty Memory Pre-Copy, Sub-150ms Freeze SLA & TCP Handoff".dimmed().to_string());
+    lines.push("".to_string());
+
+    let active_count = plans.iter().filter(|p| p.status.is_active()).count();
+    let completed_count = plans.iter().filter(|p| matches!(p.status, craft_core::MigrationStage::Completed)).count();
+    let rollback_count = plans.iter().filter(|p| matches!(p.status, craft_core::MigrationStage::RolledBack { .. })).count();
+
+    lines.push(format!("Active Migrations:   {} in-flight", active_count));
+    lines.push(format!("Completed (Zero-Loss):{} instances", completed_count));
+    lines.push(format!("Rolled Back (Safe):  {} instances", rollback_count));
+    lines.push(format!("Anycast Routes:      {} configured ({} active)", reg.routes.len(), reg.routes.iter().filter(|r| r.active).count()));
+
+    if !plans.is_empty() {
+        lines.push("".to_string());
+        lines.push("Recent Live Migrations:".dimmed().to_string());
+        for p in plans.iter().take(3) {
+            let status_badge = match p.status {
+                craft_core::MigrationStage::Completed => "[COMPLETED]".green(),
+                craft_core::MigrationStage::RolledBack { .. } => "[ROLLED_BACK]".red(),
+                craft_core::MigrationStage::FreezeAndHandoff => "[FREEZE]".yellow(),
+                _ => "[PRE_COPY]".blue(),
+            };
+            lines.push(format!(
+                "  * {} ({}) {} -> {} ({} rounds, SLA: {}ms)",
+                p.migration_id, p.server_name, p.source_node, p.target_node, p.rounds.len(), p.freeze_timeout_ms
+            ));
+            lines.push(format!("    Status: {}", status_badge));
+        }
+    }
+
+    if !reg.routes.is_empty() {
+        lines.push("".to_string());
+        lines.push("Anycast BGP Steering Routes:".dimmed().to_string());
+        for r in reg.routes.iter().take(3) {
+            let active_str = if r.active { "[ANNOUNCED]".green() } else { "[WITHDRAWN]".dimmed() };
+            lines.push(format!("  * {} (AS{}) -> {} community: {}", r.prefix, r.asn, active_str, r.community.first().map(|s| s.as_str()).unwrap_or("-")));
+        }
+    }
+
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft migrate live <server> --target-node <> Execute zero-downtime live migration".green().to_string());
+    lines.push("  craft migrate status [--id <id>]             Inspect iterative pre-copy convergence".green().to_string());
+    lines.push("  craft migrate abort --id <id>                Trigger immediate rollback failback".green().to_string());
+    lines.push("  craft anycast route <announce|withdraw>      Steer BGP Anycast routes dynamically".green().to_string());
+
+    show_modal_message("ZERO-DOWNTIME LIVE MIGRATION & ANYCAST", &lines, false)?;
+    Ok(())
+}
+
 
 
 

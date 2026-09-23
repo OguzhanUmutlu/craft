@@ -75,7 +75,8 @@ Full multi-phased task breakdowns and 5–10 line technical specifications are t
 
 | Category | Phase | Focus Area | Status |
 | :--- | :--- | :--- | :--- |
-| **Current** | **Phase 30** | Distributed Heterogeneous Cluster Orchestration, Zero-Downtime Live Migration & Global Anycast Session Continuity (Live migration, memory pre-copy, CRIU checkpointing, BGP/Anycast route steering) | **READY** |
+| **Current** | **Phase 31** | Autonomous eBPF Kernel Observability, Zero-Overhead Syscall Profiling & Deep JVM GC Telemetry (Native eBPF tracepoints, async-profiler integration, JVM safepoint analysis) | **READY** |
+| **Done** | **Phase 30** | Distributed Heterogeneous Cluster Orchestration, Zero-Downtime Live Migration & Global Anycast Session Continuity (Live migration, memory pre-copy, CRIU checkpointing, BGP/Anycast route steering) | **COMPLETED** |
 | **Done** | **Phase 29** | Autonomous Distributed Consensus Reconfiguration, Multi-Raft Partitioning & Raft Log Compaction (Dynamic membership changes, multi-Raft state partitioning, streaming WAL log compaction) | **COMPLETED** |
 | **Done** | **Phase 28** | Autonomous Kernel-Bypassed DPDK Packet Processing, NUMA-Aware Memory Pinning & Zero-Jitter Scheduling (DPDK polling drivers, NUMA page allocation, isolcpus CPU pinning) | **COMPLETED** |
 | **Done** | **Phase 27** | Hardware-Accelerated Anvil Storage Engine, Zero-Copy Packet Serialization & io_uring Chunk Pipelines (Linux io_uring async submissions, zero-copy packet serialization, NVMe chunk DMA) | **COMPLETED** |

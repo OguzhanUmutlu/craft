@@ -19,6 +19,7 @@ pub mod forecast;
 pub mod gateway;
 pub mod hibernate;
 pub mod load;
+pub mod live_migrate;
 pub mod log;
 pub mod ls;
 pub mod mesh;

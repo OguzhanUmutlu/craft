@@ -72,6 +72,10 @@ pub struct CraftPaths {
     pub numa_dir: PathBuf,
     pub numa_file: PathBuf,
     pub numa_lock: PathBuf,
+    pub migrations_dir: PathBuf,
+    pub migration_snapshots_dir: PathBuf,
+    pub migrations_file: PathBuf,
+    pub migrations_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -143,6 +147,10 @@ impl CraftPaths {
         let numa_dir = home.join("numa");
         let numa_file = numa_dir.join("numa.toml");
         let numa_lock = locks_dir.join("numa.lock");
+        let migrations_dir = home.join("migrations");
+        let migration_snapshots_dir = migrations_dir.join("snapshots");
+        let migrations_file = migrations_dir.join("migrations.toml");
+        let migrations_lock = locks_dir.join("migrations.lock");
 
         Self {
             home,
@@ -212,6 +220,10 @@ impl CraftPaths {
             numa_dir,
             numa_file,
             numa_lock,
+            migrations_dir,
+            migration_snapshots_dir,
+            migrations_file,
+            migrations_lock,
         }
     }
 
@@ -260,6 +272,8 @@ impl CraftPaths {
         let anvil_dir = home.join("anvil");
         let anvil_cache_dir = cache_dir.join("anvil");
         let numa_dir = home.join("numa");
+        let migrations_dir = home.join("migrations");
+        let migration_snapshots_dir = migrations_dir.join("snapshots");
 
         // Ensure all primary directories exist
         for dir in [
@@ -295,6 +309,8 @@ impl CraftPaths {
             &anvil_dir,
             &anvil_cache_dir,
             &numa_dir,
+            &migrations_dir,
+            &migration_snapshots_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -336,6 +352,8 @@ impl CraftPaths {
         let anvil_lock = locks_dir.join("anvil.lock");
         let numa_file = numa_dir.join("numa.toml");
         let numa_lock = locks_dir.join("numa.lock");
+        let migrations_file = migrations_dir.join("migrations.toml");
+        let migrations_lock = locks_dir.join("migrations.lock");
 
         Ok(Self {
             home,
@@ -405,7 +423,21 @@ impl CraftPaths {
             numa_dir,
             numa_file,
             numa_lock,
+            migrations_dir,
+            migration_snapshots_dir,
+            migrations_file,
+            migrations_lock,
         })
+    }
+
+    /// Returns the staging directory path for a specific server's live migration
+    pub fn migration_server_dir(&self, server: &str) -> PathBuf {
+        self.migrations_dir.join(server)
+    }
+
+    /// Returns the checkpoint directory path for a specific migration instance
+    pub fn migration_checkpoint_dir(&self, migration_id: &str) -> PathBuf {
+        self.migration_snapshots_dir.join(migration_id)
     }
 
     /// Returns the directory path for a specific Raft group's state and WAL

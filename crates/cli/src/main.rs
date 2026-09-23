@@ -406,6 +406,7 @@ async fn main() {
             }
         }
         Some(Commands::Migrate {
+            action,
             server,
             to,
             remote_name,
@@ -413,16 +414,49 @@ async fn main() {
             trash_source,
             start,
         }) => {
-            handle_migrate(
-                &server,
-                &to,
-                remote_name,
-                remote_port,
-                trash_source,
-                start,
-                &paths,
-            )
-            .await
+            if let Some(act) = action {
+                match act {
+                    cli::MigrateCommands::Live {
+                        server,
+                        target_node,
+                        target_host,
+                        target_port,
+                        freeze_max_ms,
+                        json,
+                    } => {
+                        commands::live_migrate::handle_migrate_live(
+                            &server,
+                            &target_node,
+                            target_host,
+                            target_port,
+                            freeze_max_ms,
+                            json,
+                            &paths,
+                        )
+                        .await
+                    }
+                    cli::MigrateCommands::Status { id, json } => {
+                        commands::live_migrate::handle_migrate_status(id, json, &paths).await
+                    }
+                    cli::MigrateCommands::Abort { id, reason, json } => {
+                        commands::live_migrate::handle_migrate_abort(id, reason, json, &paths).await
+                    }
+                    cli::MigrateCommands::List { json } => {
+                        commands::live_migrate::handle_migrate_list(json, &paths).await
+                    }
+                }
+            } else {
+                handle_migrate(
+                    &server,
+                    &to,
+                    remote_name,
+                    remote_port,
+                    trash_source,
+                    start,
+                    &paths,
+                )
+                .await
+            }
         }
         Some(Commands::Cluster { action }) => {
             if let Some(act) = action {
@@ -502,6 +536,19 @@ async fn main() {
         Some(Commands::Numa { action }) => {
             commands::numa::handle_numa(action, &paths).await
         }
+        Some(Commands::Anycast { action }) => match action {
+            cli::AnycastCommands::Route {
+                action,
+                prefix,
+                asn,
+                json,
+            } => {
+                commands::live_migrate::handle_anycast_route(
+                    &action, prefix, asn, json, &paths,
+                )
+                .await
+            }
+        },
     };
 
     if let Err(e) = result {
@@ -571,6 +618,8 @@ fn print_banner() {
     println!("  quota <list|get|set|tenant|balance> Cgroups v2 resource quotas & fair-share scheduling");
     println!("  trace <status|list|get|export>    Distributed tracing & OpenTelemetry (OTel)");
     println!("  anvil <status|inspect|bench>      Hardware-accelerated Anvil storage & io_uring");
+    println!("  migrate <server|live|status>      Cold or zero-downtime live server migration");
+    println!("  anycast route <announce|withdraw> Global Anycast BGP route announcements");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

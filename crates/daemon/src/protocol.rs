@@ -183,6 +183,21 @@ pub enum IpcRequest {
     GetDpdkStatus {
         bench_count: Option<usize>,
     },
+    MigrationStartLive {
+        plan: craft_core::LiveMigrationPlan,
+    },
+    MigrationGetStatus {
+        migration_id: Option<String>,
+    },
+    MigrationAbort {
+        migration_id: String,
+        reason: Option<String>,
+    },
+    MigrationList,
+    AnycastRouteManage {
+        action: String,
+        route: craft_core::AnycastRouteAnnouncement,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -355,6 +370,24 @@ pub enum IpcResponse {
     },
     DpdkStatusResult {
         stats: craft_net::DpdkDriverStats,
+    },
+    MigrationStarted {
+        plan: craft_core::LiveMigrationPlan,
+    },
+    MigrationStatus {
+        plans: Vec<craft_core::LiveMigrationPlan>,
+    },
+    MigrationAborted {
+        plan: craft_core::LiveMigrationPlan,
+        message: String,
+    },
+    MigrationListResult {
+        plans: Vec<craft_core::LiveMigrationPlan>,
+    },
+    AnycastRouteManageResult {
+        success: bool,
+        message: String,
+        routes: Vec<craft_core::AnycastRouteAnnouncement>,
     },
     Error { error: String },
 }

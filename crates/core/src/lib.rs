@@ -15,6 +15,7 @@ pub mod intelligence_config;
 pub mod java;
 pub mod log_index;
 pub mod mesh_config;
+pub mod migration;
 pub mod modpack_ci;
 pub mod nbt;
 pub mod numa;
@@ -73,6 +74,11 @@ pub use log_index::{
 };
 pub use mesh_config::{
     MeshPolicy, MeshRegistry, MeshTarget, MeshTargetKind, ReplicationQuorum,
+};
+pub use migration::{
+    build_server_checkpoint_manifest, evaluate_pre_copy_convergence, AnycastRouteAnnouncement,
+    AnycastRouteStatus, DirtyMemoryTracker, LiveMigrationPlan, MemoryPageChunk, MigrationRegistry,
+    MigrationStage, PlayerSessionDescriptor, PreCopyRound, ServerCheckpointManifest,
 };
 pub use modpack_ci::{
     BinaryDeltaHeader, DeltaOp, DeltaPatchManifest, ModSide, ModpackBuildManifest,

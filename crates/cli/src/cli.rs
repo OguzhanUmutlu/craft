@@ -354,12 +354,15 @@ pub enum Commands {
         action: Option<RemoteCommands>,
     },
 
-    /// Migrate a server to a remote host with atomic snapshot and verification
+    /// Migrate a server to a remote host with atomic snapshot or perform zero-downtime live migration
     Migrate {
-        /// Local server name to migrate
+        #[command(subcommand)]
+        action: Option<MigrateCommands>,
+        /// Local server name to migrate (for cold migration)
+        #[arg(default_value = "")]
         server: String,
         /// Target remote host alias (e.g. --to my-vps)
-        #[arg(long)]
+        #[arg(long, default_value = "")]
         to: String,
         /// Optional target server name on the remote host (defaults to source name)
         #[arg(long)]
@@ -599,6 +602,13 @@ pub enum Commands {
     Numa {
         #[command(subcommand)]
         action: NumaCommands,
+    },
+
+    /// Global Anycast BGP route announcements, session continuity, and multi-cloud steering
+    #[command(name = "anycast", alias = "bgp", alias = "route")]
+    Anycast {
+        #[command(subcommand)]
+        action: AnycastCommands,
     },
 }
 
@@ -1605,6 +1615,75 @@ pub enum NumaCommands {
         #[arg(long)]
         hugepages_2m: Option<usize>,
         /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum MigrateCommands {
+    /// Zero-downtime live game server migration with iterative dirty memory pre-copy and socket handoff
+    Live {
+        /// Server name to live migrate
+        server: String,
+        /// Destination node ID
+        #[arg(long)]
+        target_node: String,
+        /// Destination node host address (defaults to node ID if omitted)
+        #[arg(long)]
+        target_host: Option<String>,
+        /// Destination server port (defaults to 25565)
+        #[arg(long, default_value_t = 25565)]
+        target_port: u16,
+        /// Maximum allowable freeze window in milliseconds (default: 250)
+        #[arg(long, default_value_t = 250)]
+        freeze_max_ms: u64,
+        /// Output status as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Query status of active or completed live migrations
+    Status {
+        /// Migration ID to inspect (omit for all migrations)
+        #[arg(long)]
+        id: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Abort an in-flight live migration and trigger automatic rollback
+    Abort {
+        /// Migration ID to abort
+        #[arg(long)]
+        id: String,
+        /// Abort reason explanation
+        #[arg(long)]
+        reason: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// List all live migrations
+    List {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum AnycastCommands {
+    /// Announce, withdraw, prepend, or list Anycast route prefixes
+    Route {
+        /// Action to perform: announce, withdraw, prepend, or list
+        action: String,
+        /// IP prefix (e.g. 198.51.100.0/24)
+        #[arg(long)]
+        prefix: Option<String>,
+        /// Autonomous System Number (ASN)
+        #[arg(long)]
+        asn: Option<u32>,
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
@@ -2686,6 +2765,7 @@ mod tests {
         .unwrap();
         match cli.command {
             Some(Commands::Migrate {
+                action: None,
                 server,
                 to,
                 remote_name,
@@ -2701,6 +2781,96 @@ mod tests {
                 assert!(start);
             }
             _ => panic!("Expected Migrate command"),
+        }
+    }
+
+    #[test]
+    fn test_migrate_live_and_anycast_parsing() {
+        let cli_live = Cli::try_parse_from([
+            "craft",
+            "migrate",
+            "live",
+            "lobby",
+            "--target-node",
+            "node-eu-west",
+            "--target-host",
+            "10.0.0.5",
+            "--freeze-max-ms",
+            "150",
+            "--json",
+        ])
+        .unwrap();
+
+        match cli_live.command {
+            Some(Commands::Migrate {
+                action:
+                    Some(MigrateCommands::Live {
+                        server,
+                        target_node,
+                        target_host,
+                        target_port,
+                        freeze_max_ms,
+                        json,
+                    }),
+                ..
+            }) => {
+                assert_eq!(server, "lobby");
+                assert_eq!(target_node, "node-eu-west");
+                assert_eq!(target_host.as_deref(), Some("10.0.0.5"));
+                assert_eq!(target_port, 25565);
+                assert_eq!(freeze_max_ms, 150);
+                assert!(json);
+            }
+            _ => panic!("Expected Migrate live command"),
+        }
+
+        let cli_status = Cli::try_parse_from(["craft", "migrate", "status", "--id", "mig-123"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Migrate {
+                action: Some(MigrateCommands::Status { id, json }),
+                ..
+            }) => {
+                assert_eq!(id.as_deref(), Some("mig-123"));
+                assert!(!json);
+            }
+            _ => panic!("Expected Migrate status command"),
+        }
+
+        let cli_abort = Cli::try_parse_from(["craft", "migrate", "abort", "--id", "mig-123", "--reason", "timeout"]).unwrap();
+        match cli_abort.command {
+            Some(Commands::Migrate {
+                action: Some(MigrateCommands::Abort { id, reason, json }),
+                ..
+            }) => {
+                assert_eq!(id, "mig-123");
+                assert_eq!(reason.as_deref(), Some("timeout"));
+                assert!(!json);
+            }
+            _ => panic!("Expected Migrate abort command"),
+        }
+
+        let cli_anycast = Cli::try_parse_from([
+            "craft",
+            "anycast",
+            "route",
+            "announce",
+            "--prefix",
+            "198.51.100.0/24",
+            "--asn",
+            "65001",
+        ])
+        .unwrap();
+
+        match cli_anycast.command {
+            Some(Commands::Anycast {
+                action: AnycastCommands::Route { action, prefix, asn, json },
+            }) => {
+                assert_eq!(action, "announce");
+                assert_eq!(prefix.as_deref(), Some("198.51.100.0/24"));
+                assert_eq!(asn, Some(65001));
+                assert!(!json);
+            }
+            _ => panic!("Expected Anycast route command"),
         }
     }
 

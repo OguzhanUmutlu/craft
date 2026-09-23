@@ -1079,6 +1079,58 @@ where
                     .get_dpdk_status(bench_count);
                 write_frame(&mut stream, &IpcResponse::DpdkStatusResult { stats }).await?;
             }
+            IpcRequest::MigrationStartLive { plan } => {
+                let resp = match crate::migration_service::MigrationService::global(supervisor.paths())
+                    .start_live_migration(plan)
+                {
+                    Ok(p) => IpcResponse::MigrationStarted { plan: p },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::MigrationGetStatus { migration_id } => {
+                let resp = match crate::migration_service::MigrationService::global(supervisor.paths())
+                    .get_migration_status(migration_id.as_deref())
+                {
+                    Ok(plans) => IpcResponse::MigrationStatus { plans },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::MigrationAbort { migration_id, reason } => {
+                let resp = match crate::migration_service::MigrationService::global(supervisor.paths())
+                    .abort_migration(&migration_id, reason.as_deref())
+                {
+                    Ok(plan) => IpcResponse::MigrationAborted {
+                        plan,
+                        message: "Live migration successfully aborted".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::MigrationList => {
+                let resp = match crate::migration_service::MigrationService::global(supervisor.paths())
+                    .list_migrations()
+                {
+                    Ok(plans) => IpcResponse::MigrationListResult { plans },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::AnycastRouteManage { action, route } => {
+                let resp = match crate::migration_service::MigrationService::global(supervisor.paths())
+                    .manage_anycast_route(&action, route)
+                {
+                    Ok((success, message, routes)) => IpcResponse::AnycastRouteManageResult {
+                        success,
+                        message,
+                        routes,
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -2252,6 +2304,60 @@ impl DaemonClient {
     pub async fn get_dpdk_status(&mut self, bench_count: Option<usize>) -> Result<craft_net::DpdkDriverStats> {
         match self.request(IpcRequest::GetDpdkStatus { bench_count }).await? {
             IpcResponse::DpdkStatusResult { stats } => Ok(stats),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn start_live_migration(
+        &mut self,
+        plan: craft_core::LiveMigrationPlan,
+    ) -> Result<craft_core::LiveMigrationPlan> {
+        match self.request(IpcRequest::MigrationStartLive { plan }).await? {
+            IpcResponse::MigrationStarted { plan } => Ok(plan),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_migration_status(
+        &mut self,
+        migration_id: Option<String>,
+    ) -> Result<Vec<craft_core::LiveMigrationPlan>> {
+        match self.request(IpcRequest::MigrationGetStatus { migration_id }).await? {
+            IpcResponse::MigrationStatus { plans } => Ok(plans),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn abort_migration(
+        &mut self,
+        migration_id: String,
+        reason: Option<String>,
+    ) -> Result<craft_core::LiveMigrationPlan> {
+        match self.request(IpcRequest::MigrationAbort { migration_id, reason }).await? {
+            IpcResponse::MigrationAborted { plan, .. } => Ok(plan),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_migrations(&mut self) -> Result<Vec<craft_core::LiveMigrationPlan>> {
+        match self.request(IpcRequest::MigrationList).await? {
+            IpcResponse::MigrationListResult { plans } => Ok(plans),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn manage_anycast_route(
+        &mut self,
+        action: String,
+        route: craft_core::AnycastRouteAnnouncement,
+    ) -> Result<(bool, String, Vec<craft_core::AnycastRouteAnnouncement>)> {
+        match self.request(IpcRequest::AnycastRouteManage { action, route }).await? {
+            IpcResponse::AnycastRouteManageResult { success, message, routes } => Ok((success, message, routes)),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

@@ -7,6 +7,7 @@ pub mod edge_router;
 pub mod firewall;
 pub mod histogram;
 pub mod loopback;
+pub mod live_splicer;
 pub mod mtls;
 pub mod packet_inspector;
 pub mod query;
@@ -32,6 +33,10 @@ pub use edge_probe::{EdgeLatencyProber, EdgeProbeResult};
 pub use edge_router::EdgeRouteGenerator;
 pub use firewall::allow_ip_port;
 pub use histogram::LatencyHistogram;
+pub use live_splicer::{
+    decode_migration_message, encode_migration_message, AnycastBgpEngine, ConnectionSplicer,
+    MigrationWireMessage, PlayerSocketHandoffFrame, SplicerState, CRAFT_MIGRATION_MAGIC,
+};
 pub use loopback::{enable_bedrock_loopback, is_bedrock_loopback_enabled};
 pub use mtls::{CertMetadata, MtlsEngine, NodeCertBundle, RootCaBundle};
 pub use packet_inspector::{

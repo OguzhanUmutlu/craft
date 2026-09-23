@@ -53,6 +53,10 @@ pub enum LifecycleEvent {
     RaftMembershipReconfigured,
     RaftCompactionCompleted,
     MultiRaftPartitionCreated,
+    LiveMigrationInitiated,
+    LiveMigrationFreezeStarted,
+    LiveMigrationCompleted,
+    LiveMigrationRolledBack,
 }
 
 impl LifecycleEvent {
@@ -100,6 +104,10 @@ impl LifecycleEvent {
             Self::RaftMembershipReconfigured => "on_raft_membership_reconfigured",
             Self::RaftCompactionCompleted => "on_raft_compaction_completed",
             Self::MultiRaftPartitionCreated => "on_multiraft_partition_created",
+            Self::LiveMigrationInitiated => "on_live_migration_initiated",
+            Self::LiveMigrationFreezeStarted => "on_live_migration_freeze_started",
+            Self::LiveMigrationCompleted => "on_live_migration_completed",
+            Self::LiveMigrationRolledBack => "on_live_migration_rolled_back",
         }
     }
 
@@ -148,6 +156,10 @@ impl LifecycleEvent {
             "on_raft_membership_reconfigured" | "raft_membership_reconfigured" | "reconfigure" => Some(Self::RaftMembershipReconfigured),
             "on_raft_compaction_completed" | "raft_compaction_completed" | "compaction" => Some(Self::RaftCompactionCompleted),
             "on_multiraft_partition_created" | "multiraft_partition_created" | "partition_created" => Some(Self::MultiRaftPartitionCreated),
+            "on_live_migration_initiated" | "live_migration_initiated" | "migration_initiated" => Some(Self::LiveMigrationInitiated),
+            "on_live_migration_freeze_started" | "live_migration_freeze_started" | "freeze_started" => Some(Self::LiveMigrationFreezeStarted),
+            "on_live_migration_completed" | "live_migration_completed" | "migration_completed" => Some(Self::LiveMigrationCompleted),
+            "on_live_migration_rolled_back" | "live_migration_rolled_back" | "migration_rolled_back" => Some(Self::LiveMigrationRolledBack),
             _ => None,
         }
     }
@@ -196,6 +208,10 @@ impl LifecycleEvent {
             Self::RaftMembershipReconfigured,
             Self::RaftCompactionCompleted,
             Self::MultiRaftPartitionCreated,
+            Self::LiveMigrationInitiated,
+            Self::LiveMigrationFreezeStarted,
+            Self::LiveMigrationCompleted,
+            Self::LiveMigrationRolledBack,
         ]
     }
 }
@@ -338,6 +354,16 @@ pub struct HookContext {
     pub snapshot_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub partition_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub migration_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_node: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_node: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freeze_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dirty_bytes: Option<u64>,
 }
 
 impl HookContext {
@@ -375,6 +401,42 @@ impl HookContext {
         ctx.raft_group_id = Some(group_id);
         ctx.partition_name = Some(partition_name.to_string());
         ctx.details = Some(format!("Partition '{}' (group {}) registered", partition_name, group_id));
+        ctx
+    }
+
+    pub fn for_live_migration_initiated(
+        migration_id: &str,
+        server_name: &str,
+        source_node: &str,
+        target_node: &str,
+    ) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::LiveMigrationInitiated);
+        ctx.migration_id = Some(migration_id.to_string());
+        ctx.server_name = Some(server_name.to_string());
+        ctx.source_node = Some(source_node.to_string());
+        ctx.target_node = Some(target_node.to_string());
+        ctx.details = Some(format!(
+            "Live migration '{}' initiated for server '{}' from '{}' to '{}'",
+            migration_id, server_name, source_node, target_node
+        ));
+        ctx
+    }
+
+    pub fn for_live_migration_completed(
+        migration_id: &str,
+        server_name: &str,
+        freeze_ms: u64,
+        dirty_bytes: u64,
+    ) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::LiveMigrationCompleted);
+        ctx.migration_id = Some(migration_id.to_string());
+        ctx.server_name = Some(server_name.to_string());
+        ctx.freeze_ms = Some(freeze_ms);
+        ctx.dirty_bytes = Some(dirty_bytes);
+        ctx.details = Some(format!(
+            "Live migration '{}' for server '{}' completed with {}ms freeze duration",
+            migration_id, server_name, freeze_ms
+        ));
         ctx
     }
 }
@@ -933,5 +995,34 @@ mod tests {
         assert_eq!(raft_ctx.raft_group_id, Some(100));
         assert_eq!(raft_ctx.compacted_entries, Some(500));
         assert_eq!(raft_ctx.snapshot_bytes, Some(10240));
+
+        // Test Phase 30 Live Migration lifecycle events
+        assert_eq!(
+            LifecycleEvent::from_name("on_live_migration_initiated"),
+            Some(LifecycleEvent::LiveMigrationInitiated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("live_migration_initiated"),
+            Some(LifecycleEvent::LiveMigrationInitiated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_live_migration_freeze_started"),
+            Some(LifecycleEvent::LiveMigrationFreezeStarted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_live_migration_completed"),
+            Some(LifecycleEvent::LiveMigrationCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_live_migration_rolled_back"),
+            Some(LifecycleEvent::LiveMigrationRolledBack)
+        );
+
+        let mig_ctx = HookContext::for_live_migration_completed("mig-123", "survival", 42, 10485760);
+        assert_eq!(mig_ctx.event, "on_live_migration_completed");
+        assert_eq!(mig_ctx.migration_id.as_deref(), Some("mig-123"));
+        assert_eq!(mig_ctx.server_name.as_deref(), Some("survival"));
+        assert_eq!(mig_ctx.freeze_ms, Some(42));
+        assert_eq!(mig_ctx.dirty_bytes, Some(10485760));
     }
 }

@@ -1168,6 +1168,55 @@ impl RemoteCraftClient {
         Ok(stdout.trim().to_string())
     }
 
+    /// Initiates a zero-downtime live migration on the remote host
+    pub fn start_remote_live_migration(&self, plan: &craft_core::LiveMigrationPlan) -> Result<String> {
+        let cmd = format!(
+            "craft migrate live {} --target-node {} --target-host {} --target-port {} --freeze-max-ms {} --json",
+            plan.server_name, plan.target_node, plan.target_host, plan.target_port, plan.freeze_timeout_ms
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote live migration failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Queries live migration status from the remote host
+    pub fn get_remote_migration_status(&self, migration_id: Option<&str>) -> Result<String> {
+        let cmd = if let Some(id) = migration_id {
+            format!("craft migrate status --id {} --json", id)
+        } else {
+            "craft migrate list --json".to_string()
+        };
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote migration status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Manages an Anycast BGP route on the remote host
+    pub fn manage_remote_anycast_route(
+        &self,
+        action: &str,
+        prefix: &str,
+        asn: Option<u32>,
+    ) -> Result<String> {
+        let mut cmd = format!("craft anycast route {} --prefix {}", action, prefix);
+        if let Some(a) = asn {
+            cmd.push_str(&format!(" --asn {}", a));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote Anycast route management failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
     /// Formats an exec command with an active W3C traceparent environment prefix if provided
     pub fn exec_with_trace_context(
         &self,
