@@ -55,6 +55,14 @@ impl DaemonServer {
         // Launch in-process Tick Profiling & Netty Packet Telemetry Service
         self.tick_service.clone().start_sampling_loop(self.supervisor.clone(), 3);
 
+        // Launch in-process Fleet Healer and Canary Rollout Engine
+        let fleet_healer = std::sync::Arc::new(crate::fleet_healer::FleetHealer::new(
+            self.paths.clone(),
+            self.supervisor.clone(),
+            self.tick_service.clone(),
+        ));
+        fleet_healer.clone().start_autonomous_loop(5);
+
         // Load settings to check gateway and storage monitor config
         let settings = craft_core::GlobalSettings::load(&self.paths).unwrap_or_default();
 
@@ -96,6 +104,7 @@ impl DaemonServer {
             let ap_mgr = autopilot.clone();
             let eb_mgr = edge_broker.clone();
             let ts_mgr = self.tick_service.clone();
+            let fh_mgr = fleet_healer.clone();
             loop {
                 match listener.accept().await {
                     Ok((stream, _)) => {
@@ -104,8 +113,9 @@ impl DaemonServer {
                         let ap = ap_mgr.clone();
                         let eb = eb_mgr.clone();
                         let ts = ts_mgr.clone();
+                        let fh = fh_mgr.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb, ts).await {
+                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb, ts, fh).await {
                                 warn!("IPC client disconnected with error: {}", e);
                             }
                         });
@@ -136,6 +146,7 @@ impl DaemonServer {
             let ap_mgr = autopilot.clone();
             let eb_mgr = edge_broker.clone();
             let ts_mgr = self.tick_service.clone();
+            let fh_mgr = fleet_healer.clone();
             loop {
                 if let Err(e) = server.connect().await {
                     error!("Error connecting named pipe client: {}", e);
@@ -151,8 +162,9 @@ impl DaemonServer {
                 let ap = ap_mgr.clone();
                 let eb = eb_mgr.clone();
                 let ts = ts_mgr.clone();
+                let fh = fh_mgr.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(client, sup, hib, ap, eb, ts).await {
+                    if let Err(e) = handle_connection(client, sup, hib, ap, eb, ts, fh).await {
                         warn!("IPC client error: {}", e);
                     }
                 });
@@ -178,6 +190,7 @@ async fn handle_connection<S>(
     autopilot: std::sync::Arc<crate::autopilot::AutopilotEngine>,
     edge_broker: std::sync::Arc<crate::edge_broker::EdgeStateBroker>,
     tick_service: crate::tick_service::TickService,
+    fleet_healer: std::sync::Arc<crate::fleet_healer::FleetHealer>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -534,6 +547,40 @@ where
                     None => {
                         write_frame(&mut stream, &IpcResponse::Error { error: format!("No latency histogram available for server '{}'", server_name) }).await?;
                     }
+                }
+            }
+            IpcRequest::StartClusterRollout { plan } => {
+                match fleet_healer.start_cluster_rollout(plan) {
+                    Ok(rollout_id) => write_frame(&mut stream, &IpcResponse::ClusterRolloutStarted { rollout_id }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::GetClusterRolloutStatus { cluster } => {
+                let reg = craft_core::RolloutRegistry::load(supervisor.paths()).unwrap_or_default();
+                let record = reg.get_active_rollout(&cluster).cloned();
+                write_frame(&mut stream, &IpcResponse::ClusterRolloutStatus { record }).await?;
+            }
+            IpcRequest::AbortClusterRollout { rollout_id, reason } => {
+                let res = craft_core::RolloutRegistry::modify(supervisor.paths(), |reg| {
+                    reg.abort_rollout(&rollout_id, &reason)
+                });
+                match res {
+                    Ok(()) => write_frame(&mut stream, &IpcResponse::ClusterRolloutAborted {
+                        message: format!("Rollout '{}' successfully aborted", rollout_id),
+                    }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::GetFleetHealth { cluster } => {
+                match fleet_healer.evaluate_fleet_health(&cluster).await {
+                    Ok(status) => write_frame(&mut stream, &IpcResponse::FleetHealth { status }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::ExecuteFleetHeal { cluster, action } => {
+                match fleet_healer.execute_fleet_heal(&cluster, action).await {
+                    Ok(msg) => write_frame(&mut stream, &IpcResponse::FleetHealResult { message: msg }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
                 }
             }
             IpcRequest::ShutdownDaemon => {
@@ -1053,6 +1100,50 @@ impl DaemonClient {
     ) -> Result<(craft_net::LatencyHistogram, Vec<String>)> {
         match self.request(IpcRequest::GetLatencyHistogram { server_name }).await? {
             IpcResponse::LatencyHistogram { histogram, chart_lines } => Ok((histogram, chart_lines)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn start_cluster_rollout(&mut self, plan: craft_core::RolloutPlan) -> Result<String> {
+        match self.request(IpcRequest::StartClusterRollout { plan }).await? {
+            IpcResponse::ClusterRolloutStarted { rollout_id } => Ok(rollout_id),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_cluster_rollout_status(&mut self, cluster: String) -> Result<Option<craft_core::RolloutRecord>> {
+        match self.request(IpcRequest::GetClusterRolloutStatus { cluster }).await? {
+            IpcResponse::ClusterRolloutStatus { record } => Ok(record),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn abort_cluster_rollout(&mut self, rollout_id: String, reason: String) -> Result<String> {
+        match self.request(IpcRequest::AbortClusterRollout { rollout_id, reason }).await? {
+            IpcResponse::ClusterRolloutAborted { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_fleet_health(&mut self, cluster: String) -> Result<craft_core::FleetHealthStatus> {
+        match self.request(IpcRequest::GetFleetHealth { cluster }).await? {
+            IpcResponse::FleetHealth { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn execute_fleet_heal(
+        &mut self,
+        cluster: String,
+        action: craft_core::FleetHealingAction,
+    ) -> Result<String> {
+        match self.request(IpcRequest::ExecuteFleetHeal { cluster, action }).await? {
+            IpcResponse::FleetHealResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

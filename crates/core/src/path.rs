@@ -31,6 +31,8 @@ pub struct CraftPaths {
     pub edge_lock: PathBuf,
     pub edge_dir: PathBuf,
     pub config_file: PathBuf,
+    pub rollouts_file: PathBuf,
+    pub rollouts_lock: PathBuf,
     pub socket_file: PathBuf,
     pub pid_file: PathBuf,
 }
@@ -63,6 +65,8 @@ impl CraftPaths {
         let edge_file = home.join("edge.toml");
         let edge_lock = locks_dir.join("edge.lock");
         let config_file = home.join("config.toml");
+        let rollouts_file = home.join("rollouts.toml");
+        let rollouts_lock = locks_dir.join("rollouts.lock");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
 
@@ -93,6 +97,8 @@ impl CraftPaths {
             edge_lock,
             edge_dir,
             config_file,
+            rollouts_file,
+            rollouts_lock,
             socket_file,
             pid_file,
         }
@@ -159,6 +165,8 @@ impl CraftPaths {
         let edge_file = home.join("edge.toml");
         let edge_lock = locks_dir.join("edge.lock");
         let config_file = home.join("config.toml");
+        let rollouts_file = home.join("rollouts.toml");
+        let rollouts_lock = locks_dir.join("rollouts.lock");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
 
@@ -189,6 +197,8 @@ impl CraftPaths {
             edge_lock,
             edge_dir,
             config_file,
+            rollouts_file,
+            rollouts_lock,
             socket_file,
             pid_file,
         })

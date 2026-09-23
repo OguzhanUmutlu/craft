@@ -1787,6 +1787,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             Daemon,
             Firewall,
             ScriptsHooks,
+            CanaryFleet,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1829,6 +1830,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::ScriptsHooks);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Canary Rollouts & Fleet Healing")
+                .with_aliases(&["r", "rollout", "canary", "fleet"]),
+        );
+        actions.push(ToolItemAction::CanaryFleet);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1861,6 +1869,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::ScriptsHooks => {
                     super::scripts_tui::scripts_hooks_menu(paths).await?;
+                }
+                ToolItemAction::CanaryFleet => {
+                    canary_fleet_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2042,3 +2053,50 @@ pub async fn tick_profile_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("TICK PROFILING & TELEMETRY", &lines, false)?;
     Ok(())
 }
+
+pub async fn canary_fleet_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Fleet Rollouts");
+
+    let clusters = craft_core::ClustersRegistry::load(paths).unwrap_or_default();
+    let rollouts = craft_core::RolloutRegistry::load(paths).unwrap_or_default();
+
+    let mut lines = Vec::new();
+    lines.push(format!("Configured Clusters: {}", clusters.clusters.len()));
+    lines.push(format!("Active Rollouts:     {}", rollouts.active_rollouts.len()));
+    lines.push("".to_string());
+
+    if rollouts.active_rollouts.is_empty() {
+        lines.push("[OK] All cluster fleets operating normally (no active rollouts).".green().to_string());
+    } else {
+        lines.push("[ACTIVE ROLLOUTS]".yellow().bold().to_string());
+        for (cluster, id) in &rollouts.active_rollouts {
+            if let Some(record) = rollouts.get_rollout(id) {
+                lines.push(format!(
+                    " - Cluster '{}': Target v{} ({}) - Stage: {}",
+                    cluster, record.plan.target_version, record.plan.strategy, record.stage.name()
+                ));
+            }
+        }
+    }
+
+    if let Ok(mut client) = DaemonClient::connect(paths).await {
+        for cluster in &clusters.clusters {
+            if let Ok(fleet) = client.get_fleet_health(cluster.name.clone()).await {
+                lines.push("".to_string());
+                let health_str = if fleet.overall_healthy { "[HEALTHY]".green() } else { "[DEGRADED]".red() };
+                lines.push(format!("Cluster '{}' Fleet Health: {}", cluster.name, health_str));
+                for (node_id, health) in &fleet.node_statuses {
+                    lines.push(format!(
+                        "   * Node '{}': {} | {:.1} TPS | {:.1}ms MSPT",
+                        node_id, health.status, health.current_tps, health.current_mspt
+                    ));
+                }
+            }
+        }
+    }
+
+    show_modal_message("CANARY ROLLOUTS & FLEET HEALING", &lines, false)?;
+    Ok(())
+}
+

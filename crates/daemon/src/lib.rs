@@ -1,6 +1,7 @@
 pub mod autopilot;
 pub mod circuit_breaker;
 pub mod edge_broker;
+pub mod fleet_healer;
 pub mod gateway;
 pub mod hibernation;
 pub mod ipc;
@@ -16,6 +17,7 @@ pub mod webhooks;
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};
 pub use edge_broker::EdgeStateBroker;
+pub use fleet_healer::FleetHealer;
 pub use gateway::GatewayServer;
 pub use hibernation::HibernationManager;
 pub use ipc::{DaemonClient, DaemonServer, DAEMON_PORT};

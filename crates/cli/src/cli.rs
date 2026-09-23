@@ -1488,6 +1488,62 @@ pub enum ClusterCommands {
         /// Target cluster name
         cluster: String,
     },
+    /// Initiate a canary, blue-green, or rolling upgrade rollout for a cluster
+    Rollout {
+        /// Target cluster name
+        cluster: String,
+        /// Target software version (e.g. 1.21.1)
+        version: String,
+        /// Rollout strategy: canary, bluegreen, or rolling
+        #[arg(long, default_value = "canary")]
+        strategy: String,
+        /// Canary bake duration in seconds before promoting
+        #[arg(long, default_value_t = 60)]
+        bake_seconds: u64,
+        /// Canary traffic or node percentage (e.g. 25)
+        #[arg(long, default_value_t = 25)]
+        percentage: u8,
+        /// Maximum parallel nodes for rolling upgrade
+        #[arg(long, default_value_t = 1)]
+        max_parallel: usize,
+    },
+    /// View the active rollout progress and live canary bake status for a cluster
+    #[command(alias = "rollout_status")]
+    RolloutStatus {
+        /// Target cluster name
+        cluster: String,
+    },
+    /// Abort an in-progress rollout and restore nodes to pre-rollout snapshots
+    Rollback {
+        /// Target cluster name
+        cluster: String,
+        /// Reason for aborting and triggering rollback
+        #[arg(long, default_value = "Manual operator abort")]
+        reason: String,
+    },
+    /// Trigger an autonomous fleet healing action on a degraded or failed cluster node
+    Heal {
+        /// Target cluster name
+        cluster: String,
+        /// Node ID to heal
+        #[arg(long)]
+        node: String,
+        /// Healing action: restart, rollback, drain, or promote
+        #[arg(long, default_value = "restart")]
+        action: String,
+        /// Optional snapshot identifier for rollback action
+        #[arg(long)]
+        snapshot: Option<String>,
+        /// Reason for healing action
+        #[arg(long, default_value = "Manual operator intervention")]
+        reason: String,
+    },
+    /// Query real-time fleet health across all nodes in a cluster
+    #[command(alias = "fleet")]
+    FleetStatus {
+        /// Target cluster name
+        cluster: String,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]

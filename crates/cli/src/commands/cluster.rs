@@ -5,8 +5,9 @@ use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, Row, Table};
 use craft_core::{
     is_server_locked, get_server_running_pid,
-    ClusterNode, ClusterRole, ClustersRegistry, CraftError, CraftPaths,
-    RemotesRegistry, Result, ServerCluster, ServersRegistry,
+    CanaryHealthCriteria, ClusterNode, ClusterRole, ClustersRegistry, CraftError, CraftPaths,
+    FleetHealingAction, RemotesRegistry, Result, RolloutPlan, RolloutRegistry,
+    RolloutStrategy, ServerCluster, ServersRegistry,
 };
 use craft_daemon::DaemonClient;
 use craft_remote::RemoteCraftClient;
@@ -32,6 +33,37 @@ pub async fn handle_cluster(action: ClusterCommands, paths: &CraftPaths) -> Resu
             handle_sync_routing(&cluster, dry_run, paths).await
         }
         ClusterCommands::Delete { cluster } => handle_delete(&cluster, paths),
+        ClusterCommands::Rollout {
+            cluster,
+            version,
+            strategy,
+            bake_seconds,
+            percentage,
+            max_parallel,
+        } => {
+            handle_rollout(
+                &cluster,
+                &version,
+                &strategy,
+                bake_seconds,
+                percentage,
+                max_parallel,
+                paths,
+            )
+            .await
+        }
+        ClusterCommands::RolloutStatus { cluster } => handle_rollout_status(&cluster, paths).await,
+        ClusterCommands::Rollback { cluster, reason } => {
+            handle_rollback(&cluster, &reason, paths).await
+        }
+        ClusterCommands::Heal {
+            cluster,
+            node,
+            action,
+            snapshot,
+            reason,
+        } => handle_heal(&cluster, &node, &action, snapshot, &reason, paths).await,
+        ClusterCommands::FleetStatus { cluster } => handle_fleet_status(&cluster, paths).await,
     }
 }
 
@@ -704,6 +736,318 @@ pub fn sync_bungeecord_config(
     }
 
     Ok(lines.join("\n") + "\n")
+}
+
+async fn handle_rollout(
+    cluster: &str,
+    version: &str,
+    strategy_str: &str,
+    bake_seconds: u64,
+    percentage: u8,
+    max_parallel: usize,
+    paths: &CraftPaths,
+) -> Result<()> {
+    let strat = match strategy_str.to_lowercase().trim() {
+        "canary" => RolloutStrategy::Canary {
+            percentage,
+            bake_seconds,
+        },
+        "bluegreen" | "blue-green" | "bg" => RolloutStrategy::BlueGreen,
+        "rolling" => RolloutStrategy::Rolling {
+            max_parallel: max_parallel.max(1),
+        },
+        other => {
+            return Err(CraftError::Other(format!(
+                "Unknown rollout strategy '{}'. Supported: canary, bluegreen, rolling",
+                other
+            )));
+        }
+    };
+
+    let criteria = CanaryHealthCriteria {
+        min_tps: 19.0,
+        max_mspt: 45.0,
+        max_jitter_ms: 15.0,
+        max_crash_count: 0,
+        bake_seconds,
+    };
+
+    let plan = RolloutPlan::new(
+        cluster,
+        version,
+        None,
+        strat.clone(),
+        criteria,
+        vec![],
+    );
+
+    let rollout_id = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        client.start_cluster_rollout(plan).await?
+    } else {
+        RolloutRegistry::modify(paths, |reg| reg.start_rollout(plan))?
+    };
+
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_header(vec![
+            Cell::new("ROLLOUT ID").fg(Color::Cyan),
+            Cell::new("CLUSTER").fg(Color::Yellow),
+            Cell::new("TARGET VERSION").fg(Color::Green),
+            Cell::new("STRATEGY").fg(Color::White),
+            Cell::new("STATUS").fg(Color::Magenta),
+        ]);
+
+    table.add_row(Row::from(vec![
+        Cell::new(&rollout_id).fg(Color::Cyan),
+        Cell::new(cluster).fg(Color::Yellow),
+        Cell::new(version).fg(Color::Green),
+        Cell::new(format!("{}", strat)).fg(Color::White),
+        Cell::new("[INITIATED]").fg(Color::Magenta),
+    ]));
+
+    println!("\n{}", table);
+    println!(
+        "\nUse '{}' to monitor rollout progression.",
+        format!("craft cluster rollout-status {}", cluster).cyan()
+    );
+    Ok(())
+}
+
+async fn handle_rollout_status(cluster: &str, paths: &CraftPaths) -> Result<()> {
+    let maybe_record = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        client.get_cluster_rollout_status(cluster.to_string()).await?
+    } else {
+        let reg = RolloutRegistry::load(paths)?;
+        reg.get_active_rollout(cluster).cloned()
+    };
+
+    match maybe_record {
+        Some(record) => {
+            let mut table = Table::new();
+            table
+                .load_preset(UTF8_FULL)
+                .apply_modifier(UTF8_ROUND_CORNERS)
+                .set_header(vec![
+                    Cell::new("FIELD").fg(Color::Cyan),
+                    Cell::new("VALUE").fg(Color::White),
+                ]);
+
+            table.add_row(Row::from(vec![
+                Cell::new("Rollout ID").fg(Color::Cyan),
+                Cell::new(&record.plan.id),
+            ]));
+            table.add_row(Row::from(vec![
+                Cell::new("Cluster").fg(Color::Cyan),
+                Cell::new(&record.plan.cluster_name).fg(Color::Yellow),
+            ]));
+            table.add_row(Row::from(vec![
+                Cell::new("Target Version").fg(Color::Cyan),
+                Cell::new(&record.plan.target_version).fg(Color::Green),
+            ]));
+            table.add_row(Row::from(vec![
+                Cell::new("Strategy").fg(Color::Cyan),
+                Cell::new(format!("{}", record.plan.strategy)),
+            ]));
+            table.add_row(Row::from(vec![
+                Cell::new("Stage").fg(Color::Cyan),
+                Cell::new(record.stage.name()).fg(Color::Magenta),
+            ]));
+
+            let started_dt = chrono::DateTime::from_timestamp(record.started_at as i64, 0)
+                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                .unwrap_or_else(|| "N/A".to_string());
+            table.add_row(Row::from(vec![
+                Cell::new("Started At").fg(Color::Cyan),
+                Cell::new(started_dt),
+            ]));
+
+            println!("\n{}", table);
+
+            if !record.logs.is_empty() {
+                println!("\n{}", "Recent Rollout Events:".bold());
+                for log in record.logs.iter().rev().take(10).rev() {
+                    println!("  {}", log.dimmed());
+                }
+            }
+        }
+        None => {
+            println!(
+                "[INFO] No active rollout currently running for cluster '{}'.",
+                cluster.yellow()
+            );
+            let reg = RolloutRegistry::load(paths).unwrap_or_default();
+            let history: Vec<_> = reg
+                .list_history()
+                .into_iter()
+                .filter(|r| r.plan.cluster_name.eq_ignore_ascii_case(cluster))
+                .take(5)
+                .collect();
+
+            if !history.is_empty() {
+                println!("\n{}", "Recent Historical Rollouts:".bold());
+                let mut h_table = Table::new();
+                h_table
+                    .load_preset(UTF8_FULL)
+                    .apply_modifier(UTF8_ROUND_CORNERS)
+                    .set_header(vec![
+                        Cell::new("ROLLOUT ID").fg(Color::Cyan),
+                        Cell::new("VERSION").fg(Color::Green),
+                        Cell::new("STAGE").fg(Color::Magenta),
+                        Cell::new("STARTED").fg(Color::White),
+                    ]);
+
+                for r in history {
+                    let ts = chrono::DateTime::from_timestamp(r.started_at as i64, 0)
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                        .unwrap_or_default();
+                    h_table.add_row(Row::from(vec![
+                        Cell::new(&r.plan.id).fg(Color::Cyan),
+                        Cell::new(&r.plan.target_version).fg(Color::Green),
+                        Cell::new(r.stage.name()).fg(Color::Magenta),
+                        Cell::new(ts),
+                    ]));
+                }
+                println!("{}", h_table);
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn handle_rollback(cluster: &str, reason: &str, paths: &CraftPaths) -> Result<()> {
+    if let Ok(mut client) = DaemonClient::connect(paths).await {
+        let active = client.get_cluster_rollout_status(cluster.to_string()).await?;
+        if let Some(record) = active {
+            let msg = client.abort_cluster_rollout(record.plan.id.clone(), reason.to_string()).await?;
+            println!("\n[ROLLBACK] {}", msg.green());
+        } else {
+            return Err(CraftError::Other(format!(
+                "No active rollout found to roll back for cluster '{}'",
+                cluster
+            )));
+        }
+    } else {
+        let mut reg = RolloutRegistry::load(paths)?;
+        if let Some(record) = reg.get_active_rollout(cluster) {
+            let id = record.plan.id.clone();
+            reg.abort_rollout(&id, reason)?;
+            reg.save(paths)?;
+            println!(
+                "\n[ROLLBACK] Rollout '{}' for cluster '{}' aborted: {}",
+                id.cyan(),
+                cluster.yellow(),
+                reason
+            );
+        } else {
+            return Err(CraftError::Other(format!(
+                "No active rollout found to roll back for cluster '{}'",
+                cluster
+            )));
+        }
+    }
+    Ok(())
+}
+
+async fn handle_heal(
+    cluster: &str,
+    node: &str,
+    action_str: &str,
+    snapshot: Option<String>,
+    reason: &str,
+    paths: &CraftPaths,
+) -> Result<()> {
+    let healing_action = match action_str.to_lowercase().trim() {
+        "restart" => FleetHealingAction::RestartNode {
+            node_id: node.to_string(),
+            reason: reason.to_string(),
+        },
+        "rollback" => FleetHealingAction::RollbackNode {
+            node_id: node.to_string(),
+            snapshot: snapshot.unwrap_or_default(),
+            reason: reason.to_string(),
+        },
+        "drain" => FleetHealingAction::DrainNode {
+            node_id: node.to_string(),
+            reason: reason.to_string(),
+        },
+        "promote" => FleetHealingAction::PromoteCanary {
+            node_id: node.to_string(),
+        },
+        "degraded" | "mark_degraded" => FleetHealingAction::MarkDegraded {
+            node_id: node.to_string(),
+            reason: reason.to_string(),
+        },
+        other => {
+            return Err(CraftError::Other(format!(
+                "Unknown fleet healing action '{}'. Supported: restart, rollback, drain, promote, degraded",
+                other
+            )));
+        }
+    };
+
+    let mut client = DaemonClient::connect(paths)
+        .await
+        .map_err(|e| CraftError::Other(format!("Fleet healing requires the Craft background daemon: {}", e)))?;
+
+    let result = client.execute_fleet_heal(cluster.to_string(), healing_action).await?;
+    println!("\n[HEALED] {}", result.green());
+    Ok(())
+}
+
+async fn handle_fleet_status(cluster: &str, paths: &CraftPaths) -> Result<()> {
+    let mut client = DaemonClient::connect(paths)
+        .await
+        .map_err(|e| CraftError::Other(format!("Fleet status queries require the Craft background daemon: {}", e)))?;
+
+    let status = client.get_fleet_health(cluster.to_string()).await?;
+
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_header(vec![
+            Cell::new("NODE ID").fg(Color::Cyan),
+            Cell::new("STATUS").fg(Color::White),
+            Cell::new("TPS").fg(Color::Green),
+            Cell::new("MSPT").fg(Color::Yellow),
+            Cell::new("CANARY").fg(Color::Magenta),
+            Cell::new("DRAINED").fg(Color::Red),
+            Cell::new("VERSION").fg(Color::Blue),
+        ]);
+
+    let mut nodes: Vec<_> = status.node_statuses.values().collect();
+    nodes.sort_by(|a, b| a.node_id.cmp(&b.node_id));
+
+    for n in nodes {
+        let status_cell = match n.status.as_str() {
+            "Healthy" => Cell::new(&n.status).fg(Color::Green),
+            "Baking" => Cell::new(&n.status).fg(Color::Yellow),
+            "Draining" => Cell::new(&n.status).fg(Color::Yellow),
+            "Degraded" => Cell::new(&n.status).fg(Color::DarkYellow),
+            _ => Cell::new(&n.status).fg(Color::Red),
+        };
+
+        table.add_row(Row::from(vec![
+            Cell::new(&n.node_id).fg(Color::Cyan),
+            status_cell,
+            Cell::new(format!("{:.1}", n.current_tps)).fg(if n.current_tps >= 19.0 { Color::Green } else { Color::Red }),
+            Cell::new(format!("{:.1}ms", n.current_mspt)).fg(if n.current_mspt <= 45.0 { Color::Green } else { Color::Red }),
+            Cell::new(if n.is_canary { "YES" } else { "NO" }).fg(if n.is_canary { Color::Yellow } else { Color::DarkGrey }),
+            Cell::new(if n.is_drained { "YES" } else { "NO" }).fg(if n.is_drained { Color::Red } else { Color::DarkGrey }),
+            Cell::new(&n.active_version).fg(Color::Blue),
+        ]));
+    }
+
+    println!("\n{}", table);
+    let overall_label = if status.overall_healthy {
+        "[HEALTHY]".green()
+    } else {
+        "[DEGRADED]".red()
+    };
+    println!("Fleet Overall Health: {}\n", overall_label);
+    Ok(())
 }
 
 #[cfg(test)]

@@ -123,6 +123,22 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   6. Extracts directly into `~/.craft/servers/<target_name>` on the remote node.
   7. Re-registers the server in remote `~/.craft/servers.toml`, cleans up staging, and optionally trashes local source (`TrashManager::trash_path`).
 
+### 3.9. `RolloutRegistry`, Canary Deployments & Autonomous Fleet Healing
+- **Location**: `~/.craft/rollouts.toml`
+- **Lock Protection**: `~/.craft/run/locks/rollouts.lock` via `RolloutRegistry::modify`.
+- **Strategy Matrix**:
+  - `Canary`: Designates a canary node with fractional player ingress (e.g. 25%) and evaluates health metrics over a bake window (`bake_seconds`).
+  - `BlueGreen`: Operates parallel instance clusters (`blue` and `green`), swapping routing proxy endpoints atomically upon health verification.
+  - `Rolling`: Sequentially upgrades nodes in bounded batches (`max_parallel`) to preserve cluster capacity.
+- **Canary Health Criteria**:
+  - Validates real-time TPS (`min_tps`), MSPT (`max_mspt`), microsecond tick jitter (`max_jitter_ms`), and process crash count (`max_crash_count`).
+  - Continuous evaluation loop in `FleetHealer` observes telemetry; criteria breach triggers instant rollback, halting candidate instances, restoring `.tar.zst` pre-rollout snapshots, and reconnecting original proxy routes.
+- **Proxy Traffic Draining**:
+  - `EdgeRouteGenerator::generate_velocity_drained_config`, `generate_bungeecord_drained_config`, and `generate_haproxy_drained_config` isolate canary or upgrading nodes from ingress fallback lists while preserving local health probe access.
+- **Autonomous Fleet Healing**:
+  - Real-time node evaluations classify status as `Healthy`, `Baking`, `Draining`, `Degraded`, or `Crashed`.
+  - Self-healing actions include `RestartNode`, `RollbackNode` (snapshot restoration), `DrainNode`, `PromoteCanary`, and `MarkDegraded`, dispatching scripting lifecycle hooks (`LifecycleEvent::FleetNodeHealed`).
+
 ---
 
 ## 4. Error Handling Architecture

@@ -34,6 +34,11 @@ pub enum IpcRequest {
     GetTickProfile { server_name: String },
     GetPacketStats { server_name: String },
     GetLatencyHistogram { server_name: String },
+    StartClusterRollout { plan: craft_core::RolloutPlan },
+    GetClusterRolloutStatus { cluster: String },
+    AbortClusterRollout { rollout_id: String, reason: String },
+    GetFleetHealth { cluster: String },
+    ExecuteFleetHeal { cluster: String, action: craft_core::FleetHealingAction },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,5 +74,10 @@ pub enum IpcResponse {
     TickProfile { summary: craft_net::TickProfileSummary, sparkline: String },
     PacketStats { summary: craft_net::PacketRateSummary },
     LatencyHistogram { histogram: craft_net::LatencyHistogram, chart_lines: Vec<String> },
+    ClusterRolloutStarted { rollout_id: String },
+    ClusterRolloutStatus { record: Option<craft_core::RolloutRecord> },
+    ClusterRolloutAborted { message: String },
+    FleetHealth { status: craft_core::FleetHealthStatus },
+    FleetHealResult { message: String },
     Error { error: String },
 }

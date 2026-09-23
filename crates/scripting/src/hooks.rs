@@ -19,6 +19,11 @@ pub enum LifecycleEvent {
     CircuitTrip,
     StorageLow,
     AnomalyDetected,
+    RolloutStart,
+    RolloutCanaryPromoted,
+    RolloutRollback,
+    RolloutComplete,
+    FleetNodeHealed,
 }
 
 impl LifecycleEvent {
@@ -32,6 +37,11 @@ impl LifecycleEvent {
             Self::CircuitTrip => "on_circuit_trip",
             Self::StorageLow => "on_storage_low",
             Self::AnomalyDetected => "on_anomaly_detected",
+            Self::RolloutStart => "on_rollout_start",
+            Self::RolloutCanaryPromoted => "on_rollout_canary_promoted",
+            Self::RolloutRollback => "on_rollout_rollback",
+            Self::RolloutComplete => "on_rollout_complete",
+            Self::FleetNodeHealed => "on_fleet_node_healed",
         }
     }
 
@@ -46,6 +56,11 @@ impl LifecycleEvent {
             "on_circuit_trip" | "circuit_trip" | "circuittrip" | "circuit" => Some(Self::CircuitTrip),
             "on_storage_low" | "storage_low" | "storagelow" | "storage" => Some(Self::StorageLow),
             "on_anomaly_detected" | "anomaly_detected" | "anomalydetected" | "anomaly" => Some(Self::AnomalyDetected),
+            "on_rollout_start" | "rollout_start" | "rolloutstart" => Some(Self::RolloutStart),
+            "on_rollout_canary_promoted" | "rollout_canary_promoted" | "canary_promoted" => Some(Self::RolloutCanaryPromoted),
+            "on_rollout_rollback" | "rollout_rollback" | "rollback" => Some(Self::RolloutRollback),
+            "on_rollout_complete" | "rollout_complete" | "rolloutcomplete" => Some(Self::RolloutComplete),
+            "on_fleet_node_healed" | "fleet_node_healed" | "node_healed" | "heal" => Some(Self::FleetNodeHealed),
             _ => None,
         }
     }
@@ -60,6 +75,11 @@ impl LifecycleEvent {
             Self::CircuitTrip,
             Self::StorageLow,
             Self::AnomalyDetected,
+            Self::RolloutStart,
+            Self::RolloutCanaryPromoted,
+            Self::RolloutRollback,
+            Self::RolloutComplete,
+            Self::FleetNodeHealed,
         ]
     }
 }
@@ -92,6 +112,16 @@ pub struct HookContext {
     pub free_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cluster_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rollout_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub healed_node: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub healing_action: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<String>,
 }
@@ -396,5 +426,28 @@ impl HookBus {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rollout_lifecycle_events_parsing() {
+        assert_eq!(LifecycleEvent::from_name("on_rollout_start"), Some(LifecycleEvent::RolloutStart));
+        assert_eq!(LifecycleEvent::from_name("canary_promoted"), Some(LifecycleEvent::RolloutCanaryPromoted));
+        assert_eq!(LifecycleEvent::from_name("rollback"), Some(LifecycleEvent::RolloutRollback));
+        assert_eq!(LifecycleEvent::from_name("rollout_complete"), Some(LifecycleEvent::RolloutComplete));
+        assert_eq!(LifecycleEvent::from_name("node_healed"), Some(LifecycleEvent::FleetNodeHealed));
+
+        let mut ctx = HookContext::new(LifecycleEvent::RolloutStart);
+        ctx.cluster_name = Some("survival-cluster".to_string());
+        ctx.rollout_id = Some("rollout-123".to_string());
+        ctx.target_version = Some("1.21.1".to_string());
+
+        assert_eq!(ctx.event, "on_rollout_start");
+        assert_eq!(ctx.cluster_name.as_deref(), Some("survival-cluster"));
+        assert_eq!(ctx.rollout_id.as_deref(), Some("rollout-123"));
     }
 }

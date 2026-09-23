@@ -19,6 +19,7 @@ pub mod process;
 pub mod properties;
 pub mod rbac;
 pub mod remote_config;
+pub mod rollout;
 pub mod timeseries;
 pub mod trash;
 pub mod version;
@@ -41,6 +42,10 @@ pub use mesh_config::{
     MeshPolicy, MeshRegistry, MeshTarget, MeshTargetKind, ReplicationQuorum,
 };
 pub use rbac::{Permission, RbacRegistry, Role, UserAccount};
+pub use rollout::{
+    CanaryHealthCriteria, FleetHealingAction, FleetHealthStatus, NodeHealth, RolloutPlan,
+    RolloutRecord, RolloutRegistry, RolloutStage, RolloutStrategy,
+};
 pub use timeseries::{RegressionResult, RollingTimeSeries, SawtoothMetrics, TimeSeriesSample};
 
 pub use backup_config::{
