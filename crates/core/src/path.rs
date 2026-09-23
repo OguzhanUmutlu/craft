@@ -35,6 +35,8 @@ pub struct CraftPaths {
     pub rollouts_lock: PathBuf,
     pub socket_file: PathBuf,
     pub pid_file: PathBuf,
+    pub indices_dir: PathBuf,
+    pub forensics_dir: PathBuf,
 }
 
 impl CraftPaths {
@@ -51,6 +53,8 @@ impl CraftPaths {
         let dr_dir = home.join("dr");
         let diagnostics_dir = home.join("diagnostics");
         let edge_dir = home.join("edge");
+        let indices_dir = home.join("indices");
+        let forensics_dir = home.join("forensics");
 
         let servers_file = home.join("servers.toml");
         let remotes_file = home.join("remotes.toml");
@@ -101,6 +105,8 @@ impl CraftPaths {
             rollouts_lock,
             socket_file,
             pid_file,
+            indices_dir,
+            forensics_dir,
         }
     }
 
@@ -130,6 +136,8 @@ impl CraftPaths {
         let dr_dir = home.join("dr");
         let diagnostics_dir = home.join("diagnostics");
         let edge_dir = home.join("edge");
+        let indices_dir = home.join("indices");
+        let forensics_dir = home.join("forensics");
 
         // Ensure all primary directories exist
         for dir in [
@@ -146,6 +154,8 @@ impl CraftPaths {
             &dr_dir,
             &diagnostics_dir,
             &edge_dir,
+            &indices_dir,
+            &forensics_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -201,6 +211,8 @@ impl CraftPaths {
             rollouts_lock,
             socket_file,
             pid_file,
+            indices_dir,
+            forensics_dir,
         })
     }
 

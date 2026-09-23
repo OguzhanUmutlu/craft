@@ -24,6 +24,8 @@ pub enum LifecycleEvent {
     RolloutRollback,
     RolloutComplete,
     FleetNodeHealed,
+    IncidentDetected,
+    LogAlertTriggered,
 }
 
 impl LifecycleEvent {
@@ -42,6 +44,8 @@ impl LifecycleEvent {
             Self::RolloutRollback => "on_rollout_rollback",
             Self::RolloutComplete => "on_rollout_complete",
             Self::FleetNodeHealed => "on_fleet_node_healed",
+            Self::IncidentDetected => "on_incident_detected",
+            Self::LogAlertTriggered => "on_log_alert_triggered",
         }
     }
 
@@ -61,6 +65,8 @@ impl LifecycleEvent {
             "on_rollout_rollback" | "rollout_rollback" | "rollback" => Some(Self::RolloutRollback),
             "on_rollout_complete" | "rollout_complete" | "rolloutcomplete" => Some(Self::RolloutComplete),
             "on_fleet_node_healed" | "fleet_node_healed" | "node_healed" | "heal" => Some(Self::FleetNodeHealed),
+            "on_incident_detected" | "incident_detected" | "incident" => Some(Self::IncidentDetected),
+            "on_log_alert_triggered" | "log_alert_triggered" | "log_alert" => Some(Self::LogAlertTriggered),
             _ => None,
         }
     }
@@ -80,6 +86,8 @@ impl LifecycleEvent {
             Self::RolloutRollback,
             Self::RolloutComplete,
             Self::FleetNodeHealed,
+            Self::IncidentDetected,
+            Self::LogAlertTriggered,
         ]
     }
 }
@@ -122,6 +130,14 @@ pub struct HookContext {
     pub healed_node: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub healing_action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub incident_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub culprit_exception: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_level: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<String>,
 }
@@ -449,5 +465,24 @@ mod tests {
         assert_eq!(ctx.event, "on_rollout_start");
         assert_eq!(ctx.cluster_name.as_deref(), Some("survival-cluster"));
         assert_eq!(ctx.rollout_id.as_deref(), Some("rollout-123"));
+    }
+
+    #[test]
+    fn test_incident_lifecycle_events_and_context() {
+        assert_eq!(LifecycleEvent::from_name("on_incident_detected"), Some(LifecycleEvent::IncidentDetected));
+        assert_eq!(LifecycleEvent::from_name("incident"), Some(LifecycleEvent::IncidentDetected));
+        assert_eq!(LifecycleEvent::from_name("on_log_alert_triggered"), Some(LifecycleEvent::LogAlertTriggered));
+        assert_eq!(LifecycleEvent::from_name("log_alert"), Some(LifecycleEvent::LogAlertTriggered));
+
+        let mut ctx = HookContext::new(LifecycleEvent::IncidentDetected);
+        ctx.server_name = Some("lobby-01".to_string());
+        ctx.incident_id = Some("inc-lobby-01-20260923".to_string());
+        ctx.culprit_exception = Some("java.lang.NullPointerException".to_string());
+        ctx.log_level = Some("FATAL".to_string());
+
+        assert_eq!(ctx.event, "on_incident_detected");
+        assert_eq!(ctx.incident_id.as_deref(), Some("inc-lobby-01-20260923"));
+        assert_eq!(ctx.culprit_exception.as_deref(), Some("java.lang.NullPointerException"));
+        assert_eq!(ctx.log_level.as_deref(), Some("FATAL"));
     }
 }

@@ -1305,6 +1305,68 @@ pub enum LogCommands {
         #[arg(long)]
         path: Option<PathBuf>,
     },
+    /// High-speed regex and token search across multi-server inverted log index blocks
+    Search {
+        /// Search pattern or keyword
+        #[arg(default_value = "")]
+        pattern: String,
+        /// Target server name (searches all servers if omitted)
+        #[arg(short = 's', long)]
+        server: Option<String>,
+        /// Filter by log level (FATAL, ERROR, WARN, INFO, DEBUG, TRACE)
+        #[arg(short = 'l', long)]
+        level: Option<String>,
+        /// Treat pattern as regular expression
+        #[arg(short = 'r', long)]
+        regex: bool,
+        /// Minimum timestamp filter (RFC3339 or HH:MM:SS)
+        #[arg(long)]
+        since: Option<String>,
+        /// Maximum timestamp filter (RFC3339 or HH:MM:SS)
+        #[arg(long)]
+        until: Option<String>,
+        /// Maximum matching entries to return
+        #[arg(long, default_value = "100")]
+        limit: usize,
+        /// Remote host alias to dispatch federated search query across SSH
+        #[arg(long)]
+        remote: Option<String>,
+        /// Output matching entries in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Automated post-mortem incident forensics, stack demangling, and authenticity proof
+    Forensics {
+        /// Target server name
+        server: String,
+        /// Specific incident ID (defaults to most recent incident)
+        incident: Option<String>,
+        /// Output forensic timeline in JSON format
+        #[arg(long)]
+        json: bool,
+        /// Path to export incident forensic timeline report (.md or .json)
+        #[arg(short = 'e', long)]
+        export: Option<PathBuf>,
+    },
+    /// List historical crash incidents and forensic post-mortem reports
+    Incidents {
+        /// Target server name (lists all if omitted)
+        server: Option<String>,
+        /// Maximum incidents to display
+        #[arg(long, default_value = "20")]
+        limit: usize,
+        /// Output incidents in JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Trigger on-demand indexing of server console logs into compressed inverted blocks
+    Index {
+        /// Target server name (indexes all registered servers if omitted)
+        server: Option<String>,
+        /// Force re-indexing from scratch
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand)]

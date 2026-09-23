@@ -1788,6 +1788,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             Firewall,
             ScriptsHooks,
             CanaryFleet,
+            LogForensics,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1837,6 +1838,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::CanaryFleet);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Log Search & Incident Forensics")
+                .with_aliases(&["l", "logs", "forensics"]),
+        );
+        actions.push(ToolItemAction::LogForensics);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1872,6 +1880,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::CanaryFleet => {
                     canary_fleet_tui(paths).await?;
+                }
+                ToolItemAction::LogForensics => {
+                    log_forensics_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2099,4 +2110,101 @@ pub async fn canary_fleet_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("CANARY ROLLOUTS & FLEET HEALING", &lines, false)?;
     Ok(())
 }
+
+pub async fn log_forensics_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Log Forensics");
+
+    let query_input = match run_input_prompt(
+        "LOG SEARCH & INCIDENT FORENSICS",
+        "Enter search query or error keyword (e.g. exception, error, crash):",
+        Some("exception"),
+    )? {
+        Some(q) if !q.trim().is_empty() => q.trim().to_string(),
+        _ => return Ok(()),
+    };
+
+    let query = craft_core::LogQuery {
+        query_pattern: query_input.clone(),
+        limit: 25,
+        ..Default::default()
+    };
+
+    let result = if DaemonClient::is_daemon_running(paths) {
+        if let Ok(mut client) = DaemonClient::connect(paths).await {
+            client.search_logs(query).await.ok()
+        } else {
+            None
+        }
+    } else {
+        let service = craft_daemon::LogIngestionService::new(paths);
+        service.search(&query).await.ok()
+    };
+
+    let mut lines = Vec::new();
+    lines.push(format!("Query Pattern: \"{}\"", query_input));
+    lines.push("".to_string());
+
+    if let Some(res) = result {
+        lines.push(format!(
+            "Matches Found: {} | Lines Scanned: {} | Duration: {:.2}ms",
+            res.total_matches,
+            res.scanned_lines,
+            res.duration_micros as f64 / 1000.0
+        ));
+        lines.push("".to_string());
+
+        if res.matches.is_empty() {
+            lines.push("[OK] No matching log entries found.".to_string());
+        } else {
+            lines.push("[MATCHING LOG ENTRIES]".cyan().bold().to_string());
+            for m in res.matches.iter().take(15) {
+                let lvl_str = match m.level {
+                    craft_core::LogLevel::Fatal | craft_core::LogLevel::Error => format!("[{}]", m.level).red(),
+                    craft_core::LogLevel::Warn => format!("[{}]", m.level).yellow(),
+                    _ => format!("[{}]", m.level).green(),
+                };
+                lines.push(format!(
+                    "{} {} [{}] {}",
+                    m.timestamp.format("%H:%M:%S"),
+                    lvl_str,
+                    m.server_name,
+                    if m.message.len() > 60 {
+                        format!("{}...", &m.message[..57])
+                    } else {
+                        m.message.clone()
+                    }
+                ));
+            }
+        }
+    } else {
+        lines.push("[WARN] Failed to query daemon log service.".yellow().to_string());
+    }
+
+    // Also display recent incident post-mortems if any
+    let service = craft_daemon::LogIngestionService::new(paths);
+    if let Ok(incidents) = service.list_incidents(None) {
+        if !incidents.is_empty() {
+            lines.push("".to_string());
+            lines.push("[RECENT CRASH INCIDENT POST-MORTEMS]".red().bold().to_string());
+            for inc in incidents.iter().take(3) {
+                let auth_str = if inc.authenticity_valid { "[AUTHENTIC]".green() } else { "[TAMPERED]".red() };
+                lines.push(format!(
+                    " * {} | {} | {} | {}",
+                    inc.incident_id,
+                    inc.server_name,
+                    inc.culprit_exception,
+                    auth_str
+                ));
+                if let Some(ref plug) = inc.suspected_plugin {
+                    lines.push(format!("   Culprit: [PLUGIN: {}]", plug));
+                }
+            }
+        }
+    }
+
+    show_modal_message("LOG FORENSICS & INCIDENT AUDIT", &lines, false)?;
+    Ok(())
+}
+
 

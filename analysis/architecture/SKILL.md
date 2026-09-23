@@ -139,6 +139,33 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Real-time node evaluations classify status as `Healthy`, `Baking`, `Draining`, `Degraded`, or `Crashed`.
   - Self-healing actions include `RestartNode`, `RollbackNode` (snapshot restoration), `DrainNode`, `PromoteCanary`, and `MarkDegraded`, dispatching scripting lifecycle hooks (`LifecycleEvent::FleetNodeHealed`).
 
+### 3.10. Unified Multi-Server Log Ingestion, Elastic Search & Distributed Forensics
+- **Storage Locations**:
+  - `~/.craft/indices/<server_name>/block_<start_line>.idx.json`: Inverted index blocks with zstd-compressed payload chunks and token posting tables.
+  - `~/.craft/forensics/inc-<server_name>-<timestamp>.json`: Cryptographically authenticated post-mortem incident reports.
+- **Embedded Log Ingestion Service (`LogIngestionService`)**:
+  - Integrated directly into `craft-daemon` with zero external Elasticsearch or Lucene runtime requirements.
+  - Maintains in-memory circular ring buffers (up to 10,000 entries per server) and scans rotating disk log files (`logs/latest.log`, `server.log`, `crash-reports/*.txt`).
+  - Partitioned chunk builder generates `InvertedIndexBlock` files every 5,000 lines, serializing zstd-compressed JSON log entries alongside token posting lists (`term_postings: HashMap<String, Vec<u32>>`) and 8-bit log-level bloom masks.
+- **Sub-Millisecond Search Execution**:
+  - `LogQuery` executes unified token and regex queries across disk inverted index blocks and in-memory active buffers.
+  - Level bitmask pruning and timestamp range bounds skip non-matching blocks without decompressing payload chunks.
+  - Federated query dispatch: `RemoteCraftClient::search_remote_logs` dispatches search queries over pooled SSH connections to remote edge nodes, collating results transparently.
+- **Post-Mortem Incident Forensics & Java Stack Trace Demangling**:
+  - Real-time exception detector detects crash triggers (`FATAL`, `ENCOUNTERED AN UNEXPECTED EXCEPTION`, `EXCEPTION IN THREAD`, `MINECRAFT CRASH REPORT`).
+  - Captures 50 lines of preceding console events leading up to the failure.
+  - `demangle_stack_trace` reconstructs method origin, source file, line number, and JAR source tag from obfuscated stack traces.
+  - Automated culprit attribution (`CulpritType::Plugin`, `CulpritType::Core`, `CulpritType::JavaRuntime`, `CulpritType::Native`) maps crashing frames back to specific plugin JARs or core server runtime components.
+  - Cryptographic authenticity verification: `IncidentTimeline` signs timelines using HMAC-SHA256 (`verify_authenticity`), preventing post-mortem tampering.
+- **Lifecycle Hook Bus Integration**:
+  - Fires `LifecycleEvent::IncidentDetected` and `LifecycleEvent::LogAlertTriggered` events to embedded Lua scripts with incident metadata, culprit exception, log level, and message payload.
+- **CLI Commands & ModalX Centered TUI**:
+  - `craft log search <pattern> [-s server] [-l level] [-r] [--since RFC3339] [--until RFC3339] [--remote alias] [--json]`
+  - `craft log forensics <server> [incident_id] [--export path] [--json]`
+  - `craft log incidents [server] [--limit N] [--json]`
+  - `craft log index [server] [-f]`
+  - Full-screen centered interactive TUI panel (`Tools -> Log Search & Incident Forensics`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

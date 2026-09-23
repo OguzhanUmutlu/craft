@@ -717,6 +717,33 @@ impl RemoteCraftClient {
         }
         Ok(())
     }
+
+    /// Dispatches a structured log search to the remote host executing `craft log search --json ...`
+    pub fn search_remote_logs(&self, query: &craft_core::LogQuery) -> Result<craft_core::LogSearchResult> {
+        let mut cmd = format!("craft log search \"{}\" --json", query.query_pattern.replace('"', "\\\""));
+        if let Some(ref srv) = query.server_name {
+            cmd.push_str(&format!(" --server \"{}\"", srv));
+        }
+        if let Some(lvl) = query.level {
+            cmd.push_str(&format!(" --level \"{}\"", lvl));
+        }
+        if query.is_regex {
+            cmd.push_str(" --regex");
+        }
+        if query.limit > 0 {
+            cmd.push_str(&format!(" --limit {}", query.limit));
+        }
+
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote log search failed: {}", err.trim())));
+        }
+
+        let result: craft_core::LogSearchResult = serde_json::from_str(&stdout)
+            .map_err(|e| CraftError::Other(format!("Failed to parse remote log search results: {}", e)))?;
+        Ok(result)
+    }
 }
 
 #[cfg(test)]

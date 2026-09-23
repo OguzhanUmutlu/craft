@@ -63,6 +63,9 @@ impl DaemonServer {
         ));
         fleet_healer.clone().start_autonomous_loop(5);
 
+        // Launch in-process Log Ingestion and Incident Forensics Engine
+        let log_indexer = std::sync::Arc::new(crate::log_indexer::LogIngestionService::new(&self.paths));
+
         // Load settings to check gateway and storage monitor config
         let settings = craft_core::GlobalSettings::load(&self.paths).unwrap_or_default();
 
@@ -105,6 +108,7 @@ impl DaemonServer {
             let eb_mgr = edge_broker.clone();
             let ts_mgr = self.tick_service.clone();
             let fh_mgr = fleet_healer.clone();
+            let li_mgr = log_indexer.clone();
             loop {
                 match listener.accept().await {
                     Ok((stream, _)) => {
@@ -114,8 +118,9 @@ impl DaemonServer {
                         let eb = eb_mgr.clone();
                         let ts = ts_mgr.clone();
                         let fh = fh_mgr.clone();
+                        let li = li_mgr.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb, ts, fh).await {
+                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb, ts, fh, li).await {
                                 warn!("IPC client disconnected with error: {}", e);
                             }
                         });
@@ -147,6 +152,7 @@ impl DaemonServer {
             let eb_mgr = edge_broker.clone();
             let ts_mgr = self.tick_service.clone();
             let fh_mgr = fleet_healer.clone();
+            let li_mgr = log_indexer.clone();
             loop {
                 if let Err(e) = server.connect().await {
                     error!("Error connecting named pipe client: {}", e);
@@ -163,8 +169,9 @@ impl DaemonServer {
                 let eb = eb_mgr.clone();
                 let ts = ts_mgr.clone();
                 let fh = fh_mgr.clone();
+                let li = li_mgr.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(client, sup, hib, ap, eb, ts, fh).await {
+                    if let Err(e) = handle_connection(client, sup, hib, ap, eb, ts, fh, li).await {
                         warn!("IPC client error: {}", e);
                     }
                 });
@@ -191,6 +198,7 @@ async fn handle_connection<S>(
     edge_broker: std::sync::Arc<crate::edge_broker::EdgeStateBroker>,
     tick_service: crate::tick_service::TickService,
     fleet_healer: std::sync::Arc<crate::fleet_healer::FleetHealer>,
+    log_indexer: std::sync::Arc<crate::log_indexer::LogIngestionService>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -580,6 +588,38 @@ where
             IpcRequest::ExecuteFleetHeal { cluster, action } => {
                 match fleet_healer.execute_fleet_heal(&cluster, action).await {
                     Ok(msg) => write_frame(&mut stream, &IpcResponse::FleetHealResult { message: msg }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::SearchLogs { query } => {
+                match log_indexer.search(&query).await {
+                    Ok(result) => write_frame(&mut stream, &IpcResponse::LogSearchResults { result }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::GetIncidentForensics { server_name, incident_id } => {
+                match log_indexer.get_incident_forensics(&server_name, incident_id.as_deref()) {
+                    Ok(timeline) => write_frame(&mut stream, &IpcResponse::IncidentForensics { timeline }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::ListIncidents { server_name } => {
+                match log_indexer.list_incidents(server_name.as_deref()) {
+                    Ok(incidents) => write_frame(&mut stream, &IpcResponse::IncidentList { incidents }).await?,
+                    Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::IngestLogsNow { server_name } => {
+                let start = std::time::Instant::now();
+                match log_indexer.ingest_all_servers(server_name.as_deref()) {
+                    Ok((indexed_lines, blocks_created)) => {
+                        let duration_ms = start.elapsed().as_millis() as u64;
+                        write_frame(&mut stream, &IpcResponse::IngestResult {
+                            indexed_lines,
+                            blocks_created,
+                            duration_ms,
+                        }).await?;
+                    }
                     Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
                 }
             }
@@ -1144,6 +1184,50 @@ impl DaemonClient {
     ) -> Result<String> {
         match self.request(IpcRequest::ExecuteFleetHeal { cluster, action }).await? {
             IpcResponse::FleetHealResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn search_logs(&mut self, query: craft_core::LogQuery) -> Result<craft_core::LogSearchResult> {
+        match self.request(IpcRequest::SearchLogs { query }).await? {
+            IpcResponse::LogSearchResults { result } => Ok(result),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_incident_forensics(
+        &mut self,
+        server_name: String,
+        incident_id: Option<String>,
+    ) -> Result<craft_core::IncidentTimeline> {
+        match self.request(IpcRequest::GetIncidentForensics { server_name, incident_id }).await? {
+            IpcResponse::IncidentForensics { timeline } => Ok(timeline),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_incidents(
+        &mut self,
+        server_name: Option<String>,
+    ) -> Result<Vec<crate::protocol::IncidentSummary>> {
+        match self.request(IpcRequest::ListIncidents { server_name }).await? {
+            IpcResponse::IncidentList { incidents } => Ok(incidents),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn ingest_logs_now(
+        &mut self,
+        server_name: Option<String>,
+    ) -> Result<(usize, usize, u64)> {
+        match self.request(IpcRequest::IngestLogsNow { server_name }).await? {
+            IpcResponse::IngestResult { indexed_lines, blocks_created, duration_ms } => {
+                Ok((indexed_lines, blocks_created, duration_ms))
+            }
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

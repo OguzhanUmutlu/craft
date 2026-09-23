@@ -39,6 +39,10 @@ pub enum IpcRequest {
     AbortClusterRollout { rollout_id: String, reason: String },
     GetFleetHealth { cluster: String },
     ExecuteFleetHeal { cluster: String, action: craft_core::FleetHealingAction },
+    SearchLogs { query: craft_core::LogQuery },
+    GetIncidentForensics { server_name: String, incident_id: Option<String> },
+    ListIncidents { server_name: Option<String> },
+    IngestLogsNow { server_name: Option<String> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,5 +83,20 @@ pub enum IpcResponse {
     ClusterRolloutAborted { message: String },
     FleetHealth { status: craft_core::FleetHealthStatus },
     FleetHealResult { message: String },
+    LogSearchResults { result: craft_core::LogSearchResult },
+    IncidentForensics { timeline: craft_core::IncidentTimeline },
+    IncidentList { incidents: Vec<IncidentSummary> },
+    IngestResult { indexed_lines: usize, blocks_created: usize, duration_ms: u64 },
     Error { error: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncidentSummary {
+    pub incident_id: String,
+    pub server_name: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub culprit_exception: String,
+    pub suspected_plugin: Option<String>,
+    pub frames_count: usize,
+    pub authenticity_valid: bool,
 }

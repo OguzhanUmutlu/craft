@@ -11,6 +11,7 @@ pub mod error;
 pub mod game;
 pub mod intelligence_config;
 pub mod java;
+pub mod log_index;
 pub mod mesh_config;
 pub mod nbt;
 pub mod optimizer;
@@ -37,6 +38,10 @@ pub use edge_config::{
 pub use intelligence_config::{
     format_report_markdown, AnomalyRecord, AnomalySeverity, AnomalyType, AutopilotMode,
     DiagnosticReport, IntelligencePolicy, IntelligenceRegistry, RemediationAction,
+};
+pub use log_index::{
+    demangle_stack_trace, CulpritType, IncidentTimeline, InvertedIndexBlock, LogEntry, LogLevel,
+    LogQuery, LogSearchResult, StackFrame,
 };
 pub use mesh_config::{
     MeshPolicy, MeshRegistry, MeshTarget, MeshTargetKind, ReplicationQuorum,
