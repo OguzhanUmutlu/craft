@@ -31,6 +31,9 @@ pub enum IpcRequest {
     ConsumeEdgeHandoff { token: String },
     BroadcastEdgeChat { envelope: craft_core::CrossRegionChatEnvelope },
     ApplyLatencyPlaybook { server_name: String, preset: String },
+    GetTickProfile { server_name: String },
+    GetPacketStats { server_name: String },
+    GetLatencyHistogram { server_name: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,5 +66,8 @@ pub enum IpcResponse {
     EdgeHandoffResult { success: bool, message: String, handoff: Option<craft_core::PlayerSessionHandoff> },
     EdgeChatBroadcastResult { delivered_nodes: usize },
     LatencyPlaybookApplied { server_name: String, view_distance: u32, simulation_distance: u32, message: String },
+    TickProfile { summary: craft_net::TickProfileSummary, sparkline: String },
+    PacketStats { summary: craft_net::PacketRateSummary },
+    LatencyHistogram { histogram: craft_net::LatencyHistogram, chart_lines: Vec<String> },
     Error { error: String },
 }

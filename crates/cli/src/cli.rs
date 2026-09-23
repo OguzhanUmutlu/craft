@@ -536,6 +536,43 @@ pub enum Commands {
         #[command(subcommand)]
         action: ScriptCommands,
     },
+
+    /// Real-time tick profiling, Netty packet inspection, and latency micro-histograms
+    #[command(name = "profile", alias = "perf", alias = "telemetry")]
+    Profile {
+        #[command(subcommand)]
+        action: ProfileCommands,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum ProfileCommands {
+    /// Inspect real-time tick duration percentiles (P50/P90/P99), jitter, and health grade
+    Tick {
+        /// Target server name
+        server: String,
+        /// Rolling sampling window (number of ticks, default: 60)
+        #[arg(short = 'w', long = "window", default_value = "60")]
+        window: usize,
+    },
+    /// Inspect Netty ingress/egress packet rates, bandwidth, and burst anomalies
+    Packets {
+        /// Target server name
+        server: String,
+    },
+    /// Render dynamic logarithmic latency micro-histogram and ASCII bucket distribution
+    Histogram {
+        /// Target server name
+        server: String,
+        /// Maximum column width for ASCII bar chart (default: 60)
+        #[arg(short = 'w', long = "width", default_value = "60")]
+        width: usize,
+    },
+    /// Comprehensive profiling overview including ticks, packets, and latency histogram
+    Overview {
+        /// Target server name
+        server: String,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]

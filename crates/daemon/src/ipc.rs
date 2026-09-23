@@ -13,12 +13,14 @@ pub const DAEMON_PORT: u16 = 8123;
 pub struct DaemonServer {
     paths: CraftPaths,
     supervisor: Supervisor,
+    tick_service: crate::tick_service::TickService,
 }
 
 impl DaemonServer {
     pub fn new(paths: CraftPaths) -> Self {
         let supervisor = Supervisor::new(paths.clone());
-        Self { paths, supervisor }
+        let tick_service = crate::tick_service::TickService::new(paths.clone());
+        Self { paths, supervisor, tick_service }
     }
 
     pub async fn run(self) -> Result<()> {
@@ -49,6 +51,9 @@ impl DaemonServer {
 
         // Launch in-process Edge State Broker
         let edge_broker = std::sync::Arc::new(crate::edge_broker::EdgeStateBroker::new());
+
+        // Launch in-process Tick Profiling & Netty Packet Telemetry Service
+        self.tick_service.clone().start_sampling_loop(self.supervisor.clone(), 3);
 
         // Load settings to check gateway and storage monitor config
         let settings = craft_core::GlobalSettings::load(&self.paths).unwrap_or_default();
@@ -90,6 +95,7 @@ impl DaemonServer {
             let hib_mgr = hibernation.clone();
             let ap_mgr = autopilot.clone();
             let eb_mgr = edge_broker.clone();
+            let ts_mgr = self.tick_service.clone();
             loop {
                 match listener.accept().await {
                     Ok((stream, _)) => {
@@ -97,8 +103,9 @@ impl DaemonServer {
                         let hib = hib_mgr.clone();
                         let ap = ap_mgr.clone();
                         let eb = eb_mgr.clone();
+                        let ts = ts_mgr.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb).await {
+                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb, ts).await {
                                 warn!("IPC client disconnected with error: {}", e);
                             }
                         });
@@ -128,6 +135,7 @@ impl DaemonServer {
             let hib_mgr = hibernation.clone();
             let ap_mgr = autopilot.clone();
             let eb_mgr = edge_broker.clone();
+            let ts_mgr = self.tick_service.clone();
             loop {
                 if let Err(e) = server.connect().await {
                     error!("Error connecting named pipe client: {}", e);
@@ -142,8 +150,9 @@ impl DaemonServer {
                 let hib = hib_mgr.clone();
                 let ap = ap_mgr.clone();
                 let eb = eb_mgr.clone();
+                let ts = ts_mgr.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(client, sup, hib, ap, eb).await {
+                    if let Err(e) = handle_connection(client, sup, hib, ap, eb, ts).await {
                         warn!("IPC client error: {}", e);
                     }
                 });
@@ -168,6 +177,7 @@ async fn handle_connection<S>(
     hibernation: std::sync::Arc<crate::hibernation::HibernationManager>,
     autopilot: std::sync::Arc<crate::autopilot::AutopilotEngine>,
     edge_broker: std::sync::Arc<crate::edge_broker::EdgeStateBroker>,
+    tick_service: crate::tick_service::TickService,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -494,6 +504,36 @@ where
                         message: format!("Applied latency playbook '{}' to server '{}'", pb.preset, server_name),
                     }).await?,
                     Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::GetTickProfile { server_name } => {
+                match tick_service.get_tick_profile(&server_name).await {
+                    Some((summary, sparkline)) => {
+                        write_frame(&mut stream, &IpcResponse::TickProfile { summary, sparkline }).await?;
+                    }
+                    None => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: format!("No tick profile metrics available for server '{}'", server_name) }).await?;
+                    }
+                }
+            }
+            IpcRequest::GetPacketStats { server_name } => {
+                match tick_service.get_packet_stats(&server_name).await {
+                    Some(summary) => {
+                        write_frame(&mut stream, &IpcResponse::PacketStats { summary }).await?;
+                    }
+                    None => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: format!("No packet statistics available for server '{}'", server_name) }).await?;
+                    }
+                }
+            }
+            IpcRequest::GetLatencyHistogram { server_name } => {
+                match tick_service.get_latency_histogram(&server_name).await {
+                    Some((histogram, chart_lines)) => {
+                        write_frame(&mut stream, &IpcResponse::LatencyHistogram { histogram, chart_lines }).await?;
+                    }
+                    None => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: format!("No latency histogram available for server '{}'", server_name) }).await?;
+                    }
                 }
             }
             IpcRequest::ShutdownDaemon => {
@@ -980,6 +1020,39 @@ impl DaemonClient {
             IpcResponse::LatencyPlaybookApplied { view_distance, simulation_distance, message, .. } => {
                 Ok((view_distance, simulation_distance, message))
             }
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_tick_profile(
+        &mut self,
+        server_name: String,
+    ) -> Result<(craft_net::TickProfileSummary, String)> {
+        match self.request(IpcRequest::GetTickProfile { server_name }).await? {
+            IpcResponse::TickProfile { summary, sparkline } => Ok((summary, sparkline)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_packet_stats(
+        &mut self,
+        server_name: String,
+    ) -> Result<craft_net::PacketRateSummary> {
+        match self.request(IpcRequest::GetPacketStats { server_name }).await? {
+            IpcResponse::PacketStats { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_latency_histogram(
+        &mut self,
+        server_name: String,
+    ) -> Result<(craft_net::LatencyHistogram, Vec<String>)> {
+        match self.request(IpcRequest::GetLatencyHistogram { server_name }).await? {
+            IpcResponse::LatencyHistogram { histogram, chart_lines } => Ok((histogram, chart_lines)),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

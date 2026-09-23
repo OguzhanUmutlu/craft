@@ -143,3 +143,61 @@ Craft implements an active multi-region edge mesh topology backed by `~/.craft/e
   - Presets: `CompetitivePvP` (low latency, high tick fidelity), `MegaSMP` (dynamic view distance throttling), `CrossRegionEconomy` (buffered chat synchronization).
   - Autonomously tunes `server.properties` parameters (`view-distance`, `simulation-distance`, `network-compression-threshold`) to cushion servers during backbone degradation.
 
+---
+
+## 8. Real-Time Tick Profiling, Netty Packet Inspection & Latency Micro-Histograms
+
+Phase 18 introduces real-time tick duration profiling, sliding-window MSPT analysis, Netty packet rate inspection, and logarithmic latency micro-histograms into `craft-net` and the supervisor daemon.
+
+### 8.1. High-Resolution Logarithmic Micro-Histograms (`LatencyHistogram`)
+- **Memory Footprint**: Strict constant bounded memory (< 2 KB) with constant $O(1)$ sample insertion without dynamically allocated sample vectors.
+- **Logarithmic Decades**:
+  - 8 decades covering $1\,\mu\text{s}$ ($10^0$) up to $100,000,000\,\mu\text{s}$ ($10^8\,\mu\text{s} = 100\,\text{s}$).
+  - 9 contiguous sub-intervals per decade ($1\times, 2\times, \dots, 9\times \text{base}$), yielding exactly 72 contiguous, non-overlapping buckets.
+  - Bucket Index Mapping:
+    $$\text{decade} = \min\left(7, \lfloor \log_{10}(v) \rfloor\right), \quad \text{sub} = \min\left(8, \left\lfloor \frac{v}{10^{\text{decade}}} \right\rfloor - 1\right), \quad \text{idx} = \text{decade} \times 9 + \text{sub}$$
+  - Invertible Bucket Bounds:
+    $$\text{low} = (\text{sub} + 1) \cdot 10^{\text{decade}}, \quad \text{high} = \begin{cases} (\text{sub} + 2) \cdot 10^{\text{decade}} & \text{if } \text{sub} < 8 \\ 10^{\text{decade}+1} & \text{if } \text{sub} = 8 \end{cases}$$
+- **Linear Quantile Interpolation**:
+  - Quantiles ($P_{50}, P_{90}, P_{95}, P_{99}, P_{99.9}$) compute target rank $R = \lceil q \cdot N \rceil$.
+  - Interpolates linearly within the enclosing bucket:
+    $$V_q = \text{low} + \frac{R - C_{\text{prev}}}{C_{\text{bucket}}} \cdot (\text{high} - \text{low})$$
+- **ASCII Histogram Visualization**:
+  - `render_ascii(width)` displays human-readable microsecond/millisecond bucket labels, sample counts, and normalized Unicode block glyph bars (`█`).
+
+### 8.2. Real-Time Tick Profiler & MSPT Estimator (`TickProfiler`)
+- **Sliding-Window Ring Buffer**:
+  - Fixed capacity (default 60–120 samples) storing timestamped `TickSample` records.
+  - Computes moving average MSPT and effective server TPS:
+    $$\text{TPS} = \min\left(20.0, \frac{1000.0}{\text{MSPT}}\right)$$
+- **Jitter (Sample Standard Deviation)**:
+  $$\sigma = \sqrt{\frac{1}{N - 1} \sum_{i=1}^N (\text{MSPT}_i - \overline{\text{MSPT}})^2}$$
+- **Operational Health Classification (`TickHealthGrade`)**:
+  - `[PRISTINE]`: MSPT $< 25.0\,\text{ms}$, $\text{TPS} \ge 19.8$.
+  - `[STABLE]`: MSPT $< 45.0\,\text{ms}$, $\text{TPS} \ge 18.0$.
+  - `[DEGRADED]`: MSPT $< 60.0\,\text{ms}$, $\text{TPS} \ge 14.0$.
+  - `[OVERLOADED]`: MSPT $\ge 60.0\,\text{ms}$ or $\text{TPS} < 14.0$.
+- **ASCII Sparkline Generator**:
+  - Quantizes sample history into an 8-level sparkline string (` ▂▃▄▅▆▇█`) with zero terminal width distortion.
+
+### 8.3. Netty Ingress/Egress Packet & Byte Inspector (`NettyPacketInspector`)
+- **Throughput Metrics**:
+  - Tracks Ingress RX PPS, Egress TX PPS, RX bytes/sec, and TX bytes/sec.
+  - Maintains a sliding history of rate samples to calculate burst ratios.
+- **Burst & Flood Anomaly Detection**:
+  - Detects traffic surges when $\frac{\text{current\_pps}}{\text{baseline\_pps}} \ge 3.5\times$.
+  - Triggers `PacketFloodAnomaly` when RX PPS exceeds safe capacity threshold (default 5,000 PPS).
+
+### 8.4. Daemon Telemetry Loop & CLI Interface
+- **In-Process `TickService`**: Runs continuous loopback network probes against active servers, recording tick durations and packet exchanges into shared `ServerTelemetryState`.
+- **IPC Protocol Extension**:
+  - `IpcRequest::GetTickProfile { server_name }` -> `IpcResponse::TickProfile { summary, sparkline }`
+  - `IpcRequest::GetPacketStats { server_name }` -> `IpcResponse::PacketStats { summary }`
+  - `IpcRequest::GetLatencyHistogram { server_name }` -> `IpcResponse::LatencyHistogram { histogram, chart_lines }`
+- **CLI Commands**:
+  - `craft profile tick <server> [-w 60]`: Detailed MSPT table, percentiles, jitter, and ASCII sparkline.
+  - `craft profile packets <server>`: Netty RX/TX throughput, bandwidth, and burst status.
+  - `craft profile histogram <server> [-w 60]`: Logarithmic latency distribution and ASCII bar chart.
+  - `craft profile overview <server>`: Unified diagnostic overview combining all telemetry.
+- **ModalX Centered TUI**: Integrated into `craft manage` -> `Tools` -> `Tick Profiling & Network Telemetry`.
+

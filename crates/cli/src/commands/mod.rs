@@ -27,6 +27,7 @@ pub mod net;
 pub mod new;
 pub mod optimize;
 pub mod plugin;
+pub mod profile;
 pub mod prop;
 pub mod remote;
 pub mod restart;

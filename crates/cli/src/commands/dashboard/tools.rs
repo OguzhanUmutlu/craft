@@ -1783,6 +1783,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         #[derive(Clone, Copy, PartialEq, Eq)]
         enum ToolItemAction {
             Ping,
+            TickProfile,
             Daemon,
             Firewall,
             ScriptsHooks,
@@ -1800,6 +1801,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             MenuEntry::new(num.to_string(), "Server Network Ping").with_aliases(&["p", "ping"]),
         );
         actions.push(ToolItemAction::Ping);
+        num += 1;
+
+        entries.push(
+            MenuEntry::new(num.to_string(), "Tick Profiling & Network Telemetry")
+                .with_aliases(&["t", "profile", "telemetry"]),
+        );
+        actions.push(ToolItemAction::TickProfile);
         num += 1;
 
         entries
@@ -1841,6 +1849,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             Some(idx) if idx < actions.len() => match actions[idx] {
                 ToolItemAction::Ping => {
                     ping_menu().await?;
+                }
+                ToolItemAction::TickProfile => {
+                    tick_profile_tui(paths).await?;
                 }
                 ToolItemAction::Daemon => {
                     daemon_menu(paths).await?;
@@ -1901,4 +1912,133 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             _ => return Ok(()),
         }
     }
+}
+
+pub async fn tick_profile_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Tick Profile");
+
+    let registry = match ServersRegistry::load(paths) {
+        Ok(r) => r,
+        Err(e) => {
+            show_modal_message(
+                "ERROR",
+                &[format!("[ERROR] Failed to load server registry: {}", e)],
+                true,
+            )?;
+            return Ok(());
+        }
+    };
+
+    let server_name = if registry.servers.is_empty() {
+        match run_input_prompt(
+            "TICK PROFILER",
+            "Enter server name to inspect:",
+            None,
+        )? {
+            Some(name) if !name.trim().is_empty() => name.trim().to_string(),
+            _ => return Ok(()),
+        }
+    } else {
+        let width = get_content_width(80);
+        let header = format!(
+            "{}\r\n{}\r\n{}\r\n Select a server to inspect tick profiling & telemetry:\r\n{}",
+            box_top(width).cyan().bold(),
+            box_title("SELECT SERVER FOR PROFILING", width, false).cyan().bold(),
+            box_divider(width).cyan().bold(),
+            box_divider(width).dimmed(),
+        );
+
+        let mut entries: Vec<MenuEntry> = registry
+            .servers
+            .iter()
+            .enumerate()
+            .map(|(i, s)| MenuEntry::new((i + 1).to_string(), &s.name))
+            .collect();
+        entries.push(MenuEntry::new("0", "Back").with_aliases(&["b", "q"]));
+
+        let mut sel = 0;
+        match run_menu(&header, &entries, &mut sel)? {
+            Some(idx) if idx < registry.servers.len() => registry.servers[idx].name.clone(),
+            _ => return Ok(()),
+        }
+    };
+
+    print_in_place_status(
+        "COLLECTING TELEMETRY",
+        &[format!("Querying tick profiling data for '{}'...", server_name)],
+    )?;
+
+    let mut tick_info = None;
+    let mut packet_info = None;
+    let mut hist_info = None;
+
+    if let Ok(mut client) = DaemonClient::connect(paths).await {
+        if let Ok((summary, sparkline)) = client.get_tick_profile(server_name.clone()).await {
+            tick_info = Some((summary, sparkline));
+        }
+        if let Ok(stats) = client.get_packet_stats(server_name.clone()).await {
+            packet_info = Some(stats);
+        }
+        if let Ok((hist, lines)) = client.get_latency_histogram(server_name.clone()).await {
+            hist_info = Some((hist, lines));
+        }
+    }
+
+    let mut lines = Vec::new();
+    lines.push(format!("Server: {}", server_name.clone().cyan().bold()));
+    lines.push("".to_string());
+
+    if let Some((ref summary, ref sparkline)) = tick_info {
+        let grade = match summary.health {
+            craft_net::TickHealthGrade::Pristine => "[PRISTINE]".green().bold(),
+            craft_net::TickHealthGrade::Stable => "[STABLE]".cyan().bold(),
+            craft_net::TickHealthGrade::Degraded => "[DEGRADED]".yellow().bold(),
+            craft_net::TickHealthGrade::Overloaded => "[OVERLOADED]".red().bold(),
+        };
+        lines.push(format!("Tick Health:     {}", grade));
+        lines.push(format!("Current/Avg TPS: {:.1} / {:.1}", summary.current_tps, summary.avg_tps));
+        lines.push(format!("Current MSPT:    {:.2} ms (Jitter: {:.2} ms)", summary.current_mspt, summary.jitter_ms));
+        lines.push(format!("Percentiles:     P50: {:.1}ms | P90: {:.1}ms | P99: {:.1}ms", summary.mspt_p50, summary.mspt_p90, summary.mspt_p99));
+        lines.push(format!("Latency Trail:   [{}]", sparkline));
+    } else {
+        lines.push("[WARN] Daemon offline or no tick data sampled yet.".yellow().to_string());
+    }
+
+    lines.push("".to_string());
+    if let Some(ref stats) = packet_info {
+        lines.push(format!(
+            "Netty Ingress:   {} PPS ({:.1} KB/s)",
+            stats.rx_pps,
+            stats.rx_bytes_sec as f64 / 1024.0
+        ));
+        lines.push(format!(
+            "Netty Egress:    {} PPS ({:.1} KB/s)",
+            stats.tx_pps,
+            stats.tx_bytes_sec as f64 / 1024.0
+        ));
+        let burst_status = if stats.flood_warning || stats.burst_detected {
+            format!("[WARN] Rate {} pps (Elevated)", stats.rx_pps).yellow().bold().to_string()
+        } else {
+            format!("[OK] Rate {} pps (Nominal)", stats.rx_pps).green().bold().to_string()
+        };
+        lines.push(format!("Traffic Health:  {}", burst_status));
+    }
+
+    if let Some((ref hist, _)) = hist_info {
+        lines.push("".to_string());
+        lines.push(format!(
+            "Micro-Histogram: {} samples recorded",
+            hist.total_count
+        ));
+        let p50 = hist.quantile_us(0.50);
+        let p99 = hist.quantile_us(0.99);
+        lines.push(format!(
+            "Distribution:    P50: {:.1}us ({:.2}ms) | P99: {:.1}us ({:.2}ms)",
+            p50, p50 / 1000.0, p99, p99 / 1000.0
+        ));
+    }
+
+    show_modal_message("TICK PROFILING & TELEMETRY", &lines, false)?;
+    Ok(())
 }
