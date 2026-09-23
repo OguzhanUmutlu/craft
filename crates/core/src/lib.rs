@@ -1,3 +1,4 @@
+pub mod anvil;
 pub mod audit;
 pub mod autoscale_config;
 pub mod backup_config;
@@ -32,6 +33,15 @@ pub mod tracing_core;
 pub mod version;
 pub mod webhook_config;
 
+pub use anvil::{
+    chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
+    region_filename, AnvilBenchmarkReport, AnvilCacheStats, AnvilChunkCache, AnvilConfig,
+    AnvilIoEngine, AnvilRegistry, AnvilStatusSummary, CachedChunk, ChunkCompressionScheme,
+    ChunkData, ChunkKey, ChunkLocation, ChunkSectorInfo, CompactionStats, IoBatchRead,
+    IoBatchWrite, IoEngineType, IoReadResult, IoWriteResult, PrefetchSummary, RegionDetails,
+    RegionFileReader, RegionFileWriter, RegionFileHeader, RegionInspection, HEADER_BYTES,
+    HEADER_SECTORS, SECTOR_BYTES, TOTAL_CHUNKS,
+};
 pub use audit::{AuditLedger, AuditLogEntry, AuditVerificationResult, DEFAULT_AUDIT_SECRET, GENESIS_HASH};
 pub use autoscale_config::{AutoscaleRegistry, ServerAutoscalePolicy};
 pub use cgroups::{

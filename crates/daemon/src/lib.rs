@@ -1,3 +1,4 @@
+pub mod anvil_service;
 pub mod autopilot;
 pub mod circuit_breaker;
 pub mod edge_broker;
@@ -21,6 +22,8 @@ pub mod tick_service;
 pub mod tracing_service;
 pub mod web_dashboard;
 pub mod webhooks;
+
+pub use anvil_service::AnvilService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

@@ -496,6 +496,9 @@ async fn main() {
         Some(Commands::Trace { action }) => {
             commands::trace::handle_trace(action, &paths).await
         }
+        Some(Commands::Anvil { action }) => {
+            commands::anvil::handle_anvil(action, &paths).await
+        }
     };
 
     if let Err(e) = result {
@@ -563,6 +566,8 @@ fn print_banner() {
     println!("  sdn <status|up|down|policy|peers> Zero-trust mesh & eBPF microsegmentation");
     println!("  raft <status|propose|lock|logs>   Distributed Raft consensus & dynamic arbitration");
     println!("  quota <list|get|set|tenant|balance> Cgroups v2 resource quotas & fair-share scheduling");
+    println!("  trace <status|list|get|export>    Distributed tracing & OpenTelemetry (OTel)");
+    println!("  anvil <status|inspect|bench>      Hardware-accelerated Anvil storage & io_uring");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

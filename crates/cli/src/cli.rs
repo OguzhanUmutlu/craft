@@ -586,6 +586,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: TraceCommands,
     },
+
+    /// Hardware-accelerated Minecraft Anvil (.mca) storage engine, zero-copy packet pipelines, and io_uring submissions
+    #[command(name = "anvil", alias = "chunk", alias = "mca")]
+    Anvil {
+        #[command(subcommand)]
+        action: AnvilCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1351,6 +1358,77 @@ pub enum TraceCommands {
         #[arg(long)]
         service_name: Option<String>,
         /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum AnvilCommands {
+    /// Inspect background Anvil storage engine status, cache memory, hit ratio, and context-switch savings
+    Status {
+        /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect an Anvil (.mca) region file, chunk allocation table, sector fragmentation, and free runs
+    Inspect {
+        /// Server name or path (optional if direct path provided)
+        server: Option<String>,
+        /// Region file name (e.g. r.0.0.mca) or path
+        #[arg(long)]
+        file: String,
+        /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Prefetch chunks in a radius around chunk coordinates into LRU direct memory
+    Prefetch {
+        /// Server name or path
+        server: String,
+        /// World dimension name (default: world)
+        #[arg(long)]
+        world: Option<String>,
+        /// Center chunk X coordinate
+        #[arg(long, default_value_t = 0, allow_hyphen_values = true)]
+        x: i32,
+        /// Center chunk Z coordinate
+        #[arg(long, default_value_t = 0, allow_hyphen_values = true)]
+        z: i32,
+        /// Radius in chunks (1 to 16)
+        #[arg(long, default_value_t = 4)]
+        radius: u32,
+        /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark Anvil sequential and random read/write throughput, compression ratio, and IO latency
+    Bench {
+        /// Number of synthetic chunk payloads to benchmark (4 to 1024)
+        #[arg(long, default_value_t = 32)]
+        chunks: usize,
+        /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// View or configure Anvil storage engine parameters (engine, cache limit, prefetch radius)
+    Config {
+        /// Enable or disable hardware-accelerated Anvil storage engine
+        #[arg(long)]
+        enabled: Option<bool>,
+        /// Preferred I/O engine ("io_uring" or "threaded_fallback")
+        #[arg(long)]
+        engine: Option<String>,
+        /// Direct memory LRU cache size limit in megabytes
+        #[arg(long)]
+        cache_mb: Option<usize>,
+        /// Default prefetch radius in chunks
+        #[arg(long)]
+        prefetch_radius: Option<u32>,
+        /// Batch size for asynchronous chunk operations
+        #[arg(long)]
+        batch_size: Option<usize>,
+        /// Emit results as structured JSON
         #[arg(long)]
         json: bool,
     },
@@ -3395,6 +3473,83 @@ mod tests {
                 assert!(!json);
             }
             _ => panic!("Expected Trace Config command"),
+        }
+    }
+
+    #[test]
+    fn test_anvil_cli_parsing() {
+        // Anvil status with alias mca
+        let cli_status = Cli::try_parse_from(["craft", "mca", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Anvil {
+                action: AnvilCommands::Status { json },
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Anvil Status command"),
+        }
+
+        // Anvil inspect with alias chunk
+        let cli_inspect = Cli::try_parse_from([
+            "craft", "chunk", "inspect", "my-server", "--file", "r.0.0.mca", "--json",
+        ])
+        .unwrap();
+        match cli_inspect.command {
+            Some(Commands::Anvil {
+                action: AnvilCommands::Inspect { server, file, json },
+            }) => {
+                assert_eq!(server, Some("my-server".to_string()));
+                assert_eq!(file, "r.0.0.mca");
+                assert!(json);
+            }
+            _ => panic!("Expected Anvil Inspect command"),
+        }
+
+        // Anvil prefetch
+        let cli_prefetch = Cli::try_parse_from([
+            "craft", "anvil", "prefetch", "my-server", "--world", "world_nether", "--x", "10", "--z", "-5", "--radius", "3",
+        ])
+        .unwrap();
+        match cli_prefetch.command {
+            Some(Commands::Anvil {
+                action: AnvilCommands::Prefetch { server, world, x, z, radius, json },
+            }) => {
+                assert_eq!(server, "my-server");
+                assert_eq!(world, Some("world_nether".to_string()));
+                assert_eq!(x, 10);
+                assert_eq!(z, -5);
+                assert_eq!(radius, 3);
+                assert!(!json);
+            }
+            _ => panic!("Expected Anvil Prefetch command"),
+        }
+
+        // Anvil bench
+        let cli_bench = Cli::try_parse_from(["craft", "anvil", "bench", "--chunks", "64", "--json"]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Anvil {
+                action: AnvilCommands::Bench { chunks, json },
+            }) => {
+                assert_eq!(chunks, 64);
+                assert!(json);
+            }
+            _ => panic!("Expected Anvil Bench command"),
+        }
+
+        // Anvil config
+        let cli_config = Cli::try_parse_from([
+            "craft", "anvil", "config", "--engine", "io_uring", "--cache-mb", "128", "--prefetch-radius", "6",
+        ])
+        .unwrap();
+        match cli_config.command {
+            Some(Commands::Anvil {
+                action: AnvilCommands::Config { engine, cache_mb, prefetch_radius, .. },
+            }) => {
+                assert_eq!(engine, Some("io_uring".to_string()));
+                assert_eq!(cache_mb, Some(128));
+                assert_eq!(prefetch_radius, Some(6));
+            }
+            _ => panic!("Expected Anvil Config command"),
         }
     }
 }

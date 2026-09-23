@@ -174,6 +174,7 @@ pub async fn generate_prometheus_metrics(
     }
 
     out.push_str(&crate::tracing_service::TracingService::global(paths).generate_prometheus_metrics());
+    out.push_str(&crate::anvil_service::AnvilService::global(paths).generate_prometheus_metrics());
 
     out
 }

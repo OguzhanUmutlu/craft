@@ -62,6 +62,10 @@ pub struct CraftPaths {
     pub tracing_file: PathBuf,
     pub tracing_lock: PathBuf,
     pub traces_spans_dir: PathBuf,
+    pub anvil_dir: PathBuf,
+    pub anvil_file: PathBuf,
+    pub anvil_lock: PathBuf,
+    pub anvil_cache_dir: PathBuf,
 }
 
 impl CraftPaths {
@@ -123,6 +127,10 @@ impl CraftPaths {
         let tracing_file = tracing_dir.join("tracing.toml");
         let tracing_lock = locks_dir.join("tracing.lock");
         let traces_spans_dir = tracing_dir.join("spans");
+        let anvil_dir = home.join("anvil");
+        let anvil_file = anvil_dir.join("anvil.toml");
+        let anvil_lock = locks_dir.join("anvil.lock");
+        let anvil_cache_dir = cache_dir.join("anvil");
 
         Self {
             home,
@@ -182,6 +190,10 @@ impl CraftPaths {
             tracing_file,
             tracing_lock,
             traces_spans_dir,
+            anvil_dir,
+            anvil_file,
+            anvil_lock,
+            anvil_cache_dir,
         }
     }
 
@@ -226,6 +238,8 @@ impl CraftPaths {
         let cgroups_dir = home.join("cgroups");
         let tracing_dir = home.join("tracing");
         let traces_spans_dir = tracing_dir.join("spans");
+        let anvil_dir = home.join("anvil");
+        let anvil_cache_dir = cache_dir.join("anvil");
 
         // Ensure all primary directories exist
         for dir in [
@@ -257,6 +271,8 @@ impl CraftPaths {
             &cgroups_dir,
             &tracing_dir,
             &traces_spans_dir,
+            &anvil_dir,
+            &anvil_cache_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -292,6 +308,8 @@ impl CraftPaths {
         let quotas_lock = locks_dir.join("quotas.lock");
         let tracing_file = tracing_dir.join("tracing.toml");
         let tracing_lock = locks_dir.join("tracing.lock");
+        let anvil_file = anvil_dir.join("anvil.toml");
+        let anvil_lock = locks_dir.join("anvil.lock");
 
         Ok(Self {
             home,
@@ -351,6 +369,10 @@ impl CraftPaths {
             tracing_file,
             tracing_lock,
             traces_spans_dir,
+            anvil_dir,
+            anvil_file,
+            anvil_lock,
+            anvil_cache_dir,
         })
     }
 

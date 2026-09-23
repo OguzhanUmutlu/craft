@@ -44,6 +44,9 @@ pub enum LifecycleEvent {
     TraceSpanRecorded,
     OtlpExportFailed,
     TraceSamplingSurge,
+    ChunkPrefetchCompleted,
+    AnvilCacheSaturated,
+    AnvilIoError,
 }
 
 impl LifecycleEvent {
@@ -82,6 +85,9 @@ impl LifecycleEvent {
             Self::TraceSpanRecorded => "on_trace_span_recorded",
             Self::OtlpExportFailed => "on_otlp_export_failed",
             Self::TraceSamplingSurge => "on_trace_sampling_surge",
+            Self::ChunkPrefetchCompleted => "on_chunk_prefetch_completed",
+            Self::AnvilCacheSaturated => "on_anvil_cache_saturated",
+            Self::AnvilIoError => "on_anvil_io_error",
         }
     }
 
@@ -121,6 +127,9 @@ impl LifecycleEvent {
             "on_trace_span_recorded" | "trace_span_recorded" | "span_recorded" => Some(Self::TraceSpanRecorded),
             "on_otlp_export_failed" | "otlp_export_failed" | "export_failed" => Some(Self::OtlpExportFailed),
             "on_trace_sampling_surge" | "trace_sampling_surge" | "sampling_surge" => Some(Self::TraceSamplingSurge),
+            "on_chunk_prefetch_completed" | "chunk_prefetch_completed" | "prefetch_completed" => Some(Self::ChunkPrefetchCompleted),
+            "on_anvil_cache_saturated" | "anvil_cache_saturated" | "cache_saturated" => Some(Self::AnvilCacheSaturated),
+            "on_anvil_io_error" | "anvil_io_error" | "anvil_error" => Some(Self::AnvilIoError),
             _ => None,
         }
     }
@@ -160,6 +169,9 @@ impl LifecycleEvent {
             Self::TraceSpanRecorded,
             Self::OtlpExportFailed,
             Self::TraceSamplingSurge,
+            Self::ChunkPrefetchCompleted,
+            Self::AnvilCacheSaturated,
+            Self::AnvilIoError,
         ]
     }
 }
@@ -270,6 +282,20 @@ pub struct HookContext {
     pub span_duration_micros: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub span_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunk_x: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunk_z: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prefetch_radius: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prefetched_chunks: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_used_bytes: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_limit_bytes: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub io_error_message: Option<String>,
 }
 
 impl HookContext {
@@ -740,5 +766,45 @@ mod tests {
         assert_eq!(ctx.span_name.as_deref(), Some("craft.server.tick"));
         assert_eq!(ctx.span_duration_micros, Some(45000));
         assert_eq!(ctx.span_status.as_deref(), Some("Error"));
+    }
+
+    #[test]
+    fn test_anvil_lifecycle_events_and_context() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_chunk_prefetch_completed"),
+            Some(LifecycleEvent::ChunkPrefetchCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("prefetch_completed"),
+            Some(LifecycleEvent::ChunkPrefetchCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_anvil_cache_saturated"),
+            Some(LifecycleEvent::AnvilCacheSaturated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("cache_saturated"),
+            Some(LifecycleEvent::AnvilCacheSaturated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_anvil_io_error"),
+            Some(LifecycleEvent::AnvilIoError)
+        );
+
+        let mut ctx = HookContext::new(LifecycleEvent::ChunkPrefetchCompleted);
+        ctx.chunk_x = Some(10);
+        ctx.chunk_z = Some(-5);
+        ctx.prefetch_radius = Some(4);
+        ctx.prefetched_chunks = Some(49);
+        ctx.cache_used_bytes = Some(1048576);
+        ctx.cache_limit_bytes = Some(67108864);
+
+        assert_eq!(ctx.event, "on_chunk_prefetch_completed");
+        assert_eq!(ctx.chunk_x, Some(10));
+        assert_eq!(ctx.chunk_z, Some(-5));
+        assert_eq!(ctx.prefetch_radius, Some(4));
+        assert_eq!(ctx.prefetched_chunks, Some(49));
+        assert_eq!(ctx.cache_used_bytes, Some(1048576));
+        assert_eq!(ctx.cache_limit_bytes, Some(67108864));
     }
 }

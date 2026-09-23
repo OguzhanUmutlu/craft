@@ -102,3 +102,36 @@ Without requiring Java or unpacking archive trees to disk, Craft reads JAR entri
 - **Zstandard Caching**: Deduplicates pack downloads in `CacheStore`, enabling fast multi-instance deployment.
 - **Overrides Deployment**: Extracts root overrides (`overrides/`) and server-specific configurations (`server-overrides/`), preserving file attributes.
 
+---
+
+## 7. Hardware-Accelerated Anvil Storage Engine, Zero-Copy Packet Serialization & io_uring Chunk Pipelines
+
+Craft provides hardware-accelerated world storage, Linux `io_uring` asynchronous I/O batching, and zero-copy chunk packet serialization across `crates/core`, `crates/net`, and `crates/daemon`:
+
+### MCA Region Architecture & Sector Alignment (`crates/core/src/anvil/region.rs`)
+- **Anvil Header Specification**: MCA region files are structured into 4096-byte sectors. The initial 8192 bytes comprise two header sectors:
+  - **Sector 0 (Locations)**: 1,024 4-byte chunk location descriptors where the first 3 bytes define the sector offset in the file and the 4th byte defines the sector count allocated to that chunk.
+  - **Sector 1 (Timestamps)**: 1,024 4-byte big-endian Unix epoch timestamps recording last chunk modification.
+- **Multi-Compression Scheme**: Supports all standard and modern compression schemes via single-byte markers:
+  - `1`: Gzip compression.
+  - `2`: Zlib deflate compression (standard Minecraft format).
+  - `3`: Uncompressed raw NBT payload.
+  - `4`: LZ4 high-speed decompression.
+  - `5`: Zstandard (Zstd) high-ratio stream compression.
+- **Sector Defragmentation & Compaction (`compact`)**: Scans allocated sector runs, eliminates inter-chunk dead zones caused by chunk mutations, migrates valid chunks contiguously starting at sector offset 2, updates location headers atomically, and truncates file length to reclaim disk space.
+
+### Kernel-Level Asynchronous I/O Engine (`AnvilIoEngine`)
+- **Linux io_uring Ring Buffers**: Uses submission queue (SQ) and completion queue (CQ) ring buffers on Linux kernels 5.10+, submitting batch chunk operations in a single system call (`io_uring_enter`).
+- **Context-Switch Elimination**: Bypasses conventional synchronous system calls (`pread`/`pwrite`), eliminating user-kernel thread transitions and saving thousands of context switches during multi-player chunk loading storms.
+- **Portable Threaded Fallback**: Automatically falls back to a thread-pool architecture with positioned file I/O (`preadv2`/`read_exact_at` and `pwritev2`/`write_all_at`) on platforms without io_uring or when unprivileged.
+
+### Direct Memory Bounded LRU Cache & Prefetching Pipeline (`AnvilChunkCache`)
+- **Direct Memory LRU Buffer**: Maintains an in-memory chunk cache with strict memory bounds (default 64 MB), bounded chunk capacity (default 4096 chunks), and atomic hit/miss/eviction counters (`AtomicU64`).
+- **Radius-Based Speculative Prefetcher (`prefetch_radius`)**: Given player coordinates $(X, Z)$ and radius $R$, speculatively maps all candidate chunks $(2R + 1)^2$, checks memory cache presence, groups missing chunks by region file (`r.X.Z.mca`), and dispatches batch read requests to the I/O engine ahead of player movement.
+
+### Zero-Copy Packet Serialization (`crates/net/src/chunk_packet.rs`)
+- **Minecraft Packet 0x20 Framing**: Implements Minecraft Java protocol chunk data packet format (`Packet ID 0x20`), packing chunk coordinates, heightmap NBT, section bitmasks, block/biome palettes, and tile entity data.
+- **Zero-Copy Byte Slices**: Leverages `bytes::Bytes` and `bytes::BytesMut`, assembling network frames via reference-counted slice offsets without intermediate memory copying between disk read buffers and network sockets.
+- **NVMe-to-Socket DMA Streaming**: Simulates kernel-level `sendfile`/`splice` DMA pipelines to transfer raw compressed chunk blocks directly to client connection sockets.
+
+

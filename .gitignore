@@ -34,6 +34,7 @@ cargo-timing.html
 !/tools/test_raft_consensus.py
 !/tools/test_resource_quotas.py
 !/tools/test_distributed_tracing.py
+!/tools/test_anvil_pipeline.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

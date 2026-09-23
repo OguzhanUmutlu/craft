@@ -127,6 +127,24 @@ pub enum IpcRequest {
     SetTracingConfig {
         config: craft_core::TracingConfig,
     },
+    GetAnvilStatus,
+    InspectRegion {
+        server_path: PathBuf,
+        region_file: String,
+    },
+    PrefetchChunks {
+        server_path: PathBuf,
+        world: String,
+        center_x: i32,
+        center_z: i32,
+        radius: u32,
+    },
+    BenchmarkAnvil {
+        chunks: usize,
+    },
+    SetAnvilConfig {
+        config: craft_core::AnvilConfig,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -239,6 +257,21 @@ pub enum IpcResponse {
     },
     TracingConfigResult {
         config: craft_core::TracingConfig,
+    },
+    AnvilStatusResult {
+        status: craft_core::AnvilStatusSummary,
+    },
+    AnvilRegionInspectionResult {
+        details: craft_core::RegionDetails,
+    },
+    AnvilPrefetchResult {
+        summary: craft_core::PrefetchSummary,
+    },
+    AnvilBenchmarkResult {
+        report: craft_core::AnvilBenchmarkReport,
+    },
+    AnvilConfigResult {
+        config: craft_core::AnvilConfig,
     },
     Error { error: String },
 }

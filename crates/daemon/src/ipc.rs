@@ -944,6 +944,46 @@ where
                     }
                 }
             }
+            IpcRequest::GetAnvilStatus => {
+                let status = crate::anvil_service::AnvilService::global(supervisor.paths()).get_status();
+                write_frame(&mut stream, &IpcResponse::AnvilStatusResult { status }).await?;
+            }
+            IpcRequest::InspectRegion { server_path, region_file } => {
+                let resp = match crate::anvil_service::AnvilService::global(supervisor.paths())
+                    .inspect_region(&server_path, &region_file)
+                {
+                    Ok(details) => IpcResponse::AnvilRegionInspectionResult { details },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PrefetchChunks { server_path, world, center_x, center_z, radius } => {
+                let resp = match crate::anvil_service::AnvilService::global(supervisor.paths())
+                    .prefetch(&server_path, &world, center_x, center_z, radius)
+                {
+                    Ok(summary) => IpcResponse::AnvilPrefetchResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BenchmarkAnvil { chunks } => {
+                let resp = match crate::anvil_service::AnvilService::global(supervisor.paths())
+                    .benchmark(chunks)
+                {
+                    Ok(report) => IpcResponse::AnvilBenchmarkResult { report },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SetAnvilConfig { config } => {
+                let resp = match crate::anvil_service::AnvilService::global(supervisor.paths())
+                    .set_config(config)
+                {
+                    Ok(cfg) => IpcResponse::AnvilConfigResult { config: cfg },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -1910,6 +1950,59 @@ impl DaemonClient {
     pub async fn set_tracing_config(&mut self, config: craft_core::TracingConfig) -> Result<craft_core::TracingConfig> {
         match self.request(IpcRequest::SetTracingConfig { config }).await? {
             IpcResponse::TracingConfigResult { config } => Ok(config),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_anvil_status(&mut self) -> Result<craft_core::AnvilStatusSummary> {
+        match self.request(IpcRequest::GetAnvilStatus).await? {
+            IpcResponse::AnvilStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn inspect_region(&mut self, server_path: PathBuf, region_file: String) -> Result<craft_core::RegionDetails> {
+        match self.request(IpcRequest::InspectRegion { server_path, region_file }).await? {
+            IpcResponse::AnvilRegionInspectionResult { details } => Ok(details),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn prefetch_chunks(
+        &mut self,
+        server_path: PathBuf,
+        world: String,
+        center_x: i32,
+        center_z: i32,
+        radius: u32,
+    ) -> Result<craft_core::PrefetchSummary> {
+        match self.request(IpcRequest::PrefetchChunks {
+            server_path,
+            world,
+            center_x,
+            center_z,
+            radius,
+        }).await? {
+            IpcResponse::AnvilPrefetchResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn benchmark_anvil(&mut self, chunks: usize) -> Result<craft_core::AnvilBenchmarkReport> {
+        match self.request(IpcRequest::BenchmarkAnvil { chunks }).await? {
+            IpcResponse::AnvilBenchmarkResult { report } => Ok(report),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_anvil_config(&mut self, config: craft_core::AnvilConfig) -> Result<craft_core::AnvilConfig> {
+        match self.request(IpcRequest::SetAnvilConfig { config }).await? {
+            IpcResponse::AnvilConfigResult { config } => Ok(config),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

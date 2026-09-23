@@ -1795,6 +1795,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             RaftConsensus,
             ResourceQuotas,
             DistributedTracing,
+            AnvilStorage,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1893,6 +1894,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::DistributedTracing);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Hardware-Accelerated Anvil Storage & io_uring (MCA)")
+                .with_aliases(&["anvil", "chunk", "mca", "uring"]),
+        );
+        actions.push(ToolItemAction::AnvilStorage);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1949,6 +1957,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::DistributedTracing => {
                     distributed_tracing_tui(paths).await?;
+                }
+                ToolItemAction::AnvilStorage => {
+                    anvil_storage_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2843,6 +2854,89 @@ pub async fn distributed_tracing_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft trace config --enabled ... Hot-reconfigure sampling & OTLP endpoint".green().to_string());
 
     show_modal_message("DISTRIBUTED TRACING & OPENTELEMETRY", &lines, false)?;
+    Ok(())
+}
+
+pub async fn anvil_storage_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Anvil Storage & io_uring");
+
+    let status = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        match client.get_anvil_status().await {
+            Ok(s) => s,
+            Err(_) => craft_daemon::AnvilService::global(paths).get_status(),
+        }
+    } else {
+        craft_daemon::AnvilService::global(paths).get_status()
+    };
+
+    let mem_used_mb = (status.cache_memory_used_bytes as f64) / (1024.0 * 1024.0);
+    let mem_limit_mb = (status.cache_memory_limit_bytes as f64) / (1024.0 * 1024.0);
+    let r_mb = (status.total_bytes_read as f64) / (1024.0 * 1024.0);
+    let w_mb = (status.total_bytes_written as f64) / (1024.0 * 1024.0);
+    let ratio_pct = status.cache_hit_ratio * 100.0;
+
+    let mut lines = Vec::new();
+    lines.push("HARDWARE-ACCELERATED ANVIL STORAGE ENGINE (MCA)".bold().to_string());
+    lines.push("Linux io_uring Pipelines, Direct Memory Chunk Cache & Zero-Copy Framing".dimmed().to_string());
+    lines.push("".to_string());
+
+    let engine_badge = if status.engine == "io_uring" {
+        "[ACTIVE] Linux io_uring (Zero-Copy Ring Pipeline)".green()
+    } else {
+        "[FALLBACK] Threaded preadv2/pwritev2 Driver".yellow()
+    };
+    lines.push(format!("I/O Engine:          {}", engine_badge));
+    lines.push(format!(
+        "Cached Chunks:       {} chunks resident in memory",
+        status.active_cached_chunks
+    ));
+    lines.push(format!(
+        "Cache Direct Memory: {:.2} MB / {:.2} MB",
+        mem_used_mb, mem_limit_mb
+    ));
+
+    // Progress bar for memory utilization
+    let usage_frac = if mem_limit_mb > 0.0 {
+        (mem_used_mb / mem_limit_mb).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let filled_slots = (usage_frac * 24.0).round() as usize;
+    let empty_slots = 24usize.saturating_sub(filled_slots);
+    let bar = format!("[{}{}] {:.1}%", "=".repeat(filled_slots).cyan(), " ".repeat(empty_slots), usage_frac * 100.0);
+    lines.push(format!("Memory Utilization:  {}", bar));
+
+    lines.push(format!(
+        "Cache Hit Ratio:     {:.2}% ({} hits / {} misses)",
+        ratio_pct, status.cache_hit_count, status.cache_miss_count
+    ));
+    lines.push(format!(
+        "Evictions / Prefetch:{} evicted / {} prefetched",
+        status.cache_eviction_count, status.cache_prefetch_count
+    ));
+    lines.push(format!(
+        "Total I/O Ops:       {} operations ({:.2} MB read / {:.2} MB written)",
+        status.total_io_ops, r_mb, w_mb
+    ));
+    lines.push(format!(
+        "Context Switch Sav:  {} syscall switches saved",
+        status.context_switch_savings
+    ));
+    lines.push(format!(
+        "Average I/O Latency: {:.2} µs",
+        status.avg_io_latency_micros
+    ));
+
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft anvil status                Display cache metrics and context-switch savings".green().to_string());
+    lines.push("  craft anvil inspect <server> <f>  Inspect MCA sector allocation, header & fragmentation".green().to_string());
+    lines.push("  craft anvil prefetch <server>     Prefetch chunk radius into LRU cache".green().to_string());
+    lines.push("  craft anvil bench [--chunks 32]   Run I/O read/write throughput benchmark".green().to_string());
+    lines.push("  craft anvil config --engine uring Configure preferred storage engine & memory limit".green().to_string());
+
+    show_modal_message("HARDWARE-ACCELERATED ANVIL STORAGE (MCA)", &lines, false)?;
     Ok(())
 }
 

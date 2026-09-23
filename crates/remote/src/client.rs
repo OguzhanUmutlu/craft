@@ -960,6 +960,83 @@ impl RemoteCraftClient {
         Ok(stdout.trim().to_string())
     }
 
+    pub fn get_remote_anvil_status(&self) -> Result<String> {
+        let (code, stdout, stderr) = self.session.exec("craft anvil status --json")?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote anvil status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn inspect_remote_region(&self, server: &str, file: &str) -> Result<String> {
+        let cmd = format!("craft anvil inspect {} {} --json", server, file);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote anvil region inspection failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn prefetch_remote_chunks(
+        &self,
+        server: &str,
+        world: Option<&str>,
+        x: i32,
+        z: i32,
+        radius: u32,
+    ) -> Result<String> {
+        let mut cmd = format!("craft anvil prefetch {} --x {} --z {} --radius {} --json", server, x, z, radius);
+        if let Some(w) = world {
+            cmd.push_str(&format!(" --world {}", w));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote anvil chunk prefetch failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn benchmark_remote_anvil(&self, chunks: usize) -> Result<String> {
+        let cmd = format!("craft anvil bench --chunks {} --json", chunks);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote anvil benchmark failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn set_remote_anvil_config(
+        &self,
+        enabled: Option<bool>,
+        engine: Option<&str>,
+        cache_mb: Option<usize>,
+        radius: Option<u32>,
+    ) -> Result<String> {
+        let mut cmd = "craft anvil config --json".to_string();
+        if let Some(en) = enabled {
+            cmd.push_str(&format!(" --enabled {}", en));
+        }
+        if let Some(eng) = engine {
+            cmd.push_str(&format!(" --engine {}", eng));
+        }
+        if let Some(mb) = cache_mb {
+            cmd.push_str(&format!(" --cache-mb {}", mb));
+        }
+        if let Some(r) = radius {
+            cmd.push_str(&format!(" --prefetch-radius {}", r));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote anvil config update failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
     /// Formats an exec command with an active W3C traceparent environment prefix if provided
     pub fn exec_with_trace_context(
         &self,
