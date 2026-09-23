@@ -17,6 +17,7 @@ pub mod log_index;
 pub mod mesh_config;
 pub mod modpack_ci;
 pub mod nbt;
+pub mod numa;
 pub mod optimizer;
 pub mod path;
 pub mod process;
@@ -77,6 +78,11 @@ pub use modpack_ci::{
     BinaryDeltaHeader, DeltaOp, DeltaPatchManifest, ModSide, ModpackBuildManifest,
     ModpackComponent, ModpackRecord, ModpackRegistry, DEFAULT_DELTA_BLOCK_SIZE, DELTA_MAGIC,
     DELTA_VERSION,
+};
+pub use numa::{
+    format_cpu_range_string, parse_cpu_range_string, CpuAffinityManager, HugepageManager,
+    HugepageSummary, KernelBootParams, NumaBenchmarkReport, NumaNode, NumaPolicy, NumaRegistry,
+    NumaStatusSummary, NumaTopology, ServerPinningConfig,
 };
 pub use raft::{
     calculate_fencing_token, fencing_token_parts, ArbitrationWeight, DistributedLock,

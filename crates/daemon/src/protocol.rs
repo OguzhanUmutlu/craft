@@ -145,6 +145,24 @@ pub enum IpcRequest {
     SetAnvilConfig {
         config: craft_core::AnvilConfig,
     },
+    GetNumaStatus,
+    PinServerCores {
+        server_name: String,
+        cpus: Vec<usize>,
+        numa_node: Option<u32>,
+        policy: craft_core::NumaPolicy,
+    },
+    SetNumaPolicy {
+        server_name: String,
+        policy: craft_core::NumaPolicy,
+    },
+    BenchmarkNumaMemory {
+        node_id: u32,
+        size_mb: usize,
+    },
+    GetDpdkStatus {
+        bench_count: Option<usize>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,6 +290,23 @@ pub enum IpcResponse {
     },
     AnvilConfigResult {
         config: craft_core::AnvilConfig,
+    },
+    NumaStatusResult {
+        summary: craft_core::NumaStatusSummary,
+    },
+    PinServerCoresResult {
+        config: craft_core::ServerPinningConfig,
+        message: String,
+    },
+    NumaPolicyResult {
+        config: craft_core::ServerPinningConfig,
+        message: String,
+    },
+    NumaBenchmarkResult {
+        report: craft_core::NumaBenchmarkReport,
+    },
+    DpdkStatusResult {
+        stats: craft_net::DpdkDriverStats,
     },
     Error { error: String },
 }

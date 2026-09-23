@@ -27,6 +27,7 @@ pub mod mod_cmd;
 pub mod modpack;
 pub mod net;
 pub mod new;
+pub mod numa;
 pub mod optimize;
 pub mod plugin;
 pub mod profile;

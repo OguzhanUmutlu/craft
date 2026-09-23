@@ -47,6 +47,9 @@ pub enum LifecycleEvent {
     ChunkPrefetchCompleted,
     AnvilCacheSaturated,
     AnvilIoError,
+    NumaMigrationTriggered,
+    DpdkPacketFloodAlert,
+    CorePinningAdjusted,
 }
 
 impl LifecycleEvent {
@@ -88,6 +91,9 @@ impl LifecycleEvent {
             Self::ChunkPrefetchCompleted => "on_chunk_prefetch_completed",
             Self::AnvilCacheSaturated => "on_anvil_cache_saturated",
             Self::AnvilIoError => "on_anvil_io_error",
+            Self::NumaMigrationTriggered => "on_numa_migration_triggered",
+            Self::DpdkPacketFloodAlert => "on_dpdk_packet_flood_alert",
+            Self::CorePinningAdjusted => "on_core_pinning_adjusted",
         }
     }
 
@@ -130,6 +136,9 @@ impl LifecycleEvent {
             "on_chunk_prefetch_completed" | "chunk_prefetch_completed" | "prefetch_completed" => Some(Self::ChunkPrefetchCompleted),
             "on_anvil_cache_saturated" | "anvil_cache_saturated" | "cache_saturated" => Some(Self::AnvilCacheSaturated),
             "on_anvil_io_error" | "anvil_io_error" | "anvil_error" => Some(Self::AnvilIoError),
+            "on_numa_migration_triggered" | "numa_migration_triggered" | "numa_migration" => Some(Self::NumaMigrationTriggered),
+            "on_dpdk_packet_flood_alert" | "dpdk_packet_flood_alert" | "dpdk_flood" => Some(Self::DpdkPacketFloodAlert),
+            "on_core_pinning_adjusted" | "core_pinning_adjusted" | "pinning_adjusted" => Some(Self::CorePinningAdjusted),
             _ => None,
         }
     }
@@ -172,6 +181,9 @@ impl LifecycleEvent {
             Self::ChunkPrefetchCompleted,
             Self::AnvilCacheSaturated,
             Self::AnvilIoError,
+            Self::NumaMigrationTriggered,
+            Self::DpdkPacketFloodAlert,
+            Self::CorePinningAdjusted,
         ]
     }
 }
@@ -296,6 +308,14 @@ pub struct HookContext {
     pub cache_limit_bytes: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub io_error_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub numa_node: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned_cpus: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dpdk_pps: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jitter_micros: Option<f64>,
 }
 
 impl HookContext {
@@ -806,5 +826,45 @@ mod tests {
         assert_eq!(ctx.prefetched_chunks, Some(49));
         assert_eq!(ctx.cache_used_bytes, Some(1048576));
         assert_eq!(ctx.cache_limit_bytes, Some(67108864));
+    }
+
+    #[test]
+    fn test_numa_dpdk_lifecycle_events_and_context() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_numa_migration_triggered"),
+            Some(LifecycleEvent::NumaMigrationTriggered)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("numa_migration"),
+            Some(LifecycleEvent::NumaMigrationTriggered)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_dpdk_packet_flood_alert"),
+            Some(LifecycleEvent::DpdkPacketFloodAlert)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("dpdk_flood"),
+            Some(LifecycleEvent::DpdkPacketFloodAlert)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_core_pinning_adjusted"),
+            Some(LifecycleEvent::CorePinningAdjusted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("pinning_adjusted"),
+            Some(LifecycleEvent::CorePinningAdjusted)
+        );
+
+        let mut ctx = HookContext::new(LifecycleEvent::NumaMigrationTriggered);
+        ctx.numa_node = Some(1);
+        ctx.pinned_cpus = Some("4-7".to_string());
+        ctx.dpdk_pps = Some(1250000);
+        ctx.jitter_micros = Some(0.42);
+
+        assert_eq!(ctx.event, "on_numa_migration_triggered");
+        assert_eq!(ctx.numa_node, Some(1));
+        assert_eq!(ctx.pinned_cpus.as_deref(), Some("4-7"));
+        assert_eq!(ctx.dpdk_pps, Some(1250000));
+        assert_eq!(ctx.jitter_micros, Some(0.42));
     }
 }

@@ -499,6 +499,9 @@ async fn main() {
         Some(Commands::Anvil { action }) => {
             commands::anvil::handle_anvil(action, &paths).await
         }
+        Some(Commands::Numa { action }) => {
+            commands::numa::handle_numa(action, &paths).await
+        }
     };
 
     if let Err(e) = result {

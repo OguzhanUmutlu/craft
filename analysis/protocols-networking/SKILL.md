@@ -285,3 +285,77 @@ Craft incorporates a zero-dependency, pure-Rust distributed tracing engine compl
   - Subcommand aliases: `craft tracing ...` and `craft otel ...`.
 - **ModalX Centered TUI**: Integrated in `craft manage` -> `Tools` -> `Distributed Tracing & OpenTelemetry (OTel)`.
 
+---
+
+## 10. Autonomous Kernel-Bypassed DPDK Packet Processing & NUMA-Aware Memory Pinning
+
+### 10.1. Hardware Architecture & NUMA Topology Discovery
+- **NUMA Subsystem Discovery**:
+  - Direct Linux `sysfs` interrogation via `/sys/devices/system/node/nodeX/` and `/sys/devices/system/cpu/`.
+  - Fallback topology discovery via `libc::get_nprocs()` and standard sysinfo for single-socket UMA environments.
+  - Per-node CPU affinity lists, total/free physical memory accounting, and 2MB/1GB hugepage pool status.
+  - Distances matrix calculation (`/sys/devices/system/node/nodeX/distance`) reflecting interconnect NUMA penalty.
+- **CPU Range Syntax**: Universal support for range notations (`"2-5"`, `"0,2,4,6"`, `"1-3,7,9-11"`).
+
+### 10.2. Lock-Free SPSC/MPMC DPDK Packet Ring Buffer
+- **False Sharing Elimination**:
+  - Ring buffer indices (`head`, `tail`) annotated with `#[repr(align(64))]` cache-line padding to prevent L1/L2 thrashing between reader and writer cores on x86_64.
+- **Lock-Free Concurrency**:
+  - Single-Producer Single-Consumer (SPSC) lock-free atomic pointer exchange using `Acquire`/`Release` memory ordering.
+  - Multi-Producer Multi-Consumer (MPMC) atomic CAS reserve-and-commit protocol for multi-core packet ingestion.
+  - Zero heap allocation on steady-state RX/TX bursts: reusable `PacketDescriptor` ring with preallocated byte buffers.
+
+### 10.3. Sub-Microsecond Welford Jitter Engine
+- **Online Running Variance**:
+  - Real-time packet inter-arrival jitter calculation using Welford's single-pass numerical stability algorithm.
+  - Quantile estimators: P50, P90, and P99 jitter percentiles tracking microsecond spikes.
+  - Dynamic 10-bucket sparkline distribution generator (` ▂▃▄▅▆▇█`) for terminal visualization.
+
+### 10.4. DPDK Poll-Mode Hardware Driver Integration
+- **Zero-Copy Kernel Bypass**:
+  - Poll-mode driver integration checking for `/sys/bus/pci/drivers/vfio-pci` and `/sys/class/uio`.
+  - Synthetic packet stream generator for high-throughput zero-copy loopback benchmarking (1M+ PPS).
+  - Graceful userspace fallback: when vfio-pci hardware is unavailable, packet pipelines operate seamlessly over cache-aligned atomic memory rings.
+
+### 10.5. Core Pinning & Zero-Jitter Scheduling
+- **Process and Thread Affinity**:
+  - Linux `sched_setaffinity` syscall invocation via `libc` for dedicated server process PIDs and worker threads.
+  - Inter-process file locking via `numa.lock` ensuring serialized persistence to `numa.toml`.
+- **NUMA Allocation Policies**:
+  - `Local`: Allocate strictly from node hosting the pinned CPU cores.
+  - `Interleave`: Round-robin page allocation across all active NUMA nodes.
+  - `Preferred(node)`: Prioritize target NUMA node, falling back to adjacent nodes if depleted.
+  - `Bind`: Strictly restrict allocation to specified node without fallback.
+- **Kernel Boot Isolation Parameters (`generate_boot_params`)**:
+  - Automated parameter generation for `/etc/default/grub`:
+    - `isolcpus=<cores>`: Removes cores from standard CFS kernel scheduler queue.
+    - `nohz_full=<cores>`: Stops kernel timer ticks on isolated cores when a single task runs.
+    - `rcu_nocbs=<cores>`: Offloads RCU callback processing to housekeeping cores.
+    - `default_hugepagesz=1G hugepagesz=1G hugepages=<N>`: Allocates contiguous 1GB pages.
+
+### 10.6. Daemon IPC, Scripting Hooks & CLI Interface
+- **Daemon IPC Protocols**:
+  - `GetNumaStatus` -> `NumaStatusResult`
+  - `PinServerCores` -> `PinServerCoresResult`
+  - `SetNumaPolicy` -> `NumaPolicyResult`
+  - `BenchmarkNumaMemory` -> `NumaBenchmarkResult`
+  - `GetDpdkStatus` -> `DpdkStatusResult`
+- **Prometheus Telemetry Metrics**:
+  - `craft_dpdk_rx_packets_total`, `craft_dpdk_tx_packets_total`
+  - `craft_dpdk_avg_jitter_microseconds`, `craft_dpdk_p99_jitter_microseconds`
+  - `craft_dpdk_throughput_pps`, `craft_dpdk_throughput_mb_per_sec`
+  - `craft_numa_nodes_total`, `craft_numa_total_memory_bytes`, `craft_numa_pinned_servers_total`
+- **Scripting Lifecycle Hook Events**:
+  - `NumaMigrationTriggered`: Dispatched when automatic server memory migration triggers.
+  - `DpdkPacketFloodAlert`: Dispatched when packet ingress surges above configured threshold.
+  - `CorePinningAdjusted`: Dispatched when CPU core allocations or NUMA policies are altered.
+- **CLI Commands**:
+  - `craft numa status [--json]`: Inspect topology, memory per node, hugepages, and driver state.
+  - `craft numa pin <server> --cpus <range> [--node <n>] [--policy <pol>] [--json]`: Pin server process to CPU cores and memory node.
+  - `craft numa policy <server> --policy <pol> [--node <n>] [--json]`: Update server NUMA policy.
+  - `craft numa bench [--node 0] [--size-mb 16] [--json]`: Measure local vs remote cross-socket memory throughput and ring burst rate.
+  - `craft numa boot-args --cores <range> [--hugepages-1g <n>] [--json]`: Generate kernel boot parameters.
+  - Subcommand aliases: `craft dpdk ...` and `craft pinning ...`.
+- **ModalX Centered TUI**: Integrated in `craft manage` -> `Tools` -> `Kernel-Bypassed DPDK & NUMA Memory Pinning`.
+
+

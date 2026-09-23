@@ -66,6 +66,9 @@ pub struct CraftPaths {
     pub anvil_file: PathBuf,
     pub anvil_lock: PathBuf,
     pub anvil_cache_dir: PathBuf,
+    pub numa_dir: PathBuf,
+    pub numa_file: PathBuf,
+    pub numa_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -131,6 +134,9 @@ impl CraftPaths {
         let anvil_file = anvil_dir.join("anvil.toml");
         let anvil_lock = locks_dir.join("anvil.lock");
         let anvil_cache_dir = cache_dir.join("anvil");
+        let numa_dir = home.join("numa");
+        let numa_file = numa_dir.join("numa.toml");
+        let numa_lock = locks_dir.join("numa.lock");
 
         Self {
             home,
@@ -194,6 +200,9 @@ impl CraftPaths {
             anvil_file,
             anvil_lock,
             anvil_cache_dir,
+            numa_dir,
+            numa_file,
+            numa_lock,
         }
     }
 
@@ -240,6 +249,7 @@ impl CraftPaths {
         let traces_spans_dir = tracing_dir.join("spans");
         let anvil_dir = home.join("anvil");
         let anvil_cache_dir = cache_dir.join("anvil");
+        let numa_dir = home.join("numa");
 
         // Ensure all primary directories exist
         for dir in [
@@ -273,6 +283,7 @@ impl CraftPaths {
             &traces_spans_dir,
             &anvil_dir,
             &anvil_cache_dir,
+            &numa_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -310,6 +321,8 @@ impl CraftPaths {
         let tracing_lock = locks_dir.join("tracing.lock");
         let anvil_file = anvil_dir.join("anvil.toml");
         let anvil_lock = locks_dir.join("anvil.lock");
+        let numa_file = numa_dir.join("numa.toml");
+        let numa_lock = locks_dir.join("numa.lock");
 
         Ok(Self {
             home,
@@ -373,6 +386,9 @@ impl CraftPaths {
             anvil_file,
             anvil_lock,
             anvil_cache_dir,
+            numa_dir,
+            numa_file,
+            numa_lock,
         })
     }
 

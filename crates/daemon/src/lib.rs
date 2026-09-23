@@ -1,6 +1,7 @@
 pub mod anvil_service;
 pub mod autopilot;
 pub mod circuit_breaker;
+pub mod dpdk_service;
 pub mod edge_broker;
 pub mod fleet_healer;
 pub mod forecasting_service;
@@ -24,6 +25,7 @@ pub mod web_dashboard;
 pub mod webhooks;
 
 pub use anvil_service::AnvilService;
+pub use dpdk_service::DpdkNumaService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

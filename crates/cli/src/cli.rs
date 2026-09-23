@@ -593,6 +593,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: AnvilCommands,
     },
+
+    /// Autonomous kernel-bypassed DPDK packet processing, NUMA-aware memory pinning, and zero-jitter scheduling
+    #[command(name = "numa", alias = "dpdk", alias = "pinning")]
+    Numa {
+        #[command(subcommand)]
+        action: NumaCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1428,6 +1435,74 @@ pub enum AnvilCommands {
         /// Batch size for asynchronous chunk operations
         #[arg(long)]
         batch_size: Option<usize>,
+        /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum NumaCommands {
+    /// Inspect NUMA node topology, core allocations, hugepages, and DPDK driver statistics
+    Status {
+        /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Pin a server process to dedicated CPU cores and NUMA memory node
+    Pin {
+        /// Server name or path
+        server: String,
+        /// CPU cores range or list (e.g. "2-5" or "2,3,4,5")
+        #[arg(long)]
+        cpus: String,
+        /// Preferred NUMA node index (e.g. 0, 1)
+        #[arg(long)]
+        node: Option<u32>,
+        /// NUMA memory allocation policy (local, interleave, preferred, bind)
+        #[arg(long, default_value = "local")]
+        policy: String,
+        /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Update NUMA memory allocation policy for a server
+    Policy {
+        /// Server name or path
+        server: String,
+        /// NUMA memory allocation policy (local, interleave, preferred, bind)
+        #[arg(long)]
+        policy: String,
+        /// Preferred or bound NUMA node index
+        #[arg(long)]
+        node: Option<u32>,
+        /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark local vs remote NUMA node memory bandwidth, latency, and packet ring throughput
+    Bench {
+        /// NUMA node index to benchmark (defaults to node 0)
+        #[arg(long, default_value_t = 0)]
+        node: u32,
+        /// Buffer size in megabytes for memory throughput tests
+        #[arg(long, default_value_t = 16)]
+        size_mb: usize,
+        /// Emit results as structured JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Generate recommended Linux kernel boot command-line arguments for zero-jitter core isolation
+    BootArgs {
+        /// CPU cores to isolate from kernel scheduling (e.g. "2-7")
+        #[arg(long)]
+        cores: String,
+        /// Number of 1GB hugepages to reserve
+        #[arg(long)]
+        hugepages_1g: Option<usize>,
+        /// Number of 2MB hugepages to reserve
+        #[arg(long)]
+        hugepages_2m: Option<usize>,
         /// Emit results as structured JSON
         #[arg(long)]
         json: bool,
@@ -3550,6 +3625,120 @@ mod tests {
                 assert_eq!(prefetch_radius, Some(6));
             }
             _ => panic!("Expected Anvil Config command"),
+        }
+    }
+
+    #[test]
+    fn test_numa_cli_parsing() {
+        // NUMA status and aliases
+        let cli_status = Cli::try_parse_from(["craft", "numa", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Numa {
+                action: NumaCommands::Status { json },
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Numa Status command"),
+        }
+
+        let cli_alias_dpdk = Cli::try_parse_from(["craft", "dpdk", "status"]).unwrap();
+        assert!(matches!(
+            cli_alias_dpdk.command,
+            Some(Commands::Numa {
+                action: NumaCommands::Status { json: false }
+            })
+        ));
+
+        let cli_alias_pinning = Cli::try_parse_from(["craft", "pinning", "status"]).unwrap();
+        assert!(matches!(
+            cli_alias_pinning.command,
+            Some(Commands::Numa {
+                action: NumaCommands::Status { json: false }
+            })
+        ));
+
+        // NUMA pin
+        let cli_pin = Cli::try_parse_from([
+            "craft", "numa", "pin", "survival-01", "--cpus", "2-5", "--node", "0", "--policy", "bind",
+        ])
+        .unwrap();
+        match cli_pin.command {
+            Some(Commands::Numa {
+                action:
+                    NumaCommands::Pin {
+                        server,
+                        cpus,
+                        node,
+                        policy,
+                        json,
+                    },
+            }) => {
+                assert_eq!(server, "survival-01");
+                assert_eq!(cpus, "2-5");
+                assert_eq!(node, Some(0));
+                assert_eq!(policy, "bind");
+                assert!(!json);
+            }
+            _ => panic!("Expected Numa Pin command"),
+        }
+
+        // NUMA policy
+        let cli_policy = Cli::try_parse_from([
+            "craft", "numa", "policy", "survival-01", "--policy", "interleave", "--node", "1",
+        ])
+        .unwrap();
+        match cli_policy.command {
+            Some(Commands::Numa {
+                action:
+                    NumaCommands::Policy {
+                        server,
+                        policy,
+                        node,
+                        json,
+                    },
+            }) => {
+                assert_eq!(server, "survival-01");
+                assert_eq!(policy, "interleave");
+                assert_eq!(node, Some(1));
+                assert!(!json);
+            }
+            _ => panic!("Expected Numa Policy command"),
+        }
+
+        // NUMA bench
+        let cli_bench = Cli::try_parse_from(["craft", "numa", "bench", "--node", "0", "--size-mb", "32", "--json"]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Numa {
+                action: NumaCommands::Bench { node, size_mb, json },
+            }) => {
+                assert_eq!(node, 0);
+                assert_eq!(size_mb, 32);
+                assert!(json);
+            }
+            _ => panic!("Expected Numa Bench command"),
+        }
+
+        // NUMA boot-args
+        let cli_boot = Cli::try_parse_from([
+            "craft", "numa", "boot-args", "--cores", "4-15", "--hugepages-1g", "8", "--hugepages-2m", "1024",
+        ])
+        .unwrap();
+        match cli_boot.command {
+            Some(Commands::Numa {
+                action:
+                    NumaCommands::BootArgs {
+                        cores,
+                        hugepages_1g,
+                        hugepages_2m,
+                        json,
+                    },
+            }) => {
+                assert_eq!(cores, "4-15");
+                assert_eq!(hugepages_1g, Some(8));
+                assert_eq!(hugepages_2m, Some(1024));
+                assert!(!json);
+            }
+            _ => panic!("Expected Numa BootArgs command"),
         }
     }
 }

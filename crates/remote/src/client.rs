@@ -1037,6 +1037,71 @@ impl RemoteCraftClient {
         Ok(stdout.trim().to_string())
     }
 
+    pub fn get_remote_numa_status(&self) -> Result<String> {
+        let (code, stdout, stderr) = self.session.exec("craft numa status --json")?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote NUMA status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn pin_remote_server_cores(
+        &self,
+        server: &str,
+        cpus: &[usize],
+        numa_node: Option<u32>,
+        policy: Option<&str>,
+    ) -> Result<String> {
+        let cpus_str = craft_core::format_cpu_range_string(cpus);
+        let mut cmd = format!("craft numa pin {} --cpus {} --json", server, cpus_str);
+        if let Some(node) = numa_node {
+            cmd.push_str(&format!(" --node {}", node));
+        }
+        if let Some(pol) = policy {
+            cmd.push_str(&format!(" --policy {}", pol));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote core pinning failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn set_remote_numa_policy(&self, server: &str, policy: &str) -> Result<String> {
+        let cmd = format!("craft numa policy {} --policy {} --json", server, policy);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote NUMA policy update failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn benchmark_remote_numa_memory(&self, node: u32, size_mb: usize) -> Result<String> {
+        let cmd = format!("craft numa bench --node {} --size-mb {} --json", node, size_mb);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote NUMA memory benchmark failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn get_remote_dpdk_status(&self, bench_count: Option<usize>) -> Result<String> {
+        let mut cmd = "craft dpdk status --json".to_string();
+        if let Some(cnt) = bench_count {
+            cmd.push_str(&format!(" --bench {}", cnt));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote DPDK status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
     /// Formats an exec command with an active W3C traceparent environment prefix if provided
     pub fn exec_with_trace_context(
         &self,

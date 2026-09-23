@@ -75,7 +75,8 @@ Full multi-phased task breakdowns and 5–10 line technical specifications are t
 
 | Category | Phase | Focus Area | Status |
 | :--- | :--- | :--- | :--- |
-| **Current** | **Phase 28** | Autonomous Kernel-Bypassed DPDK Packet Processing, NUMA-Aware Memory Pinning & Zero-Jitter Scheduling (DPDK polling drivers, NUMA page allocation, isolcpus CPU pinning) | **READY** |
+| **Current** | **Phase 29** | Autonomous Distributed Consensus Reconfiguration, Multi-Raft Partitioning & Raft Log Compaction (Dynamic membership changes, multi-Raft state partitioning, streaming WAL log compaction) | **READY** |
+| **Done** | **Phase 28** | Autonomous Kernel-Bypassed DPDK Packet Processing, NUMA-Aware Memory Pinning & Zero-Jitter Scheduling (DPDK polling drivers, NUMA page allocation, isolcpus CPU pinning) | **COMPLETED** |
 | **Done** | **Phase 27** | Hardware-Accelerated Anvil Storage Engine, Zero-Copy Packet Serialization & io_uring Chunk Pipelines (Linux io_uring async submissions, zero-copy packet serialization, NVMe chunk DMA) | **COMPLETED** |
 | **Done** | **Phase 26** | Distributed Real-Time Tracing, OpenTelemetry Export & W3C Trace Context Propagation (Pure-Rust tracer, W3C traceparent headers, OTel push exporter) | **COMPLETED** |
 | **Done** | **Phase 25** | Autonomous Multi-Tenant Resource Quotas, Cgroups v2 Throttling & Fair-Share Scheduling (Kernel-native cgroups v2, CPU/memory quotas, fair-share scheduling) | **COMPLETED** |

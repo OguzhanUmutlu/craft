@@ -1796,6 +1796,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             ResourceQuotas,
             DistributedTracing,
             AnvilStorage,
+            NumaDpdk,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1901,6 +1902,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::AnvilStorage);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Kernel-Bypassed DPDK & NUMA Memory Pinning")
+                .with_aliases(&["numa", "dpdk", "pinning", "isolcpus"]),
+        );
+        actions.push(ToolItemAction::NumaDpdk);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1960,6 +1968,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::AnvilStorage => {
                     anvil_storage_tui(paths).await?;
+                }
+                ToolItemAction::NumaDpdk => {
+                    numa_dpdk_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2939,6 +2950,92 @@ pub async fn anvil_storage_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("HARDWARE-ACCELERATED ANVIL STORAGE (MCA)", &lines, false)?;
     Ok(())
 }
+
+pub async fn numa_dpdk_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("DPDK & NUMA Pinning");
+
+    let status = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        match client.get_numa_status().await {
+            Ok(s) => s,
+            Err(_) => craft_daemon::DpdkNumaService::global(paths).get_numa_status().await,
+        }
+    } else {
+        craft_daemon::DpdkNumaService::global(paths).get_numa_status().await
+    };
+
+    let dpdk_stats = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        client.get_dpdk_status(None).await.ok()
+    } else {
+        Some(craft_daemon::DpdkNumaService::global(paths).get_dpdk_status(None))
+    };
+
+    let total_bytes: u64 = status.topology.nodes.iter().map(|n| n.total_memory_bytes).sum();
+    let free_bytes: u64 = status.topology.nodes.iter().map(|n| n.free_memory_bytes).sum();
+    let total_mb = (total_bytes as f64) / (1024.0 * 1024.0);
+    let free_mb = (free_bytes as f64) / (1024.0 * 1024.0);
+    let used_mb = (total_mb - free_mb).max(0.0);
+
+    let mut lines = Vec::new();
+    lines.push("KERNEL-BYPASSED DPDK PACKET PROCESSING & NUMA PINNING".bold().to_string());
+    lines.push("Hardware Core Isolation, NUMA Local Node Memory & Ring Buffer Pipelines".dimmed().to_string());
+    lines.push("".to_string());
+
+    let numa_badge = if status.topology.is_numa_available {
+        "[ACTIVE] Hardware NUMA Architecture Available".green()
+    } else {
+        "[INFO] Unified Memory Architecture (UMA) Fallback".yellow()
+    };
+    lines.push(format!("NUMA Architecture:   {}", numa_badge));
+    lines.push(format!("Online NUMA Nodes:   {} nodes", status.topology.nodes.len()));
+    lines.push(format!("Logical CPU Cores:   {} cores", status.topology.total_cpus));
+    lines.push(format!(
+        "NUMA Memory Capacity:{:.2} MB used / {:.2} MB total ({:.2} MB free)",
+        used_mb, total_mb, free_mb
+    ));
+
+    // Progress bar for memory utilization
+    let usage_frac = if total_mb > 0.0 {
+        (used_mb / total_mb).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let filled_slots = (usage_frac * 24.0).round() as usize;
+    let empty_slots = 24usize.saturating_sub(filled_slots);
+    let bar = format!("[{}{}] {:.1}%", "=".repeat(filled_slots).cyan(), " ".repeat(empty_slots), usage_frac * 100.0);
+    lines.push(format!("NUMA RAM Allocated:  {}", bar));
+
+    let isolated_str = if status.isolated_cpus.is_empty() {
+        "None (run `craft numa boot-args` to configure isolcpus)".to_string()
+    } else {
+        craft_core::format_cpu_range_string(&status.isolated_cpus)
+    };
+    lines.push(format!("Isolated CPU Cores:  {}", isolated_str.cyan()));
+
+    let dpdk_badge = if let Some(ref d) = dpdk_stats {
+        if d.is_hardware_driver_active {
+            "[ACTIVE] Hardware Poll-Mode Driver (vfio-pci)".green()
+        } else {
+            format!("[FALLBACK] Ring Buffer ({:.0} pps, {:.2} µs)", d.throughput_pps, d.avg_jitter_micros).yellow()
+        }
+    } else {
+        "[FALLBACK] Cache-Aligned Ring Buffer".yellow()
+    };
+    lines.push(format!("Kernel-Bypass DPDK:  {}", dpdk_badge));
+    lines.push(format!("Pinned Game Servers: {} servers", status.pinned_servers_count));
+
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft numa status                 Inspect NUMA topology, memory per node, and hugepages".green().to_string());
+    lines.push("  craft numa pin <server> --cpus <> Pin game server to CPU cores and NUMA memory node".green().to_string());
+    lines.push("  craft numa policy <server> --pol  Update memory policy (local, interleave, bind)".green().to_string());
+    lines.push("  craft numa bench [--node 0]       Benchmark memory bandwidth & ring burst throughput".green().to_string());
+    lines.push("  craft numa boot-args --cores <>   Generate Linux isolcpus and nohz_full boot parameters".green().to_string());
+
+    show_modal_message("KERNEL-BYPASSED DPDK & NUMA MEMORY PINNING", &lines, false)?;
+    Ok(())
+}
+
 
 
 

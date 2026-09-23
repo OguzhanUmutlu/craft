@@ -1,5 +1,6 @@
 pub mod a2s;
 pub mod chunk_packet;
+pub mod dpdk;
 pub mod ebpf_filter;
 pub mod edge_probe;
 pub mod edge_router;
@@ -21,6 +22,10 @@ pub use a2s::{ping_a2s_server, A2sPingStatus};
 pub use chunk_packet::{
     decode_varint, encode_varint, ChunkDataPacket, ChunkSection, ChunkSerializationBenchmark,
     SocketTransferSimulation, DEFAULT_CHUNK_PACKET_ID,
+};
+pub use dpdk::{
+    DpdkDriver, DpdkDriverConfig, DpdkDriverStats, JitterCalculator, PacketDescriptor,
+    PacketRingBuffer,
 };
 pub use ebpf_filter::{DropStatistics, EbpfFilterCompiler, PacketFilterEngine, PacketVerdict, RawPacketHeader};
 pub use edge_probe::{EdgeLatencyProber, EdgeProbeResult};

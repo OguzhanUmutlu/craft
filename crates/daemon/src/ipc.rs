@@ -984,6 +984,51 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::GetNumaStatus => {
+                let summary = crate::dpdk_service::DpdkNumaService::global(supervisor.paths()).get_numa_status().await;
+                write_frame(&mut stream, &IpcResponse::NumaStatusResult { summary }).await?;
+            }
+            IpcRequest::PinServerCores { server_name, cpus, numa_node, policy } => {
+                let resp = match crate::dpdk_service::DpdkNumaService::global(supervisor.paths())
+                    .pin_server_cores(&server_name, cpus, numa_node, policy)
+                    .await
+                {
+                    Ok(config) => IpcResponse::PinServerCoresResult {
+                        config,
+                        message: format!("Pinned server {server_name} successfully"),
+                    },
+                    Err(e) => IpcResponse::Error { error: e },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SetNumaPolicy { server_name, policy } => {
+                let resp = match crate::dpdk_service::DpdkNumaService::global(supervisor.paths())
+                    .set_numa_policy(&server_name, policy)
+                    .await
+                {
+                    Ok(config) => IpcResponse::NumaPolicyResult {
+                        config,
+                        message: format!("Updated NUMA policy for server {server_name}"),
+                    },
+                    Err(e) => IpcResponse::Error { error: e },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BenchmarkNumaMemory { node_id, size_mb } => {
+                let resp = match crate::dpdk_service::DpdkNumaService::global(supervisor.paths())
+                    .benchmark_numa_memory(node_id, size_mb)
+                    .await
+                {
+                    Ok(report) => IpcResponse::NumaBenchmarkResult { report },
+                    Err(e) => IpcResponse::Error { error: e },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::GetDpdkStatus { bench_count } => {
+                let stats = crate::dpdk_service::DpdkNumaService::global(supervisor.paths())
+                    .get_dpdk_status(bench_count);
+                write_frame(&mut stream, &IpcResponse::DpdkStatusResult { stats }).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -2003,6 +2048,56 @@ impl DaemonClient {
     pub async fn set_anvil_config(&mut self, config: craft_core::AnvilConfig) -> Result<craft_core::AnvilConfig> {
         match self.request(IpcRequest::SetAnvilConfig { config }).await? {
             IpcResponse::AnvilConfigResult { config } => Ok(config),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_numa_status(&mut self) -> Result<craft_core::NumaStatusSummary> {
+        match self.request(IpcRequest::GetNumaStatus).await? {
+            IpcResponse::NumaStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn pin_server_cores(
+        &mut self,
+        server_name: String,
+        cpus: Vec<usize>,
+        numa_node: Option<u32>,
+        policy: craft_core::NumaPolicy,
+    ) -> Result<craft_core::ServerPinningConfig> {
+        match self.request(IpcRequest::PinServerCores { server_name, cpus, numa_node, policy }).await? {
+            IpcResponse::PinServerCoresResult { config, .. } => Ok(config),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_numa_policy(
+        &mut self,
+        server_name: String,
+        policy: craft_core::NumaPolicy,
+    ) -> Result<craft_core::ServerPinningConfig> {
+        match self.request(IpcRequest::SetNumaPolicy { server_name, policy }).await? {
+            IpcResponse::NumaPolicyResult { config, .. } => Ok(config),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn benchmark_numa_memory(&mut self, node_id: u32, size_mb: usize) -> Result<craft_core::NumaBenchmarkReport> {
+        match self.request(IpcRequest::BenchmarkNumaMemory { node_id, size_mb }).await? {
+            IpcResponse::NumaBenchmarkResult { report } => Ok(report),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_dpdk_status(&mut self, bench_count: Option<usize>) -> Result<craft_net::DpdkDriverStats> {
+        match self.request(IpcRequest::GetDpdkStatus { bench_count }).await? {
+            IpcResponse::DpdkStatusResult { stats } => Ok(stats),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }
