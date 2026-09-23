@@ -742,6 +742,143 @@ impl GatewayServer {
             return;
         }
 
+        // Route: GET /api/ai/status
+        if method == "GET" && path == "/api/ai/status" {
+            let user = match self.authenticate_request(auth_token.as_deref()).await {
+                Some(u) => u,
+                None => {
+                    let resp = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Authentication required\"}\n";
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                    return;
+                }
+            };
+
+            if !user.has_permission(Permission::ServerConsoleView, None) {
+                let resp = "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Forbidden: Requires ServerConsoleView permission\"}\n";
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            }
+
+            let reg = ServersRegistry::load(&self.paths).unwrap_or_default();
+            let int_reg = craft_core::IntelligenceRegistry::load(&self.paths).unwrap_or_default();
+            let running = self.supervisor.get_running_paths().await;
+
+            let mut server_statuses = Vec::new();
+            for s in reg.servers {
+                if !user.can_access_server(&s.name) {
+                    continue;
+                }
+                let canonical = s.path.canonicalize().unwrap_or_else(|_| s.path.clone());
+                let is_running = running.iter().any(|p| {
+                    p.canonicalize().unwrap_or_else(|_| p.clone()) == canonical
+                });
+                let policy = int_reg.get_policy(&s.name);
+                server_statuses.push(serde_json::json!({
+                    "server": s.name,
+                    "running": is_running,
+                    "policy_mode": policy.mode.to_string(),
+                    "warning_mspt": policy.mspt_warning_ms,
+                    "critical_mspt": policy.mspt_critical_ms,
+                    "memory_leak_threshold_mb_min": policy.memory_leak_slope_mb_min,
+                }));
+            }
+
+            let resp_json = serde_json::json!({ "servers": server_statuses });
+            let body = resp_json.to_string();
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(resp.as_bytes()).await;
+            return;
+        }
+
+        // Route: GET /api/ai/diagnostics/:server
+        if method == "GET" && path.starts_with("/api/ai/diagnostics/") {
+            let server_name = path.trim_start_matches("/api/ai/diagnostics/");
+            let user = match self.authenticate_request(auth_token.as_deref()).await {
+                Some(u) => u,
+                None => {
+                    let resp = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Authentication required\"}\n";
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                    return;
+                }
+            };
+
+            if !user.can_access_server(server_name) || !user.has_permission(Permission::ServerConsoleView, Some(server_name)) {
+                let resp = "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Forbidden: Server access restricted\"}\n";
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            }
+
+            let diag_dir = self.paths.diagnostics_dir.join(server_name);
+            let mut reports = Vec::new();
+            if diag_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(&diag_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                            reports.push(serde_json::json!({
+                                "filename": name,
+                                "size_bytes": size,
+                            }));
+                        }
+                    }
+                }
+            }
+
+            let resp_json = serde_json::json!({ "server": server_name, "reports": reports });
+            let body = resp_json.to_string();
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(resp.as_bytes()).await;
+            return;
+        }
+
+        // Route: POST /api/ai/remediate/:server
+        if method == "POST" && path.starts_with("/api/ai/remediate/") {
+            let server_name = path.trim_start_matches("/api/ai/remediate/");
+            let user = match self.authenticate_request(auth_token.as_deref()).await {
+                Some(u) => u,
+                None => {
+                    let resp = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Authentication required\"}\n";
+                    let _ = stream.write_all(resp.as_bytes()).await;
+                    return;
+                }
+            };
+
+            if !user.can_access_server(server_name) || !user.has_permission(Permission::ServerConsoleInput, Some(server_name)) {
+                let resp = "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Forbidden: Requires ServerConsoleInput permission\"}\n";
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            }
+
+            let reg = ServersRegistry::load(&self.paths).unwrap_or_default();
+            let s_opt = reg.find_by_name(server_name);
+            if let Some(srv) = s_opt {
+                let canonical = srv.path.canonicalize().unwrap_or_else(|_| srv.path.clone());
+                // Ingest simple command execution
+                let _ = self.supervisor.send_input(&canonical, "/kill @e[type=item]\n").await;
+                let body = serde_json::json!({ "success": true, "message": "Triggered remediation command" }).to_string();
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            } else {
+                let resp = "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"error\":\"Server not found\"}\n";
+                let _ = stream.write_all(resp.as_bytes()).await;
+                return;
+            }
+        }
+
         // Route: GET /ws/console
         if method == "GET" && path == "/ws/console" {
             let user = match self.authenticate_request(auth_token.as_deref()).await {

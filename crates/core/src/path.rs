@@ -24,6 +24,9 @@ pub struct CraftPaths {
     pub mesh_file: PathBuf,
     pub chunks_dir: PathBuf,
     pub dr_dir: PathBuf,
+    pub intelligence_file: PathBuf,
+    pub diagnostics_dir: PathBuf,
+    pub intelligence_lock: PathBuf,
     pub config_file: PathBuf,
     pub socket_file: PathBuf,
     pub pid_file: PathBuf,
@@ -41,6 +44,7 @@ impl CraftPaths {
         let trash_dir = home.join("trash");
         let chunks_dir = cache_dir.join("chunks");
         let dr_dir = home.join("dr");
+        let diagnostics_dir = home.join("diagnostics");
 
         let servers_file = home.join("servers.toml");
         let remotes_file = home.join("remotes.toml");
@@ -50,6 +54,8 @@ impl CraftPaths {
         let rbac_file = home.join("rbac.toml");
         let audit_file = home.join("audit.log");
         let mesh_file = home.join("mesh.toml");
+        let intelligence_file = home.join("intelligence.toml");
+        let intelligence_lock = locks_dir.join("intelligence.lock");
         let config_file = home.join("config.toml");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
@@ -74,6 +80,9 @@ impl CraftPaths {
             mesh_file,
             chunks_dir,
             dr_dir,
+            intelligence_file,
+            diagnostics_dir,
+            intelligence_lock,
             config_file,
             socket_file,
             pid_file,
@@ -104,6 +113,7 @@ impl CraftPaths {
         let trash_dir = home.join("trash");
         let chunks_dir = cache_dir.join("chunks");
         let dr_dir = home.join("dr");
+        let diagnostics_dir = home.join("diagnostics");
 
         // Ensure all primary directories exist
         for dir in [
@@ -118,6 +128,7 @@ impl CraftPaths {
             &locks_dir,
             &logs_dir,
             &dr_dir,
+            &diagnostics_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -132,6 +143,8 @@ impl CraftPaths {
         let rbac_file = home.join("rbac.toml");
         let audit_file = home.join("audit.log");
         let mesh_file = home.join("mesh.toml");
+        let intelligence_file = home.join("intelligence.toml");
+        let intelligence_lock = locks_dir.join("intelligence.lock");
         let config_file = home.join("config.toml");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
@@ -156,6 +169,9 @@ impl CraftPaths {
             mesh_file,
             chunks_dir,
             dr_dir,
+            intelligence_file,
+            diagnostics_dir,
+            intelligence_lock,
             config_file,
             socket_file,
             pid_file,

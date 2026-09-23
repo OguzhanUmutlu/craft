@@ -20,6 +20,10 @@ pub enum IpcRequest {
     HibernateServer { server_name: String },
     WakeServer { server_name: String },
     GetAutoscaleStatus,
+    GetIntelligenceStatus { server: Option<String> },
+    TriggerDiagnosticRun { server: String, duration_secs: u64 },
+    ExecuteRemediation { server: String, action: craft_core::RemediationAction, dry_run: bool },
+    UpdateIntelligencePolicy { server: String, policy: craft_core::IntelligencePolicy },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,5 +49,8 @@ pub enum IpcResponse {
     CircuitBreakersList { items: Vec<CircuitBreakerInfo> },
     BackupSchedulesList { items: Vec<BackupScheduleInfo> },
     AutoscaleStatusList { items: Vec<AutoscaleServerStatus> },
+    IntelligenceReports { items: Vec<craft_core::DiagnosticReport> },
+    DiagnosticRunCompleted { report: craft_core::DiagnosticReport, markdown: String },
+    RemediationResult { message: String },
     Error { error: String },
 }

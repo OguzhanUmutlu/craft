@@ -43,6 +43,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 ├── backups/               # Local snapshot storage (<server-name>/<archive>.tar.zst)
 ├── dr/
 │   └── runbooks/          # Disaster recovery runbooks and plans (<server>.toml)
+├── diagnostics/           # JFR execution profiles and performance reports (<server>/)
 ├── run/
 │   ├── daemon.sock        # Unix domain socket (Linux/macOS)
 │   ├── daemon.pid         # Daemon process ID
@@ -55,6 +56,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 ├── clusters.toml          # Multi-server cluster topologies and DAGs
 ├── rbac.toml              # Multi-tenant user accounts, roles & scopes
 ├── mesh.toml              # Distributed multi-cloud storage mesh targets & quorums
+├── intelligence.toml      # Autopilot operational intelligence policies & thresholds
 └── audit.log              # Append-only continuous HMAC-SHA256 audit ledger
 ```
 
@@ -81,6 +83,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `rbac.lock` synchronizes multi-tenant user and role definitions.
   - `audit.lock` guards append operations to the continuous HMAC audit log.
   - `mesh.lock` synchronizes multi-cloud storage mesh targets and replication policies.
+  - `intelligence.lock` guards autonomous autopilot policies and remediation thresholds.
   - `<server_dir>/server.lock` ensures a server instance cannot be launched simultaneously by multiple processes.
 
 ### 3.3. `RbacRegistry` & `AuditLedger`
@@ -96,7 +99,11 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 - **Format**: TOML configuration defining target server parameters, recovery point objective (RPO) seconds, recovery time objective (RTO) seconds, failover target remote, and verification steps.
 - Executes sandbox simulations (`~/.craft/staging/dr-test-<server>`) asserting 0 byte divergence before deploying failover.
 
-### 3.6. `ClustersRegistry` & Topological DAG Scheduling
+### 3.6. `IntelligenceRegistry` (`~/.craft/intelligence.toml`)
+- Stores global defaults and per-server `IntelligencePolicy` configurations (mode: `Advisory` vs `Autonomous`, MSPT warning/critical thresholds, memory leak slope limits, and off-peak restart windows).
+- Protected by `intelligence.lock` and configured via `craft ai policy`.
+
+### 3.7. `ClustersRegistry` & Topological DAG Scheduling
 - **Location**: `~/.craft/clusters.toml`
 - **Format**: TOML array of `ServerCluster` structs (`name`, `nodes`, `proxy_entry`) with node definitions (`name`, `role`, `remote`, `depends_on`).
 - **Roles**: `backend`, `proxy`, `lobby`.
@@ -106,7 +113,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Detects cyclic dependencies and returns descriptive errors.
   - `ServerCluster::resolve_shutdown_order()` reverses the sequence, ensuring proxies disconnect players before backend worlds terminate.
 
-### 3.7. Cross-Node Federated Migration (`ServerMigrator`)
+### 3.8. Cross-Node Federated Migration (`ServerMigrator`)
 - **Protocol**:
   1. Validates source server is stopped (`server.lock` and PID verification).
   2. Verifies remote host SSH connection and `craft` binary installation.

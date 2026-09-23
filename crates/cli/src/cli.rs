@@ -515,6 +515,66 @@ pub enum Commands {
         #[command(subcommand)]
         action: MeshCommands,
     },
+
+    /// Autonomous operational intelligence, anomaly detection, and predictive diagnostics
+    #[command(name = "ai", alias = "autopilot", alias = "diag")]
+    Ai {
+        #[command(subcommand)]
+        action: AiCommands,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum AiCommands {
+    /// Display operational intelligence and predictive health status
+    Status {
+        /// Optional server name filter
+        server: Option<String>,
+    },
+    /// Run immediate deep performance diagnostic analysis
+    Analyze {
+        /// Target server name
+        server: String,
+    },
+    /// Capture lightweight JVM flight recorder execution profile
+    Profile {
+        /// Target server name
+        server: String,
+        /// Profile duration in seconds
+        #[arg(short, long, default_value = "30")]
+        duration: u64,
+    },
+    /// Execute or dry-run automated performance remediation
+    Remediate {
+        /// Target server name
+        server: String,
+        /// Remediation action: cull, gc, restart
+        #[arg(short, long)]
+        action: String,
+        /// Simulate remediation without executing actions
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Manage Autopilot operational intelligence policies
+    Policy {
+        /// Target server name
+        server: String,
+        /// Policy mode: advisory, autonomous, disabled
+        #[arg(short, long)]
+        mode: Option<String>,
+        /// Enable autopilot in advisory mode
+        #[arg(long)]
+        enable: bool,
+        /// Disable autopilot monitoring
+        #[arg(long)]
+        disable: bool,
+        /// Warning MSPT threshold in milliseconds
+        #[arg(long)]
+        warn_mspt: Option<f64>,
+        /// Critical MSPT threshold in milliseconds
+        #[arg(long)]
+        crit_mspt: Option<f64>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1902,6 +1962,60 @@ mod tests {
         match cli_mesh_health.command {
             Some(Commands::Mesh { action: MeshCommands::Health }) => {}
             _ => panic!("Expected Mesh Health command"),
+        }
+    }
+
+    #[test]
+    fn test_phase10_cli_parsing() {
+        let cli_status = Cli::try_parse_from(["craft", "ai", "status"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Ai { action: AiCommands::Status { server: None } }) => {}
+            _ => panic!("Expected AI Status without server"),
+        }
+
+        let cli_status_srv = Cli::try_parse_from(["craft", "ai", "status", "survival"]).unwrap();
+        match cli_status_srv.command {
+            Some(Commands::Ai { action: AiCommands::Status { server: Some(s) } }) => {
+                assert_eq!(s, "survival");
+            }
+            _ => panic!("Expected AI Status with server"),
+        }
+
+        let cli_analyze = Cli::try_parse_from(["craft", "ai", "analyze", "survival"]).unwrap();
+        match cli_analyze.command {
+            Some(Commands::Ai { action: AiCommands::Analyze { server } }) => {
+                assert_eq!(server, "survival");
+            }
+            _ => panic!("Expected AI Analyze command"),
+        }
+
+        let cli_profile = Cli::try_parse_from(["craft", "ai", "profile", "survival", "--duration", "45"]).unwrap();
+        match cli_profile.command {
+            Some(Commands::Ai { action: AiCommands::Profile { server, duration } }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(duration, 45);
+            }
+            _ => panic!("Expected AI Profile command"),
+        }
+
+        let cli_remediate = Cli::try_parse_from(["craft", "ai", "remediate", "survival", "--action", "cull", "--dry-run"]).unwrap();
+        match cli_remediate.command {
+            Some(Commands::Ai { action: AiCommands::Remediate { server, action, dry_run } }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(action, "cull");
+                assert!(dry_run);
+            }
+            _ => panic!("Expected AI Remediate command"),
+        }
+
+        let cli_policy = Cli::try_parse_from(["craft", "ai", "policy", "survival", "--mode", "autonomous", "--warn-mspt", "35.5"]).unwrap();
+        match cli_policy.command {
+            Some(Commands::Ai { action: AiCommands::Policy { server, mode, warn_mspt, .. } }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(mode, Some("autonomous".to_string()));
+                assert_eq!(warn_mspt, Some(35.5));
+            }
+            _ => panic!("Expected AI Policy command"),
         }
     }
 }

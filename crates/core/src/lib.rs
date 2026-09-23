@@ -8,6 +8,7 @@ pub mod crypto;
 pub mod dr_config;
 pub mod error;
 pub mod game;
+pub mod intelligence_config;
 pub mod java;
 pub mod mesh_config;
 pub mod nbt;
@@ -17,6 +18,7 @@ pub mod process;
 pub mod properties;
 pub mod rbac;
 pub mod remote_config;
+pub mod timeseries;
 pub mod trash;
 pub mod version;
 pub mod webhook_config;
@@ -25,10 +27,15 @@ pub use audit::{AuditLedger, AuditLogEntry, AuditVerificationResult, DEFAULT_AUD
 pub use autoscale_config::{AutoscaleRegistry, ServerAutoscalePolicy};
 pub use crypto::{derive_key, ChaCha20, ChaCha20Poly1305, Poly1305};
 pub use dr_config::{DrFailoverReport, DrPlan, DrRecoveryResult, DrRunbook, DrSimulationResult};
+pub use intelligence_config::{
+    format_report_markdown, AnomalyRecord, AnomalySeverity, AnomalyType, AutopilotMode,
+    DiagnosticReport, IntelligencePolicy, IntelligenceRegistry, RemediationAction,
+};
 pub use mesh_config::{
     MeshPolicy, MeshRegistry, MeshTarget, MeshTargetKind, ReplicationQuorum,
 };
 pub use rbac::{Permission, RbacRegistry, Role, UserAccount};
+pub use timeseries::{RegressionResult, RollingTimeSeries, SawtoothMetrics, TimeSeriesSample};
 
 pub use backup_config::{
     AutoBackupPolicy, GDriveBackupConfig, GDriveBackupTarget, GlobalBackupRegistry,

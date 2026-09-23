@@ -39,6 +39,14 @@ impl DaemonServer {
         let hibernation =
             crate::hibernation::HibernationManager::start(self.paths.clone(), self.supervisor.clone());
 
+        // Launch in-process Autopilot operational intelligence engine
+        let autopilot = std::sync::Arc::new(crate::autopilot::AutopilotEngine::new(self.paths.clone()));
+        let ap_sup = self.supervisor.clone();
+        let ap_engine = autopilot.clone();
+        tokio::spawn(async move {
+            ap_engine.run_autonomous_loop(ap_sup, 5).await;
+        });
+
         // Load settings to check gateway and storage monitor config
         let settings = craft_core::GlobalSettings::load(&self.paths).unwrap_or_default();
 
@@ -77,13 +85,15 @@ impl DaemonServer {
 
             let supervisor = self.supervisor.clone();
             let hib_mgr = hibernation.clone();
+            let ap_mgr = autopilot.clone();
             loop {
                 match listener.accept().await {
                     Ok((stream, _)) => {
                         let sup = supervisor.clone();
                         let hib = hib_mgr.clone();
+                        let ap = ap_mgr.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, sup, hib).await {
+                            if let Err(e) = handle_connection(stream, sup, hib, ap).await {
                                 warn!("IPC client disconnected with error: {}", e);
                             }
                         });
@@ -111,6 +121,7 @@ impl DaemonServer {
 
             let supervisor = self.supervisor.clone();
             let hib_mgr = hibernation.clone();
+            let ap_mgr = autopilot.clone();
             loop {
                 if let Err(e) = server.connect().await {
                     error!("Error connecting named pipe client: {}", e);
@@ -123,8 +134,9 @@ impl DaemonServer {
 
                 let sup = supervisor.clone();
                 let hib = hib_mgr.clone();
+                let ap = ap_mgr.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(client, sup, hib).await {
+                    if let Err(e) = handle_connection(client, sup, hib, ap).await {
                         warn!("IPC client error: {}", e);
                     }
                 });
@@ -147,6 +159,7 @@ async fn handle_connection<S>(
     mut stream: S,
     supervisor: Supervisor,
     hibernation: std::sync::Arc<crate::hibernation::HibernationManager>,
+    autopilot: std::sync::Arc<crate::autopilot::AutopilotEngine>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -320,6 +333,89 @@ where
             IpcRequest::GetAutoscaleStatus => {
                 let items = hibernation.get_autoscale_status().await.unwrap_or_default();
                 write_frame(&mut stream, &IpcResponse::AutoscaleStatusList { items }).await?;
+            }
+            IpcRequest::GetIntelligenceStatus { server } => {
+                let policy = craft_core::IntelligencePolicy::default();
+                let reports = match server {
+                    Some(s) => {
+                        if let Some(rep) = autopilot.get_diagnostic_report(&s, &policy).await {
+                            vec![rep]
+                        } else {
+                            vec![]
+                        }
+                    }
+                    None => {
+                        let mut list = Vec::new();
+                        if let Ok(reg) = craft_core::ServersRegistry::load(autopilot.paths()) {
+                            for s in reg.servers {
+                                if let Some(rep) = autopilot.get_diagnostic_report(&s.name, &policy).await {
+                                    list.push(rep);
+                                }
+                            }
+                        }
+                        list
+                    }
+                };
+                write_frame(&mut stream, &IpcResponse::IntelligenceReports { items: reports }).await?;
+            }
+            IpcRequest::TriggerDiagnosticRun { server, duration_secs } => {
+                let policy = craft_core::IntelligencePolicy::default();
+                let canonical = match craft_core::ServersRegistry::load(autopilot.paths()) {
+                    Ok(r) => r.find_by_name(&server).map(|s| s.path.clone()),
+                    Err(_) => None,
+                };
+                let pid = match canonical.as_ref() {
+                    Some(p) => supervisor.get_server_pid(p).await,
+                    None => None,
+                };
+                let _ = autopilot.trigger_jfr_profiling(&server, pid, duration_secs).await;
+                let report = autopilot.get_diagnostic_report(&server, &policy).await.unwrap_or_else(|| {
+                    craft_core::DiagnosticReport {
+                        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                        server_name: server.clone(),
+                        tps_current: 20.0,
+                        mspt_current: 20.0,
+                        mspt_p50: 20.0,
+                        mspt_p95: 20.0,
+                        mspt_p99: 20.0,
+                        memory_rss_bytes: 0,
+                        memory_growth_rate_mb_min: 0.0,
+                        predicted_tte_seconds: None,
+                        cpu_usage_percent: 0.0,
+                        active_players: 0,
+                        anomalies: vec![],
+                        recommendations: vec![],
+                        jfr_profile_file: None,
+                    }
+                });
+                let markdown = craft_core::format_report_markdown(&report);
+                write_frame(&mut stream, &IpcResponse::DiagnosticRunCompleted { report, markdown }).await?;
+            }
+            IpcRequest::ExecuteRemediation { server, action, dry_run } => {
+                let canonical = match craft_core::ServersRegistry::load(autopilot.paths()) {
+                    Ok(r) => r.find_by_name(&server).map(|s| s.path.clone()),
+                    Err(_) => None,
+                };
+                if let Some(ref path) = canonical {
+                    let pid = supervisor.get_server_pid(path).await;
+                    let policy = craft_core::IntelligencePolicy::default();
+                    let res = autopilot.execute_remediation(&server, path, action, dry_run, pid, &supervisor, &policy).await;
+                    match res {
+                        Ok(msg) => write_frame(&mut stream, &IpcResponse::RemediationResult { message: msg }).await?,
+                        Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                    }
+                } else {
+                    write_frame(&mut stream, &IpcResponse::Error { error: format!("Server '{}' not found", server) }).await?;
+                }
+            }
+            IpcRequest::UpdateIntelligencePolicy { server, policy } => {
+                let mut reg = craft_core::IntelligenceRegistry::load(autopilot.paths()).unwrap_or_default();
+                reg.set_policy(server, policy);
+                if let Err(e) = reg.save(autopilot.paths()) {
+                    write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?;
+                } else {
+                    write_frame(&mut stream, &IpcResponse::Success { message: "Policy updated successfully".to_string() }).await?;
+                }
             }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
@@ -683,6 +779,54 @@ impl DaemonClient {
         match self.request(IpcRequest::GetAutoscaleStatus).await? {
             IpcResponse::AutoscaleStatusList { items } => Ok(items),
             IpcResponse::Error { error } => Err(CraftError::Ipc(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_intelligence_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<Vec<craft_core::DiagnosticReport>> {
+        match self.request(IpcRequest::GetIntelligenceStatus { server }).await? {
+            IpcResponse::IntelligenceReports { items } => Ok(items),
+            IpcResponse::Error { error } => Err(CraftError::Ipc(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn trigger_diagnostic_run(
+        &mut self,
+        server: String,
+        duration_secs: u64,
+    ) -> Result<(craft_core::DiagnosticReport, String)> {
+        match self.request(IpcRequest::TriggerDiagnosticRun { server, duration_secs }).await? {
+            IpcResponse::DiagnosticRunCompleted { report, markdown } => Ok((report, markdown)),
+            IpcResponse::Error { error } => Err(CraftError::Ipc(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn execute_remediation(
+        &mut self,
+        server: String,
+        action: craft_core::RemediationAction,
+        dry_run: bool,
+    ) -> Result<String> {
+        match self.request(IpcRequest::ExecuteRemediation { server, action, dry_run }).await? {
+            IpcResponse::RemediationResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn update_intelligence_policy(
+        &mut self,
+        server: String,
+        policy: craft_core::IntelligencePolicy,
+    ) -> Result<()> {
+        match self.request(IpcRequest::UpdateIntelligencePolicy { server, policy }).await? {
+            IpcResponse::Success { .. } => Ok(()),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }
     }

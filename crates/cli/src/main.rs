@@ -471,6 +471,9 @@ async fn main() {
         Some(Commands::Mesh { action }) => {
             commands::mesh::handle_mesh(action, &paths)
         }
+        Some(Commands::Ai { action }) => {
+            commands::ai::handle_ai(action, &paths).await
+        }
     };
 
     if let Err(e) = result {
@@ -532,6 +535,7 @@ fn print_banner() {
     println!("  audit <ls|verify>                 Cryptographically verify HMAC audit chain");
     println!("  dr <plan|test|failover|verify>    Automated disaster recovery & cold-start reconstitution");
     println!("  mesh <ls|add|rm|sync|health>      Distributed multi-cloud storage mesh & replication");
+    println!("  ai <status|analyze|profile|policy> Autonomous intelligence & predictive performance");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

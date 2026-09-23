@@ -186,5 +186,33 @@ Craft includes an integrated hibernation and packet-triggered auto-scaling manag
   - `WakeServer { server_name }`: Manually terminates proxy and relaunches server process.
   - `GetAutoscaleStatus`: Returns snapshot of configured policies, sleeping state, idle seconds, and player counts.
 
+---
+
+## 13. Autonomous Operational Intelligence, Anomaly Detection & JFR Profiling
+
+Craft features an integrated autopilot supervisor engine (`AutopilotEngine`) that runs in the background of the daemon process:
+- **Rolling Time-Series Buffers**:
+  - Maintained per server with 360-sample capacity (sampled every 5 seconds, covering a 30-minute rolling evaluation window).
+  - Captures memory RSS (MB), child CPU utilization (%), online player counts, and network latency (ms).
+- **Statistical Anomaly Detection & Regression**:
+  - **Z-Score Spike Detection**: $Z = \frac{x - \mu}{\sigma}$. Z-scores exceeding the configured threshold (default $Z \ge 3.0$) trigger anomaly alerts for CPU spikes, player surges, or sudden memory ballooning.
+  - **OLS Linear Regression & TTE Estimation**: Calculates linear slope $\beta$ and determination coefficient $R^2$. If positive slope persists with $R^2 \ge 0.70$, computes Time-To-Exhaustion (TTE in seconds) until process RSS exhausts maximum JVM heap or system thresholds.
+  - **GC Sawtooth Degradation**: Analyzes peak-to-trough drop ratios, collection period frequency, and post-GC trough baseline elevation to detect memory leaks and GC thrashing.
+- **Automated Diagnostic Profiling**:
+  - Automatically triggers non-blocking Java Flight Recorder (JFR) profiling sessions via `jcmd <PID> JFR.start name=craft_diag duration=30s filename=<diagnostics_dir>/<server>_<timestamp>.jfr settings=profile`.
+  - For non-Java or fallback engines, captures thread snapshots and process metrics.
+  - Emits structured diagnostic reports (`DiagnosticReport`) saved under `~/.craft/diagnostics/` and tracked in `IntelligenceRegistry`.
+- **Autonomous Remediation Loop**:
+  - Configurable policy modes: `Advisory` (diagnose and alert only) or `ActiveRemediation` (execute remediation autonomously).
+  - Remediation actions:
+    - `EntityCull`: Injects console commands (e.g. `/kill @e[type=item]`, `/kill @e[type=!player]`) via supervisor stdin to alleviate entity tick lag.
+    - `GarbageCollectionHint`: Issues `jcmd <PID> GC.run` or console hints to reclaim fragmented heap space.
+    - `OffPeakRestart`: Triggers graceful server reboot during designated off-peak hours (e.g. 02:00-06:00 UTC) with 0 players connected.
+  - Oscillation suppression: Actions are strictly rate-limited by per-server cooldown timers (default 300 seconds) and failure circuit breakers.
+- **Typed IPC & REST Exposition**:
+  - IPC: `IpcRequest::GetIntelligenceStatus`, `TriggerDiagnosticRun`, `ExecuteRemediation`, `UpdateIntelligencePolicy`.
+  - REST: `GET /api/ai/status`, `GET /api/ai/diagnostics/:server`, `POST /api/ai/remediate/:server`.
+
+
 
 

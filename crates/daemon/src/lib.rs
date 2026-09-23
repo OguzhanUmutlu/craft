@@ -1,3 +1,4 @@
+pub mod autopilot;
 pub mod circuit_breaker;
 pub mod gateway;
 pub mod hibernation;
@@ -10,6 +11,7 @@ pub mod telemetry;
 pub mod web_dashboard;
 pub mod webhooks;
 
+pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};
 pub use gateway::GatewayServer;
 pub use hibernation::HibernationManager;
