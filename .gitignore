@@ -18,7 +18,9 @@ cargo-timing.html
 !/tools/todo.md
 !/tools/analysis.md
 !/tools/catalog/
+!/tools/devtools/
 /tools/catalog/output/
+/screenshots/
 *.log
 *.sock
 *.pid
@@ -43,8 +45,11 @@ remotes.toml
 /server/craft-server
 /server/releases/
 
-/dist/
-/node_modules/
+dist/
+node_modules/
+**/node_modules/
+crates/ui/node_modules/
+crates/ui/dist/
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*

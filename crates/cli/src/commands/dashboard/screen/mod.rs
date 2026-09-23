@@ -46,7 +46,7 @@ use crossterm::{
 };
 use std::io;
 
-use craft_core::Result;
+use craft_core::Result as CraftResult;
 
 static REMOTE_NODE_NAME: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
@@ -74,10 +74,10 @@ pub fn is_remote_node() -> bool {
 /// Executes an interactive console action (e.g. foreground server, craft view) inside
 /// the alternate screen TUI, disabling raw mode during execution and cleanly restoring
 /// raw mode and cursor hiding when the session completes.
-pub async fn exec_console_action<F, Fut>(action: F) -> Result<()>
+pub async fn exec_console_action<F, Fut>(action: F) -> CraftResult<()>
 where
     F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = Result<()>>,
+    Fut: std::future::Future<Output = CraftResult<()>>,
 {
     let mut stdout = io::stdout();
     let _ = execute!(stdout, Clear(ClearType::All), MoveTo(0, 0), Show);

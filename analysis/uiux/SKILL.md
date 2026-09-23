@@ -1,0 +1,253 @@
+# Craft Desktop GUI Studio: Comprehensive UI/UX Design System & Architectural Specification
+
+> **Module**: `analysis/uiux/SKILL.md`  
+> **Applies To**: `crates/ui` (Tauri v2 + React 18 + TSX + PostCSS + Vite)  
+> **Aesthetic Archetype**: Terminal-Grade High-Density Systems Studio (Dark Slate / Electric Cyan / Monospace-First)  
+> **Compliance**: Strict Zero-Emoji, WCAG 2.1 AAA/AA, Sub-pixel Crispness, Keyboard-First Accessibility
+
+---
+
+## 1. Architectural Philosophy & Anti-AI-Aesthetic Principles
+
+Modern AI-generated user interfaces suffer from recognizable anti-patterns: excessive border radiuses (24px+ "pill" buttons), pastel gradients, meaningless floating cards with gargantuan drop-shadows, sparse spacing that hides data behind multiple clicks, generic stock icons, and ubiquitous emoji decorations.
+
+Craft Desktop Studio rejects these tropes in favor of an **industrial, high-density infrastructure cockpit**:
+
+1. **Information Density Over Whitespace Inflation**:
+   - Operators managing fleets of 5 to 50 dedicated game servers need real-time operational telemetry visible at a single glance: RSS memory, CPU core utilization, tick time (MSPT), TPS, ping jitter, network I/O, player count, and cluster routing.
+   - Default spacing uses compact 4px baseline increments, tabular data layouts, and high-density grid structures.
+2. **Sub-Pixel Crispness & Geometric Rigor**:
+   - Borders are strictly 1px solid with controlled alpha layers (`rgba(255, 255, 255, 0.08)` to `0.15`).
+   - Border radius is clamped strictly to **2px** for small controls/tags, **4px** for buttons/inputs/cards, and **6px** for floating modals. Never use pill shapes (`rounded-full`) except for status dot indicators ($6\times 6$ px).
+3. **Monospace-First Data Presentation**:
+   - All server identifiers, metrics, IP addresses, port numbers, timestamps, memory measurements, and logs use monospaced fonts (`JetBrains Mono`, `Fira Code`, `ui-monospace`) with tabular numbers (`font-variant-numeric: tabular-nums;`).
+4. **Strict Plain-Text Status & Zero-Emoji Policy**:
+   - Emojis are strictly banned. Status indicators use crisp geometric dot badges, sub-pixel vector glyphs, and standardized plain-text bracketed markers (`[OK]`, `[WARN]`, `[ERROR]`, `[ONLINE]`, `[OFFLINE]`, `[OPTIMAL]`, `[DEGRADED]`, `[CRITICAL]`).
+5. **Subtle Depth via Surface Luminance, Not Blurry Shadows**:
+   - Depth is communicated through calibrated surface background luminance tiers (`#090d13` -> `#0e141d` -> `#161e2b` -> `#1e293b`) rather than aggressive box shadows. Shadows are limited to tight, high-opacity directional ambient occlusion (`0 2px 8px rgba(0, 0, 0, 0.45)`).
+
+---
+
+## 2. Spatial Grid & Layout Architecture
+
+The layout operates on a dual-scale grid: a **4px baseline** for micro-spacing (padding, margins, iconography) and an **8px rhythm** for structural containers.
+
+### 2.1. Spatial Scale Tokens
+
+| Token | Pixels | Application |
+| :--- | :--- | :--- |
+| `--space-2xs` | 2px | Micro-separators, icon offsets, border-box offsets |
+| `--space-xs` | 4px | Tag padding, compact table cell padding, input vertical padding |
+| `--space-sm` | 8px | Button inline padding, card row gaps, header item spacing |
+| `--space-md` | 12px | Standard container padding, form field vertical gaps |
+| `--space-lg` | 16px | Card body padding, section headers, rail icon spacing |
+| `--space-xl` | 24px | Major dashboard section gaps, modal dialog padding |
+| `--space-2xl` | 32px | Page-level gutters, top-level layout separation |
+
+### 2.2. Master Window Geometry
+
+The desktop window is partitioned into 3 fixed-rail zones and 1 flexible content viewport:
+
+```
++----------------------------------------------------------------------------------------------------+
+| [Craft Studio]  [Cluster: prod-eu]   (Ctrl+K Quick Open)          [Daemon: Online] [8124] [ - + x ]|  <-- Window Chrome & TopBar (40px)
++----------+-----------------------------------------------------------------------------------------+
+| [Fleet]  | Breadcrumbs: Fleet Overview > bungeecord-hub > Live Telemetry                           |  <-- Breadcrumb / Header Bar (36px)
+| [Servers]|-----------------------------------------------------------------------------------------+
+| [Console]|                                                                                         |
+| [Plugins]|                                                                                         |
+| [Backups]|                              MAIN WORKSPACE VIEWPORT                                    |
+| [Storage]|                                                                                         |
+| [AI Diag]|                                                                                         |
+| [Edge]   |                                                                                         |
+| [Audit]  |                                                                                         |
+|----------+-----------------------------------------------------------------------------------------+
+| [Config] | Bottom Status Bar: Fleet RSS: 14.2 GB | Host CPU: 24.1% | Active Nodes: 8 | V1.0.0      |  <-- Footer Bar (24px)
++----------+-----------------------------------------------------------------------------------------+
+  ^ 56px Rail                                   ^ Flexible Main Stage
+```
+
+- **TopBar / TitleBar**: 40px fixed height. Native drag region (`data-tauri-drag-region`), unified search trigger, global daemon connection indicator, cluster switcher, and native window control buttons.
+- **Left Navigation Rail**: 56px collapsed (icon-only with 200ms tooltip delay) or 200px expanded. Contains high-contrast vector icons for core operational domains.
+- **Main Stage**: Dynamically scrollable view with scroll-anchored virtual viewports for telemetry and console streaming.
+- **Bottom Status Bar**: 24px fixed height. Displays host machine physical memory pressure, CPU total, active background tasks, and daemon IPC ping latency.
+
+---
+
+## 3. Color Architecture & WCAG 2.1 AAA Contrast Matrix
+
+The studio utilizes a dark slate palette engineered specifically for prolonged operator viewing sessions, preventing eye fatigue while delivering crisp contrast ratios exceeding WCAG AAA (7:1 for normal text).
+
+### 3.1. Surface Luminance Tiers
+
+```css
+:root {
+  /* Surface Layers (Background to Foreground) */
+  --bg-app:        #080c11; /* Deepest canvas under window chrome */
+  --bg-surface:    #0d131a; /* Default view background */
+  --bg-elevated:   #131a24; /* Cards, panels, rail containers */
+  --bg-overlay:    #192230; /* Dropdowns, modals, floating popovers */
+  --bg-active:     #212c3d; /* Selected items, active rows, pressed states */
+  --bg-hover:      #1a2433; /* Hovered rows, interactive buttons */
+
+  /* Borders & Dividers */
+  --border-subtle: rgba(255, 255, 255, 0.07); /* Subtle card borders */
+  --border-muted:  rgba(255, 255, 255, 0.12); /* Dividers, inputs */
+  --border-active: rgba(56, 189, 248, 0.50);  /* Focused controls, selected cards */
+
+  /* Text & Foreground Hierarchy */
+  --text-high:     #f1f5f9; /* 95% White: Main headers, active values (Contrast: 15.4:1) */
+  --text-base:     #cbd5e1; /* 80% Slate: Primary body text, labels (Contrast: 10.8:1) */
+  --text-muted:    #64748b; /* 45% Slate: Inactive labels, secondary hints (Contrast: 4.8:1) */
+  --text-dim:      #475569; /* 30% Slate: Line numbers, decorative brackets (Contrast: 3.2:1) */
+
+  /* Semantic State Palette */
+  --accent-cyan:   #38bdf8; /* Brand accent, selection highlights */
+  --accent-glow:   rgba(56, 189, 248, 0.15); /* Focus rings */
+  --state-ok:      #34d399; /* Emerald 400: Running, healthy, optimal */
+  --state-ok-bg:   rgba(52, 211, 153, 0.10);
+  --state-warn:    #fbbf24; /* Amber 400: Warning, elevated, draining */
+  --state-warn-bg: rgba(251, 191, 36, 0.10);
+  --state-err:     #f87171; /* Rose 400: Error, stopped, critical */
+  --state-err-bg:  rgba(248, 113, 113, 0.10);
+  --state-info:    #818cf8; /* Indigo 400: Info, queued, processing */
+  --state-info-bg: rgba(129, 140, 248, 0.10);
+}
+```
+
+---
+
+## 4. Typography Scale & Layout Hierarchy
+
+Typography is split between **Inter** for clean UI navigation/controls and **JetBrains Mono** for all server configuration, log streaming, and operational data telemetry.
+
+```css
+/* Font Families */
+--font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+--font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+```
+
+### 4.1. Type Hierarchy Tokens
+
+| Level | Size | Weight | Tracking | Line Height | Family | Application |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `display-lg` | 20px | 600 SemiBold | -0.02em | 26px | Sans | Fleet overview hero title |
+| `title-md` | 14px | 600 SemiBold | -0.01em | 20px | Sans | Panel headings, modal titles |
+| `body-sm` | 13px | 400 Regular | 0.00em | 18px | Sans | Standard UI labels, button text |
+| `caption-xs` | 11px | 500 Medium | +0.02em | 14px | Sans | Category tags, column headers, breadcrumbs |
+| `data-md` | 13px | 500 Medium | 0.00em | 18px | Mono | Table metrics, ports, memory (tabular-nums) |
+| `data-sm` | 12px | 400 Regular | 0.00em | 16px | Mono | Log streams, configuration properties |
+| `micro-badge` | 10px | 700 Bold | +0.04em | 12px | Mono | Plain-text status badges (`[OK]`, `[PID]`) |
+
+---
+
+## 5. Component Anatomy & Interaction States
+
+### 5.1. Top Navigation & Omni-Search Bar (`TopBar`)
+- **Native Window Controls**: Minimize, Maximize, and Close buttons cleanly integrated into the top-right corner with smooth hover state feedback (`#ef4444` on close).
+- **Omni-Search Trigger (`Ctrl+K`)**:
+  - Centered search input styled like a spotlight bar.
+  - Displays keyboard shortcut badge `Ctrl K` / `Cmd K`.
+  - Clicking opens a centered ModalX-style bounded search modal filtering across:
+    - Registered servers (`hub`, `survival`, `velocity-proxy`)
+    - Operational actions (`Start All`, `Hot Backup`, `JFR Profile`, `Clean Trash`)
+    - Documentation and configuration properties (`server.properties`, `eula.txt`)
+- **Global Daemon Badge**: Real-time indicator showing green dot + `DAEMON: CONNECTED (8124) [4ms RTT]`.
+
+### 5.2. Server Fleet Grid & High-Density Table
+- **ServerCard Anatomy**:
+  - **Header Row**: Archetype pill (`[JAVA-21]`, `[BEDROCK]`, `[FACTORIO]`), server name with mono styling, and status indicator (`[ONLINE]`, `[OFFLINE]`, `[CRASHED]`).
+  - **Quick Metrics Row**: 3 compact columnar gauges:
+    - **CPU**: Mini horizontal bar gauge + percentage (e.g. `14.2%`).
+    - **RAM**: Used / Allocated with progress fill (e.g. `2.4 / 4.0 GB`).
+    - **PLAYERS**: Active count with capacity (e.g. `18 / 100`).
+  - **Quick Controls**: Instant icon buttons with tooltip descriptions: Start/Stop (`Power`), Console (`Terminal`), Backup (`Archive`), Diagnostics (`Activity`), Settings (`Sliders`).
+  - **Selection State**: 1px border highlight in `--accent-cyan` with subtle glow.
+
+### 5.3. Virtualized Live Console (`ConsoleView`)
+- **Performance Requirement**: Capable of streaming 1,000+ lines/sec without UI stutter or memory leaks.
+- **Buffer Ring**: Retains up to 10,000 lines in the frontend state, synchronizing with the daemon's 50,000-line circular buffer.
+- **Controls Toolbar**:
+  - **Live Filter Input**: Real-time regex and substring search with match counter (`4 matches`).
+  - **Pause Scroll Lock (`Space` / Toggle Button)**: Halts auto-scrolling when inspecting previous logs during live incidents without disconnecting incoming messages.
+  - **Clear Buffer**: Clears local view frame without affecting disk logs.
+  - **Export Dump**: Downloads `.tar.zst` diagnostic bundle via IPC.
+- **ANSI Color Decoder**: Renders ANSI 256 colors (`38;5;...`) and bright foreground styles for Minecraft formatting (`§a`, `§c`, etc.) mapped to WCAG AAA color variables.
+- **Inside-the-Box Readline Input**: Embedded prompt anchored at the console base with history navigation (`Up` / `Down` arrows), command autocomplete suggestions, and immediate stdin injection via IPC.
+
+### 5.4. Real-Time Telemetry & JFR Diagnostics Hub (`DiagnosticsView`)
+- **Time-Series Sparklines**: Canvas-based or SVG-based sub-millisecond sparklines rendering rolling 60-second windows for:
+  - Process RSS Memory (with OLS linear regression slope line forecasting TTE).
+  - Child Process CPU % with 80% ceiling indicator.
+  - Milliseconds Per Tick (MSPT) with 50.0ms red threshold.
+  - Ping RTT and Jitter (ms).
+- **JFR Flight Profiler Panel**:
+  - "Start Diagnostic Profile" button (30s default) triggering non-blocking `jcmd` JFR recording.
+  - Lists generated `.jfr` and `.json` diagnostic reports with instant download / inspect actions.
+
+### 5.5. Global Edge Mesh Topology View (`EdgeMeshView`)
+- **Geo-Routing Grid**: Displays edge nodes (`us-east`, `eu-central`, `ap-southeast`) with multi-sample TCP ping results, sample standard deviation jitter, and packet loss %.
+- **One-Click Playbook Optimization**: Buttons for `CompetitivePvP`, `MegaSMP`, and `CrossRegionEconomy` presets with instant feedback.
+- **Session Handoff Monitor**: Live list of generated single-use player session transfer tokens with time-to-live expiration countdowns.
+
+---
+
+## 6. Micro-Interactions, Focus Management & Motion Physics
+
+1. **Transition Curves**:
+   - Standard ease: `cubic-bezier(0.16, 1, 0.3, 1)` (snappy entry, gentle deceleration).
+   - Fast state toggles (button clicks, tags): `120ms` duration.
+   - Panel transitions (collapsible navigation rail): `180ms` duration.
+   - Modals and drawers: `220ms` duration with 8px subtle scale-up from `0.98` to `1.00`.
+2. **Focus-Visible Rings**:
+   - High-visibility 2px solid `--accent-cyan` ring with 2px offset on all keyboard-navigated interactive elements. Never hide focus indicators from keyboard users.
+3. **Keyboard Shortcuts**:
+   - `Ctrl+K` / `Cmd+K`: Open Omni-Search / Command Palette.
+   - `Ctrl+1` through `Ctrl+7`: Quick-switch between navigation domains.
+   - `Space` (when Console is focused): Toggle pause scroll lock.
+   - `Escape`: Close modals, command palette, or blur active inputs.
+   - `Enter` (in console input): Dispatch command to server stdin.
+
+---
+
+## 7. Tauri IPC Architecture & Data Hydration
+
+Frontend and Rust backend communicate via strongly-typed Tauri v2 commands:
+
+```
++------------------------------------------------------------------------------------+
+| React 18 UI Shell (TypeScript TSX)                                                 |
+|   ├── useServerFleet()       --> invoke('get_fleet_overview')                      |
+|   ├── useConsoleStream()     --> listen('daemon-log-event')                        |
+|   ├── useDiagnostics()       --> invoke('get_server_diagnostics', { serverName })  |
+|   └── useEdgeMesh()          --> invoke('get_edge_mesh_status')                    |
++------------------------------------------------------------------------------------+
+                                      | Tauri IPC (JSON / Binary)
+                                      v
++------------------------------------------------------------------------------------+
+| Tauri Rust Core (`crates/ui/src/main.rs`)                                          |
+|   ├── Calls `craft_cli::commands::*` for parity                                    |
+|   ├── Calls `craft_daemon::ipc::DaemonClient` for live supervision                 |
+|   ├── Calls `craft_core::*` for path & process lock validation                     |
+|   └── Binds Chrome DevTools Protocol (CDP) WebSocket on port 9222                  |
++------------------------------------------------------------------------------------+
+```
+
+- **Zero-Polling Console Streaming**: Console lines are pushed from the daemon's IPC socket into a Tokio broadcast channel, emitted to the webview via Tauri `emit("daemon-log-event", line)`.
+- **Atomic State Synchronization**: State mutations (e.g. server start/stop, config saves) invoke Tauri commands returning Rust `Result<T, String>`, updating local React query caches immediately with rollback on error.
+
+---
+
+## 8. DevTools Automation & Testing Protocol
+
+The application includes a standalone Python automation controller (`tools/devtools/devtools.py`):
+1. **Remote Debugging Port**: Tauri runs with `--remote-debugging-port=9222`.
+2. **Headless Window Screenshotting**:
+   - Connects to the CDP WebSocket endpoint (`ws://localhost:9222/devtools/page/...`).
+   - Invokes `Page.captureScreenshot` with full viewport bounding box.
+   - Works even if the application window is minimized, hidden behind other windows, or running in virtual X11/headless environments.
+   - Saves artifacts to `.gitignore`'d `screenshots/` directory for regression inspection.
+3. **Dynamic JS Execution & Profiling**:
+   - Evaluates React state and DOM nodes via `Runtime.evaluate`.
+   - Streams browser console warnings and exceptions to identify silent React re-render loops or syntax issues.
+   - Collects layout thrashing and paint metrics via `Performance.getMetrics`.

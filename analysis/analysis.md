@@ -3,7 +3,7 @@
 > **Repository**: `OguzhanUmutlu/craft`  
 > **Workspace Model**: Multi-crate Rust Workspace CLI & Background Supervisor Daemon, Standalone Fast Installer, Go Distribution Server, and Documentation Portals  
 > **Primary Language**: Rust (2021 Edition, MSRV 1.80+)  
-> **Codebase Scale**: ~32,000+ Rust lines across 11 workspace crates (plus Go, React 18, VitePress, and Shell tooling)  
+> **Codebase Scale**: ~34,000+ Rust lines across 12 workspace crates (plus Go, React 18 TSX, VitePress, and Shell tooling)  
 > **Current Version**: `v1.0.0`
 
 ---
@@ -69,6 +69,7 @@ The Craft ecosystem is organized into 11 specialized Rust crates, a Go binary se
 | **`craft-scripting`** | [`crates/scripting/`](../crates/scripting) | Embedded Lua 5.4 engine (`mlua`) with sandboxed execution, `craft.*` stdlib (fs, servers, http, properties, exec), declarative software package format, starter script generators. |
 | **`modalx`** | [`tools/modalx/`](../tools/modalx) | Standalone centered TUI modal framework, bounded box frames with display column width calculations (`unicode-width`), `TextInput` readline engine, navigation guards, zero-emoji aesthetic. |
 | **`craft-cli`** | [`crates/cli/`](../crates/cli) | Main CLI entrypoint, 40 command handlers including `user`, `audit`, `optimize`, `modpack`, `autoscale`, `hibernate`, `mesh`, `dr`, `ai` (`status`, `analyze`, `profile`, `remediate`, `policy`), `edge` (`status`, `add`, `rm`, `probe`, `sync-routing`, `handoff`, `chat`, `optimize`), full-screen interactive TUI dashboard, virtual scrolling console with 16 KB chunked seek reader and inside-the-box anchored command prompt. |
+| **`craft-ui`** | [`crates/ui/`](../crates/ui) | Native Desktop GUI Studio built with Tauri v2, React 18, TypeScript TSX, PostCSS, and Vite. Exposes full fleet controls, live console virtualization, JFR diagnostics hub, edge latency probers, multi-cloud storage mesh inspection, and cryptographic audit ledger. |
 | **`craft-installer`** | [`crates/installer/`](../crates/installer) | Ultra-fast standalone self-extracting installer (<35ms install time) with embedded zstd decompression and PATH configuration. |
 | **Distribution Server** | [`server/`](../server) | Concurrent Go HTTP server with SHA-256 caching and dynamic install script templating (`install.sh`, `install.ps1`). |
 | **Documentation Portals**| [`docs/`](../docs) | React 18 / Vite 6 portal and VitePress documentation suite in `tools/modalx/docs/`. |
@@ -93,13 +94,15 @@ To maintain deep technical excellence without cluttering high-level documentatio
    Centered bounded box rendering, `unicode-width` border alignment, readline `TextInput` keybindings, and virtual seek-based log streaming.
 7. **Security, Diagnostics & Data Safety**: [`analysis/security-safety/SKILL.md`](./security-safety/SKILL.md)  
    Process lock guards, non-destructive `TrashManager` (files and directories), diagnostic self-healing (`craft fix`), and EULA enforcement.
+8. **Desktop Studio & Systems Design (UI/UX)**: [`analysis/uiux/SKILL.md`](./uiux/SKILL.md)  
+   Spatial grid tokens (4px/8px), WCAG AAA dark slate color matrix, monospace-first typography scale, live console virtualization, and headless CDP DevTools automation.
 
 ---
 
 ## 4. Multi-Repository Assessment
 
-- **Current Repository Model**: Craft operates as a unified Cargo workspace containing 11 crates.
+- **Current Repository Model**: Craft operates as a unified Cargo workspace containing 12 crates.
 - **Standalone Evaluation**:
   - `tools/modalx` is already decoupled into its own standalone Git repository (`git@github.com:OguzhanUmutlu/modalx.git`) and published separately to crates.io (`modalx = "0.1.3"`), while remaining synchronized in the workspace for atomic co-development.
-  - All other crates (`craft-core`, `craft-providers`, `craft-daemon`, `craft-net`, `craft-plugins`, `craft-backup`, `craft-remote`, `craft-scripting`, `craft-installer`, `craft-cli`) share deep domain interdependencies and benefits from the mono-workspace model.
+  - All other crates (`craft-core`, `craft-providers`, `craft-daemon`, `craft-net`, `craft-plugins`, `craft-backup`, `craft-remote`, `craft-scripting`, `craft-installer`, `craft-cli`, `craft-ui`) share deep domain interdependencies and benefits from the mono-workspace model.
   - Splitting the remaining crates into separate repositories is **not recommended** at this time, as single-workspace atomic builds guarantee ABI parity and prevent dependency drift.

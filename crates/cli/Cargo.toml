@@ -5,6 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[lib]
+name = "craft_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "craft"
 path = "src/main.rs"

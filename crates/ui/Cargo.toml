@@ -1,0 +1,29 @@
+[package]
+name = "craft-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Native Desktop GUI Studio for Craft server management, powered by Tauri and React."
+
+[[bin]]
+name = "craft-ui"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = [] }
+
+[dependencies]
+craft-core.workspace = true
+craft-cli.workspace = true
+craft-daemon.workspace = true
+craft-net.workspace = true
+craft-providers.workspace = true
+
+tauri = { version = "2.11" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+sysinfo = { workspace = true }

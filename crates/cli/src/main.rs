@@ -4,11 +4,9 @@ use craft_core::{CraftPaths, Result};
 use std::io::IsTerminal;
 use tracing_subscriber::EnvFilter;
 
-mod cli;
-mod commands;
-
-use cli::{Cli, Commands};
-use commands::{
+use craft_cli::cli::{self, Cli, Commands};
+use craft_cli::commands::{
+    self,
     auto::handle_auto,
     backup::handle_backup,
     cache::handle_cache,
@@ -89,8 +87,8 @@ async fn main() {
                 }
             } else {
                 if let Some(ref node) = remote_node {
-                    crate::commands::dashboard::screen::set_remote_node(Some(node.clone()));
-                    crate::commands::dashboard::screen::set_root_breadcrumbs(&[
+                    commands::dashboard::screen::set_remote_node(Some(node.clone()));
+                    commands::dashboard::screen::set_root_breadcrumbs(&[
                         "Dashboard",
                         "Remote Hosts",
                         node,
@@ -316,7 +314,7 @@ async fn main() {
             } else if std::io::stdin().is_terminal() {
                 daemon_menu(&paths).await
             } else {
-                handle_service(crate::cli::ServiceCommands::Status, &paths).await
+                handle_service(cli::ServiceCommands::Status, &paths).await
             }
         }
         Some(Commands::Auto { action }) => handle_auto(action, &paths).await,
@@ -401,7 +399,7 @@ async fn main() {
             } else if std::io::stdin().is_terminal() {
                 remotes_menu(&paths).await
             } else {
-                handle_remote(crate::cli::RemoteCommands::Ls, &paths).await
+                handle_remote(cli::RemoteCommands::Ls, &paths).await
             }
         }
         Some(Commands::Migrate {
@@ -427,7 +425,7 @@ async fn main() {
             if let Some(act) = action {
                 handle_cluster(act, &paths).await
             } else {
-                handle_cluster(crate::cli::ClusterCommands::Ls, &paths).await
+                handle_cluster(cli::ClusterCommands::Ls, &paths).await
             }
         }
         Some(Commands::Deploy { action }) => handle_deploy(action, &paths).await,

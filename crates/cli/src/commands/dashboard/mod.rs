@@ -13,7 +13,7 @@ use colored::Colorize;
 use std::io::{self, IsTerminal};
 use sysinfo::System;
 
-use craft_core::{CraftPaths, Result, ServersRegistry};
+use craft_core::{CraftPaths, Result as CraftResult, ServersRegistry};
 use craft_daemon::DaemonClient;
 
 pub use remote_tui::remote_servers_menu;
@@ -89,7 +89,7 @@ pub(crate) fn build_dashboard_header(
     )
 }
 
-pub async fn handle_dashboard(paths: &CraftPaths) -> Result<()> {
+pub async fn handle_dashboard(paths: &CraftPaths) -> CraftResult<()> {
     if !io::stdin().is_terminal() {
         println!(
             "{}",
