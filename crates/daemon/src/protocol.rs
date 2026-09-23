@@ -94,6 +94,26 @@ pub enum IpcRequest {
     GetRaftLogs {
         limit: Option<usize>,
     },
+    RaftGetMultiRaftStatus {
+        group_id: Option<u64>,
+    },
+    RaftReconfigureMembership {
+        group_id: u64,
+        change_type: craft_core::MembershipChangeType,
+        node: craft_core::RaftNode,
+    },
+    RaftTriggerCompaction {
+        group_id: u64,
+        force: bool,
+    },
+    RaftRoutePartitionKey {
+        key: String,
+    },
+    RaftManagePartition {
+        action: String,
+        partition: Option<craft_core::MultiRaftPartition>,
+        group_id: Option<u64>,
+    },
     GetServerQuota {
         server: String,
     },
@@ -243,6 +263,34 @@ pub enum IpcResponse {
     },
     RaftLogsResult {
         entries: Vec<craft_core::RaftLogEntry>,
+    },
+    RaftMultiRaftStatusResult {
+        registry: craft_core::MultiRaftRegistry,
+        statuses: std::collections::HashMap<u64, crate::raft_engine::RaftStatusSummary>,
+        learner_progress: std::collections::HashMap<String, craft_core::LearnerSyncProgress>,
+    },
+    RaftReconfigureMembershipResult {
+        success: bool,
+        phase: craft_core::JointConsensusPhase,
+        message: String,
+    },
+    RaftCompactionResult {
+        group_id: u64,
+        last_included_index: u64,
+        entries_compacted: u64,
+        snapshot_bytes: u64,
+        duration_ms: u64,
+    },
+    RaftPartitionRouteResult {
+        key: String,
+        group_id: u64,
+        partition_name: String,
+        leader_node_id: Option<String>,
+    },
+    RaftManagePartitionResult {
+        success: bool,
+        message: String,
+        partitions: Vec<craft_core::MultiRaftPartition>,
     },
     ServerQuotaResult {
         summary: craft_core::QuotaUsageSummary,

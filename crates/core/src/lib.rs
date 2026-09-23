@@ -85,9 +85,12 @@ pub use numa::{
     NumaStatusSummary, NumaTopology, ServerPinningConfig,
 };
 pub use raft::{
-    calculate_fencing_token, fencing_token_parts, ArbitrationWeight, DistributedLock,
-    PersistentRaftState, QuorumStatus, RaftLogEntry, RaftNode, RaftPayload, RaftRegistry,
-    RaftRole, RaftSnapshot,
+    calculate_fencing_token, chunk_snapshot_data, compute_crc32, fencing_token_parts,
+    reassemble_snapshot_chunks, ArbitrationWeight, DistributedLock, JointConsensusPhase,
+    LearnerSyncProgress, MembershipChangeType, MultiRaftPartition, MultiRaftRegistry,
+    PartitionRoutingKey, PersistentRaftState, QuorumStatus, RaftLogEntry, RaftNode,
+    RaftPayload, RaftRegistry, RaftRole, RaftSnapshot, RaftSnapshotMeta, SnapshotChunk,
+    WalCompactionPolicy, GROUP_CONTROL_PLANE, GROUP_DISTRIBUTED_LOCKS, GROUP_WORLD_BASE,
 };
 pub use rbac::{Permission, RbacRegistry, Role, UserAccount};
 pub use rollout::{

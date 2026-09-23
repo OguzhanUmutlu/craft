@@ -11,6 +11,7 @@ pub mod ipc;
 pub mod log_indexer;
 pub mod modpack_service;
 pub mod protocol;
+pub mod multi_raft_service;
 pub mod quota_service;
 pub mod raft_engine;
 pub mod raft_service;
@@ -26,6 +27,7 @@ pub mod webhooks;
 
 pub use anvil_service::AnvilService;
 pub use dpdk_service::DpdkNumaService;
+pub use multi_raft_service::MultiRaftService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

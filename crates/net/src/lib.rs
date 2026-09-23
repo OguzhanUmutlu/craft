@@ -39,9 +39,11 @@ pub use packet_inspector::{
 };
 pub use query::{ping_server_auto, probe_tcp_port, UniversalPingStatus};
 pub use raft_transport::{
-    decode_raft_message, encode_raft_message, AppendEntriesArgs, AppendEntriesReply,
-    HeartbeatArgs, HeartbeatReply, InstallSnapshotArgs, InstallSnapshotReply,
-    RaftRpcMessage, RequestVoteArgs, RequestVoteReply, SplitBrainArbitrator, CRAFT_RAFT_MAGIC,
+    decode_raft_envelope, decode_raft_message, encode_raft_envelope, encode_raft_message,
+    AppendEntriesArgs, AppendEntriesReply, HeartbeatArgs, HeartbeatReply, InstallSnapshotArgs,
+    InstallSnapshotChunkArgs, InstallSnapshotChunkReply, InstallSnapshotReply,
+    RaftMessageEnvelope, RaftRpcMessage, RequestVoteArgs, RequestVoteReply, SplitBrainArbitrator,
+    CRAFT_RAFT_MAGIC,
 };
 pub use raknet::{ping_bedrock_server, BedrockPingStatus};
 pub use rcon::RconClient;

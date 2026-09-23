@@ -1,6 +1,7 @@
 use craft_core::{
-    calculate_fencing_token, DistributedLock, RaftLogEntry, RaftNode, RaftPayload, RaftRole,
-    RaftSnapshot,
+    calculate_fencing_token, DistributedLock, JointConsensusPhase, LearnerSyncProgress,
+    MembershipChangeType, RaftLogEntry, RaftNode, RaftPayload, RaftRole, RaftSnapshot,
+    WalCompactionPolicy,
 };
 use craft_net::{
     AppendEntriesArgs, AppendEntriesReply, HeartbeatArgs, HeartbeatReply, RequestVoteArgs,
@@ -26,6 +27,10 @@ pub struct RaftStatusSummary {
     pub cluster_nodes: Vec<RaftNode>,
     pub is_quorum_intact: bool,
     pub edge_tie_breaker: Option<String>,
+    #[serde(default)]
+    pub group_id: u64,
+    #[serde(default)]
+    pub joint_consensus: Option<JointConsensusPhase>,
 }
 
 /// Linearizable distributed lock manager with monotonic fencing tokens
@@ -117,12 +122,26 @@ pub struct RaftEngine {
     pub edge_tie_breaker: Option<String>,
     pub votes_received: HashSet<String>,
     pub last_activity_time: i64,
+    pub group_id: u64,
+    pub joint_consensus: Option<JointConsensusPhase>,
+    pub learner_progress: HashMap<String, LearnerSyncProgress>,
 }
 
 impl RaftEngine {
-    /// Initialize a new RaftEngine instance
+    /// Initialize a new RaftEngine instance with default group 0
     pub fn new(
         node_id: String,
+        wal_path: PathBuf,
+        snapshots_dir: PathBuf,
+        cluster_nodes: Vec<RaftNode>,
+    ) -> Self {
+        Self::new_with_group(node_id, 0, wal_path, snapshots_dir, cluster_nodes)
+    }
+
+    /// Initialize a new RaftEngine instance for a specific Multi-Raft group
+    pub fn new_with_group(
+        node_id: String,
+        group_id: u64,
         wal_path: PathBuf,
         snapshots_dir: PathBuf,
         cluster_nodes: Vec<RaftNode>,
@@ -143,6 +162,9 @@ impl RaftEngine {
             edge_tie_breaker: None,
             votes_received: HashSet::new(),
             last_activity_time: chrono::Utc::now().timestamp(),
+            group_id,
+            joint_consensus: None,
+            learner_progress: HashMap::new(),
         }
     }
 
@@ -223,6 +245,38 @@ impl RaftEngine {
                 holder_id,
             } => {
                 let _ = self.lock_manager.release(lock_name, holder_id);
+            }
+            RaftPayload::ConfigurationChange {
+                change_type,
+                node,
+                phase,
+            } => {
+                self.joint_consensus = Some(phase.clone());
+                match change_type {
+                    MembershipChangeType::AddNode => {
+                        if let Some(pos) = self.cluster_nodes.iter().position(|n| n.id == node.id) {
+                            self.cluster_nodes[pos] = node.clone();
+                        } else {
+                            self.cluster_nodes.push(node.clone());
+                        }
+                    }
+                    MembershipChangeType::RemoveNode => {
+                        self.cluster_nodes.retain(|n| n.id != node.id);
+                    }
+                    MembershipChangeType::PromoteLearner => {
+                        if let Some(n) = self.cluster_nodes.iter_mut().find(|n| n.id == node.id) {
+                            n.voting_member = true;
+                        }
+                    }
+                    MembershipChangeType::DemoteToLearner => {
+                        if let Some(n) = self.cluster_nodes.iter_mut().find(|n| n.id == node.id) {
+                            n.voting_member = false;
+                        }
+                    }
+                }
+                if *phase == JointConsensusPhase::Finalized {
+                    self.joint_consensus = None;
+                }
             }
             _ => {}
         }
@@ -349,6 +403,45 @@ impl RaftEngine {
 
         self.votes_received.insert(from_node_id);
         let responsive: Vec<String> = self.votes_received.iter().cloned().collect();
+
+        // In joint consensus, candidate must achieve independent majorities in BOTH C_old and C_new
+        if let Some(JointConsensusPhase::Joint { c_old, c_new }) = &self.joint_consensus {
+            let old_nodes: Vec<RaftNode> = self
+                .cluster_nodes
+                .iter()
+                .filter(|n| c_old.contains(&n.id))
+                .cloned()
+                .collect();
+            let new_nodes: Vec<RaftNode> = self
+                .cluster_nodes
+                .iter()
+                .filter(|n| c_new.contains(&n.id))
+                .cloned()
+                .collect();
+
+            let status_old = SplitBrainArbitrator::evaluate_quorum(
+                &old_nodes,
+                &responsive,
+                &[],
+                self.edge_tie_breaker.as_deref(),
+            );
+            let status_new = SplitBrainArbitrator::evaluate_quorum(
+                &new_nodes,
+                &responsive,
+                &[],
+                self.edge_tie_breaker.as_deref(),
+            );
+
+            if status_old.is_quorum_intact && status_new.is_quorum_intact {
+                self.role = RaftRole::Leader;
+                self.leader_id = Some(self.node_id.clone());
+                let _ = self.propose(RaftPayload::NoOp, None);
+                return true;
+            }
+
+            return false;
+        }
+
         let status = SplitBrainArbitrator::evaluate_quorum(
             &self.cluster_nodes,
             &responsive,
@@ -531,6 +624,8 @@ impl RaftEngine {
                 .map_err(|e| format!("Snapshot serialization failed: {}", e))?,
             active_locks: self.lock_manager.get_locks().clone(),
             created_at: chrono::Utc::now().timestamp(),
+            group_id: self.group_id,
+            membership: self.cluster_nodes.clone(),
         };
 
         if !self.snapshots_dir.exists() {
@@ -543,9 +638,10 @@ impl RaftEngine {
             })?;
         }
 
-        let snap_path = self
-            .snapshots_dir
-            .join(format!("snapshot_{}_{}.json", last_included_term, last_included_index));
+        let snap_path = self.snapshots_dir.join(format!(
+            "snapshot_g{}_{}_{}.json",
+            self.group_id, last_included_term, last_included_index
+        ));
 
         let json = serde_json::to_string_pretty(&snapshot)
             .map_err(|e| format!("Failed to serialize snapshot: {}", e))?;
@@ -554,6 +650,58 @@ impl RaftEngine {
             .map_err(|e| format!("Failed to write snapshot {}: {}", snap_path.display(), e))?;
 
         Ok(snapshot)
+    }
+
+    /// Trigger WAL compaction according to compaction policy
+    pub fn trigger_compaction(
+        &mut self,
+        policy: &WalCompactionPolicy,
+        force: bool,
+    ) -> Result<Option<(u64, u64, u64)>, String> {
+        let entry_count = self.log.len() as u64;
+        if !force && (!policy.auto_compact_enabled || entry_count <= policy.max_retained_entries) {
+            return Ok(None);
+        }
+
+        let retain_entries = policy.max_retained_entries as usize;
+        let entries_to_compact = if force {
+            self.log.len().saturating_sub(1)
+        } else {
+            self.log.len().saturating_sub(retain_entries)
+        };
+
+        if entries_to_compact == 0 {
+            return Ok(None);
+        }
+
+        let snapshot = self.create_snapshot()?;
+        let last_included_index = snapshot.last_included_index;
+        let json_bytes = serde_json::to_vec(&snapshot)
+            .map_err(|e| format!("Failed to serialize snapshot for bytes count: {}", e))?;
+        let snapshot_bytes = json_bytes.len() as u64;
+
+        self.log.drain(0..entries_to_compact);
+
+        // Rewrite WAL file with pruned entries
+        if let Some(parent) = self.wal_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create WAL dir: {}", e))?;
+        }
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&self.wal_path)
+            .map_err(|e| format!("Failed to rewrite WAL file: {}", e))?;
+
+        for entry in &self.log {
+            let json = serde_json::to_string(entry)
+                .map_err(|e| format!("Failed to serialize entry: {}", e))?;
+            writeln!(file, "{}", json).map_err(|e| format!("Failed writing entry: {}", e))?;
+        }
+        file.flush().map_err(|e| format!("Failed flushing: {}", e))?;
+
+        Ok(Some((last_included_index, entries_to_compact as u64, snapshot_bytes)))
     }
 
     /// Prune WAL entries if log exceeds max_entries
@@ -588,6 +736,13 @@ impl RaftEngine {
         Ok(())
     }
 
+    /// Track synchronization progress of a non-voting learner
+    pub fn update_learner_progress(&mut self, node_id: String, match_index: u64) {
+        let (last_idx, _) = self.get_last_log_info();
+        let progress = LearnerSyncProgress::calculate(node_id.clone(), match_index, last_idx);
+        self.learner_progress.insert(node_id, progress);
+    }
+
     /// Retrieve summary status
     pub fn get_status(&self) -> RaftStatusSummary {
         let all_ids: Vec<String> = self.cluster_nodes.iter().map(|n| n.id.clone()).collect();
@@ -610,6 +765,8 @@ impl RaftEngine {
             cluster_nodes: self.cluster_nodes.clone(),
             is_quorum_intact: quorum.is_quorum_intact,
             edge_tie_breaker: self.edge_tie_breaker.clone(),
+            group_id: self.group_id,
+            joint_consensus: self.joint_consensus.clone(),
         }
     }
 
@@ -740,5 +897,83 @@ mod tests {
 
         assert_eq!(snap.last_included_index, 1);
         assert_eq!(snap.last_included_term, 1);
+        assert_eq!(snap.group_id, 0);
+    }
+
+    #[test]
+    fn test_trigger_compaction() {
+        let (mut engine, _temp) = setup_engine();
+        engine.role = RaftRole::Leader;
+        engine.current_term = 1;
+
+        for i in 0..10 {
+            engine
+                .propose(
+                    RaftPayload::Custom {
+                        action: "test".to_string(),
+                        data: format!("val-{}", i),
+                    },
+                    None,
+                )
+                .unwrap();
+        }
+
+        assert_eq!(engine.log.len(), 10);
+
+        let policy = WalCompactionPolicy {
+            max_retained_entries: 3,
+            min_compaction_interval_secs: 0,
+            auto_compact_enabled: true,
+            snapshot_threshold_bytes: 1024,
+        };
+
+        let result = engine.trigger_compaction(&policy, false).expect("compaction should succeed");
+        assert!(result.is_some());
+        let (last_idx, compacted, bytes) = result.unwrap();
+        assert_eq!(last_idx, 10);
+        assert_eq!(compacted, 7);
+        assert!(bytes > 0);
+        assert_eq!(engine.log.len(), 3);
+    }
+
+    #[test]
+    fn test_joint_consensus_dual_majority() {
+        let temp = TempDir::new().unwrap();
+        let wal_path = temp.path().join("wal").join("raft.wal");
+        let snapshots_dir = temp.path().join("snapshots");
+
+        let nodes = vec![
+            RaftNode { id: "n1".into(), address: "127.0.0.1".into(), raft_port: 9001, voting_member: true, priority: 10 },
+            RaftNode { id: "n2".into(), address: "127.0.0.1".into(), raft_port: 9002, voting_member: true, priority: 10 },
+            RaftNode { id: "n3".into(), address: "127.0.0.1".into(), raft_port: 9003, voting_member: true, priority: 10 },
+            RaftNode { id: "n4".into(), address: "127.0.0.1".into(), raft_port: 9004, voting_member: true, priority: 10 },
+            RaftNode { id: "n5".into(), address: "127.0.0.1".into(), raft_port: 9005, voting_member: true, priority: 10 },
+        ];
+
+        let mut engine = RaftEngine::new("n1".to_string(), wal_path, snapshots_dir, nodes);
+        engine.role = RaftRole::Candidate;
+        engine.current_term = 2;
+        engine.votes_received.insert("n1".to_string());
+
+        // Set joint consensus: C_old = [n1, n2, n3], C_new = [n1, n2, n3, n4, n5]
+        engine.joint_consensus = Some(JointConsensusPhase::Joint {
+            c_old: vec!["n1".to_string(), "n2".to_string(), "n3".to_string()],
+            c_new: vec!["n1".to_string(), "n2".to_string(), "n3".to_string(), "n4".to_string(), "n5".to_string()],
+        });
+
+        // Vote from n2 -> 2 votes (n1, n2).
+        // For C_old (size 3), majority is 2. Quorum in C_old is intact!
+        // But for C_new (size 5), majority is 3. Quorum in C_new is NOT intact yet!
+        let won = engine.record_vote("n2".to_string());
+        assert!(!won);
+        assert_eq!(engine.role, RaftRole::Candidate);
+
+        // Vote from n4 -> 3 votes (n1, n2, n4).
+        // C_old has n1, n2 (2 of 3) -> valid!
+        // C_new has n1, n2, n4 (3 of 5) -> valid!
+        // Both quorums satisfied -> candidate transitions to Leader!
+        let won2 = engine.record_vote("n4".to_string());
+        assert!(won2);
+        assert_eq!(engine.role, RaftRole::Leader);
     }
 }

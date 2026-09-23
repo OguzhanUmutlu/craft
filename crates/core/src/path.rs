@@ -54,6 +54,9 @@ pub struct CraftPaths {
     pub raft_wal_dir: PathBuf,
     pub raft_snapshots_dir: PathBuf,
     pub raft_lock: PathBuf,
+    pub raft_groups_dir: PathBuf,
+    pub multiraft_file: PathBuf,
+    pub multiraft_lock: PathBuf,
     pub quotas_dir: PathBuf,
     pub quotas_file: PathBuf,
     pub quotas_lock: PathBuf,
@@ -122,6 +125,9 @@ impl CraftPaths {
         let raft_wal_dir = raft_dir.join("wal");
         let raft_snapshots_dir = raft_dir.join("snapshots");
         let raft_lock = locks_dir.join("raft.lock");
+        let raft_groups_dir = raft_dir.join("groups");
+        let multiraft_file = raft_dir.join("multiraft.toml");
+        let multiraft_lock = locks_dir.join("multiraft.lock");
         let quotas_dir = home.join("quotas");
         let quotas_file = quotas_dir.join("quotas.toml");
         let quotas_lock = locks_dir.join("quotas.lock");
@@ -188,6 +194,9 @@ impl CraftPaths {
             raft_wal_dir,
             raft_snapshots_dir,
             raft_lock,
+            raft_groups_dir,
+            multiraft_file,
+            multiraft_lock,
             quotas_dir,
             quotas_file,
             quotas_lock,
@@ -243,6 +252,7 @@ impl CraftPaths {
         let raft_dir = home.join("raft");
         let raft_wal_dir = raft_dir.join("wal");
         let raft_snapshots_dir = raft_dir.join("snapshots");
+        let raft_groups_dir = raft_dir.join("groups");
         let quotas_dir = home.join("quotas");
         let cgroups_dir = home.join("cgroups");
         let tracing_dir = home.join("tracing");
@@ -277,6 +287,7 @@ impl CraftPaths {
             &raft_dir,
             &raft_wal_dir,
             &raft_snapshots_dir,
+            &raft_groups_dir,
             &quotas_dir,
             &cgroups_dir,
             &tracing_dir,
@@ -315,6 +326,8 @@ impl CraftPaths {
         let sdn_lock = locks_dir.join("sdn.lock");
         let raft_state_file = raft_dir.join("state.toml");
         let raft_lock = locks_dir.join("raft.lock");
+        let multiraft_file = raft_dir.join("multiraft.toml");
+        let multiraft_lock = locks_dir.join("multiraft.lock");
         let quotas_file = quotas_dir.join("quotas.toml");
         let quotas_lock = locks_dir.join("quotas.lock");
         let tracing_file = tracing_dir.join("tracing.toml");
@@ -374,6 +387,9 @@ impl CraftPaths {
             raft_wal_dir,
             raft_snapshots_dir,
             raft_lock,
+            raft_groups_dir,
+            multiraft_file,
+            multiraft_lock,
             quotas_dir,
             quotas_file,
             quotas_lock,
@@ -390,6 +406,21 @@ impl CraftPaths {
             numa_file,
             numa_lock,
         })
+    }
+
+    /// Returns the directory path for a specific Raft group's state and WAL
+    pub fn raft_group_dir(&self, group_id: u64) -> PathBuf {
+        self.raft_groups_dir.join(format!("group_{}", group_id))
+    }
+
+    /// Returns the WAL directory path for a specific Raft group
+    pub fn raft_group_wal(&self, group_id: u64) -> PathBuf {
+        self.raft_group_dir(group_id).join("wal")
+    }
+
+    /// Returns the snapshots directory path for a specific Raft group
+    pub fn raft_group_snapshots(&self, group_id: u64) -> PathBuf {
+        self.raft_group_dir(group_id).join("snapshots")
     }
 
     /// Resolves a server path either from a provided path, a name, or partial name match

@@ -2539,11 +2539,25 @@ pub async fn raft_consensus_tui(paths: &CraftPaths) -> Result<()> {
                     cluster_nodes: Vec::new(),
                     is_quorum_intact: false,
                     edge_tie_breaker: None,
+                    group_id: 0,
+                    joint_consensus: None,
                 },
             )
         })
     } else {
         craft_daemon::RaftConsensusService::get_status(paths)?
+    };
+
+    let (multi_reg, multi_statuses) = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        if let Ok((reg, statuses, _)) = client.get_multiraft_status(None).await {
+            (Some(reg), Some(statuses))
+        } else {
+            (None, None)
+        }
+    } else if let Ok((reg, statuses, _)) = craft_daemon::MultiRaftService::new(paths.clone()).get_status(None) {
+        (Some(reg), Some(statuses))
+    } else {
+        (None, None)
     };
 
     let mut lines = Vec::new();
@@ -2593,6 +2607,32 @@ pub async fn raft_consensus_tui(paths: &CraftPaths) -> Result<()> {
     ));
     lines.push("".to_string());
 
+    if let Some(ref reg) = multi_reg {
+        lines.push(
+            format!("[MULTI-RAFT PARTITIONS: {}]", reg.partitions.len())
+                .cyan()
+                .bold()
+                .to_string(),
+        );
+        for p in reg.partitions.iter().take(4) {
+            let p_lead = multi_statuses
+                .as_ref()
+                .and_then(|s| s.get(&p.group_id))
+                .and_then(|st| st.leader_id.as_deref())
+                .or(p.leader_node_id.as_deref())
+                .unwrap_or("None");
+            lines.push(format!(
+                " * Group {}: {} | Range: [{}..{}] | Leader: {}",
+                p.group_id,
+                p.name.white().bold(),
+                p.key_range_start,
+                p.key_range_end,
+                p_lead
+            ));
+        }
+        lines.push("".to_string());
+    }
+
     if status.cluster_nodes.is_empty() {
         lines.push(
             "[INFO] Standalone local node. Add peers to form a replicated cluster."
@@ -2616,37 +2656,37 @@ pub async fn raft_consensus_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("".to_string());
     lines.push("CLI Commands:".dimmed().to_string());
     lines.push(
-        "  craft raft status      View consensus state, term, and cluster nodes"
+        "  craft raft status         View consensus state, partitions, and cluster nodes"
             .green()
             .to_string(),
     );
     lines.push(
-        "  craft raft propose     Propose a replicated state mutation to leader"
+        "  craft raft reconfigure    Online joint consensus membership transition"
             .green()
             .to_string(),
     );
     lines.push(
-        "  craft raft lock        Acquire linearizable lock with monotonic fencing token"
+        "  craft raft compact        WAL log compaction and snapshot generation"
             .green()
             .to_string(),
     );
     lines.push(
-        "  craft raft unlock      Release distributed lock resource"
+        "  craft raft partition      Multi-Raft key routing and group management"
             .green()
             .to_string(),
     );
     lines.push(
-        "  craft raft step-down   Voluntarily step down as leader"
+        "  craft raft propose        Propose a replicated state mutation to leader"
             .green()
             .to_string(),
     );
     lines.push(
-        "  craft raft transfer    Transfer cluster leadership to peer"
+        "  craft raft lock / unlock  Linearizable distributed locking"
             .green()
             .to_string(),
     );
     lines.push(
-        "  craft raft logs        Inspect append-only Write-Ahead Log (WAL)"
+        "  craft raft logs           Inspect append-only Write-Ahead Log (WAL)"
             .green()
             .to_string(),
     );

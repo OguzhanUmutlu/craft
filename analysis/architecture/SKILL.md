@@ -300,6 +300,49 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `craft raft logs [--limit <n>] [--json]`
   - Full-screen centered interactive TUI panel (`Tools -> Raft Consensus & Cluster Arbitration`) powered by ModalX.
 
+### 3.15 Autonomous Distributed Consensus Reconfiguration, Multi-Raft Partitioning & Raft Log Compaction (Phase 29)
+
+- **Online Joint Consensus Reconfiguration ($C_{\text{old}} \to C_{\text{old,new}} \to C_{\text{new}}$)**:
+  - Supports zero-downtime cluster expansion, node replacement, and decommissioning.
+  - Two-phase joint consensus writes a configuration change entry to WAL entering `JointConsensusPhase::Joint { c_old, c_new }`.
+  - Quorum evaluation requires separate majority agreement from BOTH $C_{\text{old}}$ and $C_{\text{new}}$ before transitions:
+    $$\text{Quorum}_{\text{joint}} = (\text{votes}(C_{\text{old}}) > |C_{\text{old}}| / 2) \land (\text{votes}(C_{\text{new}}) > |C_{\text{new}}| / 2)$$
+  - Once committed, leader appends and commits a finalization entry transitioning to `JointConsensusPhase::Finalized` where only $C_{\text{new}}$ evaluates quorum.
+- **Non-Voting Learner Catch-Up & Promotion Lifecycle**:
+  - Nodes can join as non-voting learners (`LearnerSyncProgress`) without impacting active consensus quorum or election timeouts.
+  - Leader replicates logs to learners and tracks `match_index`, `leader_last_index`, `is_caught_up` (within 10 entries), and `sync_percentage`.
+  - Once caught up, administrators or autonomous orchestrators promote learners to voting members via joint consensus without risk of election latency spikes.
+- **Multi-Raft Partitioning & Key Range Routing**:
+  - Eliminates single-leader consensus bottlenecks by partitioning state across independent Raft groups (`MultiRaftPartition`, `MultiRaftRegistry`).
+  - Application keys (e.g. server UUID, tenant ID) route to designated groups via lexicographical key ranges `[key_range_start..key_range_end]`:
+    - Group 0 (Control Plane): Global cluster metadata, leases, server registrations, routing catalog.
+    - Group 1+ (Data Shards): Sharded world state, region entities, partitioned logs.
+  - Multi-Raft storage layout anchors per-group isolated WAL and snapshot directories under `~/.craft/raft/groups/<group_id>/wal/` and `snapshots/`.
+- **High-Watermark Log Compaction & Streaming Snapshot Chunking**:
+  - Compaction policy (`WalCompactionPolicy`) enforces high/low log entry watermarks (`entries_watermark = 50,000`), maximum log byte size (`max_log_bytes = 128 MB`), and minimum retain window (`retain_entries = 1,000`).
+  - Point-in-time state machine serialization emits `RaftSnapshotMeta` and payload state files.
+  - Wire streaming chops snapshots into 64 KB binary chunks (`SnapshotChunk`) tagged with sequential chunk indexes, total chunk counts, and CRC32 integrity checksums (`compute_crc32`).
+  - Wire reassembly (`reassemble_snapshot_chunks`) validates byte lengths and CRC32 checksums before atomic disk swapping.
+- **Pure-Rust Multiplexed Wire Envelopes (`craft-net`)**:
+  - `RaftMessageEnvelope` multiplexes traffic across groups: `magic: [u8; 4] = [0x43, 0x52, 0x46, 0x54]`, `group_id: u64`, `sender_node_id: String`, `target_node_id: Option<String>`, `payload: RaftRpcMessage`.
+  - Wire messages include `InstallSnapshotChunkArgs` and `InstallSnapshotChunkReply` alongside standard voting and heartbeat RPCs.
+- **In-Process Daemon Multi-Raft Supervisor (`MultiRaftService`)**:
+  - Supervises partition lifecycle, WAL compaction, and joint consensus transitions.
+  - IPC endpoints: `RaftGetMultiRaftStatus`, `RaftReconfigureMembership`, `RaftTriggerCompaction`, `RaftRoutePartitionKey`, `RaftManagePartition`.
+  - Prometheus metrics: `craft_raft_groups_total`, `craft_raft_log_compaction_runs_total`, `craft_raft_snapshot_bytes_total`, `craft_raft_snapshot_chunks_total`, `craft_raft_joint_consensus_transitions_total`.
+- **Remote Federation & Scripting Hook Bus**:
+  - `RemoteCraftClient` provides `get_remote_multiraft_status`, `reconfigure_remote_membership`, `trigger_remote_log_compaction`, `route_remote_partition_key` over SSH.
+  - `LifecycleEvent::RaftMembershipReconfigured`, `RaftCompactionCompleted`, `MultiRaftPartitionCreated` fire into embedded Lua scripts.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft raft status [--group <id>] [--json]`
+  - `craft raft reconfigure [--group <id>] [--add <node>] [--remove <node>] [--learner <node>] [--promote <node>] [--demote <node>] [--json]`
+  - `craft raft compact [--group <id>] [--index <n>] [--force] [--json]`
+  - `craft raft partition list [--json]`
+  - `craft raft partition route <key> [--json]`
+  - `craft raft partition create --group <id> --name <name> -s <start> -e <end> [--leader <id>] [--peers <ids...>] [--json]`
+  - `craft raft partition remove --group <id> [--json]`
+  - Full-screen centered interactive TUI panel (`Tools -> Raft Consensus & Cluster Arbitration`) displaying Multi-Raft partitions, leaders, and compaction controls powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

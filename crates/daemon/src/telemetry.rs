@@ -176,6 +176,7 @@ pub async fn generate_prometheus_metrics(
     out.push_str(&crate::tracing_service::TracingService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::anvil_service::AnvilService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::dpdk_service::DpdkNumaService::global(paths).format_prometheus_metrics().await);
+    out.push_str(&crate::multi_raft_service::MultiRaftService::global(paths).generate_prometheus_metrics());
 
     out
 }

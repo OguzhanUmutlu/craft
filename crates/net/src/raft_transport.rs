@@ -1,4 +1,4 @@
-use craft_core::{ArbitrationWeight, QuorumStatus, RaftLogEntry, RaftNode};
+use craft_core::{ArbitrationWeight, QuorumStatus, RaftLogEntry, RaftNode, SnapshotChunk};
 use serde::{Deserialize, Serialize};
 
 /// 4-byte pure-Rust Raft binary wire magic: 'CRFT' (0x43, 0x52, 0x46, 0x54)
@@ -60,6 +60,25 @@ pub struct InstallSnapshotReply {
     pub term: u64,
 }
 
+/// Streaming Snapshot Chunk RPC arguments for Multi-Raft
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallSnapshotChunkArgs {
+    pub term: u64,
+    pub leader_id: String,
+    pub group_id: u64,
+    pub chunk: SnapshotChunk,
+}
+
+/// Streaming Snapshot Chunk RPC response for Multi-Raft
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallSnapshotChunkReply {
+    pub term: u64,
+    pub group_id: u64,
+    pub chunk_index: u32,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
 /// Fast Raft Heartbeat arguments
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HeartbeatArgs {
@@ -85,8 +104,23 @@ pub enum RaftRpcMessage {
     AppendEntriesReply(AppendEntriesReply),
     InstallSnapshot(InstallSnapshotArgs),
     InstallSnapshotReply(InstallSnapshotReply),
+    InstallSnapshotChunk(InstallSnapshotChunkArgs),
+    InstallSnapshotChunkReply(InstallSnapshotChunkReply),
     Heartbeat(HeartbeatArgs),
     HeartbeatReply(HeartbeatReply),
+}
+
+/// Multi-Raft channel multiplexing envelope allowing multiple Raft groups over a single connection
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RaftMessageEnvelope {
+    pub group_id: u64,
+    pub message: RaftRpcMessage,
+}
+
+impl RaftMessageEnvelope {
+    pub fn new(group_id: u64, message: RaftRpcMessage) -> Self {
+        Self { group_id, message }
+    }
 }
 
 /// Encodes a Raft RPC message into a binary frame prefixed with CRAFT_RAFT_MAGIC and length
@@ -129,6 +163,47 @@ pub fn decode_raft_message(buffer: &[u8]) -> Result<Option<(RaftRpcMessage, usiz
         serde_json::from_slice(payload).map_err(|e| format!("Deserialization error: {}", e))?;
 
     Ok(Some((msg, total_frame_len)))
+}
+
+/// Encodes a multi-group Raft message envelope into binary wire frame
+pub fn encode_raft_envelope(env: &RaftMessageEnvelope) -> Result<Vec<u8>, String> {
+    let payload = serde_json::to_vec(env).map_err(|e| format!("Serialization error: {}", e))?;
+    let length = payload.len() as u32;
+
+    let mut frame = Vec::with_capacity(8 + payload.len());
+    frame.extend_from_slice(&CRAFT_RAFT_MAGIC);
+    frame.extend_from_slice(&length.to_be_bytes());
+    frame.extend_from_slice(&payload);
+
+    Ok(frame)
+}
+
+/// Decodes a multi-group Raft message envelope from binary wire frame
+pub fn decode_raft_envelope(buffer: &[u8]) -> Result<Option<(RaftMessageEnvelope, usize)>, String> {
+    if buffer.len() < 8 {
+        return Ok(None);
+    }
+
+    if buffer[0..4] != CRAFT_RAFT_MAGIC {
+        return Err(format!(
+            "Invalid Raft wire magic: expected {:?}, got {:?}",
+            CRAFT_RAFT_MAGIC,
+            &buffer[0..4]
+        ));
+    }
+
+    let length = u32::from_be_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]) as usize;
+    let total_frame_len = 8 + length;
+
+    if buffer.len() < total_frame_len {
+        return Ok(None);
+    }
+
+    let payload = &buffer[8..total_frame_len];
+    let envelope: RaftMessageEnvelope =
+        serde_json::from_slice(payload).map_err(|e| format!("Deserialization error: {}", e))?;
+
+    Ok(Some((envelope, total_frame_len)))
 }
 
 /// Dynamic Split-Brain Arbitrator with health-weighted quorums and edge tie-breaker logic
@@ -378,5 +453,44 @@ mod tests {
         let status_b =
             SplitBrainArbitrator::evaluate_quorum(&nodes, &partition_b, &[], Some("n1"));
         assert!(!status_b.is_quorum_intact);
+    }
+
+    #[test]
+    fn test_raft_message_envelope_roundtrip() {
+        let inner = RaftRpcMessage::Heartbeat(HeartbeatArgs {
+            term: 7,
+            leader_id: "node-primary".to_string(),
+            leader_commit: 350,
+        });
+
+        let envelope = RaftMessageEnvelope::new(100, inner);
+        let encoded = encode_raft_envelope(&envelope).expect("envelope should encode");
+        assert_eq!(&encoded[0..4], &CRAFT_RAFT_MAGIC);
+
+        let decoded = decode_raft_envelope(&encoded).expect("envelope should decode");
+        assert!(decoded.is_some());
+        let (unpacked, consumed) = decoded.unwrap();
+        assert_eq!(consumed, encoded.len());
+        assert_eq!(unpacked.group_id, 100);
+        assert_eq!(unpacked, envelope);
+    }
+
+    #[test]
+    fn test_install_snapshot_chunk_rpc_framing() {
+        use craft_core::SnapshotChunk;
+
+        let chunk = SnapshotChunk::new("snap-55".to_string(), 100, 0, 1, vec![10, 20, 30, 40], true);
+        let msg = RaftRpcMessage::InstallSnapshotChunk(InstallSnapshotChunkArgs {
+            term: 3,
+            leader_id: "node-lead".to_string(),
+            group_id: 100,
+            chunk,
+        });
+
+        let encoded = encode_raft_message(&msg).expect("snapshot chunk rpc should encode");
+        let decoded = decode_raft_message(&encoded).expect("snapshot chunk rpc should decode");
+        assert!(decoded.is_some());
+        let (unpacked, _) = decoded.unwrap();
+        assert_eq!(unpacked, msg);
     }
 }

@@ -1136,12 +1136,18 @@ pub enum SdnCommands {
 pub enum RaftCommands {
     /// Inspect Raft consensus state, active leader, term, quorum, and cluster nodes
     Status {
+        /// Raft partition group ID (defaults to all/aggregated)
+        #[arg(short, long)]
+        group: Option<String>,
         /// Emit machine-readable JSON output
         #[arg(long)]
         json: bool,
     },
     /// Propose a replicated state mutation to the cluster leader
     Propose {
+        /// Raft partition group ID (defaults to "default")
+        #[arg(short, long, default_value = "default")]
+        group: String,
         /// Mutation action (e.g. config_update, custom)
         #[arg(short, long)]
         action: String,
@@ -1151,6 +1157,50 @@ pub enum RaftCommands {
         /// Emit machine-readable JSON output
         #[arg(long)]
         json: bool,
+    },
+    /// Reconfigure cluster membership using joint consensus (add, remove, promote, demote)
+    Reconfigure {
+        /// Raft partition group ID (defaults to "default")
+        #[arg(short, long, default_value = "default")]
+        group: String,
+        /// Voting nodes to add (format: id, or id@address:port)
+        #[arg(long)]
+        add: Vec<String>,
+        /// Voting nodes to remove by node ID
+        #[arg(long)]
+        remove: Vec<String>,
+        /// Non-voting learner nodes to add for log catch-up (format: id, or id@address:port)
+        #[arg(long)]
+        learner: Vec<String>,
+        /// Promote an existing learner node to voting member
+        #[arg(long)]
+        promote: Option<String>,
+        /// Demote a voting node to non-voting learner
+        #[arg(long)]
+        demote: Option<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Trigger Raft Write-Ahead Log compaction and snapshot creation
+    Compact {
+        /// Raft partition group ID (defaults to "default")
+        #[arg(short, long, default_value = "default")]
+        group: String,
+        /// Up-to log index to compact; if omitted, compacts up to last applied index
+        #[arg(short, long)]
+        index: Option<u64>,
+        /// Force compaction regardless of log retention policy
+        #[arg(short, long)]
+        force: bool,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Multi-Raft partition routing, key hashing, and group lifecycle management
+    Partition {
+        #[command(subcommand)]
+        action: RaftPartitionCommands,
     },
     /// Acquire a linearizable distributed lock with monotonic fencing token
     Lock {
@@ -1199,6 +1249,57 @@ pub enum RaftCommands {
         /// Maximum number of log entries to display
         #[arg(short, long, default_value_t = 20)]
         limit: usize,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum RaftPartitionCommands {
+    /// List all Multi-Raft partitions and their key ranges
+    List {
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Route a partition key (e.g. server UUID, tenant ID) to its designated Raft group
+    Route {
+        /// Key string to route
+        key: String,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Create a new Multi-Raft partition
+    Create {
+        /// Partition group numerical identifier
+        #[arg(short, long)]
+        group: u64,
+        /// Partition descriptive name
+        #[arg(short, long)]
+        name: String,
+        /// Lower key range boundary (inclusive string or hex)
+        #[arg(short = 's', long)]
+        range_start: String,
+        /// Upper key range boundary (inclusive string or hex)
+        #[arg(short = 'e', long)]
+        range_end: String,
+        /// Designated initial leader node
+        #[arg(short, long)]
+        leader: Option<String>,
+        /// Initial peer node IDs
+        #[arg(short, long)]
+        peers: Vec<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Remove an existing Multi-Raft partition
+    Remove {
+        /// Partition group numerical identifier
+        #[arg(short, long)]
+        group: u64,
         /// Emit machine-readable JSON output
         #[arg(long)]
         json: bool,
@@ -3322,11 +3423,12 @@ mod tests {
     #[test]
     fn test_raft_cli_parsing() {
         // Status command
-        let cli_status = Cli::try_parse_from(["craft", "raft", "status", "--json"]).unwrap();
+        let cli_status = Cli::try_parse_from(["craft", "raft", "status", "--group", "data-1", "--json"]).unwrap();
         match cli_status.command {
             Some(Commands::Raft {
-                action: RaftCommands::Status { json },
+                action: RaftCommands::Status { group, json },
             }) => {
+                assert_eq!(group, Some("data-1".to_string()));
                 assert!(json);
             }
             _ => panic!("Expected Raft Status command"),
@@ -3336,8 +3438,9 @@ mod tests {
         let cli_consensus = Cli::try_parse_from(["craft", "consensus", "status"]).unwrap();
         match cli_consensus.command {
             Some(Commands::Raft {
-                action: RaftCommands::Status { json },
+                action: RaftCommands::Status { group, json },
             }) => {
+                assert_eq!(group, None);
                 assert!(!json);
             }
             _ => panic!("Expected Raft Status via consensus alias"),
@@ -3345,18 +3448,94 @@ mod tests {
 
         // Propose command
         let cli_propose = Cli::try_parse_from([
-            "craft", "raft", "propose", "--action", "config_update", "--data", "max_players=50",
+            "craft", "raft", "propose", "--group", "default", "--action", "config_update", "--data", "max_players=50",
         ])
         .unwrap();
         match cli_propose.command {
             Some(Commands::Raft {
-                action: RaftCommands::Propose { action, data, json },
+                action: RaftCommands::Propose { group, action, data, json },
             }) => {
+                assert_eq!(group, "default");
                 assert_eq!(action, "config_update");
                 assert_eq!(data, "max_players=50");
                 assert!(!json);
             }
             _ => panic!("Expected Raft Propose command"),
+        }
+
+        // Reconfigure command
+        let cli_reconfig = Cli::try_parse_from([
+            "craft", "raft", "reconfigure", "--group", "default", "--add", "node-3", "--remove", "node-2", "--learner", "node-4", "--promote", "node-4",
+        ])
+        .unwrap();
+        match cli_reconfig.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Reconfigure { group, add, remove, learner, promote, demote, json },
+            }) => {
+                assert_eq!(group, "default");
+                assert_eq!(add, vec!["node-3".to_string()]);
+                assert_eq!(remove, vec!["node-2".to_string()]);
+                assert_eq!(learner, vec!["node-4".to_string()]);
+                assert_eq!(promote, Some("node-4".to_string()));
+                assert_eq!(demote, None);
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft Reconfigure command"),
+        }
+
+        // Compact command
+        let cli_compact = Cli::try_parse_from([
+            "craft", "raft", "compact", "--group", "default", "--index", "100", "--force",
+        ])
+        .unwrap();
+        match cli_compact.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Compact { group, index, force, json },
+            }) => {
+                assert_eq!(group, "default");
+                assert_eq!(index, Some(100));
+                assert!(force);
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft Compact command"),
+        }
+
+        // Partition List & Route command
+        let cli_part_list = Cli::try_parse_from(["craft", "raft", "partition", "list", "--json"]).unwrap();
+        match cli_part_list.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Partition { action: RaftPartitionCommands::List { json } },
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Raft Partition List command"),
+        }
+
+        let cli_part_route = Cli::try_parse_from(["craft", "raft", "partition", "route", "server-42"]).unwrap();
+        match cli_part_route.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Partition { action: RaftPartitionCommands::Route { key, json } },
+            }) => {
+                assert_eq!(key, "server-42");
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft Partition Route command"),
+        }
+
+        let cli_part_create = Cli::try_parse_from([
+            "craft", "raft", "partition", "create", "--group", "2", "--name", "data-shard-2",
+            "--range-start", "80000000", "--range-end", "ffffffff",
+        ]).unwrap();
+        match cli_part_create.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Partition { action: RaftPartitionCommands::Create { group, name, range_start, range_end, .. } },
+            }) => {
+                assert_eq!(group, 2);
+                assert_eq!(name, "data-shard-2");
+                assert_eq!(range_start, "80000000");
+                assert_eq!(range_end, "ffffffff");
+            }
+            _ => panic!("Expected Raft Partition Create command"),
         }
 
         // Lock command

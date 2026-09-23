@@ -850,6 +850,56 @@ where
                     }
                 }
             }
+            IpcRequest::RaftGetMultiRaftStatus { group_id } => {
+                match crate::multi_raft_service::MultiRaftService::global(supervisor.paths()).get_status(group_id) {
+                    Ok((registry, statuses, learner_progress)) => {
+                        write_frame(&mut stream, &IpcResponse::RaftMultiRaftStatusResult { registry, statuses, learner_progress }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::RaftReconfigureMembership { group_id, change_type, node } => {
+                match crate::multi_raft_service::MultiRaftService::global(supervisor.paths()).reconfigure_membership(group_id, change_type, node) {
+                    Ok((success, phase, message)) => {
+                        write_frame(&mut stream, &IpcResponse::RaftReconfigureMembershipResult { success, phase, message }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::RaftTriggerCompaction { group_id, force } => {
+                match crate::multi_raft_service::MultiRaftService::global(supervisor.paths()).trigger_compaction(group_id, force) {
+                    Ok((last_included_index, entries_compacted, snapshot_bytes, duration_ms)) => {
+                        write_frame(&mut stream, &IpcResponse::RaftCompactionResult { group_id, last_included_index, entries_compacted, snapshot_bytes, duration_ms }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::RaftRoutePartitionKey { key } => {
+                match crate::multi_raft_service::MultiRaftService::global(supervisor.paths()).route_partition_key(&key) {
+                    Ok((key, group_id, partition_name, leader_node_id)) => {
+                        write_frame(&mut stream, &IpcResponse::RaftPartitionRouteResult { key, group_id, partition_name, leader_node_id }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::RaftManagePartition { action, partition, group_id } => {
+                match crate::multi_raft_service::MultiRaftService::global(supervisor.paths()).manage_partition(&action, partition, group_id) {
+                    Ok((success, message, partitions)) => {
+                        write_frame(&mut stream, &IpcResponse::RaftManagePartitionResult { success, message, partitions }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
             IpcRequest::GetServerQuota { server } => {
                 match crate::quota_service::QuotaService::get_server_quota(supervisor.paths(), &server) {
                     Ok(summary) => {
@@ -1868,6 +1918,110 @@ impl DaemonClient {
     ) -> Result<Vec<craft_core::RaftLogEntry>> {
         match self.request(IpcRequest::GetRaftLogs { limit }).await? {
             IpcResponse::RaftLogsResult { entries } => Ok(entries),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_multiraft_status(
+        &mut self,
+        group_id: Option<u64>,
+    ) -> Result<(
+        craft_core::MultiRaftRegistry,
+        std::collections::HashMap<u64, crate::raft_engine::RaftStatusSummary>,
+        std::collections::HashMap<String, craft_core::LearnerSyncProgress>,
+    )> {
+        match self.request(IpcRequest::RaftGetMultiRaftStatus { group_id }).await? {
+            IpcResponse::RaftMultiRaftStatusResult {
+                registry,
+                statuses,
+                learner_progress,
+            } => Ok((registry, statuses, learner_progress)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reconfigure_raft_membership(
+        &mut self,
+        group_id: u64,
+        change_type: craft_core::MembershipChangeType,
+        node: craft_core::RaftNode,
+    ) -> Result<(bool, craft_core::JointConsensusPhase, String)> {
+        match self
+            .request(IpcRequest::RaftReconfigureMembership {
+                group_id,
+                change_type,
+                node,
+            })
+            .await?
+        {
+            IpcResponse::RaftReconfigureMembershipResult {
+                success,
+                phase,
+                message,
+            } => Ok((success, phase, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn trigger_raft_compaction(
+        &mut self,
+        group_id: u64,
+        force: bool,
+    ) -> Result<(u64, u64, u64, u64)> {
+        match self
+            .request(IpcRequest::RaftTriggerCompaction { group_id, force })
+            .await?
+        {
+            IpcResponse::RaftCompactionResult {
+                last_included_index,
+                entries_compacted,
+                snapshot_bytes,
+                duration_ms,
+                ..
+            } => Ok((last_included_index, entries_compacted, snapshot_bytes, duration_ms)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn route_raft_partition_key(
+        &mut self,
+        key: String,
+    ) -> Result<(String, u64, String, Option<String>)> {
+        match self.request(IpcRequest::RaftRoutePartitionKey { key }).await? {
+            IpcResponse::RaftPartitionRouteResult {
+                key,
+                group_id,
+                partition_name,
+                leader_node_id,
+            } => Ok((key, group_id, partition_name, leader_node_id)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn manage_raft_partition(
+        &mut self,
+        action: String,
+        partition: Option<craft_core::MultiRaftPartition>,
+        group_id: Option<u64>,
+    ) -> Result<(bool, String, Vec<craft_core::MultiRaftPartition>)> {
+        match self
+            .request(IpcRequest::RaftManagePartition {
+                action,
+                partition,
+                group_id,
+            })
+            .await?
+        {
+            IpcResponse::RaftManagePartitionResult {
+                success,
+                message,
+                partitions,
+            } => Ok((success, message, partitions)),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

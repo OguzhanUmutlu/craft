@@ -1102,6 +1102,72 @@ impl RemoteCraftClient {
         Ok(stdout.trim().to_string())
     }
 
+    /// Queries Multi-Raft consensus partition status on remote host
+    pub fn get_remote_multiraft_status(&self, group_id: Option<u64>) -> Result<String> {
+        let mut cmd = "craft raft status --json".to_string();
+        if let Some(gid) = group_id {
+            cmd.push_str(&format!(" --group {}", gid));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote Multi-Raft status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Reconfigures cluster membership in a Multi-Raft group on remote host
+    pub fn reconfigure_remote_membership(
+        &self,
+        group_id: u64,
+        change_type: &str,
+        node_id: &str,
+        address: &str,
+        port: u16,
+        voting: bool,
+    ) -> Result<String> {
+        let mut cmd = format!(
+            "craft raft reconfigure --group {} --action {} --node-id {} --address {} --port {}",
+            group_id, change_type, node_id, address, port
+        );
+        if voting {
+            cmd.push_str(" --voting");
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote Raft reconfiguration failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Triggers streaming log compaction and snapshot creation on remote host
+    pub fn trigger_remote_log_compaction(&self, group_id: u64, force: bool) -> Result<String> {
+        let mut cmd = format!("craft raft compact --group {}", group_id);
+        if force {
+            cmd.push_str(" --force");
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote log compaction failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Routes an application key to a Multi-Raft group on remote host
+    pub fn route_remote_partition_key(&self, key: &str) -> Result<String> {
+        let cmd = format!("craft raft partition route {} --json", key);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote key routing failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
     /// Formats an exec command with an active W3C traceparent environment prefix if provided
     pub fn exec_with_trace_context(
         &self,

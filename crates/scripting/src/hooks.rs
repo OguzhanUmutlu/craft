@@ -50,6 +50,9 @@ pub enum LifecycleEvent {
     NumaMigrationTriggered,
     DpdkPacketFloodAlert,
     CorePinningAdjusted,
+    RaftMembershipReconfigured,
+    RaftCompactionCompleted,
+    MultiRaftPartitionCreated,
 }
 
 impl LifecycleEvent {
@@ -94,6 +97,9 @@ impl LifecycleEvent {
             Self::NumaMigrationTriggered => "on_numa_migration_triggered",
             Self::DpdkPacketFloodAlert => "on_dpdk_packet_flood_alert",
             Self::CorePinningAdjusted => "on_core_pinning_adjusted",
+            Self::RaftMembershipReconfigured => "on_raft_membership_reconfigured",
+            Self::RaftCompactionCompleted => "on_raft_compaction_completed",
+            Self::MultiRaftPartitionCreated => "on_multiraft_partition_created",
         }
     }
 
@@ -139,6 +145,9 @@ impl LifecycleEvent {
             "on_numa_migration_triggered" | "numa_migration_triggered" | "numa_migration" => Some(Self::NumaMigrationTriggered),
             "on_dpdk_packet_flood_alert" | "dpdk_packet_flood_alert" | "dpdk_flood" => Some(Self::DpdkPacketFloodAlert),
             "on_core_pinning_adjusted" | "core_pinning_adjusted" | "pinning_adjusted" => Some(Self::CorePinningAdjusted),
+            "on_raft_membership_reconfigured" | "raft_membership_reconfigured" | "reconfigure" => Some(Self::RaftMembershipReconfigured),
+            "on_raft_compaction_completed" | "raft_compaction_completed" | "compaction" => Some(Self::RaftCompactionCompleted),
+            "on_multiraft_partition_created" | "multiraft_partition_created" | "partition_created" => Some(Self::MultiRaftPartitionCreated),
             _ => None,
         }
     }
@@ -184,6 +193,9 @@ impl LifecycleEvent {
             Self::NumaMigrationTriggered,
             Self::DpdkPacketFloodAlert,
             Self::CorePinningAdjusted,
+            Self::RaftMembershipReconfigured,
+            Self::RaftCompactionCompleted,
+            Self::MultiRaftPartitionCreated,
         ]
     }
 }
@@ -316,6 +328,16 @@ pub struct HookContext {
     pub dpdk_pps: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jitter_micros: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raft_group_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub membership_phase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compacted_entries: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partition_name: Option<String>,
 }
 
 impl HookContext {
@@ -329,6 +351,31 @@ impl HookContext {
             timestamp,
             ..Default::default()
         }
+    }
+
+    pub fn for_raft_membership(group_id: u64, phase: &str, node_id: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::RaftMembershipReconfigured);
+        ctx.raft_group_id = Some(group_id);
+        ctx.membership_phase = Some(phase.to_string());
+        ctx.details = Some(format!("Membership reconfigured for node '{}' in group {}", node_id, group_id));
+        ctx
+    }
+
+    pub fn for_raft_compaction(group_id: u64, compacted_entries: u64, snapshot_bytes: u64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::RaftCompactionCompleted);
+        ctx.raft_group_id = Some(group_id);
+        ctx.compacted_entries = Some(compacted_entries);
+        ctx.snapshot_bytes = Some(snapshot_bytes);
+        ctx.details = Some(format!("Compacted {} entries ({} bytes) in group {}", compacted_entries, snapshot_bytes, group_id));
+        ctx
+    }
+
+    pub fn for_multiraft_partition(group_id: u64, partition_name: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::MultiRaftPartitionCreated);
+        ctx.raft_group_id = Some(group_id);
+        ctx.partition_name = Some(partition_name.to_string());
+        ctx.details = Some(format!("Partition '{}' (group {}) registered", partition_name, group_id));
+        ctx
     }
 }
 
@@ -866,5 +913,25 @@ mod tests {
         assert_eq!(ctx.pinned_cpus.as_deref(), Some("4-7"));
         assert_eq!(ctx.dpdk_pps, Some(1250000));
         assert_eq!(ctx.jitter_micros, Some(0.42));
+
+        // Test Phase 29 Multi-Raft lifecycle events
+        assert_eq!(
+            LifecycleEvent::from_name("on_raft_membership_reconfigured"),
+            Some(LifecycleEvent::RaftMembershipReconfigured)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_raft_compaction_completed"),
+            Some(LifecycleEvent::RaftCompactionCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_multiraft_partition_created"),
+            Some(LifecycleEvent::MultiRaftPartitionCreated)
+        );
+
+        let raft_ctx = HookContext::for_raft_compaction(100, 500, 10240);
+        assert_eq!(raft_ctx.event, "on_raft_compaction_completed");
+        assert_eq!(raft_ctx.raft_group_id, Some(100));
+        assert_eq!(raft_ctx.compacted_entries, Some(500));
+        assert_eq!(raft_ctx.snapshot_bytes, Some(10240));
     }
 }
