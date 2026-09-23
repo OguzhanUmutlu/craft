@@ -31,6 +31,7 @@ cargo-timing.html
 !/tools/test_workload_forecasting.py
 !/tools/test_modpack_ci.py
 !/tools/test_zero_trust_mesh.py
+!/tools/test_raft_consensus.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

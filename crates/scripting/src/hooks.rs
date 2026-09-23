@@ -35,6 +35,9 @@ pub enum LifecycleEvent {
     SdnMeshReconfigured,
     SdnPacketDropped,
     SdnCertRotated,
+    RaftLeaderElected,
+    RaftSplitBrainDetected,
+    RaftLockContended,
 }
 
 impl LifecycleEvent {
@@ -64,6 +67,9 @@ impl LifecycleEvent {
             Self::SdnMeshReconfigured => "on_sdn_mesh_reconfigured",
             Self::SdnPacketDropped => "on_sdn_packet_dropped",
             Self::SdnCertRotated => "on_sdn_cert_rotated",
+            Self::RaftLeaderElected => "on_raft_leader_elected",
+            Self::RaftSplitBrainDetected => "on_raft_split_brain_detected",
+            Self::RaftLockContended => "on_raft_lock_contended",
         }
     }
 
@@ -94,6 +100,9 @@ impl LifecycleEvent {
             "on_sdn_mesh_reconfigured" | "sdn_mesh_reconfigured" | "sdn_reconfigure" => Some(Self::SdnMeshReconfigured),
             "on_sdn_packet_dropped" | "sdn_packet_dropped" | "packet_dropped" | "packet_drop" => Some(Self::SdnPacketDropped),
             "on_sdn_cert_rotated" | "sdn_cert_rotated" | "cert_rotated" => Some(Self::SdnCertRotated),
+            "on_raft_leader_elected" | "raft_leader_elected" | "leader_elected" => Some(Self::RaftLeaderElected),
+            "on_raft_split_brain_detected" | "raft_split_brain_detected" | "split_brain_detected" | "split_brain" => Some(Self::RaftSplitBrainDetected),
+            "on_raft_lock_contended" | "raft_lock_contended" | "lock_contended" => Some(Self::RaftLockContended),
             _ => None,
         }
     }
@@ -124,6 +133,9 @@ impl LifecycleEvent {
             Self::SdnMeshReconfigured,
             Self::SdnPacketDropped,
             Self::SdnCertRotated,
+            Self::RaftLeaderElected,
+            Self::RaftSplitBrainDetected,
+            Self::RaftLockContended,
         ]
     }
 }
@@ -200,6 +212,16 @@ pub struct HookContext {
     pub dropped_packets: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cert_expires_in_days: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raft_term: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raft_leader_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raft_role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fencing_token: Option<u64>,
 }
 
 impl HookContext {
@@ -590,5 +612,47 @@ mod tests {
         assert_eq!(ctx.sdn_zone.as_deref(), Some("BackendWorld"));
         assert_eq!(ctx.dropped_packets, Some(142));
         assert_eq!(ctx.cert_expires_in_days, Some(89));
+    }
+
+    #[test]
+    fn test_raft_lifecycle_events_and_context() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_raft_leader_elected"),
+            Some(LifecycleEvent::RaftLeaderElected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("leader_elected"),
+            Some(LifecycleEvent::RaftLeaderElected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_raft_split_brain_detected"),
+            Some(LifecycleEvent::RaftSplitBrainDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("split_brain"),
+            Some(LifecycleEvent::RaftSplitBrainDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_raft_lock_contended"),
+            Some(LifecycleEvent::RaftLockContended)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("lock_contended"),
+            Some(LifecycleEvent::RaftLockContended)
+        );
+
+        let mut ctx = HookContext::new(LifecycleEvent::RaftLeaderElected);
+        ctx.raft_term = Some(3);
+        ctx.raft_leader_id = Some("node-primary".to_string());
+        ctx.raft_role = Some("Leader".to_string());
+        ctx.lock_name = Some("global-lock".to_string());
+        ctx.fencing_token = Some(12884901889);
+
+        assert_eq!(ctx.event, "on_raft_leader_elected");
+        assert_eq!(ctx.raft_term, Some(3));
+        assert_eq!(ctx.raft_leader_id.as_deref(), Some("node-primary"));
+        assert_eq!(ctx.raft_role.as_deref(), Some("Leader"));
+        assert_eq!(ctx.lock_name.as_deref(), Some("global-lock"));
+        assert_eq!(ctx.fencing_token, Some(12884901889));
     }
 }

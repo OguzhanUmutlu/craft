@@ -565,6 +565,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: SdnCommands,
     },
+
+    /// Distributed fault-tolerant consensus, Raft clustering, and dynamic split-brain arbitration
+    #[command(name = "raft", alias = "consensus")]
+    Raft {
+        #[command(subcommand)]
+        action: RaftCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1091,6 +1098,79 @@ pub enum SdnCommands {
         /// Filter audit events by destination zone
         #[arg(long)]
         to_zone: Option<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum RaftCommands {
+    /// Inspect Raft consensus state, active leader, term, quorum, and cluster nodes
+    Status {
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Propose a replicated state mutation to the cluster leader
+    Propose {
+        /// Mutation action (e.g. config_update, custom)
+        #[arg(short, long)]
+        action: String,
+        /// Payload data associated with the proposal
+        #[arg(short, long)]
+        data: String,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Acquire a linearizable distributed lock with monotonic fencing token
+    Lock {
+        /// Name of the distributed lock resource
+        #[arg(short, long)]
+        name: String,
+        /// Holder node or client identifier
+        #[arg(short = 'H', long, default_value = "local-node")]
+        holder: String,
+        /// Lease duration in seconds
+        #[arg(short, long, default_value_t = 60)]
+        lease: u64,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Release an existing distributed lock
+    Unlock {
+        /// Name of the distributed lock resource
+        #[arg(short, long)]
+        name: String,
+        /// Holder node or client identifier
+        #[arg(short = 'H', long, default_value = "local-node")]
+        holder: String,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Voluntarily step down as leader to follower state
+    StepDown {
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Transfer leadership to a designated cluster member
+    Transfer {
+        /// Target node identifier
+        #[arg(short, long)]
+        target: String,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect replicated Write-Ahead Log (WAL) entries from disk
+    Logs {
+        /// Maximum number of log entries to display
+        #[arg(short, long, default_value_t = 20)]
+        limit: usize,
         /// Emit machine-readable JSON output
         #[arg(long)]
         json: bool,
@@ -2904,6 +2984,123 @@ mod tests {
                 assert!(!json);
             }
             _ => panic!("Expected Sdn Audit command"),
+        }
+    }
+
+    #[test]
+    fn test_raft_cli_parsing() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "raft", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Status { json },
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Raft Status command"),
+        }
+
+        // Consensus alias
+        let cli_consensus = Cli::try_parse_from(["craft", "consensus", "status"]).unwrap();
+        match cli_consensus.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Status { json },
+            }) => {
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft Status via consensus alias"),
+        }
+
+        // Propose command
+        let cli_propose = Cli::try_parse_from([
+            "craft", "raft", "propose", "--action", "config_update", "--data", "max_players=50",
+        ])
+        .unwrap();
+        match cli_propose.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Propose { action, data, json },
+            }) => {
+                assert_eq!(action, "config_update");
+                assert_eq!(data, "max_players=50");
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft Propose command"),
+        }
+
+        // Lock command
+        let cli_lock = Cli::try_parse_from([
+            "craft", "raft", "lock", "--name", "world-lock", "--holder", "worker-1", "--lease",
+            "120",
+        ])
+        .unwrap();
+        match cli_lock.command {
+            Some(Commands::Raft {
+                action:
+                    RaftCommands::Lock {
+                        name,
+                        holder,
+                        lease,
+                        json,
+                    },
+            }) => {
+                assert_eq!(name, "world-lock");
+                assert_eq!(holder, "worker-1");
+                assert_eq!(lease, 120);
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft Lock command"),
+        }
+
+        // Unlock command
+        let cli_unlock = Cli::try_parse_from([
+            "craft", "raft", "unlock", "--name", "world-lock", "--holder", "worker-1",
+        ])
+        .unwrap();
+        match cli_unlock.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Unlock { name, holder, json },
+            }) => {
+                assert_eq!(name, "world-lock");
+                assert_eq!(holder, "worker-1");
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft Unlock command"),
+        }
+
+        // StepDown command
+        let cli_stepdown = Cli::try_parse_from(["craft", "raft", "step-down"]).unwrap();
+        match cli_stepdown.command {
+            Some(Commands::Raft {
+                action: RaftCommands::StepDown { json },
+            }) => {
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft StepDown command"),
+        }
+
+        // Transfer command
+        let cli_transfer =
+            Cli::try_parse_from(["craft", "raft", "transfer", "--target", "node-beta"]).unwrap();
+        match cli_transfer.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Transfer { target, json },
+            }) => {
+                assert_eq!(target, "node-beta");
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft Transfer command"),
+        }
+
+        // Logs command
+        let cli_logs = Cli::try_parse_from(["craft", "raft", "logs", "--limit", "15"]).unwrap();
+        match cli_logs.command {
+            Some(Commands::Raft {
+                action: RaftCommands::Logs { limit, json },
+            }) => {
+                assert_eq!(limit, 15);
+                assert!(!json);
+            }
+            _ => panic!("Expected Raft Logs command"),
         }
     }
 }

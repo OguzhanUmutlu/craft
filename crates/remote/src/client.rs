@@ -812,6 +812,25 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    pub fn get_remote_raft_status(&self) -> Result<String> {
+        let (code, stdout, stderr) = self.session.exec("craft raft status --json")?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote raft status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    pub fn propose_remote_raft_command(&self, action: &str, data: &str) -> Result<String> {
+        let cmd = format!("craft raft propose --action {} --data {} --json", action, data);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote raft proposal failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

@@ -780,6 +780,76 @@ where
                     }
                 }
             }
+            IpcRequest::GetRaftStatus => {
+                match crate::raft_service::RaftConsensusService::get_status(supervisor.paths()) {
+                    Ok(status) => {
+                        write_frame(&mut stream, &IpcResponse::RaftStatusResult { status }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::ProposeRaftCommand { payload } => {
+                match crate::raft_service::RaftConsensusService::propose(supervisor.paths(), payload) {
+                    Ok((term, index)) => {
+                        write_frame(&mut stream, &IpcResponse::RaftCommandProposedResult { term, index }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::AcquireDistributedLock { lock_name, holder_id, lease_secs } => {
+                match crate::raft_service::RaftConsensusService::acquire_lock(supervisor.paths(), &lock_name, &holder_id, lease_secs) {
+                    Ok(lock) => {
+                        write_frame(&mut stream, &IpcResponse::DistributedLockAcquiredResult { lock }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::ReleaseDistributedLock { lock_name, holder_id } => {
+                match crate::raft_service::RaftConsensusService::release_lock(supervisor.paths(), &lock_name, &holder_id) {
+                    Ok(()) => {
+                        write_frame(&mut stream, &IpcResponse::DistributedLockReleasedResult { message: format!("Lock '{}' released", lock_name) }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::StepDownRaftLeader => {
+                match crate::raft_service::RaftConsensusService::step_down(supervisor.paths()) {
+                    Ok(()) => {
+                        write_frame(&mut stream, &IpcResponse::RaftStepDownResult { message: "Leader stepped down".to_string() }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::TransferRaftLeadership { target_node_id } => {
+                match crate::raft_service::RaftConsensusService::transfer_leadership(supervisor.paths(), &target_node_id) {
+                    Ok(()) => {
+                        write_frame(&mut stream, &IpcResponse::RaftLeadershipTransferredResult { message: format!("Leadership transferred to '{}'", target_node_id) }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::GetRaftLogs { limit } => {
+                match crate::raft_service::RaftConsensusService::get_logs(supervisor.paths(), limit) {
+                    Ok(entries) => {
+                        write_frame(&mut stream, &IpcResponse::RaftLogsResult { entries }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -1532,6 +1602,93 @@ impl DaemonClient {
     ) -> Result<Option<craft_net::WireguardPeerMetrics>> {
         match self.request(IpcRequest::GetPeerStatus { node_id }).await? {
             IpcResponse::SdnPeerStatusResult { peer } => Ok(peer),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_raft_status(&mut self) -> Result<crate::raft_engine::RaftStatusSummary> {
+        match self.request(IpcRequest::GetRaftStatus).await? {
+            IpcResponse::RaftStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn propose_raft_command(
+        &mut self,
+        payload: craft_core::RaftPayload,
+    ) -> Result<(u64, u64)> {
+        match self.request(IpcRequest::ProposeRaftCommand { payload }).await? {
+            IpcResponse::RaftCommandProposedResult { term, index } => Ok((term, index)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn acquire_distributed_lock(
+        &mut self,
+        lock_name: String,
+        holder_id: String,
+        lease_secs: u64,
+    ) -> Result<craft_core::DistributedLock> {
+        match self
+            .request(IpcRequest::AcquireDistributedLock {
+                lock_name,
+                holder_id,
+                lease_secs,
+            })
+            .await?
+        {
+            IpcResponse::DistributedLockAcquiredResult { lock } => Ok(lock),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn release_distributed_lock(
+        &mut self,
+        lock_name: String,
+        holder_id: String,
+    ) -> Result<String> {
+        match self
+            .request(IpcRequest::ReleaseDistributedLock {
+                lock_name,
+                holder_id,
+            })
+            .await?
+        {
+            IpcResponse::DistributedLockReleasedResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn step_down_raft_leader(&mut self) -> Result<String> {
+        match self.request(IpcRequest::StepDownRaftLeader).await? {
+            IpcResponse::RaftStepDownResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn transfer_raft_leadership(&mut self, target_node_id: String) -> Result<String> {
+        match self
+            .request(IpcRequest::TransferRaftLeadership { target_node_id })
+            .await?
+        {
+            IpcResponse::RaftLeadershipTransferredResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_raft_logs(
+        &mut self,
+        limit: Option<usize>,
+    ) -> Result<Vec<craft_core::RaftLogEntry>> {
+        match self.request(IpcRequest::GetRaftLogs { limit }).await? {
+            IpcResponse::RaftLogsResult { entries } => Ok(entries),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

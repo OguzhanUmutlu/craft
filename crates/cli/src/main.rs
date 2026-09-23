@@ -487,6 +487,9 @@ async fn main() {
         Some(Commands::Sdn { action }) => {
             commands::sdn::handle_sdn(action, &paths).await
         }
+        Some(Commands::Raft { action }) => {
+            commands::raft::handle_raft(action, &paths).await
+        }
     };
 
     if let Err(e) = result {
@@ -552,6 +555,7 @@ fn print_banner() {
     println!("  edge <status|add|probe|sync-routing> Global edge mesh, traffic routing & session handoffs");
     println!("  profile <tick|packets|histogram>  Real-time tick profiling, Netty inspection & histograms");
     println!("  sdn <status|up|down|policy|peers> Zero-trust mesh & eBPF microsegmentation");
+    println!("  raft <status|propose|lock|logs>   Distributed Raft consensus & dynamic arbitration");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

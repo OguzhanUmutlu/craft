@@ -49,6 +49,11 @@ pub struct CraftPaths {
     pub sdn_certs_dir: PathBuf,
     pub wireguard_dir: PathBuf,
     pub sdn_lock: PathBuf,
+    pub raft_dir: PathBuf,
+    pub raft_state_file: PathBuf,
+    pub raft_wal_dir: PathBuf,
+    pub raft_snapshots_dir: PathBuf,
+    pub raft_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -97,6 +102,11 @@ impl CraftPaths {
         let sdn_certs_dir = sdn_dir.join("certs");
         let wireguard_dir = sdn_dir.join("wireguard");
         let sdn_lock = locks_dir.join("sdn.lock");
+        let raft_dir = home.join("raft");
+        let raft_state_file = raft_dir.join("state.toml");
+        let raft_wal_dir = raft_dir.join("wal");
+        let raft_snapshots_dir = raft_dir.join("snapshots");
+        let raft_lock = locks_dir.join("raft.lock");
 
         Self {
             home,
@@ -143,6 +153,11 @@ impl CraftPaths {
             sdn_certs_dir,
             wireguard_dir,
             sdn_lock,
+            raft_dir,
+            raft_state_file,
+            raft_wal_dir,
+            raft_snapshots_dir,
+            raft_lock,
         }
     }
 
@@ -180,6 +195,9 @@ impl CraftPaths {
         let sdn_dir = home.join("sdn");
         let sdn_certs_dir = sdn_dir.join("certs");
         let wireguard_dir = sdn_dir.join("wireguard");
+        let raft_dir = home.join("raft");
+        let raft_wal_dir = raft_dir.join("wal");
+        let raft_snapshots_dir = raft_dir.join("snapshots");
 
         // Ensure all primary directories exist
         for dir in [
@@ -204,6 +222,9 @@ impl CraftPaths {
             &sdn_dir,
             &sdn_certs_dir,
             &wireguard_dir,
+            &raft_dir,
+            &raft_wal_dir,
+            &raft_snapshots_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -233,6 +254,8 @@ impl CraftPaths {
         let modpack_lock = locks_dir.join("modpack.lock");
         let sdn_mesh_file = sdn_dir.join("mesh.toml");
         let sdn_lock = locks_dir.join("sdn.lock");
+        let raft_state_file = raft_dir.join("state.toml");
+        let raft_lock = locks_dir.join("raft.lock");
 
         Ok(Self {
             home,
@@ -279,6 +302,11 @@ impl CraftPaths {
             sdn_certs_dir,
             wireguard_dir,
             sdn_lock,
+            raft_dir,
+            raft_state_file,
+            raft_wal_dir,
+            raft_snapshots_dir,
+            raft_lock,
         })
     }
 

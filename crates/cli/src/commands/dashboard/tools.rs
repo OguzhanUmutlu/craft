@@ -1792,6 +1792,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             WorkloadForecasting,
             ModpackCI,
             ZeroTrustMesh,
+            RaftConsensus,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1869,6 +1870,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::ZeroTrustMesh);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Raft Consensus & Cluster Arbitration")
+                .with_aliases(&["raft", "consensus", "cluster", "leader"]),
+        );
+        actions.push(ToolItemAction::RaftConsensus);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1916,6 +1924,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::ZeroTrustMesh => {
                     zero_trust_mesh_tui(paths).await?;
+                }
+                ToolItemAction::RaftConsensus => {
+                    raft_consensus_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2462,6 +2473,141 @@ pub async fn zero_trust_mesh_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft sdn rotate-keys  Trigger zero-downtime key & certificate rotation".green().to_string());
 
     show_modal_message("ZERO-TRUST INTER-SERVER SDN MESH", &lines, false)?;
+    Ok(())
+}
+
+pub async fn raft_consensus_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Raft Consensus & Cluster Arbitration");
+
+    let status = if let Ok(mut client) = DaemonClient::connect(paths).await {
+        client.get_raft_status().await.unwrap_or_else(|_| {
+            craft_daemon::RaftConsensusService::get_status(paths).unwrap_or(
+                craft_daemon::RaftStatusSummary {
+                    node_id: "local-node".to_string(),
+                    role: craft_core::RaftRole::Follower,
+                    current_term: 0,
+                    leader_id: None,
+                    commit_index: 0,
+                    last_applied: 0,
+                    log_entries_count: 0,
+                    active_locks_count: 0,
+                    cluster_nodes: Vec::new(),
+                    is_quorum_intact: false,
+                    edge_tie_breaker: None,
+                },
+            )
+        })
+    } else {
+        craft_daemon::RaftConsensusService::get_status(paths)?
+    };
+
+    let mut lines = Vec::new();
+    lines.push(
+        format!("[RAFT CONSENSUS ENGINE: {}]", status.node_id)
+            .cyan()
+            .bold()
+            .to_string(),
+    );
+    lines.push(
+        format!("  Local Role:       [{}]", status.role)
+            .yellow()
+            .bold()
+            .to_string(),
+    );
+    lines.push(format!("  Current Term:     {}", status.current_term));
+    lines.push(format!(
+        "  Active Leader:    {}",
+        status
+            .leader_id
+            .as_deref()
+            .unwrap_or("None (Pending Election)")
+            .white()
+            .bold()
+    ));
+    lines.push(format!("  Commit Index:     {}", status.commit_index));
+    lines.push(format!("  Last Applied:     {}", status.last_applied));
+    lines.push(format!("  WAL Entries:      {}", status.log_entries_count));
+    lines.push(format!("  Active Locks:     {}", status.active_locks_count));
+
+    let quorum_str = if status.is_quorum_intact {
+        "[OK] Intact (Quorum Formed)".green().to_string()
+    } else {
+        "[WARN] Degraded / Sub-Quorum Partition"
+            .yellow()
+            .bold()
+            .to_string()
+    };
+    lines.push(format!("  Quorum Status:    {}", quorum_str));
+    lines.push(format!(
+        "  Edge Tie-Breaker: {}",
+        status
+            .edge_tie_breaker
+            .as_deref()
+            .unwrap_or("None")
+            .dimmed()
+    ));
+    lines.push("".to_string());
+
+    if status.cluster_nodes.is_empty() {
+        lines.push(
+            "[INFO] Standalone local node. Add peers to form a replicated cluster."
+                .dimmed()
+                .to_string(),
+        );
+    } else {
+        lines.push("[RAFT CLUSTER MEMBERSHIP]".cyan().bold().to_string());
+        for node in status.cluster_nodes.iter().take(5) {
+            lines.push(format!(
+                " * {} ({}:{}) | Voting: {} | Priority: {}",
+                node.id.white().bold(),
+                node.address,
+                node.raft_port,
+                if node.voting_member { "Yes" } else { "No" },
+                node.priority
+            ));
+        }
+    }
+
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push(
+        "  craft raft status      View consensus state, term, and cluster nodes"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft raft propose     Propose a replicated state mutation to leader"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft raft lock        Acquire linearizable lock with monotonic fencing token"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft raft unlock      Release distributed lock resource"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft raft step-down   Voluntarily step down as leader"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft raft transfer    Transfer cluster leadership to peer"
+            .green()
+            .to_string(),
+    );
+    lines.push(
+        "  craft raft logs        Inspect append-only Write-Ahead Log (WAL)"
+            .green()
+            .to_string(),
+    );
+
+    show_modal_message("RAFT CONSENSUS & CLUSTER ARBITRATION", &lines, false)?;
     Ok(())
 }
 

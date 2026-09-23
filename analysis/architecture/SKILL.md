@@ -264,6 +264,42 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `craft sdn audit [--from-zone zone] [--to-zone zone] [--json]`
   - Full-screen centered interactive TUI panel (`Tools -> Zero-Trust Mesh & Packet Filtering`) powered by ModalX.
 
+### 3.14 Distributed Fault-Tolerant Consensus, Raft Clustering & Dynamic Split-Brain Arbitration (Phase 24)
+
+- **Pure-Rust In-Memory Raft State Machine (`RaftEngine`)**:
+  - Embedded deterministic consensus engine implementing standard Raft protocol (Leader, Candidate, Follower).
+  - Randomized election timeouts (150ms-300ms) with 50ms leader heartbeat ticks.
+  - Replicated append-only Write-Ahead Log (WAL) persisted on disk (`~/.craft/raft/wal/raft.wal`) with transactional line buffering.
+  - Periodic snapshot compaction (`~/.craft/raft/snapshots/snapshot_<term>_<index>.json`) with prefix log truncation.
+  - Monotonic fencing token generator: `(term << 32) | (commit_index & 0xFFFF_FFFF)`.
+- **Advisory File Locked State Registry (`RaftRegistry`)**:
+  - Persistent state (`state.toml`) holding current term, voted-for candidate, commit index, cluster membership, and active distributed locks.
+  - Inter-process synchronization guaranteed via `fs2` advisory file locks on `~/.craft/run/locks/raft.lock`.
+- **Pure-Rust Binary Transport & Wire Framing (`craft-net`)**:
+  - 4-byte magic header `CRAFT_RAFT_MAGIC: [u8; 4] = [0x43, 0x52, 0x46, 0x54]` (`CRFT`) + 4-byte big-endian length prefix.
+  - RPC frames: `RequestVoteArgs`/`Reply`, `AppendEntriesArgs`/`Reply`, `InstallSnapshotArgs`/`Reply`, `HeartbeatArgs`/`Reply`.
+- **Dynamic Split-Brain Arbitration (`SplitBrainArbitrator`)**:
+  - Evaluates cluster node weights (`ArbitrationWeight`) based on uptime, TCP round-trip latency, and jitter telemetry.
+  - In an exact 50/50 partition (e.g. 2 vs 2 split in a 4-node cluster), the arbitrator uses the designated `edge_tie_breaker` (or highest weighted node) to designate which partition retains quorum, strictly blocking writes on sub-quorum partitions while preventing dual-leader split-brain conflicts.
+- **Linearizable Distributed Lock Manager (`DistributedLockManager`)**:
+  - Tracks cluster-wide mutex leases with monotonic 64-bit fencing tokens.
+  - Guarantees strict mutual exclusion, prevents stale split-brain writes, and supports lease renewals and automated expiration pruning.
+- **In-Process Daemon Supervisor Service (`RaftConsensusService`)**:
+  - Dispatches 7 typed IPC requests: `GetRaftStatus`, `ProposeRaftCommand`, `AcquireDistributedLock`, `ReleaseDistributedLock`, `StepDownRaftLeader`, `TransferRaftLeadership`, `GetRaftLogs`.
+  - Operates autonomously with zero external daemon dependencies.
+- **Remote Federation & Scripting Hook Bus**:
+  - `RemoteCraftClient::get_remote_raft_status` and `propose_remote_raft_command` enable remote consensus querying and proposals over SSH.
+  - `LifecycleEvent::RaftLeaderElected`, `RaftSplitBrainDetected`, `RaftLockContended` fire into embedded Lua scripts with term, leader, role, lock name, and fencing token context.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft raft status [--json]` (with alias `craft consensus status`)
+  - `craft raft propose --action <action> --data <data> [--json]`
+  - `craft raft lock --name <name> [--holder <id>] [--lease <secs>] [--json]`
+  - `craft raft unlock --name <name> [--holder <id>] [--json]`
+  - `craft raft step-down [--json]`
+  - `craft raft transfer --target <node-id> [--json]`
+  - `craft raft logs [--limit <n>] [--json]`
+  - Full-screen centered interactive TUI panel (`Tools -> Raft Consensus & Cluster Arbitration`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

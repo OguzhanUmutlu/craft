@@ -81,7 +81,7 @@ The Craft ecosystem is organized into 11 specialized Rust crates, a Go binary se
 To maintain deep technical excellence without cluttering high-level documentation, specialized domain knowledge is maintained within individual skill modules under `analysis/`. Each module contains a comprehensive `SKILL.md` detailing implementation rules, algorithms, data contracts, and operational guidelines:
 
 1. **Architecture & Core Mechanics**: [`analysis/architecture/SKILL.md`](./architecture/SKILL.md)  
-   Crate dependency boundaries, transactional registry serialization, inter-process locking (`intelligence.lock`), path resolution, and error handling architecture.
+   Crate dependency boundaries, transactional registry serialization, inter-process locking (`raft.lock`), path resolution, pure-Rust Raft consensus state machine (`RaftEngine`), write-ahead log replication (`raft.wal`), dynamic split-brain arbitration, and error handling architecture.
 2. **Daemon & Background Supervision**: [`analysis/daemon-supervision/SKILL.md`](./daemon-supervision/SKILL.md)  
    IPC protocols, circular ring buffer management, stdin streaming, service unit templating, detached process supervision, autonomous operational intelligence (`AutopilotEngine`), and `TickService` telemetry coordinator.
 3. **Protocols & Networking Security**: [`analysis/protocols-networking/SKILL.md`](./protocols-networking/SKILL.md)  

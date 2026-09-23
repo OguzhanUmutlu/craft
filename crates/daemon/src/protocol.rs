@@ -74,6 +74,26 @@ pub enum IpcRequest {
     GetPeerStatus {
         node_id: String,
     },
+    GetRaftStatus,
+    ProposeRaftCommand {
+        payload: craft_core::RaftPayload,
+    },
+    AcquireDistributedLock {
+        lock_name: String,
+        holder_id: String,
+        lease_secs: u64,
+    },
+    ReleaseDistributedLock {
+        lock_name: String,
+        holder_id: String,
+    },
+    StepDownRaftLeader,
+    TransferRaftLeadership {
+        target_node_id: String,
+    },
+    GetRaftLogs {
+        limit: Option<usize>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,6 +153,28 @@ pub enum IpcResponse {
     SdnPolicyResult { message: String, rules_count: usize },
     SdnKeyRotationResult { summary: crate::sdn_service::KeyRotationSummary },
     SdnPeerStatusResult { peer: Option<craft_net::WireguardPeerMetrics> },
+    RaftStatusResult {
+        status: crate::raft_engine::RaftStatusSummary,
+    },
+    RaftCommandProposedResult {
+        term: u64,
+        index: u64,
+    },
+    DistributedLockAcquiredResult {
+        lock: craft_core::DistributedLock,
+    },
+    DistributedLockReleasedResult {
+        message: String,
+    },
+    RaftStepDownResult {
+        message: String,
+    },
+    RaftLeadershipTransferredResult {
+        message: String,
+    },
+    RaftLogsResult {
+        entries: Vec<craft_core::RaftLogEntry>,
+    },
     Error { error: String },
 }
 

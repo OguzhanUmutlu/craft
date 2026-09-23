@@ -20,6 +20,7 @@ pub mod optimizer;
 pub mod path;
 pub mod process;
 pub mod properties;
+pub mod raft;
 pub mod rbac;
 pub mod remote_config;
 pub mod rollout;
@@ -60,6 +61,11 @@ pub use modpack_ci::{
     BinaryDeltaHeader, DeltaOp, DeltaPatchManifest, ModSide, ModpackBuildManifest,
     ModpackComponent, ModpackRecord, ModpackRegistry, DEFAULT_DELTA_BLOCK_SIZE, DELTA_MAGIC,
     DELTA_VERSION,
+};
+pub use raft::{
+    calculate_fencing_token, fencing_token_parts, ArbitrationWeight, DistributedLock,
+    PersistentRaftState, QuorumStatus, RaftLogEntry, RaftNode, RaftPayload, RaftRegistry,
+    RaftRole, RaftSnapshot,
 };
 pub use rbac::{Permission, RbacRegistry, Role, UserAccount};
 pub use rollout::{

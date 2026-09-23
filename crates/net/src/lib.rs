@@ -12,26 +12,32 @@ pub mod raknet;
 pub mod rcon;
 pub mod sleep_proxy;
 pub mod slp;
+pub mod raft_transport;
 pub mod tick_profiler;
 pub mod wireguard;
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
+pub use ebpf_filter::{DropStatistics, EbpfFilterCompiler, PacketFilterEngine, PacketVerdict, RawPacketHeader};
 pub use edge_probe::{EdgeLatencyProber, EdgeProbeResult};
 pub use edge_router::EdgeRouteGenerator;
 pub use firewall::allow_ip_port;
 pub use histogram::LatencyHistogram;
 pub use loopback::{enable_bedrock_loopback, is_bedrock_loopback_enabled};
+pub use mtls::{CertMetadata, MtlsEngine, NodeCertBundle, RootCaBundle};
 pub use packet_inspector::{
     AnomalySeverity, NettyPacketInspector, PacketFloodAnomaly, PacketRateSummary,
 };
 pub use query::{ping_server_auto, probe_tcp_port, UniversalPingStatus};
+pub use raft_transport::{
+    decode_raft_message, encode_raft_message, AppendEntriesArgs, AppendEntriesReply,
+    HeartbeatArgs, HeartbeatReply, InstallSnapshotArgs, InstallSnapshotReply,
+    RaftRpcMessage, RequestVoteArgs, RequestVoteReply, SplitBrainArbitrator, CRAFT_RAFT_MAGIC,
+};
 pub use raknet::{ping_bedrock_server, BedrockPingStatus};
 pub use rcon::RconClient;
 pub use sleep_proxy::{SleepProxy, SleepProxyConfig, SleepProxyHandle};
 pub use slp::{ping_java_server, ServerPingStatus};
 pub use tick_profiler::{TickHealthGrade, TickProfileSummary, TickProfiler, TickSample};
 pub use wireguard::{base64_decode, base64_encode, WgConfigGenerator, WireguardKeypair, WireguardPeerMetrics};
-pub use ebpf_filter::{DropStatistics, EbpfFilterCompiler, PacketFilterEngine, PacketVerdict, RawPacketHeader};
-pub use mtls::{CertMetadata, MtlsEngine, NodeCertBundle, RootCaBundle};
 
 
