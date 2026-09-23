@@ -35,6 +35,7 @@ pub mod restart;
 pub mod rm;
 pub mod run;
 pub mod script;
+pub mod sdn;
 pub mod service;
 pub mod software;
 pub mod stop;

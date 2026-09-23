@@ -66,6 +66,14 @@ pub enum IpcRequest {
         file_path: String,
         range_header: Option<String>,
     },
+    GetSdnTopology,
+    ApplySdnPolicy {
+        policy: craft_core::MicrosegmentationPolicy,
+    },
+    RotateSdnKeys,
+    GetPeerStatus {
+        node_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,6 +129,10 @@ pub enum IpcResponse {
         deltas: Vec<craft_core::DeltaPatchManifest>,
     },
     ModpackChunk { chunk: crate::modpack_service::ModpackChunkResponse },
+    SdnTopologyResult { topology: crate::sdn_service::SdnTopologySummary },
+    SdnPolicyResult { message: String, rules_count: usize },
+    SdnKeyRotationResult { summary: crate::sdn_service::KeyRotationSummary },
+    SdnPeerStatusResult { peer: Option<craft_net::WireguardPeerMetrics> },
     Error { error: String },
 }
 

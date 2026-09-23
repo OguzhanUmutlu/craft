@@ -1791,6 +1791,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             LogForensics,
             WorkloadForecasting,
             ModpackCI,
+            ZeroTrustMesh,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1861,6 +1862,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::ModpackCI);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Zero-Trust Mesh & Packet Filtering")
+                .with_aliases(&["z", "sdn", "mesh", "wireguard", "filter"]),
+        );
+        actions.push(ToolItemAction::ZeroTrustMesh);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1905,6 +1913,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::ModpackCI => {
                     modpack_ci_tui(paths).await?;
+                }
+                ToolItemAction::ZeroTrustMesh => {
+                    zero_trust_mesh_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2382,6 +2393,75 @@ pub async fn modpack_ci_tui(paths: &CraftPaths) -> Result<()> {
     }
 
     show_modal_message("MODPACK CI/CD & FAST CLIENT SYNCHRONIZER", &lines, false)?;
+    Ok(())
+}
+
+pub async fn zero_trust_mesh_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Zero-Trust SDN Mesh & Packet Filtering");
+
+    let registry = craft_core::SdnRegistry::load(paths)?;
+    let mut lines = Vec::new();
+
+    lines.push(format!("[SDN OVERLAY MESH: {}]", registry.mesh.mesh_name).cyan().bold().to_string());
+    lines.push(format!("  Overlay CIDR:    {}", registry.mesh.overlay_cidr.yellow()));
+    lines.push(format!("  Local Node:      {} ({})", registry.mesh.local_node.name.white().bold(), registry.mesh.local_node.node_id.dimmed()));
+    lines.push(format!("  Local Zone:      {:?}", registry.mesh.local_node.zone).magenta().to_string());
+    lines.push(format!("  Tunnel Endpoint: {}:{}", registry.mesh.local_node.tunnel_ip.green(), registry.mesh.local_node.listen_port));
+    lines.push(format!("  Active Peers:    {}", registry.mesh.peers.len().to_string().bold()));
+    lines.push(format!("  Policy:          {} ({} rules, default: {:?})", registry.mesh.policy.name.yellow(), registry.mesh.policy.rules.len(), registry.mesh.policy.default_action));
+
+    let mtls_str = if registry.mesh.mtls_enabled {
+        "[OK] Enabled & Enforced".green().to_string()
+    } else {
+        "[DISABLED]".yellow().to_string()
+    };
+    lines.push(format!("  mTLS Security:   {}", mtls_str));
+    lines.push("".to_string());
+
+    if registry.mesh.peers.is_empty() {
+        lines.push("[INFO] No peers configured. Peers establish dynamic overlays.".dimmed().to_string());
+    } else {
+        lines.push("[REGISTERED WIREGUARD PEERS]".cyan().bold().to_string());
+        for peer in registry.mesh.peers.iter().take(5) {
+            lines.push(format!(
+                " * {} ({}) | Zone: {:?} | Tunnel: {} | Allowed: {}",
+                peer.name.white().bold(),
+                peer.node_id.dimmed(),
+                peer.zone,
+                peer.tunnel_ip.green(),
+                peer.allowed_ips.join(", ")
+            ));
+        }
+    }
+
+    lines.push("".to_string());
+    lines.push("[ACTIVE MICROSEGMENTATION RULES]".cyan().bold().to_string());
+    for rule in registry.mesh.policy.rules.iter().take(4) {
+        let ports_str = if rule.ports.is_empty() {
+            "any".to_string()
+        } else {
+            rule.ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",")
+        };
+        lines.push(format!(
+            " * {:?} -> {:?} : {} (ports: {}) => {:?}",
+            rule.source_zone,
+            rule.target_zone,
+            rule.protocol,
+            ports_str,
+            rule.action
+        ));
+    }
+
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft sdn status       View mesh topology and node status".green().to_string());
+    lines.push("  craft sdn up           Provision and activate WireGuard interface".green().to_string());
+    lines.push("  craft sdn policy       Inspect and apply eBPF/nftables filter policy".green().to_string());
+    lines.push("  craft sdn audit        Run zero-trust inter-server security matrix audit".green().to_string());
+    lines.push("  craft sdn rotate-keys  Trigger zero-downtime key & certificate rotation".green().to_string());
+
+    show_modal_message("ZERO-TRUST INTER-SERVER SDN MESH", &lines, false)?;
     Ok(())
 }
 

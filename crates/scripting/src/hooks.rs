@@ -32,6 +32,9 @@ pub enum LifecycleEvent {
     ModpackBuildCompleted,
     ModpackDeltaPublished,
     ClientSyncRequested,
+    SdnMeshReconfigured,
+    SdnPacketDropped,
+    SdnCertRotated,
 }
 
 impl LifecycleEvent {
@@ -58,6 +61,9 @@ impl LifecycleEvent {
             Self::ModpackBuildCompleted => "on_modpack_build_completed",
             Self::ModpackDeltaPublished => "on_modpack_delta_published",
             Self::ClientSyncRequested => "on_client_sync_requested",
+            Self::SdnMeshReconfigured => "on_sdn_mesh_reconfigured",
+            Self::SdnPacketDropped => "on_sdn_packet_dropped",
+            Self::SdnCertRotated => "on_sdn_cert_rotated",
         }
     }
 
@@ -85,6 +91,9 @@ impl LifecycleEvent {
             "on_modpack_build_completed" | "modpack_build_completed" | "modpack_build" => Some(Self::ModpackBuildCompleted),
             "on_modpack_delta_published" | "modpack_delta_published" | "delta_published" => Some(Self::ModpackDeltaPublished),
             "on_client_sync_requested" | "client_sync_requested" | "client_sync" => Some(Self::ClientSyncRequested),
+            "on_sdn_mesh_reconfigured" | "sdn_mesh_reconfigured" | "sdn_reconfigure" => Some(Self::SdnMeshReconfigured),
+            "on_sdn_packet_dropped" | "sdn_packet_dropped" | "packet_dropped" | "packet_drop" => Some(Self::SdnPacketDropped),
+            "on_sdn_cert_rotated" | "sdn_cert_rotated" | "cert_rotated" => Some(Self::SdnCertRotated),
             _ => None,
         }
     }
@@ -112,6 +121,9 @@ impl LifecycleEvent {
             Self::ModpackBuildCompleted,
             Self::ModpackDeltaPublished,
             Self::ClientSyncRequested,
+            Self::SdnMeshReconfigured,
+            Self::SdnPacketDropped,
+            Self::SdnCertRotated,
         ]
     }
 }
@@ -180,6 +192,14 @@ pub struct HookContext {
     pub delta_size_bytes: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub savings_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sdn_peer_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sdn_zone: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dropped_packets: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cert_expires_in_days: Option<u32>,
 }
 
 impl HookContext {
@@ -548,5 +568,27 @@ mod tests {
         assert_eq!(ctx.cost_savings_estimate, Some(15.75));
         assert_eq!(ctx.horizon_minutes, Some(20));
         assert_eq!(ctx.scaling_action.as_deref(), Some("ProactiveWake"));
+    }
+
+    #[test]
+    fn test_sdn_lifecycle_events_and_context() {
+        assert_eq!(LifecycleEvent::from_name("on_sdn_mesh_reconfigured"), Some(LifecycleEvent::SdnMeshReconfigured));
+        assert_eq!(LifecycleEvent::from_name("sdn_reconfigure"), Some(LifecycleEvent::SdnMeshReconfigured));
+        assert_eq!(LifecycleEvent::from_name("on_sdn_packet_dropped"), Some(LifecycleEvent::SdnPacketDropped));
+        assert_eq!(LifecycleEvent::from_name("packet_drop"), Some(LifecycleEvent::SdnPacketDropped));
+        assert_eq!(LifecycleEvent::from_name("on_sdn_cert_rotated"), Some(LifecycleEvent::SdnCertRotated));
+        assert_eq!(LifecycleEvent::from_name("cert_rotated"), Some(LifecycleEvent::SdnCertRotated));
+
+        let mut ctx = HookContext::new(LifecycleEvent::SdnPacketDropped);
+        ctx.sdn_peer_name = Some("lobby-eu".to_string());
+        ctx.sdn_zone = Some("BackendWorld".to_string());
+        ctx.dropped_packets = Some(142);
+        ctx.cert_expires_in_days = Some(89);
+
+        assert_eq!(ctx.event, "on_sdn_packet_dropped");
+        assert_eq!(ctx.sdn_peer_name.as_deref(), Some("lobby-eu"));
+        assert_eq!(ctx.sdn_zone.as_deref(), Some("BackendWorld"));
+        assert_eq!(ctx.dropped_packets, Some(142));
+        assert_eq!(ctx.cert_expires_in_days, Some(89));
     }
 }

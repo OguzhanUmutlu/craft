@@ -44,6 +44,11 @@ pub struct CraftPaths {
     pub delta_cache_dir: PathBuf,
     pub modpack_registry_file: PathBuf,
     pub modpack_lock: PathBuf,
+    pub sdn_dir: PathBuf,
+    pub sdn_mesh_file: PathBuf,
+    pub sdn_certs_dir: PathBuf,
+    pub wireguard_dir: PathBuf,
+    pub sdn_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -87,6 +92,11 @@ impl CraftPaths {
         let delta_cache_dir = cache_dir.join("deltas");
         let modpack_registry_file = home.join("modpacks.toml");
         let modpack_lock = locks_dir.join("modpack.lock");
+        let sdn_dir = home.join("sdn");
+        let sdn_mesh_file = sdn_dir.join("mesh.toml");
+        let sdn_certs_dir = sdn_dir.join("certs");
+        let wireguard_dir = sdn_dir.join("wireguard");
+        let sdn_lock = locks_dir.join("sdn.lock");
 
         Self {
             home,
@@ -128,6 +138,11 @@ impl CraftPaths {
             delta_cache_dir,
             modpack_registry_file,
             modpack_lock,
+            sdn_dir,
+            sdn_mesh_file,
+            sdn_certs_dir,
+            wireguard_dir,
+            sdn_lock,
         }
     }
 
@@ -162,6 +177,9 @@ impl CraftPaths {
         let workload_dir = diagnostics_dir.join("workload");
         let modpack_ci_dir = home.join("modpacks").join("ci");
         let delta_cache_dir = cache_dir.join("deltas");
+        let sdn_dir = home.join("sdn");
+        let sdn_certs_dir = sdn_dir.join("certs");
+        let wireguard_dir = sdn_dir.join("wireguard");
 
         // Ensure all primary directories exist
         for dir in [
@@ -183,6 +201,9 @@ impl CraftPaths {
             &workload_dir,
             &modpack_ci_dir,
             &delta_cache_dir,
+            &sdn_dir,
+            &sdn_certs_dir,
+            &wireguard_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -210,6 +231,8 @@ impl CraftPaths {
         let forecasting_lock = locks_dir.join("forecasting.lock");
         let modpack_registry_file = home.join("modpacks.toml");
         let modpack_lock = locks_dir.join("modpack.lock");
+        let sdn_mesh_file = sdn_dir.join("mesh.toml");
+        let sdn_lock = locks_dir.join("sdn.lock");
 
         Ok(Self {
             home,
@@ -251,6 +274,11 @@ impl CraftPaths {
             delta_cache_dir,
             modpack_registry_file,
             modpack_lock,
+            sdn_dir,
+            sdn_mesh_file,
+            sdn_certs_dir,
+            wireguard_dir,
+            sdn_lock,
         })
     }
 

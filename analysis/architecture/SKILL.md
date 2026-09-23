@@ -226,6 +226,44 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `craft modpack sync <name> [--version v] [--client-dir dir] [--json]`
   - Full-screen centered interactive TUI panel (`Tools -> Modpack CI/CD & Fast Client Synchronizer`) powered by ModalX.
 
+### 3.13 Zero-Trust Inter-Server Microsegmentation, eBPF Packet Filtering & WireGuard Overlay Mesh
+
+- **Core Topology & File Layout**:
+  - `~/.craft/sdn`: Primary SDN overlay state directory.
+  - `~/.craft/sdn/mesh.toml`: Atomic registry configuration tracking mesh name, overlay CIDR (`10.42.0.0/16`), local node configuration, WireGuard peers, and active microsegmentation policy.
+  - `~/.craft/sdn/certs`: Storage directory for mutual TLS Root CA (`ca.crt`, `ca.key`) and per-node certificates (`node.crt`, `node.key`).
+  - `~/.craft/sdn/wireguard`: Synthesized platform-specific configuration files (`wg0.conf`, `up.sh`, `down.sh`, `filter.c`, `rules.nft`, `wireguard.netdev`, `wireguard.network`).
+  - `~/.craft/run/locks/sdn.lock`: Advisory file lock (`fs2`) synchronizing concurrent mesh mutations and cryptographic key rotations.
+- **Pure-Rust WireGuard Keypair & Configuration Generator (`WgConfigGenerator`)**:
+  - Generates Curve25519 X25519 keypairs and Base64-encoded strings without OpenSSL or external C dependencies.
+  - Synthesizes `wg-quick` standard configuration format, Linux `ip link` / `wg set` shell provisioning scripts, `systemd-networkd` `.netdev`/`.network` unit files, and Windows tunnel configs.
+  - Tracks live WireGuard peer metrics (`WireguardPeerMetrics`): RX/TX transfer volumes, last handshake timestamps, RTT latency, and connection status.
+- **Pure-Rust Userspace eBPF Packet Filter & Rate Limiter (`PacketFilterEngine`)**:
+  - Enforces zero-trust isolation zones: `IngressProxy`, `BackendWorld`, `StorageMesh`, `ControlPlane`.
+  - Evaluates raw IP packet headers against granular microsegmentation rules (`protocol`, `ports`, `source_zone`, `target_zone`, `action`).
+  - Implements sliding-window rate limiters per flow/IP to prevent DDoS amplification or port flooding across the overlay.
+  - Generates drop-in C eBPF source code (`filter.c`) targeting `SEC("cgroup/skb")` and `SEC("xdp")`, Linux `nftables` rulesets (`rules.nft`), and `iptables` commands.
+- **Mutual TLS Engine & Root CA Lifecycle (`MtlsEngine`)**:
+  - Generates self-signed Root CA and issues per-node X.509-compatible certificates with DNS and IP Subject Alternative Names (SANs).
+  - Enforces zero-downtime certificate rotation (90-day validity, automated renewal evaluation).
+  - SHA-256 fingerprint hashing for out-of-band certificate verification.
+- **In-Process Daemon SDN Supervisor Service (`SdnService`)**:
+  - Manages overlay mesh state in the background supervisor.
+  - IPC protocol endpoints: `GetSdnTopology`, `ApplySdnPolicy`, `RotateSdnKeys`, `GetPeerStatus`.
+  - Auto-synthesizes platform network configurations on disk whenever policies or keypairs are mutated.
+- **Remote Federation & Scripting Hook Bus**:
+  - `RemoteCraftClient::apply_remote_sdn_mesh`: Transmits and provisions WireGuard configurations and microsegmentation policies across remote SSH hosts.
+  - `LifecycleEvent::SdnMeshReconfigured`, `SdnPacketDropped`, `SdnCertRotated` fire into embedded Lua scripts with zone, peer, and dropped packet metrics.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft sdn status [--json]`
+  - `craft sdn up [--node node] [--json]`
+  - `craft sdn down [--node node] [--json]`
+  - `craft sdn policy [apply|show|reload] [--default-verdict drop|pass] [--json]`
+  - `craft sdn peers [--zone zone] [--json]`
+  - `craft sdn rotate-keys [--node node] [--json]`
+  - `craft sdn audit [--from-zone zone] [--to-zone zone] [--json]`
+  - Full-screen centered interactive TUI panel (`Tools -> Zero-Trust Mesh & Packet Filtering`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

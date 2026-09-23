@@ -733,6 +733,53 @@ where
                     }
                 }
             }
+            IpcRequest::GetSdnTopology => {
+                match crate::sdn_service::SdnService::get_topology(supervisor.paths()) {
+                    Ok(topology) => {
+                        write_frame(&mut stream, &IpcResponse::SdnTopologyResult { topology }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::ApplySdnPolicy { policy } => {
+                match crate::sdn_service::SdnService::apply_policy(supervisor.paths(), policy) {
+                    Ok(rules_count) => {
+                        write_frame(
+                            &mut stream,
+                            &IpcResponse::SdnPolicyResult {
+                                message: format!("Microsegmentation policy applied with {} active rules", rules_count),
+                                rules_count,
+                            },
+                        )
+                        .await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::RotateSdnKeys => {
+                match crate::sdn_service::SdnService::rotate_keys(supervisor.paths()) {
+                    Ok(summary) => {
+                        write_frame(&mut stream, &IpcResponse::SdnKeyRotationResult { summary }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::GetPeerStatus { node_id } => {
+                match crate::sdn_service::SdnService::get_peer_status(supervisor.paths(), &node_id) {
+                    Ok(peer) => {
+                        write_frame(&mut stream, &IpcResponse::SdnPeerStatusResult { peer }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -1447,6 +1494,44 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::ModpackChunk { chunk } => Ok(chunk),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_sdn_topology(&mut self) -> Result<crate::sdn_service::SdnTopologySummary> {
+        match self.request(IpcRequest::GetSdnTopology).await? {
+            IpcResponse::SdnTopologyResult { topology } => Ok(topology),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn apply_sdn_policy(
+        &mut self,
+        policy: craft_core::MicrosegmentationPolicy,
+    ) -> Result<usize> {
+        match self.request(IpcRequest::ApplySdnPolicy { policy }).await? {
+            IpcResponse::SdnPolicyResult { rules_count, .. } => Ok(rules_count),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn rotate_sdn_keys(&mut self) -> Result<crate::sdn_service::KeyRotationSummary> {
+        match self.request(IpcRequest::RotateSdnKeys).await? {
+            IpcResponse::SdnKeyRotationResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_peer_status(
+        &mut self,
+        node_id: String,
+    ) -> Result<Option<craft_net::WireguardPeerMetrics>> {
+        match self.request(IpcRequest::GetPeerStatus { node_id }).await? {
+            IpcResponse::SdnPeerStatusResult { peer } => Ok(peer),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

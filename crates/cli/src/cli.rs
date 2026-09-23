@@ -558,6 +558,13 @@ pub enum Commands {
         #[command(subcommand)]
         action: ProfileCommands,
     },
+
+    /// Zero-trust inter-server microsegmentation, eBPF packet filtering, and WireGuard overlay mesh
+    #[command(name = "sdn", alias = "overlay", alias = "wireguard")]
+    Sdn {
+        #[command(subcommand)]
+        action: SdnCommands,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1014,6 +1021,76 @@ pub enum ModpackCommands {
         /// Client installation directory (defaults to current dir)
         #[arg(short, long, default_value = ".")]
         client_dir: PathBuf,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum SdnCommands {
+    /// Inspect overlay mesh topology, local node status, zones, and peer connectivity
+    Status {
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Bring up the WireGuard overlay network interface and apply routing table
+    Up {
+        /// Target node name (defaults to local node)
+        #[arg(short, long)]
+        node: Option<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Tear down the WireGuard overlay network interface
+    Down {
+        /// Target node name (defaults to local node)
+        #[arg(short, long)]
+        node: Option<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Apply, reload, or inspect kernel eBPF / nftables microsegmentation policy
+    Policy {
+        /// Set policy action: apply, show, or reload
+        #[arg(default_value = "show")]
+        action: String,
+        /// Default policy verdict (drop or accept)
+        #[arg(long)]
+        default_verdict: Option<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// List all registered WireGuard peers, isolation zones, and handshake latencies
+    Peers {
+        /// Filter by isolation zone (ingress-proxy, backend-world, storage-mesh, control-plane)
+        #[arg(short, long)]
+        zone: Option<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Trigger cryptographic mTLS and WireGuard keypair rotation
+    RotateKeys {
+        /// Target node name (defaults to local node)
+        #[arg(short, long)]
+        node: Option<String>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Audit inter-server traffic against zero-trust policy rules and dropped packets
+    Audit {
+        /// Filter audit events by source zone
+        #[arg(long)]
+        from_zone: Option<String>,
+        /// Filter audit events by destination zone
+        #[arg(long)]
+        to_zone: Option<String>,
         /// Emit machine-readable JSON output
         #[arg(long)]
         json: bool,
@@ -2761,6 +2838,72 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Modpack Sync command"),
+        }
+
+        let cli_sdn_status = Cli::try_parse_from(["craft", "sdn", "status", "--json"]).unwrap();
+        match cli_sdn_status.command {
+            Some(Commands::Sdn { action: SdnCommands::Status { json } }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Sdn Status command"),
+        }
+
+        let cli_sdn_policy = Cli::try_parse_from([
+            "craft", "sdn", "policy", "apply", "--default-verdict", "drop", "--json"
+        ]).unwrap();
+        match cli_sdn_policy.command {
+            Some(Commands::Sdn {
+                action: SdnCommands::Policy {
+                    action,
+                    default_verdict,
+                    json,
+                },
+            }) => {
+                assert_eq!(action, "apply");
+                assert_eq!(default_verdict.as_deref(), Some("drop"));
+                assert!(json);
+            }
+            _ => panic!("Expected Sdn Policy command"),
+        }
+
+        let cli_sdn_peers = Cli::try_parse_from([
+            "craft", "sdn", "peers", "--zone", "backend-world"
+        ]).unwrap();
+        match cli_sdn_peers.command {
+            Some(Commands::Sdn {
+                action: SdnCommands::Peers { zone, json },
+            }) => {
+                assert_eq!(zone.as_deref(), Some("backend-world"));
+                assert!(!json);
+            }
+            _ => panic!("Expected Sdn Peers command"),
+        }
+
+        let cli_sdn_rotate = Cli::try_parse_from([
+            "craft", "sdn", "rotate-keys", "--node", "node-alpha"
+        ]).unwrap();
+        match cli_sdn_rotate.command {
+            Some(Commands::Sdn {
+                action: SdnCommands::RotateKeys { node, json },
+            }) => {
+                assert_eq!(node.as_deref(), Some("node-alpha"));
+                assert!(!json);
+            }
+            _ => panic!("Expected Sdn RotateKeys command"),
+        }
+
+        let cli_sdn_audit = Cli::try_parse_from([
+            "craft", "sdn", "audit", "--from-zone", "ingress-proxy", "--to-zone", "storage-mesh"
+        ]).unwrap();
+        match cli_sdn_audit.command {
+            Some(Commands::Sdn {
+                action: SdnCommands::Audit { from_zone, to_zone, json },
+            }) => {
+                assert_eq!(from_zone.as_deref(), Some("ingress-proxy"));
+                assert_eq!(to_zone.as_deref(), Some("storage-mesh"));
+                assert!(!json);
+            }
+            _ => panic!("Expected Sdn Audit command"),
         }
     }
 }

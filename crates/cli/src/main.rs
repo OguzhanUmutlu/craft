@@ -484,6 +484,9 @@ async fn main() {
         Some(Commands::Profile { action }) => {
             commands::profile::handle_profile(action, &paths).await
         }
+        Some(Commands::Sdn { action }) => {
+            commands::sdn::handle_sdn(action, &paths).await
+        }
     };
 
     if let Err(e) = result {
@@ -548,6 +551,7 @@ fn print_banner() {
     println!("  ai <status|analyze|profile|policy> Autonomous intelligence & predictive performance");
     println!("  edge <status|add|probe|sync-routing> Global edge mesh, traffic routing & session handoffs");
     println!("  profile <tick|packets|histogram>  Real-time tick profiling, Netty inspection & histograms");
+    println!("  sdn <status|up|down|policy|peers> Zero-trust mesh & eBPF microsegmentation");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

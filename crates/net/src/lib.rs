@@ -1,9 +1,11 @@
 pub mod a2s;
+pub mod ebpf_filter;
 pub mod edge_probe;
 pub mod edge_router;
 pub mod firewall;
 pub mod histogram;
 pub mod loopback;
+pub mod mtls;
 pub mod packet_inspector;
 pub mod query;
 pub mod raknet;
@@ -11,6 +13,7 @@ pub mod rcon;
 pub mod sleep_proxy;
 pub mod slp;
 pub mod tick_profiler;
+pub mod wireguard;
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
 pub use edge_probe::{EdgeLatencyProber, EdgeProbeResult};
@@ -27,5 +30,8 @@ pub use rcon::RconClient;
 pub use sleep_proxy::{SleepProxy, SleepProxyConfig, SleepProxyHandle};
 pub use slp::{ping_java_server, ServerPingStatus};
 pub use tick_profiler::{TickHealthGrade, TickProfileSummary, TickProfiler, TickSample};
+pub use wireguard::{base64_decode, base64_encode, WgConfigGenerator, WireguardKeypair, WireguardPeerMetrics};
+pub use ebpf_filter::{DropStatistics, EbpfFilterCompiler, PacketFilterEngine, PacketVerdict, RawPacketHeader};
+pub use mtls::{CertMetadata, MtlsEngine, NodeCertBundle, RootCaBundle};
 
 

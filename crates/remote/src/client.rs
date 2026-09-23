@@ -796,6 +796,22 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    pub fn apply_remote_sdn_mesh(
+        &self,
+        wg_conf_content: &str,
+    ) -> Result<String> {
+        let cmd = format!(
+            "mkdir -p ~/.craft/sdn/wireguard && cat << 'EOF' > ~/.craft/sdn/wireguard/wg0.conf\n{}\nEOF\ncraft sdn up 2>/dev/null || true",
+            wg_conf_content
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SDN mesh configuration failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

@@ -23,6 +23,7 @@ pub mod properties;
 pub mod rbac;
 pub mod remote_config;
 pub mod rollout;
+pub mod sdn;
 pub mod timeseries;
 pub mod trash;
 pub mod version;
@@ -64,6 +65,10 @@ pub use rbac::{Permission, RbacRegistry, Role, UserAccount};
 pub use rollout::{
     CanaryHealthCriteria, FleetHealingAction, FleetHealthStatus, NodeHealth, RolloutPlan,
     RolloutRecord, RolloutRegistry, RolloutStage, RolloutStrategy,
+};
+pub use sdn::{
+    FilterAction, FilterProtocol, IsolationZone, LocalNodeConfig, MicrosegmentationPolicy,
+    MicrosegmentationRule, SdnMeshConfig, SdnRegistry, WireguardPeer,
 };
 pub use timeseries::{RegressionResult, RollingTimeSeries, SawtoothMetrics, TimeSeriesSample};
 

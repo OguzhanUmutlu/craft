@@ -11,6 +11,7 @@ pub mod modpack_service;
 pub mod protocol;
 pub mod ring_buffer;
 pub mod scheduler;
+pub mod sdn_service;
 pub mod supervisor;
 pub mod telemetry;
 pub mod tick_service;
@@ -30,6 +31,7 @@ pub use modpack_service::{parse_http_range, ModpackChunkResponse, ModpackDistrib
 pub use protocol::{AutoscaleServerStatus, IncidentSummary, IpcRequest, IpcResponse};
 pub use ring_buffer::RingBuffer;
 pub use scheduler::{BackupSchedule, BackupScheduleInfo, DaemonScheduler};
+pub use sdn_service::{KeyRotationSummary, SdnService, SdnTopologySummary};
 pub use supervisor::Supervisor;
 pub use telemetry::{generate_prometheus_metrics, init_telemetry_start_time};
 pub use tick_service::{ServerTelemetryState, TickService};
