@@ -195,6 +195,37 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `craft forecast optimize [server] [--json]`
   - Full-screen centered interactive TUI panel (`Tools -> Workload Forecasting & Cost Optimizer`) powered by ModalX.
 
+### 3.12. Autonomous Modpack CI/CD, Binary Delta Patching & Fast Client Synchronizer
+- **Storage Locations**:
+  - `~/.craft/modpacks/ci`: Artifact storage directory containing packaged client and server `.tar.zst` distribution archives.
+  - `~/.craft/cache/deltas`: Content-addressed cache of computed `.delta` binary patch files.
+  - `~/.craft/modpacks.toml`: Atomic registry recording modpack builds, component lists, archive SHA-256 digests, and transition delta manifests.
+  - `~/.craft/run/locks/modpack.lock`: Cross-process file lock protecting registry mutations during concurrent CI builds and delta computations.
+- **Pure-Rust Block-Level Binary Delta Engine (`BinaryDeltaEngine`)**:
+  - Computes sub-megabyte binary deltas between multi-gigabyte server/client archives without external system dependencies (`librsync`/`bsdiff`).
+  - Rolling Adler-32 checksums match 4096-byte blocks between source and target payloads.
+  - Generates compact `DeltaOp::Copy { source_offset, length }` and `DeltaOp::Insert { data }` operation streams.
+  - Payload streams are compressed with Zstandard (`zstd::encode_all`) and prepended with a cryptographic `BinaryDeltaHeader` (`CRAFTDLT` magic, block size, original size, target size, source and target SHA-256 digests).
+  - Byte-for-byte target reconstruction is cryptographically verified against `target_sha256`.
+- **Modpack CI/CD Pipeline (`ModpackBuilder`)**:
+  - Performs AST and bytecode inspection across ZIP and JAR entries: parses `fabric.mod.json`, `quilt.mod.json`, `mods.toml`, and detects client-side vs. server-side markers (e.g. `environment`, `client`, `server`, and keyword heuristics for shaders/renderers vs. databases/permissions).
+  - Classifies components into `ModSide::ClientOnly`, `ModSide::ServerOnly`, or `ModSide::Both`.
+  - Verifies mod dependencies against declared Minecraft and mod loader versions.
+  - Bundles distribution archives into deterministic `.tar.zst` packages for server deployments and client syncs.
+- **In-Process Daemon Distribution Service (`ModpackDistributionService`)**:
+  - Implements RFC 7233 partial content chunk streaming with `Range: bytes=X-Y` header parsing.
+  - Streams modpack distribution archives and binary delta patches to remote clients in concurrent 1MB chunks without memory blowup.
+  - Typed IPC endpoints: `BuildModpack`, `GenerateDelta`, `GetModpackStatus`, `GetModpackChunk`.
+- **Remote Federation & Scripting Hook Bus**:
+  - Remote synchronization: `RemoteCraftClient::sync_modpack_delta` securely deploys delta patches across federated SSH clusters.
+  - Scripting hooks: `LifecycleEvent::ModpackBuildCompleted`, `ModpackDeltaPublished`, `ClientSyncRequested` fire into embedded Lua scripts with artifact size, version, and bandwidth reduction metrics.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft modpack build [dir] [--name name] [--version v] [--loader l] [--mc-version v] [--target both|server|client] [--output dir] [--json]`
+  - `craft modpack delta <source> <target> [--name name] [--src-version v1] [--target-version v2] [--output file] [--json]`
+  - `craft modpack patch <base> <patch> [--output file] [--json]`
+  - `craft modpack sync <name> [--version v] [--client-dir dir] [--json]`
+  - Full-screen centered interactive TUI panel (`Tools -> Modpack CI/CD & Fast Client Synchronizer`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

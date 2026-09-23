@@ -813,6 +813,7 @@ mod tests {
 
     #[test]
     fn test_colorize_log_levels() {
+        colored::control::set_override(true);
         let info = colorize_log_line("[12:34:56 INFO]: Server started on port 25565");
         assert!(info.contains("\x1B["));
 
@@ -834,6 +835,7 @@ mod tests {
 
     #[test]
     fn test_filter_matching_and_highlighting() {
+        colored::control::set_override(true);
         let mut filter = ConsoleFilter {
             query: "exception".to_string(),
             active: true,

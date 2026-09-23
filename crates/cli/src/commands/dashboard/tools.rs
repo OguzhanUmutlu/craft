@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use craft_backup::BackupEngine;
 use craft_core::{
-    kill_process, read_pid_file, CraftPaths, RemoteAuthType, RemoteHostConfig, RemotesRegistry,
-    Result, ServersRegistry,
+    format_size, kill_process, read_pid_file, CraftPaths, ModpackRegistry, RemoteAuthType,
+    RemoteHostConfig, RemotesRegistry, Result, ServersRegistry,
 };
 use craft_daemon::DaemonClient;
 use craft_plugins::PluginManager;
@@ -1790,6 +1790,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             CanaryFleet,
             LogForensics,
             WorkloadForecasting,
+            ModpackCI,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1853,6 +1854,13 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::WorkloadForecasting);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(num.to_string(), "Modpack CI/CD & Fast Client Synchronizer")
+                .with_aliases(&["m", "modpack", "ci", "sync"]),
+        );
+        actions.push(ToolItemAction::ModpackCI);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -1894,6 +1902,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::WorkloadForecasting => {
                     workload_forecasting_tui(paths).await?;
+                }
+                ToolItemAction::ModpackCI => {
+                    modpack_ci_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -2311,5 +2322,68 @@ pub async fn workload_forecasting_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("WORKLOAD FORECASTING & COST OPTIMIZER", &lines, false)?;
     Ok(())
 }
+
+pub async fn modpack_ci_tui(paths: &CraftPaths) -> Result<()> {
+    let _guard = AltScreenGuard::enter();
+    let _nav = NavGuard::enter("Modpack CI/CD & Fast Client Synchronizer");
+
+    let registry = ModpackRegistry::load(paths).unwrap_or_default();
+    let mut lines = Vec::new();
+
+    if registry.modpacks.is_empty() {
+        lines.push("[NO MODPACKS REGISTERED]".yellow().bold().to_string());
+        lines.push("No modpacks have been built or indexed on this system yet.".to_string());
+        lines.push("".to_string());
+        lines.push("To package your first modpack with automated CI:".to_string());
+        lines.push("  craft modpack build <server-dir> --name mypack --version 1.0.0".green().to_string());
+        lines.push("".to_string());
+        lines.push("To generate sub-megabyte binary delta patches:".to_string());
+        lines.push("  craft modpack delta <v1.tar.zst> <v2.tar.zst>".green().to_string());
+        lines.push("".to_string());
+        lines.push("To synchronize client files:".to_string());
+        lines.push("  craft modpack sync mypack".green().to_string());
+    } else {
+        lines.push(format!("Total Registered Modpacks: {}", registry.modpacks.len().to_string().cyan()));
+        lines.push("".to_string());
+
+        for (name, record) in &registry.modpacks {
+            lines.push(format!("[MODPACK: {}]", name).yellow().bold().to_string());
+            lines.push(format!("  Releases Indexed: {}", record.versions.len()));
+            lines.push(format!("  Delta Patches:    {}", record.deltas.len()));
+
+            if let Some(latest) = record.versions.last() {
+                lines.push(format!("  Latest Version:   {} ({})", latest.version.green(), latest.loader.purple()));
+                lines.push(format!("  Minecraft:        {}", latest.minecraft_version));
+                lines.push(format!("  Components:       {} mods/resources", latest.components.len()));
+                if let Some(ref sh) = latest.server_archive_hash {
+                    let short_sh: String = sh.chars().take(16).collect();
+                    lines.push(format!("  Server SHA-256:   {}...", short_sh));
+                }
+                if let Some(ref ch) = latest.client_archive_hash {
+                    let short_ch: String = ch.chars().take(16).collect();
+                    lines.push(format!("  Client SHA-256:   {}...", short_ch));
+                }
+            }
+
+            if !record.deltas.is_empty() {
+                lines.push("  Recent Binary Delta Patches:".dimmed().to_string());
+                for d in record.deltas.iter().take(3) {
+                    lines.push(format!(
+                        "   * {} -> {} | Delta: {} | Reduction: {:.1}%",
+                        d.source_version.cyan(),
+                        d.target_version.green(),
+                        format_size(d.delta_size),
+                        d.reduction_percent
+                    ));
+                }
+            }
+            lines.push("".to_string());
+        }
+    }
+
+    show_modal_message("MODPACK CI/CD & FAST CLIENT SYNCHRONIZER", &lines, false)?;
+    Ok(())
+}
+
 
 

@@ -1,11 +1,13 @@
 use craft_core::{CraftError, Result};
 use std::path::{Path, PathBuf};
 
+pub mod binary_delta;
 pub mod compatibility;
 pub mod hangar;
 pub mod manifest;
 pub mod map_resolver;
 pub mod modpack;
+pub mod modpack_builder;
 pub mod modrinth;
 pub mod poggit;
 pub mod resolver;
@@ -13,6 +15,7 @@ pub mod saves;
 pub mod update;
 pub mod world;
 
+pub use binary_delta::{Adler32, BinaryDeltaEngine};
 pub use compatibility::{evaluate_compatibility, CompatibilityReport};
 pub use hangar::{HangarClient, HangarProject};
 pub use manifest::{
@@ -23,6 +26,7 @@ pub use modpack::{
     inspect_modpack_archive, install_modpack_archive, ModpackInspectSummary, ModpackInstallSummary,
     ModpackKind,
 };
+pub use modpack_builder::{detect_mod_side, ModpackBuilder};
 pub use modrinth::{ModrinthClient, ModrinthFile, ModrinthHit, ModrinthVersion};
 pub use poggit::{PoggitClient, PoggitPlugin};
 pub use resolver::{

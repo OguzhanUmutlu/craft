@@ -29,6 +29,7 @@ cargo-timing.html
 !/tools/test_canary_rollout.py
 !/tools/test_log_forensics.py
 !/tools/test_workload_forecasting.py
+!/tools/test_modpack_ci.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

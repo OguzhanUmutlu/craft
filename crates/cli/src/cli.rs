@@ -925,7 +925,7 @@ pub enum AuditCommands {
     Verify,
 }
 
-#[derive(Subcommand, Debug, Clone)]
+#[derive(Subcommand, Debug, Clone, PartialEq)]
 pub enum ModpackCommands {
     /// Inspect a Modrinth (.mrpack) or CurseForge modpack archive
     Inspect {
@@ -941,6 +941,82 @@ pub enum ModpackCommands {
         /// Bypass local zstd cache store
         #[arg(long)]
         no_cache: bool,
+    },
+    /// Package a server directory into segregated client/server distributions with CI compatibility checks
+    Build {
+        /// Base directory containing mods/ and config/ (defaults to current dir)
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+        /// Modpack release name (defaults to directory name)
+        #[arg(short, long)]
+        name: Option<String>,
+        /// Release version string (default: 1.0.0)
+        #[arg(short, long, default_value = "1.0.0")]
+        version: String,
+        /// Target mod loader (fabric, forge, neoforge, quilt)
+        #[arg(short, long, default_value = "fabric")]
+        loader: String,
+        /// Target Minecraft version (e.g. 1.20.4)
+        #[arg(short, long, default_value = "1.20.4")]
+        mc_version: String,
+        /// Target deployment distribution (server, client, or both)
+        #[arg(short, long, default_value = "both")]
+        target: String,
+        /// Output directory for built archives
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Compute a block-level binary delta patch between two modpack version archives
+    Delta {
+        /// Path to base/source modpack archive
+        source: PathBuf,
+        /// Path to updated/target modpack archive
+        target: PathBuf,
+        /// Output file path for generated delta patch (.delta)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Modpack name tag for metadata
+        #[arg(long, default_value = "modpack")]
+        name: String,
+        /// Source version string tag
+        #[arg(long, default_value = "v1")]
+        src_version: String,
+        /// Target version string tag
+        #[arg(long, default_value = "v2")]
+        target_version: String,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reconstruct a target modpack archive from a base archive and binary delta patch
+    Patch {
+        /// Path to base/source modpack archive
+        base: PathBuf,
+        /// Path to binary delta patch file (.delta)
+        patch: PathBuf,
+        /// Path for reconstructed target archive output
+        #[arg(short, long)]
+        output: PathBuf,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+    /// Fast client file synchronizer: fetch or apply modpack updates via chunk streaming
+    Sync {
+        /// Modpack release name
+        name: String,
+        /// Target version to sync
+        #[arg(short, long)]
+        version: Option<String>,
+        /// Client installation directory (defaults to current dir)
+        #[arg(short, long, default_value = ".")]
+        client_dir: PathBuf,
+        /// Emit machine-readable JSON output
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -2565,6 +2641,126 @@ mod tests {
                 assert!(dry_run);
             }
             _ => panic!("Expected Edge Optimize command"),
+        }
+    }
+
+    #[test]
+    fn test_modpack_cli_parsing() {
+        let cli_build = Cli::try_parse_from([
+            "craft", "modpack", "build", "/tmp/server",
+            "--name", "speedcraft",
+            "--version", "1.2.0",
+            "--loader", "fabric",
+            "--mc-version", "1.20.4",
+            "--target", "both",
+            "--json",
+        ])
+        .unwrap();
+
+        match cli_build.command {
+            Some(Commands::Modpack {
+                action: ModpackCommands::Build {
+                    dir,
+                    name,
+                    version,
+                    loader,
+                    mc_version,
+                    target,
+                    json,
+                    ..
+                },
+            }) => {
+                assert_eq!(dir, PathBuf::from("/tmp/server"));
+                assert_eq!(name, Some("speedcraft".to_string()));
+                assert_eq!(version, "1.2.0");
+                assert_eq!(loader, "fabric");
+                assert_eq!(mc_version, "1.20.4");
+                assert_eq!(target, "both");
+                assert!(json);
+            }
+            _ => panic!("Expected Modpack Build command"),
+        }
+
+        let cli_delta = Cli::try_parse_from([
+            "craft", "modpack", "delta", "/tmp/v1.tar.zst", "/tmp/v2.tar.zst",
+            "--name", "speedcraft",
+            "--src-version", "1.0.0",
+            "--target-version", "1.1.0",
+            "--output", "/tmp/patch.delta",
+            "--json",
+        ])
+        .unwrap();
+
+        match cli_delta.command {
+            Some(Commands::Modpack {
+                action: ModpackCommands::Delta {
+                    source,
+                    target,
+                    name,
+                    src_version,
+                    target_version,
+                    output,
+                    json,
+                },
+            }) => {
+                assert_eq!(source, PathBuf::from("/tmp/v1.tar.zst"));
+                assert_eq!(target, PathBuf::from("/tmp/v2.tar.zst"));
+                assert_eq!(name, "speedcraft");
+                assert_eq!(src_version, "1.0.0");
+                assert_eq!(target_version, "1.1.0");
+                assert_eq!(output, Some(PathBuf::from("/tmp/patch.delta")));
+                assert!(json);
+            }
+            _ => panic!("Expected Modpack Delta command"),
+        }
+
+        let cli_patch = Cli::try_parse_from([
+            "craft", "modpack", "patch", "/tmp/base.tar.zst", "/tmp/patch.delta",
+            "--output", "/tmp/reconstructed.tar.zst",
+            "--json",
+        ])
+        .unwrap();
+
+        match cli_patch.command {
+            Some(Commands::Modpack {
+                action: ModpackCommands::Patch {
+                    base,
+                    patch,
+                    output,
+                    json,
+                },
+            }) => {
+                assert_eq!(base, PathBuf::from("/tmp/base.tar.zst"));
+                assert_eq!(patch, PathBuf::from("/tmp/patch.delta"));
+                assert_eq!(output, PathBuf::from("/tmp/reconstructed.tar.zst"));
+                assert!(json);
+            }
+            _ => panic!("Expected Modpack Patch command"),
+        }
+
+        let cli_sync = Cli::try_parse_from([
+            "craft", "modpack", "sync", "speedcraft",
+            "--version", "1.2.0",
+            "--client-dir", "/tmp/client",
+            "--json",
+        ])
+        .unwrap();
+
+        match cli_sync.command {
+            Some(Commands::Modpack {
+                action: ModpackCommands::Sync {
+                    name,
+                    version,
+                    client_dir,
+                    json,
+                },
+            }) => {
+                assert_eq!(name, "speedcraft");
+                assert_eq!(version, Some("1.2.0".to_string()));
+                assert_eq!(client_dir, PathBuf::from("/tmp/client"));
+                assert!(json);
+            }
+            _ => panic!("Expected Modpack Sync command"),
         }
     }
 }

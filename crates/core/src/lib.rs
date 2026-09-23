@@ -14,6 +14,7 @@ pub mod intelligence_config;
 pub mod java;
 pub mod log_index;
 pub mod mesh_config;
+pub mod modpack_ci;
 pub mod nbt;
 pub mod optimizer;
 pub mod path;
@@ -53,6 +54,11 @@ pub use log_index::{
 };
 pub use mesh_config::{
     MeshPolicy, MeshRegistry, MeshTarget, MeshTargetKind, ReplicationQuorum,
+};
+pub use modpack_ci::{
+    BinaryDeltaHeader, DeltaOp, DeltaPatchManifest, ModSide, ModpackBuildManifest,
+    ModpackComponent, ModpackRecord, ModpackRegistry, DEFAULT_DELTA_BLOCK_SIZE, DELTA_MAGIC,
+    DELTA_VERSION,
 };
 pub use rbac::{Permission, RbacRegistry, Role, UserAccount};
 pub use rollout::{

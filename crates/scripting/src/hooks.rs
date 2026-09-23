@@ -29,6 +29,9 @@ pub enum LifecycleEvent {
     WorkloadSurgePredicted,
     CostOptimizationApplied,
     ProactiveWakeTriggered,
+    ModpackBuildCompleted,
+    ModpackDeltaPublished,
+    ClientSyncRequested,
 }
 
 impl LifecycleEvent {
@@ -52,6 +55,9 @@ impl LifecycleEvent {
             Self::WorkloadSurgePredicted => "on_workload_surge_predicted",
             Self::CostOptimizationApplied => "on_cost_optimization_applied",
             Self::ProactiveWakeTriggered => "on_proactive_wake_triggered",
+            Self::ModpackBuildCompleted => "on_modpack_build_completed",
+            Self::ModpackDeltaPublished => "on_modpack_delta_published",
+            Self::ClientSyncRequested => "on_client_sync_requested",
         }
     }
 
@@ -76,6 +82,9 @@ impl LifecycleEvent {
             "on_workload_surge_predicted" | "workload_surge_predicted" | "surge_predicted" | "surge" => Some(Self::WorkloadSurgePredicted),
             "on_cost_optimization_applied" | "cost_optimization_applied" | "cost_optimization" | "cost" => Some(Self::CostOptimizationApplied),
             "on_proactive_wake_triggered" | "proactive_wake_triggered" | "proactive_wake" | "wake" => Some(Self::ProactiveWakeTriggered),
+            "on_modpack_build_completed" | "modpack_build_completed" | "modpack_build" => Some(Self::ModpackBuildCompleted),
+            "on_modpack_delta_published" | "modpack_delta_published" | "delta_published" => Some(Self::ModpackDeltaPublished),
+            "on_client_sync_requested" | "client_sync_requested" | "client_sync" => Some(Self::ClientSyncRequested),
             _ => None,
         }
     }
@@ -100,6 +109,9 @@ impl LifecycleEvent {
             Self::WorkloadSurgePredicted,
             Self::CostOptimizationApplied,
             Self::ProactiveWakeTriggered,
+            Self::ModpackBuildCompleted,
+            Self::ModpackDeltaPublished,
+            Self::ClientSyncRequested,
         ]
     }
 }
@@ -160,6 +172,14 @@ pub struct HookContext {
     pub horizon_minutes: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scaling_action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modpack_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modpack_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delta_size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub savings_percent: Option<f64>,
 }
 
 impl HookContext {

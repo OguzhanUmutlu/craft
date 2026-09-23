@@ -40,6 +40,10 @@ pub struct CraftPaths {
     pub forecasting_file: PathBuf,
     pub forecasting_lock: PathBuf,
     pub workload_dir: PathBuf,
+    pub modpack_ci_dir: PathBuf,
+    pub delta_cache_dir: PathBuf,
+    pub modpack_registry_file: PathBuf,
+    pub modpack_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -79,6 +83,10 @@ impl CraftPaths {
         let forecasting_file = home.join("forecasting.toml");
         let forecasting_lock = locks_dir.join("forecasting.lock");
         let workload_dir = diagnostics_dir.join("workload");
+        let modpack_ci_dir = home.join("modpacks").join("ci");
+        let delta_cache_dir = cache_dir.join("deltas");
+        let modpack_registry_file = home.join("modpacks.toml");
+        let modpack_lock = locks_dir.join("modpack.lock");
 
         Self {
             home,
@@ -116,6 +124,10 @@ impl CraftPaths {
             forecasting_file,
             forecasting_lock,
             workload_dir,
+            modpack_ci_dir,
+            delta_cache_dir,
+            modpack_registry_file,
+            modpack_lock,
         }
     }
 
@@ -148,6 +160,8 @@ impl CraftPaths {
         let indices_dir = home.join("indices");
         let forensics_dir = home.join("forensics");
         let workload_dir = diagnostics_dir.join("workload");
+        let modpack_ci_dir = home.join("modpacks").join("ci");
+        let delta_cache_dir = cache_dir.join("deltas");
 
         // Ensure all primary directories exist
         for dir in [
@@ -167,6 +181,8 @@ impl CraftPaths {
             &indices_dir,
             &forensics_dir,
             &workload_dir,
+            &modpack_ci_dir,
+            &delta_cache_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -192,6 +208,8 @@ impl CraftPaths {
         let pid_file = run_dir.join("daemon.pid");
         let forecasting_file = home.join("forecasting.toml");
         let forecasting_lock = locks_dir.join("forecasting.lock");
+        let modpack_registry_file = home.join("modpacks.toml");
+        let modpack_lock = locks_dir.join("modpack.lock");
 
         Ok(Self {
             home,
@@ -229,6 +247,10 @@ impl CraftPaths {
             forecasting_file,
             forecasting_lock,
             workload_dir,
+            modpack_ci_dir,
+            delta_cache_dir,
+            modpack_registry_file,
+            modpack_lock,
         })
     }
 

@@ -73,6 +73,11 @@ impl DaemonServer {
         ));
         forecasting.clone().start_worker();
 
+        // Launch in-process Modpack CI/CD, Binary Delta & Range Chunk Distribution Service
+        let modpack_service = std::sync::Arc::new(crate::modpack_service::ModpackDistributionService::new(
+            &self.paths,
+        ));
+
         // Load settings to check gateway and storage monitor config
         let settings = craft_core::GlobalSettings::load(&self.paths).unwrap_or_default();
 
@@ -117,6 +122,7 @@ impl DaemonServer {
             let fh_mgr = fleet_healer.clone();
             let li_mgr = log_indexer.clone();
             let fc_mgr = forecasting.clone();
+            let mp_mgr = modpack_service.clone();
             loop {
                 match listener.accept().await {
                     Ok((stream, _)) => {
@@ -128,8 +134,9 @@ impl DaemonServer {
                         let fh = fh_mgr.clone();
                         let li = li_mgr.clone();
                         let fc = fc_mgr.clone();
+                        let mp = mp_mgr.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb, ts, fh, li, fc).await {
+                            if let Err(e) = handle_connection(stream, sup, hib, ap, eb, ts, fh, li, fc, mp).await {
                                 warn!("IPC client disconnected with error: {}", e);
                             }
                         });
@@ -163,6 +170,7 @@ impl DaemonServer {
             let fh_mgr = fleet_healer.clone();
             let li_mgr = log_indexer.clone();
             let fc_mgr = forecasting.clone();
+            let mp_mgr = modpack_service.clone();
             loop {
                 if let Err(e) = server.connect().await {
                     error!("Error connecting named pipe client: {}", e);
@@ -181,8 +189,9 @@ impl DaemonServer {
                 let fh = fh_mgr.clone();
                 let li = li_mgr.clone();
                 let fc = fc_mgr.clone();
+                let mp = mp_mgr.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(client, sup, hib, ap, eb, ts, fh, li, fc).await {
+                    if let Err(e) = handle_connection(client, sup, hib, ap, eb, ts, fh, li, fc, mp).await {
                         warn!("IPC client error: {}", e);
                     }
                 });
@@ -211,6 +220,7 @@ async fn handle_connection<S>(
     fleet_healer: std::sync::Arc<crate::fleet_healer::FleetHealer>,
     log_indexer: std::sync::Arc<crate::log_indexer::LogIngestionService>,
     forecasting: std::sync::Arc<crate::forecasting_service::WorkloadForecastingService>,
+    modpack_service: std::sync::Arc<crate::modpack_service::ModpackDistributionService>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -662,6 +672,65 @@ where
                         write_frame(&mut stream, &IpcResponse::ProactiveScalingResult { message, applied_action }).await?
                     }
                     Err(e) => write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?,
+                }
+            }
+            IpcRequest::BuildModpack {
+                name,
+                version,
+                loader,
+                mc_version,
+                base_path,
+            } => {
+                match modpack_service.build_modpack(
+                    &name,
+                    &version,
+                    &loader,
+                    &mc_version,
+                    std::path::Path::new(&base_path),
+                ) {
+                    Ok(manifest) => {
+                        write_frame(&mut stream, &IpcResponse::ModpackBuildResult { manifest }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::GenerateDelta {
+                pack_name,
+                source_version,
+                target_version,
+            } => {
+                match modpack_service.generate_delta(&pack_name, &source_version, &target_version) {
+                    Ok(delta_manifest) => {
+                        write_frame(&mut stream, &IpcResponse::DeltaResult { delta_manifest }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::GetModpackStatus { pack_name } => {
+                match modpack_service.get_status(&pack_name) {
+                    Ok((versions, deltas)) => {
+                        write_frame(&mut stream, &IpcResponse::ModpackStatus { versions, deltas }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
+                }
+            }
+            IpcRequest::GetModpackChunk {
+                file_path,
+                range_header,
+            } => {
+                match modpack_service.read_chunk(&file_path, range_header.as_deref()) {
+                    Ok(chunk) => {
+                        write_frame(&mut stream, &IpcResponse::ModpackChunk { chunk }).await?
+                    }
+                    Err(e) => {
+                        write_frame(&mut stream, &IpcResponse::Error { error: e.to_string() }).await?
+                    }
                 }
             }
             IpcRequest::ShutdownDaemon => {
@@ -1305,6 +1374,79 @@ impl DaemonClient {
     pub async fn trigger_proactive_scaling(&mut self, server_name: String) -> Result<(String, String)> {
         match self.request(IpcRequest::TriggerProactiveScalingNow { server_name }).await? {
             IpcResponse::ProactiveScalingResult { message, applied_action } => Ok((message, applied_action)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn build_modpack(
+        &mut self,
+        name: String,
+        version: String,
+        loader: String,
+        mc_version: String,
+        base_path: String,
+    ) -> Result<craft_core::ModpackBuildManifest> {
+        match self
+            .request(IpcRequest::BuildModpack {
+                name,
+                version,
+                loader,
+                mc_version,
+                base_path,
+            })
+            .await?
+        {
+            IpcResponse::ModpackBuildResult { manifest } => Ok(manifest),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn generate_modpack_delta(
+        &mut self,
+        pack_name: String,
+        source_version: String,
+        target_version: String,
+    ) -> Result<craft_core::DeltaPatchManifest> {
+        match self
+            .request(IpcRequest::GenerateDelta {
+                pack_name,
+                source_version,
+                target_version,
+            })
+            .await?
+        {
+            IpcResponse::DeltaResult { delta_manifest } => Ok(delta_manifest),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_modpack_status(
+        &mut self,
+        pack_name: String,
+    ) -> Result<(Vec<craft_core::ModpackBuildManifest>, Vec<craft_core::DeltaPatchManifest>)> {
+        match self.request(IpcRequest::GetModpackStatus { pack_name }).await? {
+            IpcResponse::ModpackStatus { versions, deltas } => Ok((versions, deltas)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_modpack_chunk(
+        &mut self,
+        file_path: String,
+        range_header: Option<String>,
+    ) -> Result<crate::modpack_service::ModpackChunkResponse> {
+        match self
+            .request(IpcRequest::GetModpackChunk {
+                file_path,
+                range_header,
+            })
+            .await?
+        {
+            IpcResponse::ModpackChunk { chunk } => Ok(chunk),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

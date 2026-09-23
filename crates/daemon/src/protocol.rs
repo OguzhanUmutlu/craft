@@ -47,6 +47,25 @@ pub enum IpcRequest {
     GetCostOptimizationReport { server_name: Option<String> },
     SetWorkloadPolicy { policy: craft_core::WorkloadPolicy },
     TriggerProactiveScalingNow { server_name: String },
+    BuildModpack {
+        name: String,
+        version: String,
+        loader: String,
+        mc_version: String,
+        base_path: String,
+    },
+    GenerateDelta {
+        pack_name: String,
+        source_version: String,
+        target_version: String,
+    },
+    GetModpackStatus {
+        pack_name: String,
+    },
+    GetModpackChunk {
+        file_path: String,
+        range_header: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,6 +114,13 @@ pub enum IpcResponse {
     CostOptimizationReportResult { report: craft_core::CostOptimizationReport },
     WorkloadPolicyResult { policies: Vec<craft_core::WorkloadPolicy> },
     ProactiveScalingResult { message: String, applied_action: String },
+    ModpackBuildResult { manifest: craft_core::ModpackBuildManifest },
+    DeltaResult { delta_manifest: craft_core::DeltaPatchManifest },
+    ModpackStatus {
+        versions: Vec<craft_core::ModpackBuildManifest>,
+        deltas: Vec<craft_core::DeltaPatchManifest>,
+    },
+    ModpackChunk { chunk: crate::modpack_service::ModpackChunkResponse },
     Error { error: String },
 }
 

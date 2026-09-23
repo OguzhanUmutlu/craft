@@ -775,6 +775,27 @@ impl RemoteCraftClient {
             .map_err(|e| CraftError::Other(format!("Failed to parse remote cost report: {}", e)))?;
         Ok(report)
     }
+
+    /// Syncs a modpack delta patch to the remote host executing `craft modpack patch <base_pack> <delta_patch> --output <output_path>`
+    pub fn sync_modpack_delta(
+        &self,
+        base_pack_path: &str,
+        delta_patch_path: &str,
+        output_path: &str,
+    ) -> Result<String> {
+        let cmd = format!(
+            "craft modpack patch \"{}\" \"{}\" --output \"{}\"",
+            base_pack_path.replace('"', "\\\""),
+            delta_patch_path.replace('"', "\\\""),
+            output_path.replace('"', "\\\"")
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote modpack delta patch failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]
