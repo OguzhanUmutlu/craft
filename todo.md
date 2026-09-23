@@ -6,19 +6,22 @@ This roadmap organizes engineering phases into a strict **Future-Current-Done** 
 
 ## Current Phase
 
-### Phase 9: Distributed Multi-Cloud Storage Mesh & Disaster Recovery
-Phase 9 expands backup capabilities into a distributed storage mesh with multi-cloud replication across AWS S3, Google Cloud Storage, Cloudflare R2, and local SFTP repositories. A content-addressed chunk deduplication engine splits world regions and files into rolling rabin-fingerprinted blocks, dramatically slashing transfer bandwidth and remote storage footprints. Automated disaster recovery playbooks (`craft dr test`, `craft dr failover`) simulate unrecoverable host failure and automate end-to-end server reconstitution with zero data divergence. Cryptographic encryption-at-rest (ChaCha20-Poly1305) ensures all remote archives remain secure even in zero-trust multi-tenant cloud storage. Automated verification audits validate data integrity using background merkle-tree sampling.
-
----
-
-## Future Phases
-
 ### Phase 10: Autonomous Operational Intelligence & Predictive Performance Diagnostics
 Phase 10 equips Craft with self-tuning autonomous operational intelligence and predictive performance diagnostics. An in-process anomaly detection engine analyzes real-time MSPT/TPS time series, GC pause frequency, and memory growth gradients to forecast tick degradation before player-visible lag occurs. Automated JVM flight recorder (JFR) triggers capture lightweight execution profiles during performance spikes, generating actionable diagnostic reports identifying slow plugin event listeners or runaway entity tick loops. Intelligent auto-remediation policies execute graceful entity culling, garbage collection hints, or scheduled rolling restarts during predicted off-peak player windows. Automated unit benchmarks and simulated load tests validate that the operational analyzer maintains negligible CPU overhead (<0.5%).
 
 ---
 
+## Future Phases
+
+### Phase 11: Global Edge Mesh, Multi-Region Server Sync & Player Traffic Routing
+Phase 11 introduces multi-region edge mesh routing and geo-distributed server state synchronization across global infrastructure providers. Dynamic Anycast and GeoDNS health probes route players to the lowest-latency edge proxy while maintaining synchronized cross-region cluster routing topologies. An asynchronous edge-to-core state broker streams player session handoffs, inventory snapshots, and cross-server chat channels with sub-millisecond serialization latency. Automated latency optimization playbooks dynamically adjust tick rates and view distances based on regional backbone conditions, ensuring consistent player experience across international server networks.
+
+---
+
 ## Done Phases
+
+### Phase 9: Distributed Multi-Cloud Storage Mesh & Disaster Recovery
+Phase 9 delivered a distributed multi-cloud storage mesh, content-addressed rolling chunk deduplication, zero-trust authenticated encryption-at-rest (ChaCha20-Poly1305), and automated disaster recovery (DR) playbooks. A Fast Content-Defined Chunking (`FastCDC`) engine with rolling gear hashing splits game servers and Minecraft Anvil region files (`.mca`) into 64 KB average variable-size chunks stored in a local Content-Addressed Storage pool (`~/.craft/cache/chunks/`) with Zstandard compression, cutting incremental backup bandwidth by over 90%. A pure-Rust RFC 8439 `ChaCha20Poly1305` AEAD cipher with 10,000-round PBKDF2/SHA-256 key derivation secures all stored chunks and signed manifests without external OpenSSL dependencies. A multi-cloud `StorageMesh` coordinator replicates chunks and manifests across AWS S3, Cloudflare R2, Google Cloud Storage, and remote SFTP endpoints with configurable quorum policies (`All`, `Majority`, `Any`). Cryptographic Merkle-tree sampling (`sample_mesh_integrity`) audits chunk integrity without full multi-gigabyte downloads. Disaster recovery commands (`craft dr plan`, `craft dr test`, `craft dr failover`, `craft dr verify`, `craft mesh ls|add|rm|sync|health`) execute automated cold-start recovery simulations in isolated sandboxes (`~/.craft/staging/dr-test-<server>`) and verify zero byte divergence. All workspace unit tests and compiler checks (`-D warnings`) passed cleanly with zero warnings.
 
 ### Phase 8: Multi-Tenant Role-Based Access Control, Audit Trails & Web Dashboard
 Phase 8 delivered multi-tenant role-based access control (RBAC), a cryptographically verified append-only audit trail ledger, and a zero-external-dependency embedded web dashboard. Granular role hierarchies (`SuperAdmin`, `ServerOperator`, `BackupAuditor`, `Viewer`) and fine-grained `Permission` flags are stored in `~/.craft/rbac.toml` with `fs2` advisory file locking (`rbac.lock`), salted 1,000-round SHA-256 password key-stretching, and per-user server scoping (`assigned_servers`). An append-only cryptographic ledger (`~/.craft/audit.log`) records every administrative mutation with continuous SHA-256 hash chaining anchored at `GENESIS_HASH` and pure-Rust HMAC-SHA256 signatures (`verify_chain` detects any line tampering or insertion). A lightweight single-page web dashboard and REST API (`GET /`, `GET /dashboard`, `/api/auth/login`, `/api/servers`, `/api/audit`, `/api/audit/verify`, `/api/rbac/users`) is served directly by `craft-daemon`, featuring authenticated live WebSocket console streaming (`/ws/console`), remote command execution, and real-time server fleet controls. CLI management commands (`craft user add|ls|rm|passwd` and `craft audit ls|verify`) provide operator parity from the terminal. All workspace unit tests and compiler checks (`-D warnings`) passed cleanly with zero warnings.

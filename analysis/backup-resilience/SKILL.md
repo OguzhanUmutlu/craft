@@ -116,3 +116,67 @@ Rather than relying on host crontabs or systemd timers, `craft-daemon` includes 
    - Enforces zero-downtime RCON saves if the server is running, or clean disk archiving if stopped.
    - Automatically executes retention pruning upon backup completion.
 
+---
+
+## 7. Fast Content-Defined Chunking (`FastCDC`) & Deduplication
+
+For large game worlds (e.g. Minecraft Anvil `.mca` files) where only small sub-regions change between saves, full tar archiving incurs redundant disk I/O and cloud bandwidth. Phase 9 introduces variable-size content-defined chunking:
+
+### 7.1. Rolling Gear Hash Algorithm
+- Target chunk size: 64 KB (`TARGET_CHUNK_SIZE`).
+- Minimum chunk size: 16 KB (`MIN_CHUNK_SIZE`).
+- Maximum chunk size: 256 KB (`MAX_CHUNK_SIZE`).
+- A 256-entry pseudo-random 32-bit `GEAR_MATRIX` continuously hashes a sliding window over stream bytes. When `(fingerprint & MASK) == 0` (with dynamic mask adjustment around the target size), a deterministic chunk boundary is declared.
+- **Deduplication Ratio**: Typical Minecraft world saves achieve 85%–95% deduplication across incremental snapshots.
+
+### 7.2. Content-Addressed Storage (`ChunkStore`)
+- Chunks are hashed using pure-Rust SHA-256 (`hash = sha256(raw_chunk)`).
+- Chunks are stored in a two-level prefix tree: `~/.craft/cache/chunks/xx/<hash>.chunk.zst`.
+- Each chunk is compressed using Zstandard (level 3).
+- **Zero-Trust Encryption**: When configured, chunks are encrypted with pure-Rust RFC 8439 `ChaCha20Poly1305` authenticated cipher using a 256-bit key derived via PBKDF2-SHA256 (10,000 iterations).
+
+### 7.3. Backup Manifests (`BackupManifest`)
+- Contains timestamp, server name, source size, total unique chunks, deduplicated size, and an ordered list of `ManifestFileEntry` mapping each file path and permission mode to its constituent chunk hashes.
+- Restoration reconstructs original file trees directly from chunk streams with zero byte divergence.
+
+---
+
+## 8. Distributed Multi-Cloud Storage Mesh (`StorageMesh`)
+
+Rather than binding to a single cloud provider, `StorageMesh` acts as a multi-cloud coordinator configured via `~/.craft/mesh.toml`:
+
+### 8.1. Target Providers & Quorums
+- Supported providers: `AWS S3`, `Cloudflare R2`, `Google Cloud Storage`, `Remote SFTP`, and `Local Path`.
+- Replication Quorums:
+  - `ReplicationQuorum::All`: Requires successful upload to all active targets before confirming replication.
+  - `ReplicationQuorum::Majority`: Succeeds when `replicated_count > total_active / 2`.
+  - `ReplicationQuorum::Any`: Succeeds when at least one active target accepts the payload.
+- Health Probing: `StorageMesh::probe_health` tracks endpoint reachability and latency metrics (ms).
+
+### 8.2. Merkle Tree Integrity Auditing
+- Full cloud downloads to verify archive integrity are costly and slow.
+- `compute_merkle_root` computes a binary cryptographic hash tree over all manifest chunk SHA-256 digests.
+- `sample_mesh_integrity` randomly samples a deterministic percentage of chunks across mesh targets, checking existence and byte-length without downloading full multi-gigabyte archives.
+
+---
+
+## 9. Automated Disaster Recovery (DR) & Sandbox Simulation
+
+Disaster Recovery in Craft provides automated runbooks and verification playbooks configured in `~/.craft/dr/runbooks/<server>.toml`:
+
+### 9.1. DR Operations Lifecycle
+1. **Plan (`craft dr plan <server>`)**: Analyzes target server configuration, local vs mesh manifests, RTO/RPO targets, and generates an executable recovery runbook.
+2. **Test / Simulation (`craft dr test <server>`)**:
+   - Executes cold-start restoration into an isolated staging sandbox (`~/.craft/staging/dr-test-<server>`).
+   - Reconstructs all chunked files.
+   - Recomputes SHA-256 hashes of all restored files and compares them against the source manifest.
+   - Measures simulated Recovery Time Objective (RTO) and Recovery Point Objective (RPO).
+   - Verifies 0 divergent bytes before discarding sandbox directory.
+3. **Failover (`craft dr failover <server> --target <remote>`)**:
+   - Orchestrates automated remote failover when a primary host fails.
+   - Fetches manifests and chunks from the storage mesh directly to the failover node.
+   - Updates cluster proxy routing (`craft cluster sync-routing`) to redirect incoming player traffic to the failover instance.
+4. **Verification (`craft dr verify <server>`)**:
+   - Audits Merkle roots, target replication health, and local chunk pool consistency.
+
+

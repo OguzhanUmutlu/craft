@@ -465,6 +465,12 @@ async fn main() {
         Some(Commands::Audit { action }) => {
             commands::audit::handle_audit(action, &paths)
         }
+        Some(Commands::Dr { action }) => {
+            commands::dr::handle_dr(action, &paths).await
+        }
+        Some(Commands::Mesh { action }) => {
+            commands::mesh::handle_mesh(action, &paths)
+        }
     };
 
     if let Err(e) = result {
@@ -524,6 +530,8 @@ fn print_banner() {
     println!("  hibernate <server> [--wake]       Manually sleep or wake server via SleepProxy");
     println!("  user <add|ls|rm|passwd>           Manage multi-tenant users, roles & scopes");
     println!("  audit <ls|verify>                 Cryptographically verify HMAC audit chain");
+    println!("  dr <plan|test|failover|verify>    Automated disaster recovery & cold-start reconstitution");
+    println!("  mesh <ls|add|rm|sync|health>      Distributed multi-cloud storage mesh & replication");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

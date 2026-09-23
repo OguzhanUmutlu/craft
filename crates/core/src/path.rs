@@ -21,6 +21,9 @@ pub struct CraftPaths {
     pub autoscale_file: PathBuf,
     pub rbac_file: PathBuf,
     pub audit_file: PathBuf,
+    pub mesh_file: PathBuf,
+    pub chunks_dir: PathBuf,
+    pub dr_dir: PathBuf,
     pub config_file: PathBuf,
     pub socket_file: PathBuf,
     pub pid_file: PathBuf,
@@ -36,6 +39,8 @@ impl CraftPaths {
         let locks_dir = run_dir.join("locks");
         let logs_dir = home.join("logs");
         let trash_dir = home.join("trash");
+        let chunks_dir = cache_dir.join("chunks");
+        let dr_dir = home.join("dr");
 
         let servers_file = home.join("servers.toml");
         let remotes_file = home.join("remotes.toml");
@@ -44,6 +49,7 @@ impl CraftPaths {
         let autoscale_file = home.join("autoscale.toml");
         let rbac_file = home.join("rbac.toml");
         let audit_file = home.join("audit.log");
+        let mesh_file = home.join("mesh.toml");
         let config_file = home.join("config.toml");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
@@ -65,6 +71,9 @@ impl CraftPaths {
             autoscale_file,
             rbac_file,
             audit_file,
+            mesh_file,
+            chunks_dir,
+            dr_dir,
             config_file,
             socket_file,
             pid_file,
@@ -93,6 +102,8 @@ impl CraftPaths {
         let locks_dir = run_dir.join("locks");
         let logs_dir = home.join("logs");
         let trash_dir = home.join("trash");
+        let chunks_dir = cache_dir.join("chunks");
+        let dr_dir = home.join("dr");
 
         // Ensure all primary directories exist
         for dir in [
@@ -100,11 +111,13 @@ impl CraftPaths {
             &servers_dir,
             &softwares_dir,
             &cache_dir,
+            &chunks_dir,
             &backups_dir,
             &trash_dir,
             &run_dir,
             &locks_dir,
             &logs_dir,
+            &dr_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -118,6 +131,7 @@ impl CraftPaths {
         let autoscale_file = home.join("autoscale.toml");
         let rbac_file = home.join("rbac.toml");
         let audit_file = home.join("audit.log");
+        let mesh_file = home.join("mesh.toml");
         let config_file = home.join("config.toml");
         let socket_file = run_dir.join("daemon.sock");
         let pid_file = run_dir.join("daemon.pid");
@@ -139,6 +153,9 @@ impl CraftPaths {
             autoscale_file,
             rbac_file,
             audit_file,
+            mesh_file,
+            chunks_dir,
+            dr_dir,
             config_file,
             socket_file,
             pid_file,

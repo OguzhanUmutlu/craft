@@ -4,9 +4,12 @@ pub mod backup_config;
 pub mod cache;
 pub mod cluster_config;
 pub mod config;
+pub mod crypto;
+pub mod dr_config;
 pub mod error;
 pub mod game;
 pub mod java;
+pub mod mesh_config;
 pub mod nbt;
 pub mod optimizer;
 pub mod path;
@@ -20,6 +23,11 @@ pub mod webhook_config;
 
 pub use audit::{AuditLedger, AuditLogEntry, AuditVerificationResult, DEFAULT_AUDIT_SECRET, GENESIS_HASH};
 pub use autoscale_config::{AutoscaleRegistry, ServerAutoscalePolicy};
+pub use crypto::{derive_key, ChaCha20, ChaCha20Poly1305, Poly1305};
+pub use dr_config::{DrFailoverReport, DrPlan, DrRecoveryResult, DrRunbook, DrSimulationResult};
+pub use mesh_config::{
+    MeshPolicy, MeshRegistry, MeshTarget, MeshTargetKind, ReplicationQuorum,
+};
 pub use rbac::{Permission, RbacRegistry, Role, UserAccount};
 
 pub use backup_config::{

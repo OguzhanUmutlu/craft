@@ -501,6 +501,100 @@ pub enum Commands {
         #[command(subcommand)]
         action: AuditCommands,
     },
+
+    /// Automated disaster recovery playbooks, simulation sandboxes, and failover
+    #[command(name = "dr")]
+    Dr {
+        #[command(subcommand)]
+        action: DrCommands,
+    },
+
+    /// Manage multi-cloud storage mesh targets, quorums, and synchronization
+    #[command(name = "mesh")]
+    Mesh {
+        #[command(subcommand)]
+        action: MeshCommands,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum DrCommands {
+    /// Generate or view an automated disaster recovery runbook
+    Plan {
+        /// Server name
+        server: String,
+    },
+    /// Run non-destructive cold-start recovery simulation in an isolated staging sandbox
+    Test {
+        /// Server name
+        server: String,
+    },
+    /// Execute automated cold-start disaster recovery failover to a target node
+    Failover {
+        /// Server name
+        server: String,
+        /// Destination remote node alias
+        #[arg(short, long)]
+        target: String,
+        /// Automatically start the server after failover
+        #[arg(long)]
+        live: bool,
+    },
+    /// Display storage mesh deduplication metrics and disaster recovery status
+    Status,
+    /// Run Merkle-tree background sampling audit across storage mesh
+    Verify {
+        /// Server name
+        server: String,
+        /// Percentage of chunks to sample (e.g. 10 for 10%)
+        #[arg(short, long, default_value = "10.0")]
+        sample: f64,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum MeshCommands {
+    /// List all configured storage mesh replication targets
+    #[command(alias = "list")]
+    Ls,
+    /// Add a new storage mesh replication target (s3, r2, gdrive, sftp, local)
+    Add {
+        /// Unique target ID (e.g. r2-backup, aws-primary)
+        id: String,
+        /// Descriptive target name
+        name: String,
+        /// Target provider kind (s3, r2, gdrive, sftp, local)
+        #[arg(short, long, default_value = "s3")]
+        kind: String,
+        /// Target bucket name or directory path
+        #[arg(short, long)]
+        bucket_or_path: String,
+        /// Custom API endpoint URL (for Cloudflare R2, MinIO, Wasabi)
+        #[arg(short, long)]
+        endpoint: Option<String>,
+        /// Access key ID
+        #[arg(long)]
+        access_key: Option<String>,
+        /// Secret access key
+        #[arg(long)]
+        secret_key: Option<String>,
+        /// Target priority (lower = higher priority)
+        #[arg(short, long, default_value = "10")]
+        priority: u32,
+    },
+    /// Remove an existing storage mesh target
+    #[command(alias = "remove")]
+    Rm {
+        /// Target ID to remove
+        id: String,
+    },
+    /// Synchronize deduplicated chunks for a server across all mesh targets
+    Sync {
+        /// Server name
+        server: String,
+    },
+    /// Probe network reachability and latency across all storage mesh targets
+    Health,
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
@@ -1709,6 +1803,105 @@ mod tests {
         match cli_audit_verify.command {
             Some(Commands::Audit { action: AuditCommands::Verify }) => {}
             _ => panic!("Expected Audit Verify command"),
+        }
+    }
+
+    #[test]
+    fn test_phase9_cli_parsing() {
+        let cli_dr_plan = Cli::try_parse_from(["craft", "dr", "plan", "survival"]).unwrap();
+        match cli_dr_plan.command {
+            Some(Commands::Dr { action: DrCommands::Plan { server } }) => {
+                assert_eq!(server, "survival");
+            }
+            _ => panic!("Expected Dr Plan command"),
+        }
+
+        let cli_dr_test = Cli::try_parse_from(["craft", "dr", "test", "survival"]).unwrap();
+        match cli_dr_test.command {
+            Some(Commands::Dr { action: DrCommands::Test { server } }) => {
+                assert_eq!(server, "survival");
+            }
+            _ => panic!("Expected Dr Test command"),
+        }
+
+        let cli_dr_failover = Cli::try_parse_from(["craft", "dr", "failover", "survival", "--target", "node2", "--live"]).unwrap();
+        match cli_dr_failover.command {
+            Some(Commands::Dr { action: DrCommands::Failover { server, target, live } }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(target, "node2");
+                assert!(live);
+            }
+            _ => panic!("Expected Dr Failover command"),
+        }
+
+        let cli_dr_status = Cli::try_parse_from(["craft", "dr", "status"]).unwrap();
+        match cli_dr_status.command {
+            Some(Commands::Dr { action: DrCommands::Status }) => {}
+            _ => panic!("Expected Dr Status command"),
+        }
+
+        let cli_dr_verify = Cli::try_parse_from(["craft", "dr", "verify", "survival", "--sample", "15.0"]).unwrap();
+        match cli_dr_verify.command {
+            Some(Commands::Dr { action: DrCommands::Verify { server, sample } }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(sample, 15.0);
+            }
+            _ => panic!("Expected Dr Verify command"),
+        }
+
+        let cli_mesh_ls = Cli::try_parse_from(["craft", "mesh", "ls"]).unwrap();
+        match cli_mesh_ls.command {
+            Some(Commands::Mesh { action: MeshCommands::Ls }) => {}
+            _ => panic!("Expected Mesh Ls command"),
+        }
+
+        let cli_mesh_add = Cli::try_parse_from([
+            "craft", "mesh", "add", "r2-us", "Cloudflare R2",
+            "--kind", "r2", "--bucket-or-path", "craft-backups",
+            "--endpoint", "https://r2.example.com", "--priority", "5"
+        ]).unwrap();
+        match cli_mesh_add.command {
+            Some(Commands::Mesh {
+                action: MeshCommands::Add {
+                    id,
+                    name,
+                    kind,
+                    bucket_or_path,
+                    endpoint,
+                    priority,
+                    ..
+                },
+            }) => {
+                assert_eq!(id, "r2-us");
+                assert_eq!(name, "Cloudflare R2");
+                assert_eq!(kind, "r2");
+                assert_eq!(bucket_or_path, "craft-backups");
+                assert_eq!(endpoint, Some("https://r2.example.com".to_string()));
+                assert_eq!(priority, 5);
+            }
+            _ => panic!("Expected Mesh Add command"),
+        }
+
+        let cli_mesh_rm = Cli::try_parse_from(["craft", "mesh", "rm", "r2-us"]).unwrap();
+        match cli_mesh_rm.command {
+            Some(Commands::Mesh { action: MeshCommands::Rm { id } }) => {
+                assert_eq!(id, "r2-us");
+            }
+            _ => panic!("Expected Mesh Rm command"),
+        }
+
+        let cli_mesh_sync = Cli::try_parse_from(["craft", "mesh", "sync", "survival"]).unwrap();
+        match cli_mesh_sync.command {
+            Some(Commands::Mesh { action: MeshCommands::Sync { server } }) => {
+                assert_eq!(server, "survival");
+            }
+            _ => panic!("Expected Mesh Sync command"),
+        }
+
+        let cli_mesh_health = Cli::try_parse_from(["craft", "mesh", "health"]).unwrap();
+        match cli_mesh_health.command {
+            Some(Commands::Mesh { action: MeshCommands::Health }) => {}
+            _ => panic!("Expected Mesh Health command"),
         }
     }
 }

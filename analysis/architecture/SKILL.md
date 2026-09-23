@@ -38,8 +38,11 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 ├── servers/               # Server working directories (<server-name>/)
 ├── cache/
 │   ├── artifacts/         # Raw downloaded server JARs and archives
+│   ├── chunks/            # Content-addressed deduplication chunks (xx/<hash>.chunk.zst)
 │   └── meta/              # Zstd-compressed JSON metadata
 ├── backups/               # Local snapshot storage (<server-name>/<archive>.tar.zst)
+├── dr/
+│   └── runbooks/          # Disaster recovery runbooks and plans (<server>.toml)
 ├── run/
 │   ├── daemon.sock        # Unix domain socket (Linux/macOS)
 │   ├── daemon.pid         # Daemon process ID
@@ -51,6 +54,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 ├── remotes.toml           # Federated remote SSH host configurations
 ├── clusters.toml          # Multi-server cluster topologies and DAGs
 ├── rbac.toml              # Multi-tenant user accounts, roles & scopes
+├── mesh.toml              # Distributed multi-cloud storage mesh targets & quorums
 └── audit.log              # Append-only continuous HMAC-SHA256 audit ledger
 ```
 
@@ -76,13 +80,23 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `clusters.lock` prevents concurrent cluster topology updates.
   - `rbac.lock` synchronizes multi-tenant user and role definitions.
   - `audit.lock` guards append operations to the continuous HMAC audit log.
+  - `mesh.lock` synchronizes multi-cloud storage mesh targets and replication policies.
   - `<server_dir>/server.lock` ensures a server instance cannot be launched simultaneously by multiple processes.
 
 ### 3.3. `RbacRegistry` & `AuditLedger`
 - **`RbacRegistry` (`~/.craft/rbac.toml`)**: Manages `UserAccount` entries with 1,000-round SHA-256 salted hashes, `Role` hierarchies, granular `Permission` sets, and per-user `assigned_servers` filtering. Auto-initializes default `admin:admin` account if empty.
 - **`AuditLedger` (`~/.craft/audit.log`)**: Records every CLI, REST, and WebSocket mutation with continuous SHA-256 hash chains starting at `GENESIS_HASH` and HMAC-SHA256 signatures. Supports verification against tampering with `AuditLedger::verify_chain`.
 
-### 3.4. `ClustersRegistry` & Topological DAG Scheduling
+### 3.4. `MeshRegistry` (`~/.craft/mesh.toml`)
+- Configures geo-distributed multi-cloud storage destinations (`MeshTargetKind::S3`, `CloudflareR2`, `GDrive`, `Sftp`, `Local`) with endpoint URLs, bucket/folder paths, credentials, and quorum rules (`All`, `Majority`, `Any`).
+- Synchronized through `mesh.lock` and managed via `craft mesh` commands.
+
+### 3.5. `DrRunbook` & Disaster Recovery Orchestrator
+- **Location**: `~/.craft/dr/runbooks/<server>.toml`
+- **Format**: TOML configuration defining target server parameters, recovery point objective (RPO) seconds, recovery time objective (RTO) seconds, failover target remote, and verification steps.
+- Executes sandbox simulations (`~/.craft/staging/dr-test-<server>`) asserting 0 byte divergence before deploying failover.
+
+### 3.6. `ClustersRegistry` & Topological DAG Scheduling
 - **Location**: `~/.craft/clusters.toml`
 - **Format**: TOML array of `ServerCluster` structs (`name`, `nodes`, `proxy_entry`) with node definitions (`name`, `role`, `remote`, `depends_on`).
 - **Roles**: `backend`, `proxy`, `lobby`.
@@ -92,7 +106,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Detects cyclic dependencies and returns descriptive errors.
   - `ServerCluster::resolve_shutdown_order()` reverses the sequence, ensuring proxies disconnect players before backend worlds terminate.
 
-### 3.5. Cross-Node Federated Migration (`ServerMigrator`)
+### 3.7. Cross-Node Federated Migration (`ServerMigrator`)
 - **Protocol**:
   1. Validates source server is stopped (`server.lock` and PID verification).
   2. Verifies remote host SSH connection and `craft` binary installation.
