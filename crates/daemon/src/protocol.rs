@@ -361,6 +361,30 @@ pub enum IpcRequest {
     PatchResetMetrics {
         server: Option<String>,
     },
+    VmGetStatus {
+        vm_id: Option<String>,
+    },
+    VmSpawn {
+        name: String,
+        vcpus: u32,
+        memory_mb: u64,
+        vsock_cid: Option<u32>,
+        virtio_devices: Vec<String>,
+    },
+    VmStop {
+        vm_id: String,
+        force: bool,
+    },
+    VmInspect {
+        vm_id: String,
+    },
+    VmRunBench {
+        concurrency: usize,
+        iterations: usize,
+    },
+    VmResetMetrics {
+        vm_id: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -701,6 +725,24 @@ pub enum IpcResponse {
         metrics: craft_core::patch::PatchBenchmarkMetrics,
     },
     PatchMetricsResetResult {
+        message: String,
+    },
+    VmStatusResult {
+        summary: craft_core::vm::MicroVmStatusSummary,
+    },
+    VmSpawnResult {
+        descriptor: craft_core::vm::MicroVmDescriptor,
+    },
+    VmStopResult {
+        stopped: bool,
+    },
+    VmInspectResult {
+        descriptor: craft_core::vm::MicroVmDescriptor,
+    },
+    VmBenchResult {
+        metrics: craft_core::vm::MicroVmBenchmarkMetrics,
+    },
+    VmResetMetricsResult {
         message: String,
     },
     Error { error: String },

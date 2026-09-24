@@ -565,6 +565,34 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Aliases: `craft hot-swap`, `craft hotpatch`, `craft live-patch`.
   - Full-screen centered interactive TUI panel (`Tools -> Dynamic Binary Rewriting & Trampoline Hot Patching`) powered by ModalX.
 
+### 3.16. Autonomous MicroVM Sandboxing, Lightweight Firecracker/KVM Isolation & Sub-50ms Cold Starts (Phase 40)
+- **Core KVM Models, Virtio Devices & Registry (`craft-core`)**:
+  - Foundational KVM kernel ioctl abstractions (`KvmCapability`, `KvmUserMemoryRegion`, `KvmRegs`, `KvmSregs`, `KvmExitReason`).
+  - Virtio device specifications (`VirtioDeviceType`: `Net`, `Block`, `Vsock`, `Console`; `VirtioQueue`, `VirtioDescriptor`).
+  - AF_VSOCK host-guest communication framing (`VsockPacketHeader`, `VsockAddr`, `VsockOp` for connection requests, responses, data payloads, credits, and resets).
+  - MicroVM state models (`MicroVmConfig`, `MicroVmState`, `MicroVmDescriptor`, `MicroVmStatusSummary`, `MicroVmBenchmarkMetrics`).
+  - Advisory file locking (`vm.lock`) protecting persistent registry state under `~/.craft/vms/` (`vm_dir`, `vm_registry_file`, `vm_state_file`, `vm_lock`).
+- **Network TAP Bridge Driver, AF_VSOCK Multiplexer & Benchmarking (`craft-net`)**:
+  - `TapBridgeDriver`: manages TAP interfaces, MTU configuration, MAC address generation, and packet bridging.
+  - `VsockMultiplexer`: multiplexes host-guest AF_VSOCK streams with port routing and round-trip payload echo validation.
+  - Synthetic cold start and communication benchmark (`benchmark_microvm_boot`): verifies sub-20ms cold boot latency (<50ms threshold) and >500k vsock msgs/sec.
+- **MicroVM Supervisor Service & Prometheus Telemetry (`craft-daemon`)**:
+  - `MicroVmService`: manages in-process VM state machine, enforces jailer directory isolation (`~/.craft/vms/jails/<vm_id>/`), manages memory overcommit scheduling, background watchdog sweeps, and dispatches scripting lifecycle hooks.
+  - 6 typed IPC requests and responses: `VmGetStatus`, `VmSpawn`, `VmStop`, `VmInspect`, `VmRunBench`, `VmResetMetrics`.
+  - Prometheus metrics exposition (`craft_vm_*`): `craft_vm_active_instances`, `craft_vm_total_spawned`, `craft_vm_total_terminated`, `craft_vm_cold_start_duration_ms`, `craft_vm_vsock_packets_total`, `craft_vm_memory_allocated_bytes`.
+- **Remote Federation & Scripting Hooks**:
+  - `RemoteCraftClient` provides `get_remote_vm_status`, `spawn_remote_vm`, `stop_remote_vm`, `inspect_remote_vm`, `run_remote_vm_bench`, and `reset_remote_vm_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `MicroVmSpawned`, `MicroVmTerminated`, `MicroVmIsolationAlert` with structured VM metrics context.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft vm status [--server <name>] [--json]`
+  - `craft vm spawn -n <name> [-s <server>] [--vcpus <n>] [--mem <mb>] [--kernel <path>] [--rootfs <path>] [--json]`
+  - `craft vm stop -i <vm_id> [--json]`
+  - `craft vm inspect -i <vm_id> [--json]`
+  - `craft vm bench [--iterations <count>] [--json]`
+  - `craft vm reset-metrics [--json]`
+  - Aliases: `craft microvm`, `craft firecracker`, `craft kvm`.
+  - Full-screen centered interactive TUI panel (`Tools -> Autonomous MicroVM Sandboxing & KVM Isolation`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

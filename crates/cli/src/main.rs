@@ -576,6 +576,9 @@ async fn main() {
         Some(Commands::Patch { action }) => {
             commands::patch::handle_patch(&paths, action).await
         }
+        Some(Commands::Vm { action }) => {
+            commands::vm::handle_vm(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

@@ -86,6 +86,9 @@ pub enum LifecycleEvent {
     PatchApplied,
     PatchRolledBack,
     PatchSafetyCheckFailed,
+    MicroVmSpawned,
+    MicroVmTerminated,
+    MicroVmIsolationAlert,
 }
 
 impl LifecycleEvent {
@@ -166,6 +169,9 @@ impl LifecycleEvent {
             Self::PatchApplied => "on_patch_applied",
             Self::PatchRolledBack => "on_patch_rolled_back",
             Self::PatchSafetyCheckFailed => "on_patch_safety_check_failed",
+            Self::MicroVmSpawned => "on_microvm_spawned",
+            Self::MicroVmTerminated => "on_microvm_terminated",
+            Self::MicroVmIsolationAlert => "on_microvm_isolation_alert",
         }
     }
 
@@ -247,6 +253,9 @@ impl LifecycleEvent {
             "on_patch_applied" | "patch_applied" | "patch_apply" => Some(Self::PatchApplied),
             "on_patch_rolled_back" | "patch_rolled_back" | "patch_rollback" => Some(Self::PatchRolledBack),
             "on_patch_safety_check_failed" | "patch_safety_check_failed" | "patch_safety_failed" => Some(Self::PatchSafetyCheckFailed),
+            "on_microvm_spawned" | "microvm_spawned" | "vm_spawned" | "vm_start" => Some(Self::MicroVmSpawned),
+            "on_microvm_terminated" | "microvm_terminated" | "vm_terminated" | "vm_stop" => Some(Self::MicroVmTerminated),
+            "on_microvm_isolation_alert" | "microvm_isolation_alert" | "vm_alert" | "isolation_alert" => Some(Self::MicroVmIsolationAlert),
             _ => None,
         }
     }
@@ -328,6 +337,9 @@ impl LifecycleEvent {
             Self::PatchApplied,
             Self::PatchRolledBack,
             Self::PatchSafetyCheckFailed,
+            Self::MicroVmSpawned,
+            Self::MicroVmTerminated,
+            Self::MicroVmIsolationAlert,
         ]
     }
 }
@@ -546,6 +558,18 @@ pub struct HookContext {
     pub patch_apply_duration_micros: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub patch_rejection_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vm_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vm_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vm_vcpus: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vm_memory_mb: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vm_cold_start_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vm_isolation_alert_reason: Option<String>,
 }
 
 impl HookContext {
@@ -807,6 +831,42 @@ impl HookContext {
         ctx.details = Some(format!(
             "Dynamic patch '{}' on symbol '{}' rejected by CFG dominance check: {}",
             patch_name, target_symbol, reason
+        ));
+        ctx
+    }
+
+    pub fn for_vm_spawned(vm_id: &str, vm_name: &str, vcpus: u32, memory_mb: u64, cold_start_ms: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::MicroVmSpawned);
+        ctx.vm_id = Some(vm_id.to_string());
+        ctx.vm_name = Some(vm_name.to_string());
+        ctx.vm_vcpus = Some(vcpus);
+        ctx.vm_memory_mb = Some(memory_mb);
+        ctx.vm_cold_start_ms = Some(cold_start_ms);
+        ctx.details = Some(format!(
+            "MicroVM '{}' ({}) spawned with {} vCPUs, {} MB in {:.2} ms",
+            vm_name, vm_id, vcpus, memory_mb, cold_start_ms
+        ));
+        ctx
+    }
+
+    pub fn for_vm_terminated(vm_id: &str, vm_name: &str, uptime_seconds: u64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::MicroVmTerminated);
+        ctx.vm_id = Some(vm_id.to_string());
+        ctx.vm_name = Some(vm_name.to_string());
+        ctx.details = Some(format!(
+            "MicroVM '{}' ({}) terminated after {}s uptime",
+            vm_name, vm_id, uptime_seconds
+        ));
+        ctx
+    }
+
+    pub fn for_vm_isolation_alert(vm_id: &str, reason: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::MicroVmIsolationAlert);
+        ctx.vm_id = Some(vm_id.to_string());
+        ctx.vm_isolation_alert_reason = Some(reason.to_string());
+        ctx.details = Some(format!(
+            "MicroVM '{}' isolation alert: {}",
+            vm_id, reason
         ));
         ctx
     }
@@ -1455,5 +1515,49 @@ mod tests {
         assert_eq!(xdp_ctx.src_ip.as_deref(), Some("198.51.100.42"));
         assert_eq!(xdp_ctx.drop_rate_pps, Some(50000.0));
         assert_eq!(xdp_ctx.xdp_action.as_deref(), Some("XDP_DROP"));
+    }
+
+    #[test]
+    fn test_microvm_lifecycle_events_and_context() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_microvm_spawned"),
+            Some(LifecycleEvent::MicroVmSpawned)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("vm_spawned"),
+            Some(LifecycleEvent::MicroVmSpawned)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_microvm_terminated"),
+            Some(LifecycleEvent::MicroVmTerminated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("vm_stop"),
+            Some(LifecycleEvent::MicroVmTerminated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_microvm_isolation_alert"),
+            Some(LifecycleEvent::MicroVmIsolationAlert)
+        );
+
+        let spawn_ctx = HookContext::for_vm_spawned("vm-101", "sandbox-alpha", 2, 512, 18.5);
+        assert_eq!(spawn_ctx.event, "on_microvm_spawned");
+        assert_eq!(spawn_ctx.vm_id.as_deref(), Some("vm-101"));
+        assert_eq!(spawn_ctx.vm_name.as_deref(), Some("sandbox-alpha"));
+        assert_eq!(spawn_ctx.vm_vcpus, Some(2));
+        assert_eq!(spawn_ctx.vm_memory_mb, Some(512));
+        assert_eq!(spawn_ctx.vm_cold_start_ms, Some(18.5));
+
+        let term_ctx = HookContext::for_vm_terminated("vm-101", "sandbox-alpha", 120);
+        assert_eq!(term_ctx.event, "on_microvm_terminated");
+        assert_eq!(term_ctx.vm_id.as_deref(), Some("vm-101"));
+
+        let alert_ctx = HookContext::for_vm_isolation_alert("vm-101", "Unmapped MMIO write attempted at 0xdeadbeef");
+        assert_eq!(alert_ctx.event, "on_microvm_isolation_alert");
+        assert_eq!(alert_ctx.vm_id.as_deref(), Some("vm-101"));
+        assert_eq!(
+            alert_ctx.vm_isolation_alert_reason.as_deref(),
+            Some("Unmapped MMIO write attempted at 0xdeadbeef")
+        );
     }
 }

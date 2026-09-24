@@ -1633,6 +1633,65 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::VmGetStatus { vm_id } => {
+                let service = crate::vm_service::MicroVmService::global(supervisor.paths());
+                let resp = match service.get_status(vm_id.as_deref()) {
+                    Ok(summary) => IpcResponse::VmStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VmSpawn {
+                name,
+                vcpus,
+                memory_mb,
+                vsock_cid,
+                virtio_devices,
+            } => {
+                let service = crate::vm_service::MicroVmService::global(supervisor.paths());
+                let resp = match service.spawn_vm(&name, vcpus, memory_mb, vsock_cid, virtio_devices) {
+                    Ok(descriptor) => IpcResponse::VmSpawnResult { descriptor },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VmStop { vm_id, force } => {
+                let service = crate::vm_service::MicroVmService::global(supervisor.paths());
+                let resp = match service.stop_vm(&vm_id, force) {
+                    Ok(stopped) => IpcResponse::VmStopResult { stopped },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VmInspect { vm_id } => {
+                let service = crate::vm_service::MicroVmService::global(supervisor.paths());
+                let resp = match service.inspect_vm(&vm_id) {
+                    Ok(descriptor) => IpcResponse::VmInspectResult { descriptor },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VmRunBench {
+                concurrency,
+                iterations,
+            } => {
+                let service = crate::vm_service::MicroVmService::global(supervisor.paths());
+                let resp = match service.run_bench(concurrency, iterations) {
+                    Ok(metrics) => IpcResponse::VmBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VmResetMetrics { vm_id } => {
+                let service = crate::vm_service::MicroVmService::global(supervisor.paths());
+                let resp = match service.reset_metrics(vm_id.as_deref()) {
+                    Ok(_) => IpcResponse::VmResetMetricsResult {
+                        message: "MicroVM metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -3526,6 +3585,77 @@ impl DaemonClient {
     pub async fn reset_patch_metrics(&mut self, server: Option<String>) -> Result<String> {
         match self.request(IpcRequest::PatchResetMetrics { server }).await? {
             IpcResponse::PatchMetricsResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_vm_status(
+        &mut self,
+        vm_id: Option<String>,
+    ) -> Result<craft_core::vm::MicroVmStatusSummary> {
+        match self.request(IpcRequest::VmGetStatus { vm_id }).await? {
+            IpcResponse::VmStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn spawn_vm(
+        &mut self,
+        name: String,
+        vcpus: u32,
+        memory_mb: u64,
+        vsock_cid: Option<u32>,
+        virtio_devices: Vec<String>,
+    ) -> Result<craft_core::vm::MicroVmDescriptor> {
+        match self
+            .request(IpcRequest::VmSpawn {
+                name,
+                vcpus,
+                memory_mb,
+                vsock_cid,
+                virtio_devices,
+            })
+            .await?
+        {
+            IpcResponse::VmSpawnResult { descriptor } => Ok(descriptor),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn stop_vm(&mut self, vm_id: String, force: bool) -> Result<bool> {
+        match self.request(IpcRequest::VmStop { vm_id, force }).await? {
+            IpcResponse::VmStopResult { stopped } => Ok(stopped),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn inspect_vm(&mut self, vm_id: String) -> Result<craft_core::vm::MicroVmDescriptor> {
+        match self.request(IpcRequest::VmInspect { vm_id }).await? {
+            IpcResponse::VmInspectResult { descriptor } => Ok(descriptor),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_vm_bench(
+        &mut self,
+        concurrency: usize,
+        iterations: usize,
+    ) -> Result<craft_core::vm::MicroVmBenchmarkMetrics> {
+        match self.request(IpcRequest::VmRunBench { concurrency, iterations }).await? {
+            IpcResponse::VmBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_vm_metrics(&mut self, vm_id: Option<String>) -> Result<String> {
+        match self.request(IpcRequest::VmResetMetrics { vm_id }).await? {
+            IpcResponse::VmResetMetricsResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

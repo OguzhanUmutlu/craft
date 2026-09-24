@@ -117,6 +117,10 @@ pub struct CraftPaths {
     pub patch_registry_file: PathBuf,
     pub patch_state_file: PathBuf,
     pub patch_lock: PathBuf,
+    pub vm_dir: PathBuf,
+    pub vm_registry_file: PathBuf,
+    pub vm_state_file: PathBuf,
+    pub vm_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -233,6 +237,10 @@ impl CraftPaths {
         let patch_registry_file = patch_dir.join("registry.json");
         let patch_state_file = patch_dir.join("state.json");
         let patch_lock = locks_dir.join("patch.lock");
+        let vm_dir = home.join("vms");
+        let vm_registry_file = vm_dir.join("registry.json");
+        let vm_state_file = vm_dir.join("state.json");
+        let vm_lock = locks_dir.join("vm.lock");
 
         Self {
             home,
@@ -347,6 +355,10 @@ impl CraftPaths {
             patch_registry_file,
             patch_state_file,
             patch_lock,
+            vm_dir,
+            vm_registry_file,
+            vm_state_file,
+            vm_lock,
         }
     }
 
@@ -412,6 +424,7 @@ impl CraftPaths {
         let pmu_dir = home.join("pmu");
         let shm_dir = home.join("shm");
         let patch_dir = home.join("patching");
+        let vm_dir = home.join("vms");
 
         // Ensure all primary directories exist
         for dir in [
@@ -464,6 +477,7 @@ impl CraftPaths {
             &pmu_dir,
             &shm_dir,
             &patch_dir,
+            &vm_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -533,6 +547,9 @@ impl CraftPaths {
         let patch_registry_file = patch_dir.join("registry.json");
         let patch_state_file = patch_dir.join("state.json");
         let patch_lock = locks_dir.join("patch.lock");
+        let vm_registry_file = vm_dir.join("registry.json");
+        let vm_state_file = vm_dir.join("state.json");
+        let vm_lock = locks_dir.join("vm.lock");
 
         Ok(Self {
             home,
@@ -647,6 +664,10 @@ impl CraftPaths {
             patch_registry_file,
             patch_state_file,
             patch_lock,
+            vm_dir,
+            vm_registry_file,
+            vm_state_file,
+            vm_lock,
         })
     }
 

@@ -1734,6 +1734,98 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries MicroVM sandboxes status on the remote host
+    pub fn get_remote_vm_status(&self, vm_id: Option<&str>) -> Result<craft_core::vm::MicroVmStatusSummary> {
+        let mut cmd = "craft vm status --json".to_string();
+        if let Some(id) = vm_id {
+            cmd.push_str(&format!(" --id {}", id));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote VM status query failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote VM status: {}", e)))
+    }
+
+    /// Provisions a new MicroVM sandbox on the remote host
+    pub fn spawn_remote_vm(
+        &self,
+        name: &str,
+        vcpus: u32,
+        memory_mb: u64,
+        vsock_cid: Option<u32>,
+        devices: Vec<String>,
+    ) -> Result<craft_core::vm::MicroVmDescriptor> {
+        let mut cmd = format!("craft vm spawn -n {} --vcpus {} --memory {} --json", name, vcpus, memory_mb);
+        if let Some(cid) = vsock_cid {
+            cmd.push_str(&format!(" --cid {}", cid));
+        }
+        if !devices.is_empty() {
+            cmd.push_str(&format!(" --devices {}", devices.join(",")));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote VM spawn failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote VM descriptor: {}", e)))
+    }
+
+    /// Stops a running MicroVM sandbox on the remote host
+    pub fn stop_remote_vm(&self, vm_id: &str, force: bool) -> Result<bool> {
+        let mut cmd = format!("craft vm stop -i {} --json", vm_id);
+        if force {
+            cmd.push_str(" --force");
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote VM stop failed: {}", err.trim())));
+        }
+        Ok(stdout.contains("\"stopped\": true") || stdout.contains("true"))
+    }
+
+    /// Inspects a MicroVM sandbox on the remote host
+    pub fn inspect_remote_vm(&self, vm_id: &str) -> Result<craft_core::vm::MicroVmDescriptor> {
+        let cmd = format!("craft vm inspect -i {} --json", vm_id);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote VM inspect failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote VM inspection: {}", e)))
+    }
+
+    /// Executes synthetic MicroVM cold start benchmark on the remote host
+    pub fn run_remote_vm_bench(
+        &self,
+        concurrency: usize,
+        iterations: usize,
+    ) -> Result<craft_core::vm::MicroVmBenchmarkMetrics> {
+        let cmd = format!("craft vm bench --concurrency {} --iterations {} --json", concurrency, iterations);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote VM bench failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote VM bench metrics: {}", e)))
+    }
+
+    /// Resets MicroVM cumulative metrics on the remote host
+    pub fn reset_remote_vm_metrics(&self, vm_id: Option<&str>) -> Result<String> {
+        let mut cmd = "craft vm reset-metrics --json".to_string();
+        if let Some(id) = vm_id {
+            cmd.push_str(&format!(" --id {}", id));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote VM metrics reset failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

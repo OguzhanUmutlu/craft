@@ -666,6 +666,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<PatchCommands>,
     },
+    /// Autonomous MicroVM Sandboxing, Lightweight Firecracker/KVM Isolation & Sub-50ms Cold Starts
+    #[command(name = "vm", alias = "microvm", alias = "firecracker", alias = "kvm")]
+    Vm {
+        #[command(subcommand)]
+        action: Option<VmCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2276,6 +2282,81 @@ pub enum PatchCommands {
     },
 }
 
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum VmCommands {
+    /// Inspect active MicroVM sandboxes, allocated resources, and KVM capabilities
+    Status {
+        /// Filter by MicroVM ID or name
+        #[arg(short, long)]
+        id: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Provision a new hardware-isolated MicroVM sandbox with Firecracker/KVM virtualization
+    Spawn {
+        /// MicroVM human-readable name
+        #[arg(short, long)]
+        name: String,
+        /// Number of allocated virtual CPUs (default: 1)
+        #[arg(short, long, default_value_t = 1)]
+        vcpus: u32,
+        /// Allocated physical memory in megabytes (default: 256)
+        #[arg(short, long, default_value_t = 256)]
+        memory: u64,
+        /// Explicit AF_VSOCK Context ID (CID >= 3)
+        #[arg(short, long)]
+        cid: Option<u32>,
+        /// Comma-separated virtio devices: net,block,vsock,console (default: net,vsock,block)
+        #[arg(short, long)]
+        devices: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop and terminate a running MicroVM sandbox
+    Stop {
+        /// MicroVM ID or name to terminate
+        #[arg(short, long)]
+        id: String,
+        /// Force immediate termination without guest shutdown signal
+        #[arg(short, long)]
+        force: bool,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect low-level MicroVM descriptor, virtio devices, and cold start metrics
+    Inspect {
+        /// MicroVM ID or name to inspect
+        #[arg(short, long)]
+        id: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark concurrent MicroVM cold starts and host-guest AF_VSOCK throughput
+    Bench {
+        /// Number of concurrent workers (default: 4)
+        #[arg(short, long, default_value_t = 4)]
+        concurrency: usize,
+        /// Total number of MicroVM bootstrap iterations (default: 20)
+        #[arg(long, default_value_t = 20)]
+        iterations: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset MicroVM cumulative metrics and clear terminated instances
+    ResetMetrics {
+        /// Target MicroVM ID (resets all if omitted)
+        #[arg(short, long)]
+        id: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
 pub enum XdpRuleSubcommands {
@@ -5338,6 +5419,90 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Patch ResetMetrics command"),
+        }
+    }
+
+    #[test]
+    fn test_vm_cli_parsing() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "vm", "status", "-i", "vm-101", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Vm {
+                action: Some(VmCommands::Status { id, json }),
+            }) => {
+                assert_eq!(id, Some("vm-101".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Vm Status command"),
+        }
+
+        // Spawn command via alias 'microvm'
+        let cli_spawn = Cli::try_parse_from([
+            "craft", "microvm", "spawn", "-n", "sandbox-alpha", "-v", "2", "-m", "512", "-c", "4", "--devices", "net,vsock", "--json",
+        ])
+        .unwrap();
+        match cli_spawn.command {
+            Some(Commands::Vm {
+                action: Some(VmCommands::Spawn { name, vcpus, memory, cid, devices, json }),
+            }) => {
+                assert_eq!(name, "sandbox-alpha");
+                assert_eq!(vcpus, 2);
+                assert_eq!(memory, 512);
+                assert_eq!(cid, Some(4));
+                assert_eq!(devices, Some("net,vsock".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Vm Spawn command via alias 'microvm'"),
+        }
+
+        // Stop command via alias 'firecracker'
+        let cli_stop = Cli::try_parse_from(["craft", "firecracker", "stop", "-i", "vm-101", "--force"]).unwrap();
+        match cli_stop.command {
+            Some(Commands::Vm {
+                action: Some(VmCommands::Stop { id, force, json }),
+            }) => {
+                assert_eq!(id, "vm-101");
+                assert!(force);
+                assert!(!json);
+            }
+            _ => panic!("Expected Vm Stop command via alias 'firecracker'"),
+        }
+
+        // Inspect command via alias 'kvm'
+        let cli_inspect = Cli::try_parse_from(["craft", "kvm", "inspect", "-i", "vm-101", "--json"]).unwrap();
+        match cli_inspect.command {
+            Some(Commands::Vm {
+                action: Some(VmCommands::Inspect { id, json }),
+            }) => {
+                assert_eq!(id, "vm-101");
+                assert!(json);
+            }
+            _ => panic!("Expected Vm Inspect command via alias 'kvm'"),
+        }
+
+        // Bench command
+        let cli_bench = Cli::try_parse_from(["craft", "vm", "bench", "-c", "8", "--iterations", "50", "--json"]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Vm {
+                action: Some(VmCommands::Bench { concurrency, iterations, json }),
+            }) => {
+                assert_eq!(concurrency, 8);
+                assert_eq!(iterations, 50);
+                assert!(json);
+            }
+            _ => panic!("Expected Vm Bench command"),
+        }
+
+        // ResetMetrics command
+        let cli_reset = Cli::try_parse_from(["craft", "vm", "reset-metrics", "-i", "vm-101", "--json"]).unwrap();
+        match cli_reset.command {
+            Some(Commands::Vm {
+                action: Some(VmCommands::ResetMetrics { id, json }),
+            }) => {
+                assert_eq!(id, Some("vm-101".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Vm ResetMetrics command"),
         }
     }
 }

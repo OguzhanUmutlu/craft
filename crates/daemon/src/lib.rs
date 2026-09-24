@@ -35,6 +35,7 @@ pub mod xdp_service;
 pub mod pmu_service;
 pub mod shm_service;
 pub mod patch_service;
+pub mod vm_service;
 
 pub use anvil_service::AnvilService;
 pub use compaction_service::CompactionService;
@@ -50,6 +51,7 @@ pub use xdp_service::XdpService;
 pub use pmu_service::PmuService;
 pub use shm_service::ShmService;
 pub use patch_service::DynamicPatchService;
+pub use vm_service::MicroVmService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

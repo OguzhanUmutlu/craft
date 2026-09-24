@@ -43,6 +43,7 @@ pub mod xdp;
 pub mod pmu;
 pub mod shm;
 pub mod patch;
+pub mod vm;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -207,6 +208,13 @@ pub use patch::{
     ArchInstructionSet, BasicBlock, ControlFlowGraph, DominanceValidator, PagePermissionGuard,
     PatchBenchmarkMetrics, PatchManifest, PatchRegistry, PatchState, PatchStatusSummary,
     PatchTargetType, TrampolineDescriptor, TrampolinePatchType,
+};
+pub use vm::{
+    KvmCapability, KvmExitReason, KvmRegs, KvmSregs, KvmUserMemoryRegion, MicroVmBenchmarkMetrics,
+    MicroVmConfig, MicroVmDescriptor, MicroVmRegistry, MicroVmRegistryData, MicroVmState,
+    MicroVmStatusSummary, SeccompLevel, VirtioDescriptor, VirtioDeviceType, VirtioQueue,
+    VsockAddr, VsockOp, VsockPacketHeader, CVSK_MAGIC, VMADDR_CID_GUEST_MIN, VMADDR_CID_HOST,
+    VMADDR_CID_HYPERVISOR, VMADDR_CID_LOCAL,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

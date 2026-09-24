@@ -1807,6 +1807,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             HardwarePerformanceCounters,
             SharedMemoryRingBus,
             DynamicBinaryPatching,
+            MicroVmSandboxing,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2016,6 +2017,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::DynamicBinaryPatching);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Autonomous MicroVM Sandboxing & KVM Isolation (Firecracker)",
+            )
+            .with_aliases(&["vm", "microvm", "firecracker", "kvm"]),
+        );
+        actions.push(ToolItemAction::MicroVmSandboxing);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2108,6 +2119,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::DynamicBinaryPatching => {
                     patch_tui(paths).await?;
+                }
+                ToolItemAction::MicroVmSandboxing => {
+                    microvm_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3708,6 +3722,54 @@ async fn patch_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft patch reset-metrics               Reset cumulative patch latency counters".green().to_string());
 
     show_modal_message("DYNAMIC BINARY REWRITING & TRAMPOLINES", &lines, false)?;
+    Ok(())
+}
+
+async fn microvm_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::MicroVmService::global(paths);
+    let status = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS MICROVM SANDBOXING & LIGHTWEIGHT KVM ISOLATION".bold().to_string());
+    lines.push("Sub-50ms Cold Starts, Virtio Hardware Virtualization & AF_VSOCK Channels".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Active MicroVMs:        {}", status.active_vms));
+    lines.push(format!("Total vCPUs Allocated:  {}", status.total_vcpus));
+    lines.push(format!("Total Memory Allocated: {} MB", status.total_memory_mb));
+    lines.push(format!("Avg Cold Start:         {:.2} ms", status.avg_boot_time_ms));
+    lines.push(format!(
+        "KVM Driver:             {}",
+        if status.kvm_available {
+            "[AVAILABLE] (/dev/kvm)"
+        } else {
+            "[FALLBACK] (Synthetic KVM)"
+        }
+    ));
+    lines.push(format!("KVM API Version:        {}", status.kvm_api_version));
+    lines.push("".to_string());
+    if !status.vms.is_empty() {
+        lines.push("Active MicroVM Sandboxes:".bold().to_string());
+        for v in status.vms.iter().take(3) {
+            lines.push(
+                format!(
+                    "  {} / {} ({}, {} vCPUs, {} MB)",
+                    v.config.vm_id, v.config.name, v.state, v.config.vcpus, v.config.memory_mb
+                )
+                .dimmed()
+                .to_string(),
+            );
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft vm status [--id <ID>]             Inspect active microVM instances & KVM metrics".green().to_string());
+    lines.push("  craft vm spawn -n <NAME> [--vcpus <N>]  Provision isolated microVM with Firecracker/KVM".green().to_string());
+    lines.push("  craft vm stop -i <ID> [--force]         Terminate running microVM sandbox".green().to_string());
+    lines.push("  craft vm inspect -i <ID>                Inspect low-level virtio devices & cold start".green().to_string());
+    lines.push("  craft vm bench [--concurrency <N>]      Benchmark concurrent cold starts & AF_VSOCK".green().to_string());
+    lines.push("  craft vm reset-metrics                  Reset cumulative microVM telemetry counters".green().to_string());
+
+    show_modal_message("MICROVM SANDBOXING & KVM ISOLATION", &lines, false)?;
     Ok(())
 }
 
