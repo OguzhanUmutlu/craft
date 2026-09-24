@@ -1457,6 +1457,54 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Fetches autonomous eBPF XDP firewall and flow status from the remote host
+    pub fn get_remote_xdp_status(&self) -> Result<String> {
+        let cmd = "craft xdp status --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote XDP status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Attaches eBPF XDP firewall to a network interface on the remote host
+    pub fn attach_remote_xdp(&self, interface: &str, mode: Option<&str>) -> Result<String> {
+        let mut cmd = format!("craft xdp attach {}", interface);
+        if let Some(m) = mode {
+            cmd.push_str(&format!(" --mode {}", m));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote XDP attachment failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Detaches eBPF XDP firewall from network interface on the remote host
+    pub fn detach_remote_xdp(&self) -> Result<String> {
+        let cmd = "craft xdp detach --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote XDP detachment failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets XDP packet and drop metrics on the remote host
+    pub fn reset_remote_xdp_metrics(&self) -> Result<String> {
+        let cmd = "craft xdp reset-metrics --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote XDP metrics reset failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

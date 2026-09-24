@@ -73,6 +73,9 @@ pub enum LifecycleEvent {
     MemoryCompactionCompleted,
     HighMemoryFragmentationDetected,
     ThpAllocationStallAlert,
+    XdpDdosAttackMitigated,
+    XdpFlowRateLimitExceeded,
+    XdpInterfaceAttached,
 }
 
 impl LifecycleEvent {
@@ -140,6 +143,9 @@ impl LifecycleEvent {
             Self::MemoryCompactionCompleted => "on_memory_compaction_completed",
             Self::HighMemoryFragmentationDetected => "on_high_memory_fragmentation_detected",
             Self::ThpAllocationStallAlert => "on_thp_allocation_stall_alert",
+            Self::XdpDdosAttackMitigated => "on_xdp_ddos_attack_mitigated",
+            Self::XdpFlowRateLimitExceeded => "on_xdp_flow_rate_limit_exceeded",
+            Self::XdpInterfaceAttached => "on_xdp_interface_attached",
         }
     }
 
@@ -208,6 +214,9 @@ impl LifecycleEvent {
             "on_memory_compaction_completed" | "memory_compaction_completed" | "memory_compaction" => Some(Self::MemoryCompactionCompleted),
             "on_high_memory_fragmentation_detected" | "high_memory_fragmentation_detected" | "high_fragmentation" => Some(Self::HighMemoryFragmentationDetected),
             "on_thp_allocation_stall_alert" | "thp_allocation_stall_alert" | "thp_stall" => Some(Self::ThpAllocationStallAlert),
+            "on_xdp_ddos_attack_mitigated" | "xdp_ddos_attack_mitigated" | "ddos_mitigated" | "ddos" => Some(Self::XdpDdosAttackMitigated),
+            "on_xdp_flow_rate_limit_exceeded" | "xdp_flow_rate_limit_exceeded" | "flow_rate_limited" | "rate_limited" => Some(Self::XdpFlowRateLimitExceeded),
+            "on_xdp_interface_attached" | "xdp_interface_attached" | "interface_attached" | "xdp_attached" => Some(Self::XdpInterfaceAttached),
             _ => None,
         }
     }
@@ -276,6 +285,9 @@ impl LifecycleEvent {
             Self::MemoryCompactionCompleted,
             Self::HighMemoryFragmentationDetected,
             Self::ThpAllocationStallAlert,
+            Self::XdpDdosAttackMitigated,
+            Self::XdpFlowRateLimitExceeded,
+            Self::XdpInterfaceAttached,
         ]
     }
 }
@@ -460,6 +472,16 @@ pub struct HookContext {
     pub fragmentation_index: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thp_alloc_stalls: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xdp_interface: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attack_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub src_ip: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drop_rate_pps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xdp_action: Option<String>,
 }
 
 impl HookContext {
@@ -593,6 +615,26 @@ impl HookContext {
             "Transparent hugepage allocation stall alert: {} stalls observed",
             stalls
         ));
+        ctx
+    }
+
+    pub fn for_xdp_mitigation(attack_type: &str, src_ip: &str, pps: f64, action: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::XdpDdosAttackMitigated);
+        ctx.attack_type = Some(attack_type.to_string());
+        ctx.src_ip = Some(src_ip.to_string());
+        ctx.drop_rate_pps = Some(pps);
+        ctx.xdp_action = Some(action.to_string());
+        ctx.details = Some(format!(
+            "eBPF XDP anti-DDoS mitigation triggered: attack '{}' from IP '{}' dropped ({:.2} pps, action: {})",
+            attack_type, src_ip, pps, action
+        ));
+        ctx
+    }
+
+    pub fn for_xdp_attached(iface: &str, mode: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::XdpInterfaceAttached);
+        ctx.xdp_interface = Some(iface.to_string());
+        ctx.details = Some(format!("eBPF XDP firewall attached to interface '{}' (mode: {})", iface, mode));
         ctx
     }
 }
@@ -1213,5 +1255,26 @@ mod tests {
         assert_eq!(lock_ctx.event, "on_thread_contention_surge");
         assert_eq!(lock_ctx.lock_symbol.as_deref(), Some("MinecraftServer.tick()"));
         assert_eq!(lock_ctx.contention_ms, Some(18.5));
+
+        // Test Phase 36 XDP Firewall lifecycle events
+        assert_eq!(
+            LifecycleEvent::from_name("on_xdp_ddos_attack_mitigated"),
+            Some(LifecycleEvent::XdpDdosAttackMitigated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_xdp_flow_rate_limit_exceeded"),
+            Some(LifecycleEvent::XdpFlowRateLimitExceeded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_xdp_interface_attached"),
+            Some(LifecycleEvent::XdpInterfaceAttached)
+        );
+
+        let xdp_ctx = HookContext::for_xdp_mitigation("syn_flood", "198.51.100.42", 50000.0, "XDP_DROP");
+        assert_eq!(xdp_ctx.event, "on_xdp_ddos_attack_mitigated");
+        assert_eq!(xdp_ctx.attack_type.as_deref(), Some("syn_flood"));
+        assert_eq!(xdp_ctx.src_ip.as_deref(), Some("198.51.100.42"));
+        assert_eq!(xdp_ctx.drop_rate_pps, Some(50000.0));
+        assert_eq!(xdp_ctx.xdp_action.as_deref(), Some("XDP_DROP"));
     }
 }

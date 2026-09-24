@@ -1401,6 +1401,62 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::XdpGetStatus => {
+                let service = crate::xdp_service::XdpService::global(supervisor.paths());
+                let resp = match service.get_status() {
+                    Ok(status) => IpcResponse::XdpStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::XdpAttachInterface { interface_name, mode } => {
+                let service = crate::xdp_service::XdpService::global(supervisor.paths());
+                let resp = match service.attach_interface(&interface_name, mode) {
+                    Ok(status) => IpcResponse::XdpStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::XdpDetachInterface => {
+                let service = crate::xdp_service::XdpService::global(supervisor.paths());
+                let resp = match service.detach_interface() {
+                    Ok(status) => IpcResponse::XdpStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::XdpAddRule { rule } => {
+                let service = crate::xdp_service::XdpService::global(supervisor.paths());
+                let resp = match service.add_rule(rule) {
+                    Ok(status) => IpcResponse::XdpRuleModified {
+                        status,
+                        message: "XDP filter rule added successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::XdpRemoveRule { rule_id } => {
+                let service = crate::xdp_service::XdpService::global(supervisor.paths());
+                let resp = match service.remove_rule(&rule_id) {
+                    Ok(status) => IpcResponse::XdpRuleModified {
+                        status,
+                        message: format!("XDP filter rule '{}' removed successfully", rule_id),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::XdpResetMetrics => {
+                let service = crate::xdp_service::XdpService::global(supervisor.paths());
+                let resp = match service.reset_metrics() {
+                    Ok(_) => IpcResponse::XdpMetricsResetResult {
+                        message: "XDP metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -2977,6 +3033,75 @@ impl DaemonClient {
     pub async fn reset_compaction_metrics(&mut self) -> Result<String> {
         match self.request(IpcRequest::CompactionResetMetrics).await? {
             IpcResponse::CompactionMetricsResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_xdp_status(&mut self) -> Result<craft_core::XdpInterfaceStatus> {
+        match self.request(IpcRequest::XdpGetStatus).await? {
+            IpcResponse::XdpStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn attach_xdp_interface(
+        &mut self,
+        interface_name: &str,
+        mode: craft_core::XdpAttachMode,
+    ) -> Result<craft_core::XdpInterfaceStatus> {
+        match self
+            .request(IpcRequest::XdpAttachInterface {
+                interface_name: interface_name.to_string(),
+                mode,
+            })
+            .await?
+        {
+            IpcResponse::XdpStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn detach_xdp_interface(&mut self) -> Result<craft_core::XdpInterfaceStatus> {
+        match self.request(IpcRequest::XdpDetachInterface).await? {
+            IpcResponse::XdpStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn add_xdp_rule(
+        &mut self,
+        rule: craft_core::XdpFilterRule,
+    ) -> Result<(craft_core::XdpInterfaceStatus, String)> {
+        match self.request(IpcRequest::XdpAddRule { rule }).await? {
+            IpcResponse::XdpRuleModified { status, message } => Ok((status, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn remove_xdp_rule(
+        &mut self,
+        rule_id: &str,
+    ) -> Result<(craft_core::XdpInterfaceStatus, String)> {
+        match self
+            .request(IpcRequest::XdpRemoveRule {
+                rule_id: rule_id.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::XdpRuleModified { status, message } => Ok((status, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_xdp_metrics(&mut self) -> Result<String> {
+        match self.request(IpcRequest::XdpResetMetrics).await? {
+            IpcResponse::XdpMetricsResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

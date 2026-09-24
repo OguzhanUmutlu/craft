@@ -279,6 +279,19 @@ pub enum IpcRequest {
     },
     CompactionGetPoolStats,
     CompactionResetMetrics,
+    XdpGetStatus,
+    XdpAttachInterface {
+        interface_name: String,
+        mode: craft_core::XdpAttachMode,
+    },
+    XdpDetachInterface,
+    XdpAddRule {
+        rule: craft_core::XdpFilterRule,
+    },
+    XdpRemoveRule {
+        rule_id: String,
+    },
+    XdpResetMetrics,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -555,6 +568,16 @@ pub enum IpcResponse {
         stats: craft_core::PagePoolStats,
     },
     CompactionMetricsResetResult {
+        message: String,
+    },
+    XdpStatusResult {
+        status: craft_core::XdpInterfaceStatus,
+    },
+    XdpRuleModified {
+        status: craft_core::XdpInterfaceStatus,
+        message: String,
+    },
+    XdpMetricsResetResult {
         message: String,
     },
     Error { error: String },

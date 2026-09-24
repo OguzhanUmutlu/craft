@@ -101,6 +101,10 @@ pub struct CraftPaths {
     pub compaction_dir: PathBuf,
     pub compaction_registry_file: PathBuf,
     pub compaction_lock: PathBuf,
+    pub xdp_dir: PathBuf,
+    pub xdp_rules_file: PathBuf,
+    pub xdp_state_file: PathBuf,
+    pub xdp_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -201,6 +205,10 @@ impl CraftPaths {
         let compaction_dir = home.join("compaction");
         let compaction_registry_file = compaction_dir.join("registry.json");
         let compaction_lock = locks_dir.join("compaction.lock");
+        let xdp_dir = home.join("xdp");
+        let xdp_rules_file = xdp_dir.join("rules.json");
+        let xdp_state_file = xdp_dir.join("state.json");
+        let xdp_lock = locks_dir.join("xdp.lock");
 
         Self {
             home,
@@ -299,6 +307,10 @@ impl CraftPaths {
             compaction_dir,
             compaction_registry_file,
             compaction_lock,
+            xdp_dir,
+            xdp_rules_file,
+            xdp_state_file,
+            xdp_lock,
         }
     }
 
@@ -360,6 +372,7 @@ impl CraftPaths {
         let hsm_tokens_dir = hsm_dir.join("tokens");
         let hsm_pcr_dir = hsm_dir.join("pcr");
         let hsm_zk_dir = hsm_dir.join("zk");
+        let xdp_dir = home.join("xdp");
 
         // Ensure all primary directories exist
         for dir in [
@@ -408,6 +421,7 @@ impl CraftPaths {
             &hsm_tokens_dir,
             &hsm_pcr_dir,
             &hsm_zk_dir,
+            &xdp_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -465,6 +479,9 @@ impl CraftPaths {
         let compaction_dir = home.join("compaction");
         let compaction_registry_file = compaction_dir.join("registry.json");
         let compaction_lock = locks_dir.join("compaction.lock");
+        let xdp_rules_file = xdp_dir.join("rules.json");
+        let xdp_state_file = xdp_dir.join("state.json");
+        let xdp_lock = locks_dir.join("xdp.lock");
 
         Ok(Self {
             home,
@@ -563,7 +580,16 @@ impl CraftPaths {
             compaction_dir,
             compaction_registry_file,
             compaction_lock,
+            xdp_dir,
+            xdp_rules_file,
+            xdp_state_file,
+            xdp_lock,
         })
+    }
+
+    /// Returns the XDP rules file path
+    pub fn xdp_rules_path(&self) -> PathBuf {
+        self.xdp_rules_file.clone()
     }
 
     /// Returns the token file path for a specific HSM token ID

@@ -642,6 +642,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<MemoryCommands>,
     },
+    /// Autonomous Self-Healing eBPF XDP Firewall, Anti-DDoS Mitigation & State-Machine Flow Tracking
+    #[command(name = "xdp", alias = "xdp-firewall", alias = "antiddos", alias = "ddos", alias = "bpf-xdp")]
+    Xdp {
+        #[command(subcommand)]
+        action: Option<XdpCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2010,6 +2016,103 @@ pub enum MemoryCommands {
         /// Packet slice payload size in bytes
         #[arg(long, default_value = "1024")]
         slice_size: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum XdpCommands {
+    /// Show current eBPF XDP firewall status, drop metrics, active rules, and tracked flows
+    Status {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Attach eBPF XDP driver to network interface
+    Attach {
+        /// Network interface name (e.g. eth0, ens3, lo)
+        interface: String,
+        /// Attachment mode: native, offload, generic
+        #[arg(short, long, default_value = "generic")]
+        mode: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Detach eBPF XDP driver from current network interface
+    Detach {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Manage eBPF XDP firewall filtering rules
+    Rule {
+        #[command(subcommand)]
+        action: XdpRuleSubcommands,
+    },
+    /// Reset packet counters and drop metrics
+    ResetMetrics {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark pure-Rust XDP pipeline throughput with synthetic attack simulation
+    Bench {
+        /// Total packets to simulate
+        #[arg(long, default_value = "100000")]
+        packets: usize,
+        /// Ratio of attack packets to generate (0.0 - 1.0)
+        #[arg(long, default_value = "0.7")]
+        attack_ratio: f64,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum XdpRuleSubcommands {
+    /// Add a filtering rule
+    Add {
+        /// Unique rule identifier
+        id: String,
+        /// Target CIDR network or IP (e.g. 192.168.1.0/24, 10.0.0.1, or 'any')
+        #[arg(long, default_value = "any")]
+        cidr: String,
+        /// Optional destination port
+        #[arg(short, long)]
+        port: Option<u16>,
+        /// Transport protocol: any, tcp, udp, icmp
+        #[arg(long, default_value = "any")]
+        proto: String,
+        /// Action: pass, drop, redirect, tx
+        #[arg(short, long, default_value = "drop")]
+        action: String,
+        /// Optional rate limit in packets per second
+        #[arg(long)]
+        rate_limit: Option<u64>,
+        /// Optional temporary ban duration in seconds
+        #[arg(long)]
+        ban_seconds: Option<u64>,
+        /// Rule evaluation priority (higher evaluated first)
+        #[arg(long, default_value = "100")]
+        priority: u32,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Remove a filtering rule by ID
+    Remove {
+        /// Unique rule identifier
+        id: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List all configured filtering rules
+    List {
         /// Output in machine-readable JSON format
         #[arg(long)]
         json: bool,
@@ -4687,6 +4790,116 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Memory Pool command"),
+        }
+    }
+
+    #[test]
+    fn test_xdp_cli_parsing() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "xdp", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Xdp {
+                action: Some(XdpCommands::Status { json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Xdp Status command"),
+        }
+
+        // Aliases
+        for alias in &["xdp-firewall", "antiddos", "ddos", "bpf-xdp"] {
+            let cli_alias = Cli::try_parse_from(["craft", alias, "status"]).unwrap();
+            assert!(matches!(
+                cli_alias.command,
+                Some(Commands::Xdp {
+                    action: Some(XdpCommands::Status { json: false })
+                })
+            ));
+        }
+
+        // Attach command
+        let cli_attach = Cli::try_parse_from([
+            "craft", "xdp", "attach", "eth0", "--mode", "native", "--json",
+        ])
+        .unwrap();
+        match cli_attach.command {
+            Some(Commands::Xdp {
+                action: Some(XdpCommands::Attach { interface, mode, json }),
+            }) => {
+                assert_eq!(interface, "eth0");
+                assert_eq!(mode, "native");
+                assert!(json);
+            }
+            _ => panic!("Expected Xdp Attach command"),
+        }
+
+        // Detach command
+        let cli_detach = Cli::try_parse_from(["craft", "xdp", "detach"]).unwrap();
+        match cli_detach.command {
+            Some(Commands::Xdp {
+                action: Some(XdpCommands::Detach { json }),
+            }) => {
+                assert!(!json);
+            }
+            _ => panic!("Expected Xdp Detach command"),
+        }
+
+        // Rule Add command
+        let cli_rule_add = Cli::try_parse_from([
+            "craft", "xdp", "rule", "add", "block-bad-cidr",
+            "--cidr", "10.0.0.0/8",
+            "--port", "25565",
+            "--proto", "tcp",
+            "--action", "drop",
+            "--rate-limit", "100",
+            "--ban-seconds", "300",
+            "--priority", "200",
+            "--json",
+        ])
+        .unwrap();
+        match cli_rule_add.command {
+            Some(Commands::Xdp {
+                action: Some(XdpCommands::Rule {
+                    action: XdpRuleSubcommands::Add {
+                        id,
+                        cidr,
+                        port,
+                        proto,
+                        action,
+                        rate_limit,
+                        ban_seconds,
+                        priority,
+                        json,
+                    },
+                }),
+            }) => {
+                assert_eq!(id, "block-bad-cidr");
+                assert_eq!(cidr, "10.0.0.0/8");
+                assert_eq!(port, Some(25565));
+                assert_eq!(proto, "tcp");
+                assert_eq!(action, "drop");
+                assert_eq!(rate_limit, Some(100));
+                assert_eq!(ban_seconds, Some(300));
+                assert_eq!(priority, 200);
+                assert!(json);
+            }
+            _ => panic!("Expected Xdp Rule Add command"),
+        }
+
+        // Bench command
+        let cli_bench = Cli::try_parse_from([
+            "craft", "xdp", "bench", "--packets", "50000", "--attack-ratio", "0.8", "--json",
+        ])
+        .unwrap();
+        match cli_bench.command {
+            Some(Commands::Xdp {
+                action: Some(XdpCommands::Bench { packets, attack_ratio, json }),
+            }) => {
+                assert_eq!(packets, 50000);
+                assert!((attack_ratio - 0.8).abs() < 1e-6);
+                assert!(json);
+            }
+            _ => panic!("Expected Xdp Bench command"),
         }
     }
 }

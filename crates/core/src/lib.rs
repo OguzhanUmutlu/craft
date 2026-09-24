@@ -39,6 +39,7 @@ pub mod cgroups;
 pub mod tracing_core;
 pub mod version;
 pub mod webhook_config;
+pub mod xdp;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -185,6 +186,10 @@ pub use version::{
     compare_versions, is_stable_version, sort_versions_descending, ReleaseTier, VersionToken,
 };
 pub use webhook_config::{WebhookEndpoint, WebhookEvent, WebhookKind, WebhooksRegistry};
+pub use xdp::{
+    matches_cidr, XdpAction, XdpAttachMode, XdpEngine, XdpFilterRule, XdpFlowEntry, XdpFlowKey,
+    XdpFlowState, XdpInterfaceStatus, XdpMapConfig, XdpMetricsSummary, XdpProtocol, XdpRegistry,
+};
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");
 

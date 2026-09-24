@@ -564,6 +564,9 @@ async fn main() {
         Some(Commands::Memory { action }) => {
             commands::memory::handle_memory(&paths, action).await
         }
+        Some(Commands::Xdp { action }) => {
+            commands::xdp::handle_xdp(&paths, action).await
+        }
     };
 
     if let Err(e) = result {
@@ -637,6 +640,7 @@ fn print_banner() {
     println!("  anycast route <announce|withdraw> Global Anycast BGP route announcements");
     println!("  bpf <trace|status|flamegraph|gc>  Autonomous eBPF kernel observability & JVM GC telemetry");
     println!("  attest <verify|inspect|policy|sign|hermetic> Cryptographic supply chain verification & SLSA signing");
+    println!("  xdp <status|attach|detach|rule|bench> Autonomous eBPF XDP firewall & Anti-DDoS mitigation");
     println!("\nGlobal Flags:");
     println!("  --remote <alias>                  Execute any command on a remote host");
     println!("\nRun 'craft --help' for full flags and subcommand reference.");

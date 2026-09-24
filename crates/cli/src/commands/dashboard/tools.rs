@@ -1803,6 +1803,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             PostQuantum,
             HardwareSecurityModule,
             MemoryCompaction,
+            XdpFirewall,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1972,6 +1973,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::MemoryCompaction);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Autonomous eBPF XDP Firewall & Anti-DDoS Mitigation",
+            )
+            .with_aliases(&["xdp", "antiddos", "ddos", "bpf-xdp"]),
+        );
+        actions.push(ToolItemAction::XdpFirewall);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2052,6 +2063,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::MemoryCompaction => {
                     memory_compaction_tui(paths).await?;
+                }
+                ToolItemAction::XdpFirewall => {
+                    xdp_firewall_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3504,6 +3518,49 @@ async fn memory_compaction_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft memory pool --packets 10000      Benchmark zero-allocation socket packet pool".green().to_string());
 
     show_modal_message("MEMORY COMPACTION & TRANSPARENT HUGEPAGES", &lines, false)?;
+    Ok(())
+}
+
+async fn xdp_firewall_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::XdpService::global(paths);
+    let status = service.get_status()?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS eBPF XDP FIREWALL & ANTI-DDOS MITIGATION".bold().to_string());
+    lines.push("Sub-Microsecond Wire-Speed Packet Filtering, RFC 4987 SYN Cookies & RakNet Verification".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Interface Name:         {}", status.interface_name));
+    lines.push(format!("Attachment Mode:        {}", status.mode));
+    lines.push(format!(
+        "Attachment State:       {}",
+        if status.attached {
+            "[OK] Active & Mitigating"
+        } else {
+            "[WARN] Inactive (Detached)"
+        }
+    ));
+    if let Some(prog_id) = status.bpf_prog_id {
+        lines.push(format!("BPF Program ID:         {}", prog_id));
+    }
+    lines.push(format!("Active Filter Rules:    {}", status.rules_count));
+    lines.push(format!("Tracked Flows (LRU):    {}", status.active_flows));
+    lines.push(format!("Ingress Packets:        {}", status.metrics.total_rx_packets));
+    lines.push(format!("Passed Packets:         {}", status.metrics.passed_packets));
+    lines.push(format!("Dropped Packets:        {}", status.metrics.dropped_packets));
+    lines.push(format!("SYN Flood Drops:        {}", status.metrics.syn_flood_drops));
+    lines.push(format!("UDP Flood Drops:        {}", status.metrics.udp_flood_drops));
+    lines.push(format!("RakNet Flood Drops:     {}", status.metrics.raknet_flood_drops));
+    lines.push(format!("Instant Drop Rate:      {:.2} pps", status.metrics.drop_rate_pps));
+    lines.push(format!("Absorbed Flood BW:      {:.4} Gbps", status.metrics.bandwidth_absorbed_gbps));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft xdp status                       Display active XDP interface & packet drop metrics".green().to_string());
+    lines.push("  craft xdp attach <iface> [--mode M]    Attach eBPF XDP driver to network interface".green().to_string());
+    lines.push("  craft xdp detach                       Detach eBPF XDP driver from interface".green().to_string());
+    lines.push("  craft xdp rule add <id> --cidr <C>     Install in-kernel CIDR or rate-limit filter rule".green().to_string());
+    lines.push("  craft xdp bench --packets 100000       Benchmark pure-Rust sub-microsecond packet pipeline".green().to_string());
+
+    show_modal_message("eBPF XDP FIREWALL & ANTI-DDOS", &lines, false)?;
     Ok(())
 }
 

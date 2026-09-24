@@ -22,6 +22,7 @@ pub mod slp;
 pub mod raft_transport;
 pub mod tick_profiler;
 pub mod wireguard;
+pub mod xdp_pipeline;
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
 pub use chunk_packet::{
@@ -79,5 +80,9 @@ pub use sleep_proxy::{SleepProxy, SleepProxyConfig, SleepProxyHandle};
 pub use slp::{ping_java_server, ServerPingStatus};
 pub use tick_profiler::{TickHealthGrade, TickProfileSummary, TickProfiler, TickSample};
 pub use wireguard::{base64_decode, base64_encode, WgConfigGenerator, WireguardKeypair, WireguardPeerMetrics};
+pub use xdp_pipeline::{
+    compute_syn_cookie, validate_raknet_packet, validate_syn_cookie, RakNetValidationResult,
+    XdpBenchmarkResult, XdpPacketDescriptor, XdpPipeline, RAKNET_OFFLINE_MAGIC,
+};
 
 
