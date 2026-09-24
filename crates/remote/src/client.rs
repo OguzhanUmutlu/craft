@@ -2005,6 +2005,89 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries SmartNIC offload status and device enumeration on the remote host
+    pub fn get_remote_smartnic_status(&self, server: Option<&str>) -> Result<(craft_core::SmartNicStatusSummary, Vec<craft_core::SmartNicDeviceInfo>)> {
+        let mut cmd = "craft smartnic status --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SmartNIC status query failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote SmartNIC status: {}", e)))
+    }
+
+    /// Installs a SmartNIC match-action offload rule on the remote host
+    pub fn install_remote_smartnic_rule(&self, rule: &craft_core::SmartNicOffloadRule) -> Result<craft_core::SmartNicOffloadRule> {
+        let mut cmd = format!("craft smartnic rule-add --rule-id {} --protocol {} --action {}",
+            rule.rule_id, rule.protocol.as_str(), rule.action.to_string());
+        if let Some(port) = rule.match_port {
+            cmd.push_str(&format!(" --port {}", port));
+        }
+        if let Some(ref cidr) = rule.match_cidr {
+            cmd.push_str(&format!(" --cidr {}", cidr));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SmartNIC rule installation failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse installed remote SmartNIC rule: {}", e)))
+    }
+
+    /// Removes a SmartNIC offload rule on the remote host
+    pub fn remove_remote_smartnic_rule(&self, rule_id: &str) -> Result<bool> {
+        let cmd = format!("craft smartnic rule-rm --rule-id {} --json", rule_id);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SmartNIC rule removal failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote SmartNIC removal result: {}", e)))
+    }
+
+    /// Lists active SmartNIC offload rules on the remote host
+    pub fn list_remote_smartnic_rules(&self, server: Option<&str>) -> Result<Vec<craft_core::SmartNicOffloadRule>> {
+        let mut cmd = "craft smartnic rules --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SmartNIC rules list failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote SmartNIC rules list: {}", e)))
+    }
+
+    /// Runs a line-rate SmartNIC packet switching benchmark on the remote host
+    pub fn run_remote_smartnic_bench(&self, iterations: usize, packet_size: usize) -> Result<craft_core::SmartNicBenchmarkMetrics> {
+        let cmd = format!("craft smartnic bench --iterations {} --packet-size {} --json", iterations, packet_size);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SmartNIC bench failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote SmartNIC bench metrics: {}", e)))
+    }
+
+    /// Resets SmartNIC cumulative counters on the remote host
+    pub fn reset_remote_smartnic_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft smartnic reset-metrics --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SmartNIC metrics reset failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

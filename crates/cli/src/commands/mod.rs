@@ -65,3 +65,4 @@ pub mod patch;
 pub mod vm;
 pub mod crash;
 pub mod rdma;
+pub mod smartnic;

@@ -131,6 +131,10 @@ pub struct CraftPaths {
     pub rdma_registry_file: PathBuf,
     pub rdma_state_file: PathBuf,
     pub rdma_lock: PathBuf,
+    pub smartnic_dir: PathBuf,
+    pub smartnic_registry_file: PathBuf,
+    pub smartnic_state_file: PathBuf,
+    pub smartnic_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -261,6 +265,10 @@ impl CraftPaths {
         let rdma_registry_file = rdma_dir.join("registry.json");
         let rdma_state_file = rdma_dir.join("state.json");
         let rdma_lock = locks_dir.join("rdma.lock");
+        let smartnic_dir = home.join("smartnic");
+        let smartnic_registry_file = smartnic_dir.join("registry.json");
+        let smartnic_state_file = smartnic_dir.join("state.json");
+        let smartnic_lock = locks_dir.join("smartnic.lock");
 
         Self {
             home,
@@ -389,6 +397,10 @@ impl CraftPaths {
             rdma_registry_file,
             rdma_state_file,
             rdma_lock,
+            smartnic_dir,
+            smartnic_registry_file,
+            smartnic_state_file,
+            smartnic_lock,
         }
     }
 
@@ -459,6 +471,7 @@ impl CraftPaths {
         let crash_reports_dir = crash_dir.join("reports");
         let crash_dumps_dir = crash_dir.join("dumps");
         let rdma_dir = home.join("rdma");
+        let smartnic_dir = home.join("smartnic");
 
         // Ensure all primary directories exist
         for dir in [
@@ -516,6 +529,7 @@ impl CraftPaths {
             &crash_reports_dir,
             &crash_dumps_dir,
             &rdma_dir,
+            &smartnic_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -594,6 +608,9 @@ impl CraftPaths {
         let rdma_registry_file = rdma_dir.join("registry.json");
         let rdma_state_file = rdma_dir.join("state.json");
         let rdma_lock = locks_dir.join("rdma.lock");
+        let smartnic_registry_file = smartnic_dir.join("registry.json");
+        let smartnic_state_file = smartnic_dir.join("state.json");
+        let smartnic_lock = locks_dir.join("smartnic.lock");
 
         Ok(Self {
             home,
@@ -722,7 +739,16 @@ impl CraftPaths {
             rdma_registry_file,
             rdma_state_file,
             rdma_lock,
+            smartnic_dir,
+            smartnic_registry_file,
+            smartnic_state_file,
+            smartnic_lock,
         })
+    }
+
+    /// Returns the path to a specific P4 program file
+    pub fn smartnic_p4_path(&self, name: &str) -> PathBuf {
+        self.smartnic_dir.join(format!("{}.p4", name))
     }
 
     /// Returns the memory region file path for a specific MR ID

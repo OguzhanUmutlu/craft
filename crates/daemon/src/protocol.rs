@@ -428,6 +428,27 @@ pub enum IpcRequest {
     RdmaResetMetrics {
         server: Option<String>,
     },
+    SmartNicGetStatus {
+        server: Option<String>,
+    },
+    SmartNicInstallRule {
+        server: Option<String>,
+        rule: craft_core::SmartNicOffloadRule,
+    },
+    SmartNicRemoveRule {
+        server: Option<String>,
+        rule_id: String,
+    },
+    SmartNicListRules {
+        server: Option<String>,
+    },
+    SmartNicRunBench {
+        iterations: usize,
+        packet_size: usize,
+    },
+    SmartNicResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -819,6 +840,25 @@ pub enum IpcResponse {
         metrics: craft_core::rdma::RdmaBenchmarkMetrics,
     },
     RdmaMetricsResetResult {
+        message: String,
+    },
+    SmartNicStatusResult {
+        summary: craft_core::SmartNicStatusSummary,
+        devices: Vec<craft_core::SmartNicDeviceInfo>,
+    },
+    SmartNicRuleResult {
+        rule: craft_core::SmartNicOffloadRule,
+    },
+    SmartNicRemoveResult {
+        success: bool,
+    },
+    SmartNicRulesListResult {
+        rules: Vec<craft_core::SmartNicOffloadRule>,
+    },
+    SmartNicBenchResult {
+        metrics: craft_core::SmartNicBenchmarkMetrics,
+    },
+    SmartNicResetResult {
         message: String,
     },
     Error { error: String },

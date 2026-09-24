@@ -46,6 +46,7 @@ pub mod patch;
 pub mod vm;
 pub mod crash;
 pub mod rdma;
+pub mod smartnic;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -229,6 +230,12 @@ pub use rdma::{
     QueuePairConfig, RdmaAccessFlags, RdmaBenchmarkMetrics, RdmaLinkStatus, RdmaPeerEndpoint,
     RdmaQpState, RdmaQpType, RdmaRegistry, RdmaStatusSummary, RdmaTransportType, WorkCompletion,
     WorkCompletionStatus, WorkOpcode, WorkRequest,
+};
+pub use smartnic::{
+    current_epoch_secs, render_smartnic_bench_text, render_smartnic_rules_text,
+    render_smartnic_status_text, OffloadMode, OffloadProtocol, P4ActionType, P4MatchActionTable,
+    P4MatchField, P4TableEntry, SmartNicBenchmarkMetrics, SmartNicDeviceInfo, SmartNicOffloadRule,
+    SmartNicRegistry, SmartNicStatusSummary, SmartNicVendor,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

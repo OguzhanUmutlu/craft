@@ -1810,6 +1810,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             MicroVmSandboxing,
             CrashTriagingAndLeakDetection,
             RdmaAcceleration,
+            SmartNicAcceleration,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2049,6 +2050,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::RdmaAcceleration);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "SmartNIC Hardware Offload & P4 Line-Rate Switching",
+            )
+            .with_aliases(&["smartnic", "p4", "nic-offload"]),
+        );
+        actions.push(ToolItemAction::SmartNicAcceleration);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2150,6 +2161,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::RdmaAcceleration => {
                     rdma_tui(paths).await?;
+                }
+                ToolItemAction::SmartNicAcceleration => {
+                    smartnic_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3896,6 +3910,55 @@ async fn rdma_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft rdma reset-metrics                Reset cumulative transfer counters".green().to_string());
 
     show_modal_message("RDMA ACCELERATION & FABRIC", &lines, false)?;
+    Ok(())
+}
+
+async fn smartnic_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::SmartNicService::global(paths);
+    let (summary, devices) = service.get_status(None)?;
+    let rules = service.list_rules(None).unwrap_or_default();
+    let primary_dev = devices.first();
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS SMARTNIC HARDWARE OFFLOAD & P4 LINE-RATE SWITCHING".bold().to_string());
+    lines.push("ASIC/FPGA In-Hardware XDP, Stateless SLP/RakNet Pong & Programmable Match-Action".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Primary SmartNIC Device: {}", primary_dev.map(|d| d.device_id.as_str()).unwrap_or("nic0")));
+    lines.push(format!("Vendor & Architecture:   {}", primary_dev.map(|d| d.vendor.as_str()).unwrap_or("generic_p4_emulated")));
+    lines.push(format!("Active Offload Mode:     {}", summary.offload_mode.as_str()));
+    lines.push(format!("Hardware Link Speed:     {} Gbps", primary_dev.map(|d| d.link_speed_gbps).unwrap_or(100)));
+    lines.push(format!("TCAM Capacity Usage:     {:.2}%", summary.tcam_usage_percent));
+    lines.push(format!("In-Hardware Offloaded:   {} packets ({:.2} MB)", summary.offloaded_packets, summary.offloaded_bytes as f64 / (1024.0 * 1024.0)));
+    lines.push(format!("Host CPU Cycles Saved:   {:.1}%", summary.host_cpu_saved_percent));
+    lines.push(format!("Driver Fallback Active:  {}", if summary.fallback_count > 0 { "[WARN] YES (Degraded Mode)" } else { "[OK] NO (Pure ASIC Hardware)" }));
+    lines.push("".to_string());
+    if !rules.is_empty() {
+        lines.push("Active P4 Hardware Offload Rules:".bold().to_string());
+        for r in rules.iter().take(3) {
+            lines.push(
+                format!(
+                    "  {} [{}] -> {} (Priority {}) [{}]",
+                    r.rule_id,
+                    r.protocol.as_str(),
+                    r.action,
+                    r.priority,
+                    if r.hardware_installed { "HW ASIC" } else { "SW FALLBACK" }
+                )
+                .dimmed()
+                .to_string(),
+            );
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft smartnic status [--server <S>]      Inspect SmartNIC ASIC, TCAM usage & counters".green().to_string());
+    lines.push("  craft smartnic rule-add -r <ID> -p <PROTO> Add match-action rule to hardware TCAM".green().to_string());
+    lines.push("  craft smartnic rule-rm -r <ID>            Remove offload rule from hardware".green().to_string());
+    lines.push("  craft smartnic rules                      List active in-hardware P4 rules".green().to_string());
+    lines.push("  craft smartnic bench                      Benchmark line-rate throughput & latency".green().to_string());
+    lines.push("  craft smartnic reset-metrics              Reset cumulative hardware counters".green().to_string());
+
+    show_modal_message("SMARTNIC ACCELERATION & P4 SWITCHING", &lines, false)?;
     Ok(())
 }
 

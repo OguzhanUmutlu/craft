@@ -50,6 +50,7 @@ cargo-timing.html
 !/tools/test_microvm_sandboxing.py
 !/tools/test_crash_triage_pipeline.py
 !/tools/test_rdma_fabric.py
+!/tools/test_smartnic_acceleration.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

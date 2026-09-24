@@ -684,6 +684,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<RdmaCommands>,
     },
+    /// Autonomous eBPF XDP Hardware Offloading, SmartNIC Acceleration & P4 Programmable Data Plane Line-Rate Switching
+    #[command(name = "smartnic", alias = "p4", alias = "nic-offload")]
+    SmartNic {
+        #[command(subcommand)]
+        action: Option<SmartNicCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2507,6 +2513,91 @@ pub enum RdmaCommands {
     },
     /// Reset RDMA cumulative transfer counters and error metrics
     ResetMetrics {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum SmartNicCommands {
+    /// Inspect SmartNIC ASIC hardware status, TCAM allocation, offload mode, and packet counters
+    Status {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Add a match-action offload rule to SmartNIC hardware TCAM table
+    RuleAdd {
+        /// Unique identifier for the offload rule
+        #[arg(short, long)]
+        rule_id: String,
+        /// Target offload protocol: slp, raknet, a2s, ddos, custom
+        #[arg(short = 't', long = "protocol", default_value = "slp")]
+        protocol: String,
+        /// Offload action: drop, forward, pong, syn_cookie, pass
+        #[arg(short = 'a', long = "action", default_value = "pong")]
+        action: String,
+        /// Ingress port to match
+        #[arg(short = 'p', long = "port")]
+        port: Option<u16>,
+        /// Source CIDR subnet to match (e.g. 192.168.1.0/24)
+        #[arg(short = 'c', long = "cidr")]
+        cidr: Option<String>,
+        /// Priority for rule ordering (higher number = higher priority)
+        #[arg(long, default_value_t = 10)]
+        priority: u32,
+        /// Filter or associate with server name
+        #[arg(short = 's', long = "server")]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Remove an offload rule from SmartNIC hardware
+    RuleRm {
+        /// Identifier of the rule to remove
+        #[arg(short, long)]
+        rule_id: String,
+        /// Filter or associate with server name
+        #[arg(short = 's', long = "server")]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List active in-hardware P4 match-action rules
+    Rules {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark line-rate SmartNIC switching throughput and sub-microsecond latency
+    Bench {
+        /// Benchmark iteration count
+        #[arg(short, long, default_value_t = 50000)]
+        iterations: usize,
+        /// Packet payload size in bytes
+        #[arg(short = 'b', long = "packet-size", default_value_t = 64)]
+        packet_size: usize,
+        /// Filter or associate with server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset SmartNIC cumulative hardware packet counters and fallback events
+    ResetMetrics {
+        /// Filter or associate with server name
+        #[arg(short, long)]
+        server: Option<String>,
         /// Output in machine-readable JSON format
         #[arg(long)]
         json: bool,
@@ -5741,6 +5832,101 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Rdma ResetMetrics command"),
+        }
+    }
+
+    #[test]
+    fn test_smartnic_cli_commands() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "smartnic", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::SmartNic {
+                action: Some(SmartNicCommands::Status { server: None, json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected SmartNic Status command"),
+        }
+
+        // RuleAdd command via alias 'p4'
+        let cli_add = Cli::try_parse_from([
+            "craft", "p4", "rule-add",
+            "--rule-id", "slp-rule-1",
+            "--protocol", "slp",
+            "--action", "pong",
+            "--port", "25565",
+            "--priority", "100",
+            "--json",
+        ])
+        .unwrap();
+        match cli_add.command {
+            Some(Commands::SmartNic {
+                action: Some(SmartNicCommands::RuleAdd {
+                    rule_id,
+                    protocol,
+                    action,
+                    port,
+                    cidr: None,
+                    priority,
+                    server: None,
+                    json,
+                }),
+            }) => {
+                assert_eq!(rule_id, "slp-rule-1");
+                assert_eq!(protocol, "slp");
+                assert_eq!(action, "pong");
+                assert_eq!(port, Some(25565));
+                assert_eq!(priority, 100);
+                assert!(json);
+            }
+            _ => panic!("Expected SmartNic RuleAdd command via alias 'p4'"),
+        }
+
+        // RuleRm command
+        let cli_rm = Cli::try_parse_from(["craft", "smartnic", "rule-rm", "-r", "slp-rule-1", "--json"]).unwrap();
+        match cli_rm.command {
+            Some(Commands::SmartNic {
+                action: Some(SmartNicCommands::RuleRm { rule_id, server: None, json }),
+            }) => {
+                assert_eq!(rule_id, "slp-rule-1");
+                assert!(json);
+            }
+            _ => panic!("Expected SmartNic RuleRm command"),
+        }
+
+        // Rules command via alias 'nic-offload'
+        let cli_rules = Cli::try_parse_from(["craft", "nic-offload", "rules", "--json"]).unwrap();
+        match cli_rules.command {
+            Some(Commands::SmartNic {
+                action: Some(SmartNicCommands::Rules { server: None, json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected SmartNic Rules command via alias 'nic-offload'"),
+        }
+
+        // Bench command
+        let cli_bench = Cli::try_parse_from(["craft", "smartnic", "bench", "-i", "10000", "-b", "128", "--json"]).unwrap();
+        match cli_bench.command {
+            Some(Commands::SmartNic {
+                action: Some(SmartNicCommands::Bench { iterations, packet_size, server: None, json }),
+            }) => {
+                assert_eq!(iterations, 10000);
+                assert_eq!(packet_size, 128);
+                assert!(json);
+            }
+            _ => panic!("Expected SmartNic Bench command"),
+        }
+
+        // ResetMetrics command
+        let cli_reset = Cli::try_parse_from(["craft", "smartnic", "reset-metrics", "--json"]).unwrap();
+        match cli_reset.command {
+            Some(Commands::SmartNic {
+                action: Some(SmartNicCommands::ResetMetrics { server: None, json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected SmartNic ResetMetrics command"),
         }
     }
 }

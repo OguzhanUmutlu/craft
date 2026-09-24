@@ -29,6 +29,7 @@ pub mod patch_engine;
 pub mod microvm;
 pub mod crash_triage;
 pub mod rdma;
+pub mod smartnic;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -108,6 +109,10 @@ pub use rdma::{
     RdmaVerbsEngine, RoceV2Bth, RoceV2Packet, RoceV2Reth, BTH_OPCODE_ACKNOWLEDGE,
     BTH_OPCODE_RDMA_READ_REQUEST, BTH_OPCODE_RDMA_READ_RESPONSE, BTH_OPCODE_RDMA_WRITE_ONLY,
     BTH_OPCODE_SEND_ONLY, ROCE_V2_UDP_PORT,
+};
+pub use smartnic::{
+    benchmark_smartnic_line_rate, synthesize_raknet_unconnected_pong, synthesize_slp_pong,
+    P4PipelineEngine, SmartNicFallbackBridge, SmartNicOffloadEngine,
 };
 
 

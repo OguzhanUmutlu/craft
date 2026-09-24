@@ -95,6 +95,9 @@ pub enum LifecycleEvent {
     RdmaLinkEstablished,
     RdmaFailoverTriggered,
     RdmaLatencySpike,
+    SmartNicOffloadInstalled,
+    SmartNicTcamSaturated,
+    SmartNicFallbackEngaged,
 }
 
 impl LifecycleEvent {
@@ -184,6 +187,9 @@ impl LifecycleEvent {
             Self::RdmaLinkEstablished => "on_rdma_link_established",
             Self::RdmaFailoverTriggered => "on_rdma_failover_triggered",
             Self::RdmaLatencySpike => "on_rdma_latency_spike",
+            Self::SmartNicOffloadInstalled => "on_smartnic_offload_installed",
+            Self::SmartNicTcamSaturated => "on_smartnic_tcam_saturated",
+            Self::SmartNicFallbackEngaged => "on_smartnic_fallback_engaged",
         }
     }
 
@@ -274,6 +280,9 @@ impl LifecycleEvent {
             "on_rdma_link_established" | "rdma_link_established" | "rdma_link" | "rdma_connect" => Some(Self::RdmaLinkEstablished),
             "on_rdma_failover_triggered" | "rdma_failover_triggered" | "rdma_failover" => Some(Self::RdmaFailoverTriggered),
             "on_rdma_latency_spike" | "rdma_latency_spike" | "rdma_spike" => Some(Self::RdmaLatencySpike),
+            "on_smartnic_offload_installed" | "smartnic_offload_installed" | "smartnic_installed" => Some(Self::SmartNicOffloadInstalled),
+            "on_smartnic_tcam_saturated" | "smartnic_tcam_saturated" | "tcam_saturated" => Some(Self::SmartNicTcamSaturated),
+            "on_smartnic_fallback_engaged" | "smartnic_fallback_engaged" | "smartnic_fallback" => Some(Self::SmartNicFallbackEngaged),
             _ => None,
         }
     }
@@ -364,6 +373,9 @@ impl LifecycleEvent {
             Self::RdmaLinkEstablished,
             Self::RdmaFailoverTriggered,
             Self::RdmaLatencySpike,
+            Self::SmartNicOffloadInstalled,
+            Self::SmartNicTcamSaturated,
+            Self::SmartNicFallbackEngaged,
         ]
     }
 }
@@ -616,6 +628,14 @@ pub struct HookContext {
     pub rdma_latency_nanos: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rdma_bandwidth_gbps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smartnic_device_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smartnic_rule_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smartnic_tcam_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub smartnic_offload_mode: Option<String>,
 }
 
 impl HookContext {
@@ -982,6 +1002,40 @@ impl HookContext {
         ctx.details = Some(format!(
             "RDMA transfer latency spike on peer '{}': {} ns > {} ns threshold",
             peer_node, latency_nanos, threshold_nanos
+        ));
+        ctx
+    }
+
+    pub fn for_smartnic_offload_installed(device_id: &str, rule_id: &str, mode: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::SmartNicOffloadInstalled);
+        ctx.smartnic_device_id = Some(device_id.to_string());
+        ctx.smartnic_rule_id = Some(rule_id.to_string());
+        ctx.smartnic_offload_mode = Some(mode.to_string());
+        ctx.details = Some(format!(
+            "SmartNIC offload rule '{}' installed on device '{}' in mode '{}'",
+            rule_id, device_id, mode
+        ));
+        ctx
+    }
+
+    pub fn for_smartnic_tcam_saturated(device_id: &str, tcam_percent: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::SmartNicTcamSaturated);
+        ctx.smartnic_device_id = Some(device_id.to_string());
+        ctx.smartnic_tcam_percent = Some(tcam_percent);
+        ctx.details = Some(format!(
+            "SmartNIC device '{}' TCAM capacity saturated at {:.1}%",
+            device_id, tcam_percent
+        ));
+        ctx
+    }
+
+    pub fn for_smartnic_fallback_engaged(device_id: &str, fallback_mode: &str, reason: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::SmartNicFallbackEngaged);
+        ctx.smartnic_device_id = Some(device_id.to_string());
+        ctx.smartnic_offload_mode = Some(fallback_mode.to_string());
+        ctx.details = Some(format!(
+            "SmartNIC fallback engaged on '{}' -> {}: {}",
+            device_id, fallback_mode, reason
         ));
         ctx
     }
@@ -1770,5 +1824,49 @@ mod tests {
         assert_eq!(spike_ctx.event, "on_rdma_latency_spike");
         assert_eq!(spike_ctx.rdma_peer_node.as_deref(), Some("node-2"));
         assert_eq!(spike_ctx.rdma_latency_nanos, Some(4500));
+    }
+
+    #[test]
+    fn test_smartnic_lifecycle_events() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_smartnic_offload_installed"),
+            Some(LifecycleEvent::SmartNicOffloadInstalled)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("smartnic_installed"),
+            Some(LifecycleEvent::SmartNicOffloadInstalled)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_smartnic_tcam_saturated"),
+            Some(LifecycleEvent::SmartNicTcamSaturated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("tcam_saturated"),
+            Some(LifecycleEvent::SmartNicTcamSaturated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_smartnic_fallback_engaged"),
+            Some(LifecycleEvent::SmartNicFallbackEngaged)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("smartnic_fallback"),
+            Some(LifecycleEvent::SmartNicFallbackEngaged)
+        );
+
+        let inst_ctx = HookContext::for_smartnic_offload_installed("smartnic-0", "slp-rule", "hardware_asic");
+        assert_eq!(inst_ctx.event, "on_smartnic_offload_installed");
+        assert_eq!(inst_ctx.smartnic_device_id.as_deref(), Some("smartnic-0"));
+        assert_eq!(inst_ctx.smartnic_rule_id.as_deref(), Some("slp-rule"));
+        assert_eq!(inst_ctx.smartnic_offload_mode.as_deref(), Some("hardware_asic"));
+
+        let sat_ctx = HookContext::for_smartnic_tcam_saturated("smartnic-0", 97.5);
+        assert_eq!(sat_ctx.event, "on_smartnic_tcam_saturated");
+        assert_eq!(sat_ctx.smartnic_device_id.as_deref(), Some("smartnic-0"));
+        assert_eq!(sat_ctx.smartnic_tcam_percent, Some(97.5));
+
+        let fall_ctx = HookContext::for_smartnic_fallback_engaged("smartnic-0", "driver", "TCAM saturated");
+        assert_eq!(fall_ctx.event, "on_smartnic_fallback_engaged");
+        assert_eq!(fall_ctx.smartnic_device_id.as_deref(), Some("smartnic-0"));
+        assert_eq!(fall_ctx.smartnic_offload_mode.as_deref(), Some("driver"));
     }
 }

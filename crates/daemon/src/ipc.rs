@@ -1801,6 +1801,54 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::SmartNicGetStatus { server } => {
+                let service = crate::smartnic_service::SmartNicService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok((summary, devices)) => IpcResponse::SmartNicStatusResult { summary, devices },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SmartNicInstallRule { server: _, rule } => {
+                let service = crate::smartnic_service::SmartNicService::global(supervisor.paths());
+                let resp = match service.install_rule(rule) {
+                    Ok(rule) => IpcResponse::SmartNicRuleResult { rule },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SmartNicRemoveRule { server: _, rule_id } => {
+                let service = crate::smartnic_service::SmartNicService::global(supervisor.paths());
+                let resp = match service.remove_rule(&rule_id) {
+                    Ok(success) => IpcResponse::SmartNicRemoveResult { success },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SmartNicListRules { server } => {
+                let service = crate::smartnic_service::SmartNicService::global(supervisor.paths());
+                let resp = match service.list_rules(server.as_deref()) {
+                    Ok(rules) => IpcResponse::SmartNicRulesListResult { rules },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SmartNicRunBench { iterations, packet_size } => {
+                let service = crate::smartnic_service::SmartNicService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations, packet_size) {
+                    Ok(metrics) => IpcResponse::SmartNicBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::SmartNicResetMetrics { server } => {
+                let service = crate::smartnic_service::SmartNicService::global(supervisor.paths());
+                let resp = match service.reset_metrics(server.as_deref()) {
+                    Ok(message) => IpcResponse::SmartNicResetResult { message },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -3933,6 +3981,75 @@ impl DaemonClient {
     ) -> Result<String> {
         match self.request(IpcRequest::RdmaResetMetrics { server }).await? {
             IpcResponse::RdmaMetricsResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_smartnic_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<(craft_core::SmartNicStatusSummary, Vec<craft_core::SmartNicDeviceInfo>)> {
+        match self.request(IpcRequest::SmartNicGetStatus { server }).await? {
+            IpcResponse::SmartNicStatusResult { summary, devices } => Ok((summary, devices)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn install_smartnic_rule(
+        &mut self,
+        server: Option<String>,
+        rule: craft_core::SmartNicOffloadRule,
+    ) -> Result<craft_core::SmartNicOffloadRule> {
+        match self.request(IpcRequest::SmartNicInstallRule { server, rule }).await? {
+            IpcResponse::SmartNicRuleResult { rule } => Ok(rule),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn remove_smartnic_rule(
+        &mut self,
+        server: Option<String>,
+        rule_id: String,
+    ) -> Result<bool> {
+        match self.request(IpcRequest::SmartNicRemoveRule { server, rule_id }).await? {
+            IpcResponse::SmartNicRemoveResult { success } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_smartnic_rules(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<Vec<craft_core::SmartNicOffloadRule>> {
+        match self.request(IpcRequest::SmartNicListRules { server }).await? {
+            IpcResponse::SmartNicRulesListResult { rules } => Ok(rules),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_smartnic_bench(
+        &mut self,
+        iterations: usize,
+        packet_size: usize,
+    ) -> Result<craft_core::SmartNicBenchmarkMetrics> {
+        match self.request(IpcRequest::SmartNicRunBench { iterations, packet_size }).await? {
+            IpcResponse::SmartNicBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_smartnic_metrics(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<String> {
+        match self.request(IpcRequest::SmartNicResetMetrics { server }).await? {
+            IpcResponse::SmartNicResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

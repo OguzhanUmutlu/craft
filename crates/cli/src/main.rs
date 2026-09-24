@@ -585,6 +585,9 @@ async fn main() {
         Some(Commands::Rdma { action }) => {
             commands::rdma::handle_rdma(&paths, action).await
         }
+        Some(Commands::SmartNic { action }) => {
+            commands::smartnic::handle_smartnic(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

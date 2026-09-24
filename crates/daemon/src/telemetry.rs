@@ -190,6 +190,7 @@ pub async fn generate_prometheus_metrics(
     out.push_str(&crate::vm_service::MicroVmService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::crash_service::CrashTriageService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::rdma_service::RdmaService::global(paths).generate_prometheus_metrics());
+    out.push_str(&crate::smartnic_service::SmartNicService::global(paths).generate_prometheus_metrics());
 
     out
 }

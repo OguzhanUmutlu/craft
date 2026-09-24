@@ -665,6 +665,39 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Aliases: `craft infiniband`, `craft roce`, `craft verbs`.
   - Full-screen centered interactive TUI panel (`Tools -> Autonomous RDMA Network Acceleration & Sub-Microsecond Fabric`) powered by ModalX.
 
+### 3.19. Autonomous eBPF XDP Hardware Offloading, SmartNIC Acceleration & P4 Programmable Data Plane Line-Rate Switching (Phase 43)
+- **Core SmartNIC Models, P4 Match-Action Tables & Registry (`craft-core`)**:
+  - Foundational hardware vendor models (`SmartNicVendor`: `NvidiaBluefield`, `AmdPensando`, `IntelIpu`, `NetronomeAgilio`, `GenericP4Emulated`).
+  - Offload execution modes (`OffloadMode`: `HardwareAsic`, `Driver`, `SoftwareGeneric`, `EmulatedP4Software`).
+  - Offload protocol taxonomy (`OffloadProtocol`: `MinecraftJavaSlp`, `BedrockRaknet`, `ValveA2s`, `DdosMitigation`, `CustomP4`).
+  - P4 match-action table structures (`P4MatchField`: `Exact`, `Ternary`, `Lpm`, `Range`; `P4ActionType`: `Drop`, `ForwardPort`, `SendPongDirect`, `SendSynCookie`, `RateLimitToken`, `PassToHost`; `P4TableEntry`, `P4MatchActionTable`).
+  - Device and rule descriptors (`SmartNicDeviceInfo`, `SmartNicOffloadRule`, `SmartNicStatusSummary`, `SmartNicBenchmarkMetrics`).
+  - Advisory file locking (`smartnic.lock`) protecting persistent registry state under `~/.craft/smartnic/` (`smartnic_dir`, `smartnic_registry_file`, `smartnic_state_file`, `smartnic_lock`, `smartnic_p4_path`).
+- **Stateless Wire Responders, P4 Pipeline & Fallback Bridge (`craft-net`)**:
+  - Stateless wire-level pong synthesizers:
+    - `synthesize_slp_pong`: constructs Minecraft Java Server List Ping (SLP) status JSON and VarInt framing without waking JVM or host processes.
+    - `synthesize_raknet_unconnected_pong`: constructs Bedrock UDP `0x1c` Unconnected Pong response with server GUID, timestamp, and 16-byte magic token.
+  - `P4PipelineEngine`: evaluates ingress packets across match-action tables with exact match, ternary bitmasking, longest prefix match (LPM), and numerical range checks with priority sorting.
+  - `SmartNicOffloadEngine`: tracks ASIC TCAM capacity (e.g. 65,536 entries), counts hardware hits and byte volumes, and flags TCAM saturation.
+  - `SmartNicFallbackBridge`: monitors hardware engine state and executes seamless failover to host driver XDP (`XDP_FLAGS_DRV_MODE`) upon TCAM saturation or ASIC fault.
+  - Synthetic line-rate benchmark (`benchmark_smartnic_line_rate`): verifies >3.18 Mpps throughput, >1.63 Gbps bandwidth, sub-microsecond ASIC latency (~313 ns), and 0.0% host CPU overhead.
+- **Daemon Supervision, SmartNIC Service & Prometheus Telemetry (`craft-daemon`)**:
+  - `SmartNicService`: manages in-process singleton via `OnceLock`, installs and removes P4 rules, synchronizes TCAM state, executes line-rate benchmarks, and exposes metrics.
+  - 6 typed IPC requests and responses: `SmartNicGetStatus`, `SmartNicInstallRule`, `SmartNicRemoveRule`, `SmartNicListRules`, `SmartNicRunBench`, `SmartNicResetMetrics`.
+  - Prometheus metrics exposition (`craft_smartnic_*`): `craft_smartnic_active_devices`, `craft_smartnic_installed_rules`, `craft_smartnic_tcam_usage_percent`, `craft_smartnic_offloaded_packets_total`, `craft_smartnic_offloaded_bytes_total`, `craft_smartnic_fallback_events_total`, `craft_smartnic_host_cpu_saved_percent`.
+- **Remote Federation & Scripting Hooks**:
+  - `RemoteCraftClient` provides `get_remote_smartnic_status`, `install_remote_smartnic_rule`, `remove_remote_smartnic_rule`, `list_remote_smartnic_rules`, `run_remote_smartnic_bench`, and `reset_remote_smartnic_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `SmartNicOffloadInstalled`, `SmartNicTcamSaturated`, `SmartNicFallbackEngaged` with structured context (`smartnic_device_id`, `smartnic_rule_id`, `smartnic_tcam_percent`, `smartnic_offload_mode`).
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft smartnic status [--server <name>] [--json]`
+  - `craft smartnic rule-add -r <id> [-t <proto>] [-a <action>] [-p <port>] [-c <cidr>] [--priority <n>] [--json]`
+  - `craft smartnic rule-rm -r <id> [--json]`
+  - `craft smartnic rules [--server <name>] [--json]`
+  - `craft smartnic bench [-i <iterations>] [-b <packet-size>] [--json]`
+  - `craft smartnic reset-metrics [--json]`
+  - Aliases: `craft p4`, `craft nic-offload`.
+  - Full-screen centered interactive TUI panel (`Tools -> SmartNIC Hardware Offload & P4 Line-Rate Switching`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture
