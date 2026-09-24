@@ -1808,6 +1808,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             SharedMemoryRingBus,
             DynamicBinaryPatching,
             MicroVmSandboxing,
+            CrashTriagingAndLeakDetection,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2027,6 +2028,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::MicroVmSandboxing);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Autonomous AI Crash Triaging, Leak Detection & Core Dumps",
+            )
+            .with_aliases(&["crash", "triage", "core-dump", "leak-detect"]),
+        );
+        actions.push(ToolItemAction::CrashTriagingAndLeakDetection);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2122,6 +2133,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::MicroVmSandboxing => {
                     microvm_tui(paths).await?;
+                }
+                ToolItemAction::CrashTriagingAndLeakDetection => {
+                    crash_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3770,6 +3784,56 @@ async fn microvm_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft vm reset-metrics                  Reset cumulative microVM telemetry counters".green().to_string());
 
     show_modal_message("MICROVM SANDBOXING & KVM ISOLATION", &lines, false)?;
+    Ok(())
+}
+
+async fn crash_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::CrashTriageService::global(paths);
+    let status = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS AI CRASH TRIAGING & REAL-TIME LEAK DETECTION".bold().to_string());
+    lines.push("eBPF Tracepoints, ELF Core Dumps, hs_err Parser & Automated Remediations".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Total Reports:          {}", status.total_reports));
+    lines.push(format!("Critical Incidents:     {}", status.critical_reports));
+    lines.push(format!("Active Leaks Tracked:   {}", status.active_leaks));
+    lines.push(format!("Total Leaked Bytes:     {} ({} MB)", status.total_leaked_bytes, status.total_leaked_bytes / 1024 / 1024));
+    if let Some(ts) = status.last_triaged_timestamp {
+        lines.push(format!("Last Triaged:           {}s ago", craft_core::crash::now_secs().saturating_sub(ts)));
+    }
+    lines.push("".to_string());
+    if !status.recent_reports.is_empty() {
+        lines.push("Recent Triaged Crash Incidents:".bold().to_string());
+        for r in status.recent_reports.iter().take(3) {
+            lines.push(
+                format!(
+                    "  {} / {} ({}, {}) - {}",
+                    r.id,
+                    r.server.as_deref().unwrap_or("standalone"),
+                    r.crash_type,
+                    r.severity,
+                    if r.root_cause_analysis.len() > 30 {
+                        format!("{}...", &r.root_cause_analysis[..27])
+                    } else {
+                        r.root_cause_analysis.clone()
+                    }
+                )
+                .dimmed()
+                .to_string(),
+            );
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft crash status [--server <S>]       Inspect crash triage registry & leak tracking".green().to_string());
+    lines.push("  craft crash triage -f <PATH>            Triage ELF core dump, hs_err, or leak log".green().to_string());
+    lines.push("  craft crash list [--server <S>]         List historical incident reports".green().to_string());
+    lines.push("  craft crash inspect -i <REPORT_ID>      View complete triage report & advice".green().to_string());
+    lines.push("  craft crash bench [--iterations <N>]    Benchmark ELF & hs_err parser engines".green().to_string());
+    lines.push("  craft crash reset-metrics               Reset cumulative triage metrics".green().to_string());
+
+    show_modal_message("AI CRASH TRIAGING & LEAK DETECTION", &lines, false)?;
     Ok(())
 }
 

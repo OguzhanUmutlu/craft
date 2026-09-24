@@ -69,6 +69,11 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 │   ├── registry.json      # Active ring buffer segment registry
 │   ├── state.json         # Persisted fallback IPC throughput state
 │   └── segments/          # Named memory-mapped files (/craft_shm_<server>_<channel>)
+├── crash/                 # Autonomous crash triage reports & core dump artifacts
+│   ├── registry.json      # Triaged crash reports and leak candidates
+│   ├── state.json         # Real-time memory leak and triage telemetry
+│   ├── reports/           # Structured JSON crash triage reports (<id>.json)
+│   └── dumps/             # Ingested ELF core dumps and hs_err logs
 └── audit.log              # Append-only continuous HMAC-SHA256 audit ledger
 ```
 
@@ -97,6 +102,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `mesh.lock` synchronizes multi-cloud storage mesh targets and replication policies.
   - `intelligence.lock` guards autonomous autopilot policies and remediation thresholds.
   - `supply_chain.lock` synchronizes supply chain policies, trust anchors, and attestation registries.
+  - `crash.lock` guards crash reports, memory leak detections, and automated remediation actions.
   - `<server_dir>/server.lock` ensures a server instance cannot be launched simultaneously by multiple processes.
 
 ### 3.3. `RbacRegistry` & `AuditLedger`
@@ -592,6 +598,37 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `craft vm reset-metrics [--json]`
   - Aliases: `craft microvm`, `craft firecracker`, `craft kvm`.
   - Full-screen centered interactive TUI panel (`Tools -> Autonomous MicroVM Sandboxing & KVM Isolation`) powered by ModalX.
+
+### 3.17. Autonomous AI-Guided Static Analysis, Real-Time Memory Leak Detection & Automated Core Dump Triaging (Phase 41)
+- **Core Crash Models, Leak Candidates & Registry (`craft-core`)**:
+  - Foundational crash taxonomy models (`CrashType`: `NativeCoreDump`, `JvmHsErr`, `MemoryLeak`, `StaticAnalysisViolation`, `Custom`; `CrashSeverity`: `Low`, `Medium`, `High`, `Critical`).
+  - Native ELF core dump header parsing models (`ElfCoreDumpHeader`, `ElfCoreNoteType`, `ElfCoreParsedInfo` capturing signal, faulting address, and register state).
+  - JVM crash log parsing models (`JvmCrashLogParsed` capturing signal, problematic frame, native stack, Java stack frames, and active compilation task).
+  - Real-time memory leak detection models (`AllocationRecord`, `LeakCandidate` with callsite, monotonic growth score, leak rate bytes/sec, and orphan allocation classification).
+  - Triage report and metrics models (`CrashRemediationAction`, `CrashTriageReport`, `CrashTriageStatusSummary`, `CrashTriageBenchmarkMetrics`).
+  - Advisory file locking (`crash.lock`) protecting persistent registry state under `~/.craft/crash/` (`crash_dir`, `crash_registry_file`, `crash_state_file`, `crash_reports_dir`, `crash_dumps_dir`, `crash_lock`).
+- **Binary ELF Parser, hs_err Dissector, Leak Engine & AI Advisor (`craft-net`)**:
+  - `ElfCoreDumpParser`: parses ELF 64-bit and 32-bit core dumps (`0x7f454c46`), extracts `PT_NOTE` and `PT_LOAD` program headers, unpacks `NT_PRSTATUS` note descriptors, extracts signal numbers, faulting addresses, and thread execution contexts.
+  - `JvmHsErrParser`: parses OpenJDK and HotSpot `hs_err_pid*.log` files, extracts termination signals (`SIGSEGV`, `SIGBUS`, etc.), identifies problematic native or JIT frames (`# C [libnative.so+0x1234]`), parses Java call stacks, and extracts active JIT compilation tasks.
+  - `MemoryLeakDetector`: maintains sliding-window allocation tracking, computes linear growth regression slopes, calculates orphan rates (`unfreed / total`), detects monotonic leaks exceeding configurable thresholds (e.g. 0.85 slope score), and generates actionable leak candidates.
+  - `AiTriageAdvisor`: executes deterministic rule-based root cause analysis across native crashes, JVM faults, and memory exhaustion; generates actionable playbooks (`RestartProcess`, `ApplyHotPatch`, `AdjustJvmHeap`, `RollbackPlugin`, `TuneGcParameters`, `IsolateNetworkTraffic`, `ManualInvestigationRequired`) with confidence scores.
+  - Synthetic benchmarking (`benchmark_crash_triage`): validates high-throughput dump parsing (>200 dumps/sec) and allocation diffing (>500k ops/sec).
+- **Daemon Supervision, Ingestion Loop & Prometheus Telemetry (`craft-daemon`)**:
+  - `CrashTriageService`: manages in-process triage singleton via `OnceLock`, monitors crash ingestion directories, runs automated memory leak sweeps, applies safe auto-remediation playbooks, and dispatches scripting lifecycle hooks.
+  - 6 typed IPC requests and responses: `CrashGetStatus`, `CrashTriageFile`, `CrashListReports`, `CrashGetReport`, `CrashRunBench`, `CrashResetMetrics`.
+  - Prometheus metrics exposition (`craft_crash_*`): `craft_crash_triaged_total`, `craft_crash_native_core_dumps_total`, `craft_crash_jvm_hs_err_total`, `craft_crash_active_leaks`, `craft_crash_remediated_total`, `craft_crash_avg_triage_latency_micros`.
+- **Remote Federation & Scripting Hooks**:
+  - `RemoteCraftClient` provides `get_remote_crash_status`, `triage_remote_crash_file`, `list_remote_crash_reports`, `get_remote_crash_report`, `run_remote_crash_bench`, and `reset_remote_crash_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `CrashTriageCompleted`, `MemoryLeakDetected`, `CriticalFaultRemediated` with structured crash metrics context.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft crash status [--server <name>] [--json]`
+  - `craft crash triage -f <file> [-s <server>] [--json]`
+  - `craft crash list [--server <name>] [--limit <n>] [--json]`
+  - `craft crash inspect -i <report_id> [--json]`
+  - `craft crash bench [--iterations <n>] [--json]`
+  - `craft crash reset-metrics [--server <name>] [--json]`
+  - Aliases: `craft triage`, `craft core-dump`, `craft leak-detect`.
+  - Full-screen centered interactive TUI panel (`Tools -> Autonomous Crash Triaging & Memory Leak Detection`) powered by ModalX.
 
 ---
 

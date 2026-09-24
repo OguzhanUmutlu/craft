@@ -1692,6 +1692,65 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::CrashGetStatus { server } => {
+                let service = crate::crash_service::CrashTriageService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(summary) => IpcResponse::CrashStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CrashTriageFile {
+                server,
+                file_path,
+            } => {
+                let service = crate::crash_service::CrashTriageService::global(supervisor.paths());
+                let resp = match service.triage_file(
+                    server.as_deref(),
+                    &file_path,
+                ) {
+                    Ok(report) => IpcResponse::CrashTriageReportResult { report },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CrashListReports { server, limit } => {
+                let service = crate::crash_service::CrashTriageService::global(supervisor.paths());
+                let resp = match service.list_reports(server.as_deref(), limit) {
+                    Ok(reports) => IpcResponse::CrashReportsListResult { reports },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CrashGetReport { report_id } => {
+                let service = crate::crash_service::CrashTriageService::global(supervisor.paths());
+                let resp = match service.get_report(&report_id) {
+                    Ok(Some(report)) => IpcResponse::CrashTriageReportResult { report },
+                    Ok(None) => IpcResponse::Error {
+                        error: format!("Crash report not found: {}", report_id),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CrashRunBench { iterations } => {
+                let service = crate::crash_service::CrashTriageService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations) {
+                    Ok(metrics) => IpcResponse::CrashBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CrashResetMetrics { server } => {
+                let service = crate::crash_service::CrashTriageService::global(supervisor.paths());
+                let resp = match service.reset_metrics(server.as_deref()) {
+                    Ok(_) => IpcResponse::CrashMetricsResetResult {
+                        message: "Crash triage metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -3656,6 +3715,83 @@ impl DaemonClient {
     pub async fn reset_vm_metrics(&mut self, vm_id: Option<String>) -> Result<String> {
         match self.request(IpcRequest::VmResetMetrics { vm_id }).await? {
             IpcResponse::VmResetMetricsResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_crash_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<craft_core::crash::CrashTriageStatusSummary> {
+        match self.request(IpcRequest::CrashGetStatus { server }).await? {
+            IpcResponse::CrashStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn triage_crash_file(
+        &mut self,
+        server: Option<String>,
+        file_path: String,
+    ) -> Result<craft_core::crash::CrashTriageReport> {
+        match self
+            .request(IpcRequest::CrashTriageFile {
+                server,
+                file_path,
+            })
+            .await?
+        {
+            IpcResponse::CrashTriageReportResult { report } => Ok(report),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_crash_reports(
+        &mut self,
+        server: Option<String>,
+        limit: Option<usize>,
+    ) -> Result<Vec<craft_core::crash::CrashTriageReport>> {
+        match self
+            .request(IpcRequest::CrashListReports { server, limit })
+            .await?
+        {
+            IpcResponse::CrashReportsListResult { reports } => Ok(reports),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_crash_report(
+        &mut self,
+        report_id: String,
+    ) -> Result<craft_core::crash::CrashTriageReport> {
+        match self.request(IpcRequest::CrashGetReport { report_id }).await? {
+            IpcResponse::CrashTriageReportResult { report } => Ok(report),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_crash_bench(
+        &mut self,
+        iterations: usize,
+    ) -> Result<craft_core::crash::CrashTriageBenchmarkMetrics> {
+        match self.request(IpcRequest::CrashRunBench { iterations }).await? {
+            IpcResponse::CrashBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_crash_metrics(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<String> {
+        match self.request(IpcRequest::CrashResetMetrics { server }).await? {
+            IpcResponse::CrashMetricsResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

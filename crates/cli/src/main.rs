@@ -579,6 +579,9 @@ async fn main() {
         Some(Commands::Vm { action }) => {
             commands::vm::handle_vm(&paths, action).await
         }
+        Some(Commands::Crash { action }) => {
+            commands::crash::handle_crash(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

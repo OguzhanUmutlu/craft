@@ -48,6 +48,7 @@ cargo-timing.html
 !/tools/test_shm_zero_copy_bus.py
 !/tools/test_dynamic_binary_patching.py
 !/tools/test_microvm_sandboxing.py
+!/tools/test_crash_triage_pipeline.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

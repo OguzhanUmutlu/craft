@@ -121,6 +121,12 @@ pub struct CraftPaths {
     pub vm_registry_file: PathBuf,
     pub vm_state_file: PathBuf,
     pub vm_lock: PathBuf,
+    pub crash_dir: PathBuf,
+    pub crash_registry_file: PathBuf,
+    pub crash_state_file: PathBuf,
+    pub crash_reports_dir: PathBuf,
+    pub crash_dumps_dir: PathBuf,
+    pub crash_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -241,6 +247,12 @@ impl CraftPaths {
         let vm_registry_file = vm_dir.join("registry.json");
         let vm_state_file = vm_dir.join("state.json");
         let vm_lock = locks_dir.join("vm.lock");
+        let crash_dir = home.join("crash");
+        let crash_registry_file = crash_dir.join("registry.json");
+        let crash_state_file = crash_dir.join("state.json");
+        let crash_reports_dir = crash_dir.join("reports");
+        let crash_dumps_dir = crash_dir.join("dumps");
+        let crash_lock = locks_dir.join("crash.lock");
 
         Self {
             home,
@@ -359,6 +371,12 @@ impl CraftPaths {
             vm_registry_file,
             vm_state_file,
             vm_lock,
+            crash_dir,
+            crash_registry_file,
+            crash_state_file,
+            crash_reports_dir,
+            crash_dumps_dir,
+            crash_lock,
         }
     }
 
@@ -425,6 +443,9 @@ impl CraftPaths {
         let shm_dir = home.join("shm");
         let patch_dir = home.join("patching");
         let vm_dir = home.join("vms");
+        let crash_dir = home.join("crash");
+        let crash_reports_dir = crash_dir.join("reports");
+        let crash_dumps_dir = crash_dir.join("dumps");
 
         // Ensure all primary directories exist
         for dir in [
@@ -478,6 +499,9 @@ impl CraftPaths {
             &shm_dir,
             &patch_dir,
             &vm_dir,
+            &crash_dir,
+            &crash_reports_dir,
+            &crash_dumps_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -550,6 +574,9 @@ impl CraftPaths {
         let vm_registry_file = vm_dir.join("registry.json");
         let vm_state_file = vm_dir.join("state.json");
         let vm_lock = locks_dir.join("vm.lock");
+        let crash_registry_file = crash_dir.join("registry.json");
+        let crash_state_file = crash_dir.join("state.json");
+        let crash_lock = locks_dir.join("crash.lock");
 
         Ok(Self {
             home,
@@ -668,7 +695,18 @@ impl CraftPaths {
             vm_registry_file,
             vm_state_file,
             vm_lock,
+            crash_dir,
+            crash_registry_file,
+            crash_state_file,
+            crash_reports_dir,
+            crash_dumps_dir,
+            crash_lock,
         })
+    }
+
+    /// Returns the crash report JSON file path for a specific report ID
+    pub fn crash_report_path(&self, report_id: &str) -> PathBuf {
+        self.crash_reports_dir.join(format!("{}.json", report_id))
     }
 
     /// Returns the patch backup/prologue storage path

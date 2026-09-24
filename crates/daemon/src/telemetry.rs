@@ -188,6 +188,7 @@ pub async fn generate_prometheus_metrics(
     out.push_str(&crate::shm_service::ShmService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::patch_service::DynamicPatchService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::vm_service::MicroVmService::global(paths).generate_prometheus_metrics());
+    out.push_str(&crate::crash_service::CrashTriageService::global(paths).generate_prometheus_metrics());
 
     out
 }

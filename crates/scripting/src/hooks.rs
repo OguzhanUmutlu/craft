@@ -89,6 +89,9 @@ pub enum LifecycleEvent {
     MicroVmSpawned,
     MicroVmTerminated,
     MicroVmIsolationAlert,
+    CrashTriageCompleted,
+    MemoryLeakDetected,
+    CriticalFaultRemediated,
 }
 
 impl LifecycleEvent {
@@ -172,6 +175,9 @@ impl LifecycleEvent {
             Self::MicroVmSpawned => "on_microvm_spawned",
             Self::MicroVmTerminated => "on_microvm_terminated",
             Self::MicroVmIsolationAlert => "on_microvm_isolation_alert",
+            Self::CrashTriageCompleted => "on_crash_triage_completed",
+            Self::MemoryLeakDetected => "on_memory_leak_detected",
+            Self::CriticalFaultRemediated => "on_critical_fault_remediated",
         }
     }
 
@@ -256,6 +262,9 @@ impl LifecycleEvent {
             "on_microvm_spawned" | "microvm_spawned" | "vm_spawned" | "vm_start" => Some(Self::MicroVmSpawned),
             "on_microvm_terminated" | "microvm_terminated" | "vm_terminated" | "vm_stop" => Some(Self::MicroVmTerminated),
             "on_microvm_isolation_alert" | "microvm_isolation_alert" | "vm_alert" | "isolation_alert" => Some(Self::MicroVmIsolationAlert),
+            "on_crash_triage_completed" | "crash_triage_completed" | "crash_triage" => Some(Self::CrashTriageCompleted),
+            "on_memory_leak_detected" | "memory_leak_detected" | "leak_detected" | "leak" => Some(Self::MemoryLeakDetected),
+            "on_critical_fault_remediated" | "critical_fault_remediated" | "fault_remediated" => Some(Self::CriticalFaultRemediated),
             _ => None,
         }
     }
@@ -340,6 +349,9 @@ impl LifecycleEvent {
             Self::MicroVmSpawned,
             Self::MicroVmTerminated,
             Self::MicroVmIsolationAlert,
+            Self::CrashTriageCompleted,
+            Self::MemoryLeakDetected,
+            Self::CriticalFaultRemediated,
         ]
     }
 }
@@ -570,6 +582,20 @@ pub struct HookContext {
     pub vm_cold_start_ms: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vm_isolation_alert_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crash_report_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crash_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crash_severity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leak_candidate_callsite: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leaked_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root_cause: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remediation_status: Option<String>,
 }
 
 impl HookContext {
@@ -867,6 +893,42 @@ impl HookContext {
         ctx.details = Some(format!(
             "MicroVM '{}' isolation alert: {}",
             vm_id, reason
+        ));
+        ctx
+    }
+
+    pub fn for_crash_triage(report_id: &str, crash_type: &str, severity: &str, root_cause: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CrashTriageCompleted);
+        ctx.crash_report_id = Some(report_id.to_string());
+        ctx.crash_type = Some(crash_type.to_string());
+        ctx.crash_severity = Some(severity.to_string());
+        ctx.root_cause = Some(root_cause.to_string());
+        ctx.details = Some(format!(
+            "Crash report '{}' triaged: {} ({}) - {}",
+            report_id, crash_type, severity, root_cause
+        ));
+        ctx
+    }
+
+    pub fn for_memory_leak(callsite: &str, leaked_bytes: u64, root_cause: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::MemoryLeakDetected);
+        ctx.leak_candidate_callsite = Some(callsite.to_string());
+        ctx.leaked_bytes = Some(leaked_bytes);
+        ctx.root_cause = Some(root_cause.to_string());
+        ctx.details = Some(format!(
+            "Memory leak detected at {}: {} bytes leaked ({})",
+            callsite, leaked_bytes, root_cause
+        ));
+        ctx
+    }
+
+    pub fn for_critical_fault_remediated(report_id: &str, action: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CriticalFaultRemediated);
+        ctx.crash_report_id = Some(report_id.to_string());
+        ctx.remediation_status = Some(action.to_string());
+        ctx.details = Some(format!(
+            "Critical crash fault '{}' remediated with action: {}",
+            report_id, action
         ));
         ctx
     }
@@ -1559,5 +1621,53 @@ mod tests {
             alert_ctx.vm_isolation_alert_reason.as_deref(),
             Some("Unmapped MMIO write attempted at 0xdeadbeef")
         );
+    }
+
+    #[test]
+    fn test_crash_triage_lifecycle_events() {
+        assert_eq!(LifecycleEvent::CrashTriageCompleted.as_str(), "on_crash_triage_completed");
+        assert_eq!(LifecycleEvent::MemoryLeakDetected.as_str(), "on_memory_leak_detected");
+        assert_eq!(LifecycleEvent::CriticalFaultRemediated.as_str(), "on_critical_fault_remediated");
+
+        assert_eq!(
+            LifecycleEvent::from_name("on_crash_triage_completed"),
+            Some(LifecycleEvent::CrashTriageCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("crash_triage"),
+            Some(LifecycleEvent::CrashTriageCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_memory_leak_detected"),
+            Some(LifecycleEvent::MemoryLeakDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("leak"),
+            Some(LifecycleEvent::MemoryLeakDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_critical_fault_remediated"),
+            Some(LifecycleEvent::CriticalFaultRemediated)
+        );
+
+        let triage_ctx = HookContext::for_crash_triage(
+            "report-41",
+            "JvmCrash",
+            "Critical",
+            "JVM fatal error in C2 CompilerThread: SIGSEGV",
+        );
+        assert_eq!(triage_ctx.event, "on_crash_triage_completed");
+        assert_eq!(triage_ctx.crash_report_id.as_deref(), Some("report-41"));
+        assert_eq!(triage_ctx.crash_type.as_deref(), Some("JvmCrash"));
+        assert_eq!(triage_ctx.crash_severity.as_deref(), Some("Critical"));
+
+        let leak_ctx = HookContext::for_memory_leak("world::load_chunks", 10485760, "Chunk leak");
+        assert_eq!(leak_ctx.event, "on_memory_leak_detected");
+        assert_eq!(leak_ctx.leak_candidate_callsite.as_deref(), Some("world::load_chunks"));
+        assert_eq!(leak_ctx.leaked_bytes, Some(10485760));
+
+        let rem_ctx = HookContext::for_critical_fault_remediated("report-41", "ApplyHotfix");
+        assert_eq!(rem_ctx.event, "on_critical_fault_remediated");
+        assert_eq!(rem_ctx.remediation_status.as_deref(), Some("ApplyHotfix"));
     }
 }

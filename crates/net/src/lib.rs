@@ -27,6 +27,7 @@ pub mod pmu_sampler;
 pub mod shm_bus;
 pub mod patch_engine;
 pub mod microvm;
+pub mod crash_triage;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -96,6 +97,10 @@ pub use patch_engine::{
 };
 pub use microvm::{
     benchmark_microvm_boot, TapBridgeDriver, VsockMultiplexer, VsockSession,
+};
+pub use crash_triage::{
+    benchmark_crash_triage, signal_name_from_code, AiTriageAdvisor, ElfCoreDumpParser,
+    JvmHsErrParser, MemoryLeakDetector, SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSEGV,
 };
 
 

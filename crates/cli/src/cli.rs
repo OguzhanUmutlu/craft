@@ -672,6 +672,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<VmCommands>,
     },
+    /// Autonomous AI-Guided Static Analysis, Real-Time Memory Leak Detection & Automated Core Dump Triaging
+    #[command(name = "crash", alias = "triage", alias = "core-dump", alias = "leak-detect")]
+    Crash {
+        #[command(subcommand)]
+        action: Option<CrashCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2352,6 +2358,73 @@ pub enum VmCommands {
         /// Target MicroVM ID (resets all if omitted)
         #[arg(short, long)]
         id: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum CrashCommands {
+    /// Inspect crash triage registry, active memory leaks, and triage summary
+    Status {
+        /// Filter by server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Triage an ELF core dump, hs_err_pid log, or leak history file
+    Triage {
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Path to crash dump or log file
+        #[arg(short, long)]
+        file: String,
+        /// Optional path to memory leak history JSON file
+        #[arg(short, long)]
+        leak_history: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List historical crash triage reports
+    List {
+        /// Filter by server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Maximum number of reports to display
+        #[arg(short, long, default_value_t = 20)]
+        limit: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect a detailed crash triage report by ID
+    Inspect {
+        /// Report ID (e.g. crash-1727190000)
+        #[arg(short, long)]
+        id: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark ELF core dump parsing, hs_err parsing, and leak detection performance
+    Bench {
+        /// Benchmark iteration count
+        #[arg(short, long, default_value_t = 50)]
+        iterations: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset crash triage metrics and clear active leak tracking
+    ResetMetrics {
+        /// Filter by server name
+        #[arg(short, long)]
+        server: Option<String>,
         /// Output in machine-readable JSON format
         #[arg(long)]
         json: bool,

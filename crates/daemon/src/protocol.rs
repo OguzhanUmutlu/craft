@@ -385,6 +385,26 @@ pub enum IpcRequest {
     VmResetMetrics {
         vm_id: Option<String>,
     },
+    CrashGetStatus {
+        server: Option<String>,
+    },
+    CrashTriageFile {
+        server: Option<String>,
+        file_path: String,
+    },
+    CrashListReports {
+        server: Option<String>,
+        limit: Option<usize>,
+    },
+    CrashGetReport {
+        report_id: String,
+    },
+    CrashRunBench {
+        iterations: usize,
+    },
+    CrashResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -743,6 +763,21 @@ pub enum IpcResponse {
         metrics: craft_core::vm::MicroVmBenchmarkMetrics,
     },
     VmResetMetricsResult {
+        message: String,
+    },
+    CrashStatusResult {
+        summary: craft_core::crash::CrashTriageStatusSummary,
+    },
+    CrashTriageReportResult {
+        report: craft_core::crash::CrashTriageReport,
+    },
+    CrashReportsListResult {
+        reports: Vec<craft_core::crash::CrashTriageReport>,
+    },
+    CrashBenchResult {
+        metrics: craft_core::crash::CrashTriageBenchmarkMetrics,
+    },
+    CrashMetricsResetResult {
         message: String,
     },
     Error { error: String },

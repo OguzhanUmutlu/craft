@@ -44,6 +44,7 @@ pub mod pmu;
 pub mod shm;
 pub mod patch;
 pub mod vm;
+pub mod crash;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -215,6 +216,12 @@ pub use vm::{
     MicroVmStatusSummary, SeccompLevel, VirtioDescriptor, VirtioDeviceType, VirtioQueue,
     VsockAddr, VsockOp, VsockPacketHeader, CVSK_MAGIC, VMADDR_CID_GUEST_MIN, VMADDR_CID_HOST,
     VMADDR_CID_HYPERVISOR, VMADDR_CID_LOCAL,
+};
+pub use crash::{
+    render_crash_report_text, render_crash_status_text, AllocationRecord, CrashSeverity,
+    CrashTriageBenchmarkMetrics, CrashTriageRegistry, CrashTriageReport, CrashTriageStatusSummary,
+    CrashType, ElfCoreDumpHeader, ElfCoreNoteType, ElfCoreParsedInfo, JvmCrashLogParsed,
+    LeakCandidate, CrashRemediationAction,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

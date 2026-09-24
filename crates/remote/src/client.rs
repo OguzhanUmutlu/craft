@@ -1826,6 +1826,101 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries autonomous crash triage status summary from the remote host
+    pub fn get_remote_crash_status(
+        &self,
+        server: Option<&str>,
+    ) -> Result<craft_core::crash::CrashTriageStatusSummary> {
+        let mut cmd = "craft crash status --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote crash status failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote crash status: {}", e)))
+    }
+
+    /// Triages a remote crash dump or hs_err file on the remote host
+    pub fn triage_remote_crash_file(
+        &self,
+        server: Option<&str>,
+        file_path: &str,
+    ) -> Result<craft_core::crash::CrashTriageReport> {
+        let mut cmd = format!("craft crash triage -f {} --json", file_path);
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote crash triage failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote crash triage report: {}", e)))
+    }
+
+    /// Lists triaged crash reports from the remote host
+    pub fn list_remote_crash_reports(
+        &self,
+        server: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<craft_core::crash::CrashTriageReport>> {
+        let mut cmd = "craft crash list --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        if let Some(lim) = limit {
+            cmd.push_str(&format!(" --limit {}", lim));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote crash list failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote crash reports: {}", e)))
+    }
+
+    /// Inspects a specific crash triage report on the remote host
+    pub fn get_remote_crash_report(&self, report_id: &str) -> Result<craft_core::crash::CrashTriageReport> {
+        let cmd = format!("craft crash inspect -i {} --json", report_id);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote crash inspect failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote crash report: {}", e)))
+    }
+
+    /// Runs synthetic crash triage and leak detection benchmark on the remote host
+    pub fn run_remote_crash_bench(
+        &self,
+        iterations: usize,
+    ) -> Result<craft_core::crash::CrashTriageBenchmarkMetrics> {
+        let cmd = format!("craft crash bench --iterations {} --json", iterations);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote crash bench failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote crash bench metrics: {}", e)))
+    }
+
+    /// Resets crash triage and leak metrics on the remote host
+    pub fn reset_remote_crash_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft crash reset-metrics --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote crash metrics reset failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]
