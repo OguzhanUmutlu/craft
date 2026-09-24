@@ -2088,6 +2088,146 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Retrieves distributed memory fabric status from the remote host
+    pub fn get_remote_memfabric_status(
+        &self,
+        server: Option<&str>,
+    ) -> Result<(
+        craft_core::memfabric::MemFabricStatusSummary,
+        Vec<craft_core::memfabric::MemFabricNodeInfo>,
+    )> {
+        let mut cmd = "craft memfabric status --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote MemFabric status query failed: {}",
+                err.trim()
+            )));
+        }
+        serde_json::from_str(&stdout).map_err(|e| {
+            CraftError::Other(format!("Failed to parse remote MemFabric status: {}", e))
+        })
+    }
+
+    /// Allocates a memory fabric page on the remote host
+    pub fn allocate_remote_memfabric_page(
+        &self,
+        page_id: &str,
+        size: usize,
+        tier: &str,
+        dimension: Option<&str>,
+    ) -> Result<craft_core::memfabric::RemotePageDescriptor> {
+        let mut cmd = format!(
+            "craft memfabric page-alloc --page-id {} --size {} --tier {}",
+            page_id, size, tier
+        );
+        if let Some(dim) = dimension {
+            cmd.push_str(&format!(" --dimension {}", dim));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote MemFabric page allocation failed: {}",
+                err.trim()
+            )));
+        }
+        serde_json::from_str(&stdout).map_err(|e| {
+            CraftError::Other(format!("Failed to parse remote MemFabric page: {}", e))
+        })
+    }
+
+    /// Evicts a dormant dimension on the remote host to the cluster NVRAM pool
+    pub fn evict_remote_memfabric_dimension(
+        &self,
+        dimension: &str,
+        target_node: Option<&str>,
+    ) -> Result<(usize, u64, String)> {
+        let mut cmd = format!("craft memfabric evict-dim --dimension {}", dimension);
+        if let Some(target) = target_node {
+            cmd.push_str(&format!(" --target-node {}", target));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote MemFabric dimension eviction failed: {}",
+                err.trim()
+            )));
+        }
+        serde_json::from_str(&stdout).map_err(|e| {
+            CraftError::Other(format!("Failed to parse remote MemFabric evict result: {}", e))
+        })
+    }
+
+    /// Lists active memory fabric pages on the remote host
+    pub fn list_remote_memfabric_pages(
+        &self,
+        server: Option<&str>,
+    ) -> Result<Vec<craft_core::memfabric::RemotePageDescriptor>> {
+        let mut cmd = "craft memfabric pages --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote MemFabric pages list failed: {}",
+                err.trim()
+            )));
+        }
+        serde_json::from_str(&stdout).map_err(|e| {
+            CraftError::Other(format!("Failed to parse remote MemFabric pages list: {}", e))
+        })
+    }
+
+    /// Runs a memory fabric remote paging benchmark on the remote host
+    pub fn run_remote_memfabric_bench(
+        &self,
+        iterations: usize,
+        page_size: usize,
+    ) -> Result<craft_core::memfabric::MemFabricBenchmarkMetrics> {
+        let cmd = format!(
+            "craft memfabric bench --iterations {} --page-size {} --json",
+            iterations, page_size
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote MemFabric bench failed: {}",
+                err.trim()
+            )));
+        }
+        serde_json::from_str(&stdout).map_err(|e| {
+            CraftError::Other(format!("Failed to parse remote MemFabric bench metrics: {}", e))
+        })
+    }
+
+    /// Resets memory fabric telemetry counters on the remote host
+    pub fn reset_remote_memfabric_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft memfabric reset-metrics --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote MemFabric metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

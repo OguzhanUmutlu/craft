@@ -449,6 +449,31 @@ pub enum IpcRequest {
     SmartNicResetMetrics {
         server: Option<String>,
     },
+    MemFabricGetStatus {
+        server: Option<String>,
+    },
+    MemFabricAllocatePage {
+        server: Option<String>,
+        page_id: String,
+        size: usize,
+        tier: craft_core::memfabric::MemoryTier,
+        dimension: Option<String>,
+    },
+    MemFabricEvictDimension {
+        server: Option<String>,
+        dimension: String,
+        target_node: Option<String>,
+    },
+    MemFabricListPages {
+        server: Option<String>,
+    },
+    MemFabricRunBench {
+        iterations: usize,
+        page_size: usize,
+    },
+    MemFabricResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -859,6 +884,27 @@ pub enum IpcResponse {
         metrics: craft_core::SmartNicBenchmarkMetrics,
     },
     SmartNicResetResult {
+        message: String,
+    },
+    MemFabricStatusResult {
+        summary: craft_core::memfabric::MemFabricStatusSummary,
+        nodes: Vec<craft_core::memfabric::MemFabricNodeInfo>,
+    },
+    MemFabricPageResult {
+        page: craft_core::memfabric::RemotePageDescriptor,
+    },
+    MemFabricEvictResult {
+        pages_evicted: usize,
+        bytes_freed: u64,
+        dimension: String,
+    },
+    MemFabricPagesListResult {
+        pages: Vec<craft_core::memfabric::RemotePageDescriptor>,
+    },
+    MemFabricBenchResult {
+        metrics: craft_core::memfabric::MemFabricBenchmarkMetrics,
+    },
+    MemFabricResetResult {
         message: String,
     },
     Error { error: String },

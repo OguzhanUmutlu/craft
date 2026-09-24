@@ -1849,6 +1849,71 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::MemFabricGetStatus { server } => {
+                let service = crate::memfabric_service::MemFabricService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok((summary, nodes)) => IpcResponse::MemFabricStatusResult { summary, nodes },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::MemFabricAllocatePage {
+                server: _,
+                page_id,
+                size,
+                tier,
+                dimension,
+            } => {
+                let service = crate::memfabric_service::MemFabricService::global(supervisor.paths());
+                let resp = match service.allocate_page(page_id, size, tier, dimension) {
+                    Ok(page) => IpcResponse::MemFabricPageResult { page },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::MemFabricEvictDimension {
+                server: _,
+                dimension,
+                target_node,
+            } => {
+                let service = crate::memfabric_service::MemFabricService::global(supervisor.paths());
+                let resp = match service.evict_dimension(&dimension, target_node.as_deref()) {
+                    Ok((pages_evicted, bytes_freed)) => IpcResponse::MemFabricEvictResult {
+                        pages_evicted,
+                        bytes_freed,
+                        dimension,
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::MemFabricListPages { server } => {
+                let service = crate::memfabric_service::MemFabricService::global(supervisor.paths());
+                let resp = match service.list_pages(server.as_deref()) {
+                    Ok(pages) => IpcResponse::MemFabricPagesListResult { pages },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::MemFabricRunBench {
+                iterations,
+                page_size,
+            } => {
+                let service = crate::memfabric_service::MemFabricService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations, page_size) {
+                    Ok(metrics) => IpcResponse::MemFabricBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::MemFabricResetMetrics { server } => {
+                let service = crate::memfabric_service::MemFabricService::global(supervisor.paths());
+                let resp = match service.reset_metrics(server.as_deref()) {
+                    Ok(message) => IpcResponse::MemFabricResetResult { message },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -4050,6 +4115,108 @@ impl DaemonClient {
     ) -> Result<String> {
         match self.request(IpcRequest::SmartNicResetMetrics { server }).await? {
             IpcResponse::SmartNicResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_memfabric_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<(
+        craft_core::memfabric::MemFabricStatusSummary,
+        Vec<craft_core::memfabric::MemFabricNodeInfo>,
+    )> {
+        match self.request(IpcRequest::MemFabricGetStatus { server }).await? {
+            IpcResponse::MemFabricStatusResult { summary, nodes } => Ok((summary, nodes)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn allocate_memfabric_page(
+        &mut self,
+        server: Option<String>,
+        page_id: String,
+        size: usize,
+        tier: craft_core::memfabric::MemoryTier,
+        dimension: Option<String>,
+    ) -> Result<craft_core::memfabric::RemotePageDescriptor> {
+        match self
+            .request(IpcRequest::MemFabricAllocatePage {
+                server,
+                page_id,
+                size,
+                tier,
+                dimension,
+            })
+            .await?
+        {
+            IpcResponse::MemFabricPageResult { page } => Ok(page),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn evict_memfabric_dimension(
+        &mut self,
+        server: Option<String>,
+        dimension: String,
+        target_node: Option<String>,
+    ) -> Result<(usize, u64, String)> {
+        match self
+            .request(IpcRequest::MemFabricEvictDimension {
+                server,
+                dimension,
+                target_node,
+            })
+            .await?
+        {
+            IpcResponse::MemFabricEvictResult {
+                pages_evicted,
+                bytes_freed,
+                dimension,
+            } => Ok((pages_evicted, bytes_freed, dimension)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_memfabric_pages(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<Vec<craft_core::memfabric::RemotePageDescriptor>> {
+        match self.request(IpcRequest::MemFabricListPages { server }).await? {
+            IpcResponse::MemFabricPagesListResult { pages } => Ok(pages),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_memfabric_bench(
+        &mut self,
+        iterations: usize,
+        page_size: usize,
+    ) -> Result<craft_core::memfabric::MemFabricBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::MemFabricRunBench {
+                iterations,
+                page_size,
+            })
+            .await?
+        {
+            IpcResponse::MemFabricBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_memfabric_metrics(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<String> {
+        match self.request(IpcRequest::MemFabricResetMetrics { server }).await? {
+            IpcResponse::MemFabricResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

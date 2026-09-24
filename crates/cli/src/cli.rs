@@ -690,6 +690,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<SmartNicCommands>,
     },
+    /// Autonomous Distributed Inter-Server Memory Fabric, Remote Paged Compaction & Cluster NVRAM Pool
+    #[command(name = "memfabric", alias = "cxl", alias = "nvram", alias = "paging")]
+    MemFabric {
+        #[command(subcommand)]
+        action: Option<MemFabricCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2594,6 +2600,88 @@ pub enum SmartNicCommands {
         json: bool,
     },
     /// Reset SmartNIC cumulative hardware packet counters and fallback events
+    ResetMetrics {
+        /// Filter or associate with server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum MemFabricCommands {
+    /// Inspect memory fabric status, DRAM/NVRAM pool utilization, and node topology
+    Status {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Allocate a virtual memory page in the designated memory tier
+    PageAlloc {
+        /// Identifier for the memory page
+        #[arg(short, long)]
+        page_id: String,
+        /// Size of the page in bytes (default: 4096)
+        #[arg(short = 'z', long = "size", default_value_t = 4096)]
+        size: usize,
+        /// Memory tier: local, cxl, remote, nvram
+        #[arg(short = 't', long = "tier", default_value = "local")]
+        tier: String,
+        /// Optional associated Minecraft dimension (e.g. the_nether, the_end)
+        #[arg(short = 'd', long = "dimension")]
+        dimension: Option<String>,
+        /// Associated server name
+        #[arg(short = 's', long = "server")]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Evict all resident pages belonging to a dormant dimension to remote NVRAM pool
+    EvictDim {
+        /// Name of the Minecraft dimension to evict (e.g. the_nether, the_end)
+        #[arg(short, long)]
+        dimension: String,
+        /// Destination remote memory fabric node
+        #[arg(short = 'n', long = "target-node")]
+        target_node: Option<String>,
+        /// Associated server name
+        #[arg(short = 's', long = "server")]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List active memory fabric pages and their memory tier placements
+    Pages {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark remote paging and userfaultfd resolution throughput
+    Bench {
+        /// Benchmark page iteration count
+        #[arg(short, long, default_value_t = 50)]
+        iterations: usize,
+        /// Page size in bytes
+        #[arg(short = 'z', long = "page-size", default_value_t = 4096)]
+        page_size: usize,
+        /// Associated server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset memory fabric telemetry counters and page fault history
     ResetMetrics {
         /// Filter or associate with server name
         #[arg(short, long)]
@@ -5927,6 +6015,117 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected SmartNic ResetMetrics command"),
+        }
+    }
+
+    #[test]
+    fn test_memfabric_cli_commands() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "memfabric", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::MemFabric {
+                action: Some(MemFabricCommands::Status { server: None, json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected MemFabric Status command"),
+        }
+
+        // PageAlloc command via alias 'cxl'
+        let cli_alloc = Cli::try_parse_from([
+            "craft", "cxl", "page-alloc",
+            "--page-id", "nether-chunk-1",
+            "--size", "8192",
+            "--tier", "cxl",
+            "--dimension", "the_nether",
+            "--json",
+        ]).unwrap();
+        match cli_alloc.command {
+            Some(Commands::MemFabric {
+                action: Some(MemFabricCommands::PageAlloc {
+                    page_id,
+                    size,
+                    tier,
+                    dimension,
+                    server: None,
+                    json,
+                }),
+            }) => {
+                assert_eq!(page_id, "nether-chunk-1");
+                assert_eq!(size, 8192);
+                assert_eq!(tier, "cxl");
+                assert_eq!(dimension.as_deref(), Some("the_nether"));
+                assert!(json);
+            }
+            _ => panic!("Expected MemFabric PageAlloc command via alias 'cxl'"),
+        }
+
+        // EvictDim command via alias 'nvram'
+        let cli_evict = Cli::try_parse_from([
+            "craft", "nvram", "evict-dim",
+            "--dimension", "the_nether",
+            "--target-node", "nvram-node-2",
+            "--json",
+        ]).unwrap();
+        match cli_evict.command {
+            Some(Commands::MemFabric {
+                action: Some(MemFabricCommands::EvictDim {
+                    dimension,
+                    target_node,
+                    server: None,
+                    json,
+                }),
+            }) => {
+                assert_eq!(dimension, "the_nether");
+                assert_eq!(target_node.as_deref(), Some("nvram-node-2"));
+                assert!(json);
+            }
+            _ => panic!("Expected MemFabric EvictDim command via alias 'nvram'"),
+        }
+
+        // Pages command via alias 'paging'
+        let cli_pages = Cli::try_parse_from(["craft", "paging", "pages", "--json"]).unwrap();
+        match cli_pages.command {
+            Some(Commands::MemFabric {
+                action: Some(MemFabricCommands::Pages { server: None, json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected MemFabric Pages command via alias 'paging'"),
+        }
+
+        // Bench command
+        let cli_bench = Cli::try_parse_from([
+            "craft", "memfabric", "bench",
+            "-i", "25",
+            "-z", "4096",
+            "--json",
+        ]).unwrap();
+        match cli_bench.command {
+            Some(Commands::MemFabric {
+                action: Some(MemFabricCommands::Bench {
+                    iterations,
+                    page_size,
+                    server: None,
+                    json,
+                }),
+            }) => {
+                assert_eq!(iterations, 25);
+                assert_eq!(page_size, 4096);
+                assert!(json);
+            }
+            _ => panic!("Expected MemFabric Bench command"),
+        }
+
+        // ResetMetrics command
+        let cli_reset = Cli::try_parse_from(["craft", "memfabric", "reset-metrics", "--json"]).unwrap();
+        match cli_reset.command {
+            Some(Commands::MemFabric {
+                action: Some(MemFabricCommands::ResetMetrics { server: None, json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected MemFabric ResetMetrics command"),
         }
     }
 }

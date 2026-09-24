@@ -1811,6 +1811,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             CrashTriagingAndLeakDetection,
             RdmaAcceleration,
             SmartNicAcceleration,
+            MemFabricPaging,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2060,6 +2061,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::SmartNicAcceleration);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Distributed Memory Fabric, CXL & Remote NVRAM Pool",
+            )
+            .with_aliases(&["memfabric", "cxl", "nvram", "paging"]),
+        );
+        actions.push(ToolItemAction::MemFabricPaging);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2164,6 +2175,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::SmartNicAcceleration => {
                     smartnic_tui(paths).await?;
+                }
+                ToolItemAction::MemFabricPaging => {
+                    memfabric_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3959,6 +3973,54 @@ async fn smartnic_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft smartnic reset-metrics              Reset cumulative hardware counters".green().to_string());
 
     show_modal_message("SMARTNIC ACCELERATION & P4 SWITCHING", &lines, false)?;
+    Ok(())
+}
+
+async fn memfabric_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::MemFabricService::global(paths);
+    let (summary, nodes) = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("DISTRIBUTED INTER-SERVER MEMORY FABRIC & NVRAM POOL".bold().to_string());
+    lines.push("Sub-Microsecond userfaultfd Resolution, Zero-Copy RDMA Paging & CXL Memory".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Active Fabric Nodes:    {}", summary.active_nodes));
+    lines.push(format!("Cluster DRAM Capacity:  {:.2} GB (Alloc: {:.2} GB, {:.1}%)",
+        summary.total_dram_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+        summary.allocated_dram_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+        summary.dram_utilization_percent
+    ));
+    lines.push(format!("Cluster NVRAM Pool:     {:.2} GB (Alloc: {:.2} GB, {:.1}%)",
+        summary.total_nvram_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+        summary.allocated_nvram_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+        summary.nvram_utilization_percent
+    ));
+    lines.push(format!("Managed Virtual Pages:  {} (Remote Paged: {})", summary.total_pages_managed, summary.remote_pages_count));
+    lines.push(format!("Page Faults Resolved:   {}", summary.page_faults_total));
+    lines.push(format!("Avg Paging Latency:     {} ns ({:.3} us)", summary.avg_page_fault_latency_nanos, summary.avg_page_fault_latency_nanos as f64 / 1000.0));
+    lines.push(format!("Remote Dimension Paging:{} evictions", summary.remote_evictions_total));
+    lines.push("".to_string());
+    if !nodes.is_empty() {
+        lines.push("Fabric Interconnect Nodes:".bold().to_string());
+        for n in nodes.iter().take(3) {
+            lines.push(
+                format!("  {:<16} {:<18} Latency: {}ns | CXL: {}",
+                    n.node_id, n.address, n.interconnect_latency_nanos,
+                    if n.cxl_enabled { "YES" } else { "NO" }
+                ).dimmed().to_string()
+            );
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft memfabric status [--server <S>]      Inspect fabric DRAM/NVRAM & node topology".green().to_string());
+    lines.push("  craft memfabric page-alloc -p <ID> -t <T>  Allocate virtual page in DRAM/CXL/NVRAM".green().to_string());
+    lines.push("  craft memfabric evict-dim -d <DIM>         Evict dormant dimension to remote NVRAM".green().to_string());
+    lines.push("  craft memfabric pages                      List active virtual pages & tiers".green().to_string());
+    lines.push("  craft memfabric bench                      Benchmark remote paging throughput & latency".green().to_string());
+    lines.push("  craft memfabric reset-metrics              Reset cumulative telemetry counters".green().to_string());
+
+    show_modal_message("DISTRIBUTED MEMORY FABRIC & NVRAM POOL", &lines, false)?;
     Ok(())
 }
 

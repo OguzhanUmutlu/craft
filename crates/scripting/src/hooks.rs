@@ -98,6 +98,9 @@ pub enum LifecycleEvent {
     SmartNicOffloadInstalled,
     SmartNicTcamSaturated,
     SmartNicFallbackEngaged,
+    MemFabricPageFaultResolved,
+    MemFabricDimensionPaged,
+    MemFabricPoolSaturated,
 }
 
 impl LifecycleEvent {
@@ -190,6 +193,9 @@ impl LifecycleEvent {
             Self::SmartNicOffloadInstalled => "on_smartnic_offload_installed",
             Self::SmartNicTcamSaturated => "on_smartnic_tcam_saturated",
             Self::SmartNicFallbackEngaged => "on_smartnic_fallback_engaged",
+            Self::MemFabricPageFaultResolved => "on_memfabric_page_fault_resolved",
+            Self::MemFabricDimensionPaged => "on_memfabric_dimension_paged",
+            Self::MemFabricPoolSaturated => "on_memfabric_pool_saturated",
         }
     }
 
@@ -283,6 +289,9 @@ impl LifecycleEvent {
             "on_smartnic_offload_installed" | "smartnic_offload_installed" | "smartnic_installed" => Some(Self::SmartNicOffloadInstalled),
             "on_smartnic_tcam_saturated" | "smartnic_tcam_saturated" | "tcam_saturated" => Some(Self::SmartNicTcamSaturated),
             "on_smartnic_fallback_engaged" | "smartnic_fallback_engaged" | "smartnic_fallback" => Some(Self::SmartNicFallbackEngaged),
+            "on_memfabric_page_fault_resolved" | "memfabric_page_fault_resolved" | "page_fault_resolved" => Some(Self::MemFabricPageFaultResolved),
+            "on_memfabric_dimension_paged" | "memfabric_dimension_paged" | "dimension_paged" => Some(Self::MemFabricDimensionPaged),
+            "on_memfabric_pool_saturated" | "memfabric_pool_saturated" | "memfabric_saturated" => Some(Self::MemFabricPoolSaturated),
             _ => None,
         }
     }
@@ -376,6 +385,9 @@ impl LifecycleEvent {
             Self::SmartNicOffloadInstalled,
             Self::SmartNicTcamSaturated,
             Self::SmartNicFallbackEngaged,
+            Self::MemFabricPageFaultResolved,
+            Self::MemFabricDimensionPaged,
+            Self::MemFabricPoolSaturated,
         ]
     }
 }
@@ -636,6 +648,22 @@ pub struct HookContext {
     pub smartnic_tcam_percent: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub smartnic_offload_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memfabric_page_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memfabric_vaddr: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memfabric_dimension: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memfabric_latency_nanos: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memfabric_pages_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memfabric_bytes_freed: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memfabric_dram_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memfabric_nvram_percent: Option<f64>,
 }
 
 impl HookContext {
@@ -1036,6 +1064,53 @@ impl HookContext {
         ctx.details = Some(format!(
             "SmartNIC fallback engaged on '{}' -> {}: {}",
             device_id, fallback_mode, reason
+        ));
+        ctx
+    }
+
+    pub fn for_memfabric_page_fault(
+        page_id: &str,
+        vaddr: u64,
+        latency_nanos: u64,
+        node_id: &str,
+    ) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::MemFabricPageFaultResolved);
+        ctx.memfabric_page_id = Some(page_id.to_string());
+        ctx.memfabric_vaddr = Some(vaddr);
+        ctx.memfabric_latency_nanos = Some(latency_nanos);
+        ctx.target_node = Some(node_id.to_string());
+        ctx.details = Some(format!(
+            "MemFabric resolved userfaultfd page fault for '{}' (0x{:x}) in {} ns via node '{}'",
+            page_id, vaddr, latency_nanos, node_id
+        ));
+        ctx
+    }
+
+    pub fn for_memfabric_dimension_paged(
+        dimension: &str,
+        pages_evicted: usize,
+        bytes_freed: u64,
+        target_node: &str,
+    ) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::MemFabricDimensionPaged);
+        ctx.memfabric_dimension = Some(dimension.to_string());
+        ctx.memfabric_pages_count = Some(pages_evicted);
+        ctx.memfabric_bytes_freed = Some(bytes_freed);
+        ctx.target_node = Some(target_node.to_string());
+        ctx.details = Some(format!(
+            "MemFabric evicted dimension '{}' ({} pages, {} bytes freed) to NVRAM node '{}'",
+            dimension, pages_evicted, bytes_freed, target_node
+        ));
+        ctx
+    }
+
+    pub fn for_memfabric_pool_saturated(dram_util_pct: f64, nvram_util_pct: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::MemFabricPoolSaturated);
+        ctx.memfabric_dram_percent = Some(dram_util_pct);
+        ctx.memfabric_nvram_percent = Some(nvram_util_pct);
+        ctx.details = Some(format!(
+            "MemFabric cluster pool saturated: DRAM at {:.1}%, NVRAM at {:.1}%",
+            dram_util_pct, nvram_util_pct
         ));
         ctx
     }
@@ -1868,5 +1943,63 @@ mod tests {
         assert_eq!(fall_ctx.event, "on_smartnic_fallback_engaged");
         assert_eq!(fall_ctx.smartnic_device_id.as_deref(), Some("smartnic-0"));
         assert_eq!(fall_ctx.smartnic_offload_mode.as_deref(), Some("driver"));
+    }
+
+    #[test]
+    fn test_memfabric_lifecycle_events() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_memfabric_page_fault_resolved"),
+            Some(LifecycleEvent::MemFabricPageFaultResolved)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("page_fault_resolved"),
+            Some(LifecycleEvent::MemFabricPageFaultResolved)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_memfabric_dimension_paged"),
+            Some(LifecycleEvent::MemFabricDimensionPaged)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("dimension_paged"),
+            Some(LifecycleEvent::MemFabricDimensionPaged)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_memfabric_pool_saturated"),
+            Some(LifecycleEvent::MemFabricPoolSaturated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("memfabric_saturated"),
+            Some(LifecycleEvent::MemFabricPoolSaturated)
+        );
+
+        let fault_ctx = HookContext::for_memfabric_page_fault(
+            "chunk-nether-0",
+            0x7fff_0000_1000,
+            1850,
+            "remote-nvram-node-1",
+        );
+        assert_eq!(fault_ctx.event, "on_memfabric_page_fault_resolved");
+        assert_eq!(
+            fault_ctx.memfabric_page_id.as_deref(),
+            Some("chunk-nether-0")
+        );
+        assert_eq!(fault_ctx.memfabric_vaddr, Some(0x7fff_0000_1000));
+        assert_eq!(fault_ctx.memfabric_latency_nanos, Some(1850));
+
+        let dim_ctx = HookContext::for_memfabric_dimension_paged(
+            "the_nether",
+            32,
+            131072,
+            "remote-nvram-node-1",
+        );
+        assert_eq!(dim_ctx.event, "on_memfabric_dimension_paged");
+        assert_eq!(dim_ctx.memfabric_dimension.as_deref(), Some("the_nether"));
+        assert_eq!(dim_ctx.memfabric_pages_count, Some(32));
+        assert_eq!(dim_ctx.memfabric_bytes_freed, Some(131072));
+
+        let sat_ctx = HookContext::for_memfabric_pool_saturated(88.5, 94.2);
+        assert_eq!(sat_ctx.event, "on_memfabric_pool_saturated");
+        assert_eq!(sat_ctx.memfabric_dram_percent, Some(88.5));
+        assert_eq!(sat_ctx.memfabric_nvram_percent, Some(94.2));
     }
 }

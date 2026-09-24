@@ -698,6 +698,34 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Aliases: `craft p4`, `craft nic-offload`.
   - Full-screen centered interactive TUI panel (`Tools -> SmartNIC Hardware Offload & P4 Line-Rate Switching`) powered by ModalX.
 
+### 3.20. Autonomous Distributed Inter-Server Memory Fabric, Remote Paged Compaction & Cluster NVRAM Pool (Phase 44)
+- **Core Memory Fabric Models, CXL/NVRAM Descriptors & Registry (`craft-core`)**:
+  - Memory tier hierarchy (`MemoryTier`: `LocalDram`, `CxlPmem`, `RemoteRdmaDram`, `RemoteNvram`).
+  - Page memory protection bits (`PageProtection`: `Read`, `ReadWrite`, `ReadWriteExec`).
+  - Virtual page and cluster topology descriptors (`RemotePageDescriptor`, `MemFabricNodeInfo`, `MemFabricStatusSummary`, `MemFabricBenchmarkMetrics`).
+  - Advisory file locking (`memfabric.lock`) protecting persistent registry state under `~/.craft/memfabric/` (`memfabric_dir`, `memfabric_registry_file`, `memfabric_state_file`, `memfabric_lock`, `memfabric_page_path`).
+- **Remote Paging Engine, userfaultfd Interception & Dimension Memory Fabric (`craft-net`)**:
+  - `RemotePagingEngine`: aggregates local DRAM, CXL persistent memory, and remote NVRAM pools; manages virtual page table (`0x7fff_0000_0000..`), resident page buffers, and remote RDMA storage mappings.
+  - `UserfaultPageHandler`: implements sub-microsecond `userfaultfd` (`UFFDIO_COPY`) page fault interception, pulling remote NVRAM pages into local DRAM via zero-copy RDMA verbs with average resolution latency <2.0 us.
+  - `DimensionMemoryFabric`: tracks Minecraft dimension memory pages (`overworld`, `the_nether`, `the_end`), coordinates transparent bulk eviction of dormant dimension chunks to remote NVRAM pool freeing local DRAM, and auto-restores pages via page faults when players teleport.
+  - Synthetic zero-copy remote paging benchmark (`benchmark_remote_paging`): verifies sustained throughput >340k pages/sec and sub-2.0 us average fault resolution latency.
+- **Daemon Supervision, MemFabric Service & Prometheus Telemetry (`craft-daemon`)**:
+  - `MemFabricService`: singleton managing in-process remote paging engine, dimension memory fabric, background compaction sweeps, and Prometheus telemetry exposition (`craft_memfabric_*`).
+  - 6 typed IPC requests and responses: `MemFabricGetStatus`, `MemFabricAllocatePage`, `MemFabricEvictDimension`, `MemFabricListPages`, `MemFabricRunBench`, `MemFabricResetMetrics`.
+  - Prometheus metrics exposition (`craft_memfabric_*`): `craft_memfabric_active_nodes`, `craft_memfabric_total_dram_bytes`, `craft_memfabric_allocated_dram_bytes`, `craft_memfabric_total_nvram_bytes`, `craft_memfabric_allocated_nvram_bytes`, `craft_memfabric_dram_utilization_percent`, `craft_memfabric_nvram_utilization_percent`, `craft_memfabric_total_pages_managed`, `craft_memfabric_remote_pages_count`, `craft_memfabric_page_faults_total`, `craft_memfabric_remote_evictions_total`, `craft_memfabric_avg_page_fault_latency_nanos`.
+- **Remote Federation & Scripting Hooks**:
+  - `RemoteCraftClient` provides `get_remote_memfabric_status`, `allocate_remote_memfabric_page`, `evict_remote_memfabric_dimension`, `list_remote_memfabric_pages`, `run_remote_memfabric_bench`, and `reset_remote_memfabric_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `MemFabricPageFaultResolved`, `MemFabricDimensionPaged`, `MemFabricPoolSaturated` with structured context (`memfabric_page_id`, `memfabric_vaddr`, `memfabric_dimension`, `memfabric_latency_nanos`, `memfabric_pages_count`, `memfabric_bytes_freed`, `memfabric_dram_percent`, `memfabric_nvram_percent`).
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft memfabric status [--server <name>] [--json]`
+  - `craft memfabric page-alloc -p <id> [-z <size>] [-t <tier>] [-d <dimension>] [--json]`
+  - `craft memfabric evict-dim -d <dimension> [-n <node>] [--json]`
+  - `craft memfabric pages [--server <name>] [--json]`
+  - `craft memfabric bench [-i <iterations>] [-z <page-size>] [--json]`
+  - `craft memfabric reset-metrics [--json]`
+  - Aliases: `craft memfabric`, `craft cxl`, `craft nvram`, `craft paging`.
+  - Full-screen centered interactive TUI panel (`Tools -> Distributed Memory Fabric, CXL & Remote NVRAM Pool`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

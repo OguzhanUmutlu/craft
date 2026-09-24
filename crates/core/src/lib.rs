@@ -47,6 +47,7 @@ pub mod vm;
 pub mod crash;
 pub mod rdma;
 pub mod smartnic;
+pub mod memfabric;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -236,6 +237,11 @@ pub use smartnic::{
     render_smartnic_status_text, OffloadMode, OffloadProtocol, P4ActionType, P4MatchActionTable,
     P4MatchField, P4TableEntry, SmartNicBenchmarkMetrics, SmartNicDeviceInfo, SmartNicOffloadRule,
     SmartNicRegistry, SmartNicStatusSummary, SmartNicVendor,
+};
+pub use memfabric::{
+    render_memfabric_bench_text, render_memfabric_pages_text, render_memfabric_status_text,
+    MemFabricBenchmarkMetrics, MemFabricNodeInfo, MemFabricRegistry, MemFabricStatusSummary,
+    MemoryTier, PageProtection, RemotePageDescriptor,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

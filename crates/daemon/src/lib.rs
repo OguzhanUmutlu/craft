@@ -39,6 +39,7 @@ pub mod vm_service;
 pub mod crash_service;
 pub mod rdma_service;
 pub mod smartnic_service;
+pub mod memfabric_service;
 
 pub use anvil_service::AnvilService;
 pub use compaction_service::CompactionService;
@@ -58,6 +59,7 @@ pub use vm_service::MicroVmService;
 pub use crash_service::CrashTriageService;
 pub use rdma_service::RdmaService;
 pub use smartnic_service::SmartNicService;
+pub use memfabric_service::MemFabricService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

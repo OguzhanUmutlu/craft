@@ -135,6 +135,10 @@ pub struct CraftPaths {
     pub smartnic_registry_file: PathBuf,
     pub smartnic_state_file: PathBuf,
     pub smartnic_lock: PathBuf,
+    pub memfabric_dir: PathBuf,
+    pub memfabric_registry_file: PathBuf,
+    pub memfabric_state_file: PathBuf,
+    pub memfabric_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -269,6 +273,10 @@ impl CraftPaths {
         let smartnic_registry_file = smartnic_dir.join("registry.json");
         let smartnic_state_file = smartnic_dir.join("state.json");
         let smartnic_lock = locks_dir.join("smartnic.lock");
+        let memfabric_dir = home.join("memfabric");
+        let memfabric_registry_file = memfabric_dir.join("registry.json");
+        let memfabric_state_file = memfabric_dir.join("state.json");
+        let memfabric_lock = locks_dir.join("memfabric.lock");
 
         Self {
             home,
@@ -401,6 +409,10 @@ impl CraftPaths {
             smartnic_registry_file,
             smartnic_state_file,
             smartnic_lock,
+            memfabric_dir,
+            memfabric_registry_file,
+            memfabric_state_file,
+            memfabric_lock,
         }
     }
 
@@ -472,6 +484,7 @@ impl CraftPaths {
         let crash_dumps_dir = crash_dir.join("dumps");
         let rdma_dir = home.join("rdma");
         let smartnic_dir = home.join("smartnic");
+        let memfabric_dir = home.join("memfabric");
 
         // Ensure all primary directories exist
         for dir in [
@@ -530,6 +543,7 @@ impl CraftPaths {
             &crash_dumps_dir,
             &rdma_dir,
             &smartnic_dir,
+            &memfabric_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -611,6 +625,9 @@ impl CraftPaths {
         let smartnic_registry_file = smartnic_dir.join("registry.json");
         let smartnic_state_file = smartnic_dir.join("state.json");
         let smartnic_lock = locks_dir.join("smartnic.lock");
+        let memfabric_registry_file = memfabric_dir.join("registry.json");
+        let memfabric_state_file = memfabric_dir.join("state.json");
+        let memfabric_lock = locks_dir.join("memfabric.lock");
 
         Ok(Self {
             home,
@@ -743,7 +760,16 @@ impl CraftPaths {
             smartnic_registry_file,
             smartnic_state_file,
             smartnic_lock,
+            memfabric_dir,
+            memfabric_registry_file,
+            memfabric_state_file,
+            memfabric_lock,
         })
+    }
+
+    /// Returns the page binary snapshot path for a specific page ID
+    pub fn memfabric_page_path(&self, page_id: &str) -> PathBuf {
+        self.memfabric_dir.join(format!("{}.page", page_id))
     }
 
     /// Returns the path to a specific P4 program file

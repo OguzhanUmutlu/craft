@@ -30,6 +30,7 @@ pub mod microvm;
 pub mod crash_triage;
 pub mod rdma;
 pub mod smartnic;
+pub mod memfabric;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -113,6 +114,11 @@ pub use rdma::{
 pub use smartnic::{
     benchmark_smartnic_line_rate, synthesize_raknet_unconnected_pong, synthesize_slp_pong,
     P4PipelineEngine, SmartNicFallbackBridge, SmartNicOffloadEngine,
+};
+pub use memfabric::{
+    benchmark_remote_paging, DimensionEvictionSummary, DimensionMemoryFabric,
+    DimensionTouchSummary, PageFaultEventType, PageFaultRecord, RemotePagingEngine,
+    UserfaultPageHandler, BASE_VIRTUAL_ADDR, PAGE_SIZE_2M, PAGE_SIZE_4K,
 };
 
 

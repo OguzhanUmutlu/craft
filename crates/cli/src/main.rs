@@ -588,6 +588,9 @@ async fn main() {
         Some(Commands::SmartNic { action }) => {
             commands::smartnic::handle_smartnic(&paths, action).await
         }
+        Some(Commands::MemFabric { action }) => {
+            commands::memfabric::handle_memfabric(&paths, action).await
+        }
     };
 
     if let Err(e) = result {
