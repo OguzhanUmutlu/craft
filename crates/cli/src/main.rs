@@ -558,6 +558,9 @@ async fn main() {
         Some(Commands::Pqc { action }) => {
             commands::pqc::handle_pqc(action, &paths).await
         }
+        Some(Commands::Hsm { action }) => {
+            commands::hsm::handle_hsm(action, &paths).await
+        }
     };
 
     if let Err(e) = result {

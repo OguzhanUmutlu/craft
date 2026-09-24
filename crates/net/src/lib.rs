@@ -7,6 +7,7 @@ pub mod edge_probe;
 pub mod edge_router;
 pub mod firewall;
 pub mod histogram;
+pub mod hsm_transport;
 pub mod loopback;
 pub mod live_splicer;
 pub mod mtls;
@@ -38,6 +39,13 @@ pub use edge_probe::{EdgeLatencyProber, EdgeProbeResult};
 pub use edge_router::EdgeRouteGenerator;
 pub use firewall::allow_ip_port;
 pub use histogram::LatencyHistogram;
+pub use hsm_transport::{
+    decode_hsm_frame, encode_hsm_frame, AttestationChallenge, AttestationResponse,
+    HsmFrameHeader, HsmSignedEnvelope, HsmTransportVerifier, ZkMembershipChallenge,
+    ZkMembershipResponse, CRAFT_HSM_MAGIC, CRAFT_HSM_VERSION, FRAME_TYPE_ATTESTATION_CHALLENGE,
+    FRAME_TYPE_ATTESTATION_RESPONSE, FRAME_TYPE_SIGNED_ENVELOPE,
+    FRAME_TYPE_ZK_MEMBERSHIP_CHALLENGE, FRAME_TYPE_ZK_MEMBERSHIP_RESPONSE,
+};
 pub use live_splicer::{
     decode_migration_message, encode_migration_message, AnycastBgpEngine, ConnectionSplicer,
     MigrationWireMessage, PlayerSocketHandoffFrame, SplicerState, CRAFT_MIGRATION_MAGIC,

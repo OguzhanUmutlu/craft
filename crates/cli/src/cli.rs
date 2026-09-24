@@ -630,6 +630,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<PqcCommands>,
     },
+    /// Hardware Security Module (HSM) Integration, PKCS#11 Enclave Attestation & Zero-Knowledge Cluster Membership
+    #[command(name = "hsm", alias = "pkcs11", alias = "tpm", alias = "enclave", alias = "zkp")]
+    Hsm {
+        #[command(subcommand)]
+        action: Option<HsmCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1897,6 +1903,64 @@ pub enum PqcCommands {
         /// Target migration phase
         #[arg(long = "phase")]
         phase: String,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum HsmCommands {
+    /// Inspect hardware security module tokens, TPM 2.0 PCR registers, and active hardware keys
+    Status {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Generate a non-extractable hardware key handle inside secure token boundary
+    Keygen {
+        /// Unique key label
+        #[arg(long = "label")]
+        label: String,
+        /// Key algorithm type (ed25519, mldsa65, rsa2048, rsa4096, ec_p256, ec_p384)
+        #[arg(long = "type")]
+        key_type: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Execute cryptographic signing directly within the secure hardware token boundary
+    Sign {
+        /// Key label or handle ID
+        #[arg(long = "label")]
+        label: String,
+        /// Data payload string to sign
+        #[arg(long = "data")]
+        data: String,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Generate or verify a signed TPM 2.0 enclave attestation quote
+    Attest {
+        /// Platform Configuration Register (PCR) selection bitmask (e.g. 7 for PCR 0-2)
+        #[arg(long = "pcr-mask")]
+        pcr_mask: Option<u32>,
+        /// Fresh 32-byte cryptographic challenge nonce (hex-encoded)
+        #[arg(long = "nonce")]
+        nonce: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Generate or verify Schnorr-Pedersen Zero-Knowledge Proof cluster membership
+    ZkMember {
+        /// Action to perform: prove or verify
+        #[arg(long = "action")]
+        action: String,
+        /// Target cluster identity
+        #[arg(long = "cluster")]
+        cluster: String,
         /// Output as JSON
         #[arg(long)]
         json: bool,
@@ -4413,6 +4477,95 @@ mod tests {
                 assert!(!json);
             }
             _ => panic!("Expected Pqc Migrate command"),
+        }
+    }
+
+    #[test]
+    fn test_hsm_cli_parsing_and_aliases() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "hsm", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Hsm {
+                action: Some(HsmCommands::Status { json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Hsm Status command"),
+        }
+
+        // Aliases test: pkcs11, tpm, enclave, zkp
+        for alias in &["pkcs11", "tpm", "enclave", "zkp"] {
+            let parsed = Cli::try_parse_from(["craft", alias, "status"]).unwrap();
+            assert!(matches!(
+                parsed.command,
+                Some(Commands::Hsm {
+                    action: Some(HsmCommands::Status { json: false })
+                })
+            ));
+        }
+
+        // Keygen command
+        let cli_keygen = Cli::try_parse_from([
+            "craft", "hsm", "keygen", "--label", "test-key", "--type", "ed25519", "--json",
+        ])
+        .unwrap();
+        match cli_keygen.command {
+            Some(Commands::Hsm {
+                action: Some(HsmCommands::Keygen { label, key_type, json }),
+            }) => {
+                assert_eq!(label, "test-key");
+                assert_eq!(key_type, Some("ed25519".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Hsm Keygen command"),
+        }
+
+        // Sign command
+        let cli_sign = Cli::try_parse_from([
+            "craft", "hsm", "sign", "--label", "test-key", "--data", "hello-world",
+        ])
+        .unwrap();
+        match cli_sign.command {
+            Some(Commands::Hsm {
+                action: Some(HsmCommands::Sign { label, data, json }),
+            }) => {
+                assert_eq!(label, "test-key");
+                assert_eq!(data, "hello-world");
+                assert!(!json);
+            }
+            _ => panic!("Expected Hsm Sign command"),
+        }
+
+        // Attest command
+        let cli_attest = Cli::try_parse_from([
+            "craft", "hsm", "attest", "--pcr-mask", "7", "--json",
+        ])
+        .unwrap();
+        match cli_attest.command {
+            Some(Commands::Hsm {
+                action: Some(HsmCommands::Attest { pcr_mask, nonce, json }),
+            }) => {
+                assert_eq!(pcr_mask, Some(7));
+                assert_eq!(nonce, None);
+                assert!(json);
+            }
+            _ => panic!("Expected Hsm Attest command"),
+        }
+
+        // ZkMember command
+        let cli_zk = Cli::try_parse_from([
+            "craft", "hsm", "zk-member", "--action", "prove", "--cluster", "cluster-alpha",
+        ])
+        .unwrap();
+        match cli_zk.command {
+            Some(Commands::Hsm {
+                action: Some(HsmCommands::ZkMember { action, cluster, json }),
+            }) => {
+                assert_eq!(action, "prove");
+                assert_eq!(cluster, "cluster-alpha");
+                assert!(!json);
+            }
+            _ => panic!("Expected Hsm ZkMember command"),
         }
     }
 }

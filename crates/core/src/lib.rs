@@ -12,6 +12,7 @@ pub mod edge_config;
 pub mod error;
 pub mod forecasting;
 pub mod game;
+pub mod hsm;
 pub mod intelligence_config;
 pub mod java;
 pub mod log_index;
@@ -65,6 +66,11 @@ pub use forecasting::{
     ForecastingRegistry, HourlyWorkloadSample, ResourceTier, ResourceThrottlingPlan,
     SeasonalForecaster, WorkloadForecast, WorkloadPolicy, DEFAULT_RAM_GIB_HOURLY_COST,
     DEFAULT_VCPU_HOURLY_COST,
+};
+pub use hsm::{
+    generate_aik_keypair, generate_pcr_quote, verify_pcr_quote, HsmBackendType, HsmEngine,
+    HsmKeyHandle, HsmKeyType, HsmRegistry, HsmSlotInfo, HsmStatusSummary, HsmTokenSession,
+    PcrQuote, TpmPcrBank, ZkMembershipEngine, ZkMembershipProof, U256, TPM_PCR_COUNT,
 };
 pub use edge_config::{
     BackboneCondition, BackboneStatus, CrossRegionChatEnvelope, EdgeNode, EdgeRegistry,

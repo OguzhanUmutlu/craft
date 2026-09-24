@@ -20,6 +20,7 @@ pub mod fix;
 pub mod forecast;
 pub mod gateway;
 pub mod hibernate;
+pub mod hsm;
 pub mod load;
 pub mod live_migrate;
 pub mod log;

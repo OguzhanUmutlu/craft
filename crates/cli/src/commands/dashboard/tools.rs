@@ -1801,6 +1801,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             EbpfObservability,
             SupplyChain,
             PostQuantum,
+            HardwareSecurityModule,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1950,6 +1951,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::PostQuantum);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Hardware Security Module (HSM, TPM 2.0 & ZKP)",
+            )
+            .with_aliases(&["hsm", "pkcs11", "tpm", "enclave", "zkp"]),
+        );
+        actions.push(ToolItemAction::HardwareSecurityModule);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2024,6 +2035,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::PostQuantum => {
                     pqc_tui(paths).await?;
+                }
+                ToolItemAction::HardwareSecurityModule => {
+                    hsm_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3408,6 +3422,36 @@ async fn pqc_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("POST-QUANTUM CRYPTOGRAPHY (ML-KEM / ML-DSA)", &lines, false)?;
     Ok(())
 }
+
+async fn hsm_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::HsmService::global(paths);
+    let status = service.get_status()?;
+
+    let mut lines = Vec::new();
+    lines.push("HARDWARE SECURITY MODULE (HSM), TPM 2.0 & ZK ENCLAVE ATTESTATION".bold().to_string());
+    lines.push("Pure-Rust PKCS#11, TPM 2.0 PCR Quoting & Schnorr-Pedersen Zero-Knowledge".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Backend Type:           {}", status.backend_type));
+    lines.push(format!("Hardware Token Present: {}", if status.token_present { "Yes" } else { "No" }));
+    lines.push(format!("Available Slots:        {}", status.slots_count));
+    lines.push(format!("Active Keypairs:        {}", status.active_keys_count));
+    lines.push(format!("Non-Extractable Keys:   {}", status.hardware_backed_keys));
+    lines.push(format!("TPM 2.0 PCR Active:     {}", if status.tpm_pcr_active { "Yes" } else { "No" }));
+    lines.push(format!("Attested Quotes:        {}", status.attested_quotes_count));
+    lines.push(format!("ZK Node Memberships:    {}", status.zk_memberships_count));
+    lines.push(format!("Total HSM Operations:   {}", status.total_operations));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft hsm status                       Display active HSM hardware status & slots".green().to_string());
+    lines.push("  craft hsm keygen --label <L> --type <T> Generate non-extractable key (ed25519/rsa2048)".green().to_string());
+    lines.push("  craft hsm sign --key-id <ID> --data <D> Cryptographically sign payload using HSM".green().to_string());
+    lines.push("  craft hsm attest                       Attest TPM 2.0 PCR measurement quote".green().to_string());
+    lines.push("  craft hsm zk-member                    Prove zero-knowledge cluster membership".green().to_string());
+
+    show_modal_message("HARDWARE SECURITY MODULE (HSM & TPM 2.0)", &lines, false)?;
+    Ok(())
+}
+
 
 
 

@@ -251,6 +251,26 @@ pub enum IpcRequest {
     PqcMigrateNode {
         target_phase: craft_core::pqc::PqcMigrationPhase,
     },
+    HsmGetStatus,
+    HsmGenerateKey {
+        label: String,
+        key_type: craft_core::hsm::HsmKeyType,
+    },
+    HsmSign {
+        label: String,
+        data: Vec<u8>,
+    },
+    HsmAttest {
+        nonce: Option<[u8; 32]>,
+        pcr_mask: u32,
+    },
+    HsmZkProve {
+        cluster_id: String,
+    },
+    HsmZkVerify {
+        cluster_id: String,
+        proof: craft_core::hsm::ZkMembershipProof,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -492,6 +512,25 @@ pub enum IpcResponse {
     },
     PqcMigrationResult {
         new_phase: craft_core::pqc::PqcMigrationPhase,
+        message: String,
+    },
+    HsmStatus {
+        summary: craft_core::hsm::HsmStatusSummary,
+    },
+    HsmKeyResult {
+        key: craft_core::hsm::HsmKeyHandle,
+    },
+    HsmSignResult {
+        signature: Vec<u8>,
+    },
+    HsmAttestResult {
+        quote: craft_core::hsm::PcrQuote,
+    },
+    HsmZkProveResult {
+        proof: craft_core::hsm::ZkMembershipProof,
+    },
+    HsmZkVerifyResult {
+        valid: bool,
         message: String,
     },
     Error { error: String },

@@ -1378,6 +1378,47 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries the hardware security module and TPM 2.0 status from the remote host
+    pub fn get_remote_hsm_status(&self) -> Result<String> {
+        let cmd = "craft hsm status --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote HSM status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Generates or validates an enclave attestation quote on the remote host
+    pub fn attest_remote_hsm(&self, pcr_mask: Option<u32>, nonce: Option<&str>) -> Result<String> {
+        let mut cmd = "craft hsm attest".to_string();
+        if let Some(mask) = pcr_mask {
+            cmd.push_str(&format!(" --pcr-mask {}", mask));
+        }
+        if let Some(n) = nonce {
+            cmd.push_str(&format!(" --nonce {}", n));
+        }
+        cmd.push_str(" --json");
+
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote HSM enclave attestation failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Verifies zero-knowledge cluster membership on the remote host
+    pub fn verify_remote_zk_membership(&self, cluster_id: &str) -> Result<String> {
+        let cmd = format!("craft hsm zk-member --action prove --cluster {} --json", cluster_id);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote ZK cluster membership failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

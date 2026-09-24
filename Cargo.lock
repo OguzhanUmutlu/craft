@@ -604,6 +604,7 @@ dependencies = [
  "dialoguer",
  "directories",
  "flate2",
+ "hex",
  "indicatif",
  "modalx",
  "regex",

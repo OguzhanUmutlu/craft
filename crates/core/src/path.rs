@@ -92,6 +92,12 @@ pub struct CraftPaths {
     pub pqc_policy_file: PathBuf,
     pub pqc_registry_file: PathBuf,
     pub pqc_lock: PathBuf,
+    pub hsm_dir: PathBuf,
+    pub hsm_tokens_dir: PathBuf,
+    pub hsm_pcr_dir: PathBuf,
+    pub hsm_zk_dir: PathBuf,
+    pub hsm_registry_file: PathBuf,
+    pub hsm_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -183,6 +189,12 @@ impl CraftPaths {
         let pqc_policy_file = pqc_dir.join("policy.json");
         let pqc_registry_file = pqc_dir.join("registry.json");
         let pqc_lock = locks_dir.join("pqc.lock");
+        let hsm_dir = home.join("hsm");
+        let hsm_tokens_dir = hsm_dir.join("tokens");
+        let hsm_pcr_dir = hsm_dir.join("pcr");
+        let hsm_zk_dir = hsm_dir.join("zk");
+        let hsm_registry_file = hsm_dir.join("registry.json");
+        let hsm_lock = locks_dir.join("hsm.lock");
 
         Self {
             home,
@@ -272,6 +284,12 @@ impl CraftPaths {
             pqc_policy_file,
             pqc_registry_file,
             pqc_lock,
+            hsm_dir,
+            hsm_tokens_dir,
+            hsm_pcr_dir,
+            hsm_zk_dir,
+            hsm_registry_file,
+            hsm_lock,
         }
     }
 
@@ -329,6 +347,10 @@ impl CraftPaths {
         let pqc_dir = home.join("pqc");
         let pqc_keys_dir = pqc_dir.join("keys");
         let pqc_certs_dir = pqc_dir.join("certs");
+        let hsm_dir = home.join("hsm");
+        let hsm_tokens_dir = hsm_dir.join("tokens");
+        let hsm_pcr_dir = hsm_dir.join("pcr");
+        let hsm_zk_dir = hsm_dir.join("zk");
 
         // Ensure all primary directories exist
         for dir in [
@@ -373,6 +395,10 @@ impl CraftPaths {
             &pqc_dir,
             &pqc_keys_dir,
             &pqc_certs_dir,
+            &hsm_dir,
+            &hsm_tokens_dir,
+            &hsm_pcr_dir,
+            &hsm_zk_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -425,6 +451,8 @@ impl CraftPaths {
         let pqc_policy_file = pqc_dir.join("policy.json");
         let pqc_registry_file = pqc_dir.join("registry.json");
         let pqc_lock = locks_dir.join("pqc.lock");
+        let hsm_registry_file = hsm_dir.join("registry.json");
+        let hsm_lock = locks_dir.join("hsm.lock");
 
         Ok(Self {
             home,
@@ -514,7 +542,28 @@ impl CraftPaths {
             pqc_policy_file,
             pqc_registry_file,
             pqc_lock,
+            hsm_dir,
+            hsm_tokens_dir,
+            hsm_pcr_dir,
+            hsm_zk_dir,
+            hsm_registry_file,
+            hsm_lock,
         })
+    }
+
+    /// Returns the token file path for a specific HSM token ID
+    pub fn hsm_token_path(&self, token_id: &str) -> PathBuf {
+        self.hsm_tokens_dir.join(format!("{}.json", token_id))
+    }
+
+    /// Returns the PCR measurement file path for a specific PCR measurement ID
+    pub fn hsm_pcr_path(&self, pcr_id: &str) -> PathBuf {
+        self.hsm_pcr_dir.join(format!("{}.json", pcr_id))
+    }
+
+    /// Returns the ZKP membership commitment file path for a cluster ID
+    pub fn hsm_zk_path(&self, cluster_id: &str) -> PathBuf {
+        self.hsm_zk_dir.join(format!("{}.json", cluster_id))
     }
 
     /// Returns the public or private key path for a specific PQC key identifier

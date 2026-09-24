@@ -235,5 +235,68 @@ Phase 33 incorporates pure-Rust post-quantum cryptography to defend against Harv
    - `DualStack`: hybrid negotiation with classical fallback permitted (95% defense score).
    - `EnforcedPqc`: classical fallback forbidden, pure/hybrid post-quantum cipher suites enforced (100% defense score).
 
+---
+
+## 8. Hardware Security Module (HSM), TPM 2.0 & Zero-Knowledge Cluster Membership (Phase 34)
+
+Phase 34 integrates hardware security module (HSM) tokens, TPM 2.0 PCR measurement quotes, and Schnorr-Pedersen Zero-Knowledge Proof (ZKP) cluster membership validation across Craft federations.
+
+```
+[ Prover Node (Local HSM) ]                              [ Verifier / Cluster Supervisor ]
+           │                                                               │
+           │  1. Attestation Challenge (nonce_req)                         │
+           │◄──────────────────────────────────────────────────────────────┤
+           │                                                               │
+           │  2. Attestation Response (PcrQuote)                           │
+           ├──────────────────────────────────────────────────────────────►│
+           │     pcr_digest: SHA-256(PCR 0..23)                            │  Verify AIK Signature & PCRs:
+           │     aik_public_key: ML-DSA-65 AIK pk                          │  verify_pcr_quote(&quote)
+           │     signature: ML-DSA-65 AIK signature                        │
+           │                                                               │
+           │  3. ZkMembershipChallenge (cluster_id, nonce)                 │
+           │◄──────────────────────────────────────────────────────────────┤
+           │                                                               │
+           │  4. ZkMembershipProof (Topological Privacy Preserved)         │
+           ├──────────────────────────────────────────────────────────────►│
+           │     C = g^s * h^r mod p                                       │  Verify Identity:
+           │     T = g^k_s * h^k_r mod p                                   │  g^z_s * h^z_r == T * C^c mod p
+           │     z_s = (k_s + c * s) mod q                                 │
+           │     z_r = (k_r + c * r) mod q                                 │
+```
+
+### Invariants & Cryptographic Formulations:
+1. **PKCS#11 v2.40/v3.0 Token & Non-Extractable Key Abstraction**:
+   - Keys generated within hardware token boundary enforce `CKA_EXTRACTABLE = false`.
+   - Any attempt to read, serialize, or dump raw secret key bytes triggers immediate rejection with `CKR_ACTION_PROHIBITED`.
+   - Cryptographic signing executes entirely within the token boundary (`HsmEngine::sign`); only digital signatures and public keys leave the enclave.
+   - Token vaults are isolated under `~/.craft/hsm/tokens/` with slot mapping and advisory lock protection (`hsm.lock`).
+2. **TPM 2.0 PCR Bank & Enclave Attestation Quoting**:
+   - Platform Configuration Registers (PCR 0–23) measure firmware, boot loaders, kernel parameters, Craft runtime binaries, and configuration hashes.
+   - Extension operation: $\text{PCR}_{\text{new}} = \text{SHA-256}(\text{PCR}_{\text{old}} \parallel \text{Measurement})$.
+   - Composite quote digest: SHA-256 over concatenated selected PCR registers defined by bitmask `pcr_mask`.
+   - Attestation Identity Key (AIK) signs composite digest together with a fresh 32-byte verifier nonce using ML-DSA-65 post-quantum signatures, strictly preventing quote replay attacks.
+3. **Pure-Rust Schnorr-Pedersen Zero-Knowledge Proof (ZKP)**:
+   - Evaluated over 256-bit safe prime $p = 2^{256} - 36113$ (`ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff72ef`) and subgroup prime order $q = (p - 1)/2$ (`7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb977`).
+   - Generators $g = 4$ and $h = 9$ are quadratic residues mod $p$, guaranteeing they belong to the unique cyclic subgroup of prime order $q$.
+   - Commitment: $C = g^s \cdot h^r \bmod p$ where $s \in \mathbb{Z}_q$ is the private node identity secret and $r \in \mathbb{Z}_q$ is blinding randomness.
+   - Prover chooses random ephemeral blinding factors $k_s, k_r \in \mathbb{Z}_q$ and computes initial commitment $T = g^{k_s} \cdot h^{k_r} \bmod p$.
+   - Fiat-Shamir non-interactive challenge: $c = \text{SHA-256}(C \parallel T \parallel \text{cluster\_id} \parallel \text{nonce}) \bmod q$.
+   - Responses: $z_s = (k_s + c \cdot s) \bmod q$ and $z_r = (k_r + c \cdot r) \bmod q$.
+   - Verification equation:
+     $$g^{z_s} \cdot h^{z_r} \equiv T \cdot C^c \pmod p$$
+   - Zero information about secret node identity $s$ or topological IP/hardware identifiers is leaked to verifiers.
+4. **Wire Protocol & Frame Encoding**:
+   - Magic header `CRAFT_HSM_MAGIC = "HSMS"` (`[0x48, 0x53, 0x4d, 0x53]`).
+   - Encapsulates `AttestationChallenge`/`Response`, `ZkMembershipChallenge`/`Response`, and `HsmSignedEnvelope` with CRC-32 and payload length headers.
+5. **Daemon Supervision & Prometheus Telemetry**:
+   - In-process `HsmService` tracks atomic hardware operations, verified attestation quotes, and validated ZK proofs.
+   - Prometheus metrics: `craft_hsm_operations_total`, `craft_hsm_attestations_verified_total`, `craft_hsm_zk_proofs_verified_total`, `craft_hsm_hardware_signing_total`, `craft_hsm_token_present`.
+   - IPC requests: `HsmGetStatus`, `HsmGenerateKey`, `HsmSign`, `HsmAttest`, `HsmProveZk`, `HsmVerifyZk`.
+6. **Remote Orchestration & Lifecycle Automation**:
+   - `RemoteCraftClient` executes federated HSM commands over SSH (`get_remote_hsm_status`, `attest_remote_hsm`, `verify_remote_zk_membership`).
+   - `HookBus` lifecycle events: `HsmTokenInserted`, `EnclaveAttestationVerified`, `ZkMembershipValidated`.
+   - CLI subcommands: `craft hsm status|keygen|sign|attest|zk-member` (aliases: `pkcs11`, `tpm`, `enclave`, `zkp`).
+
+
 
 

@@ -41,6 +41,7 @@ cargo-timing.html
 !/tools/test_ebpf_observability.py
 !/tools/test_supply_chain_verification.py
 !/tools/test_pqc_quantum_hardening.py
+!/tools/test_hsm_zk_enclave.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

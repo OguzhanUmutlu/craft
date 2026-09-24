@@ -67,6 +67,9 @@ pub enum LifecycleEvent {
     PqcHandshakeCompleted,
     PqcPolicyMigrated,
     PqcDegradedFallbackDetected,
+    HsmTokenInserted,
+    EnclaveAttestationVerified,
+    ZkMembershipValidated,
 }
 
 impl LifecycleEvent {
@@ -128,6 +131,9 @@ impl LifecycleEvent {
             Self::PqcHandshakeCompleted => "on_pqc_handshake_completed",
             Self::PqcPolicyMigrated => "on_pqc_policy_migrated",
             Self::PqcDegradedFallbackDetected => "on_pqc_degraded_fallback_detected",
+            Self::HsmTokenInserted => "on_hsm_token_inserted",
+            Self::EnclaveAttestationVerified => "on_enclave_attestation_verified",
+            Self::ZkMembershipValidated => "on_zk_membership_validated",
         }
     }
 
@@ -190,6 +196,9 @@ impl LifecycleEvent {
             "on_pqc_handshake_completed" | "pqc_handshake_completed" | "pqc_handshake" => Some(Self::PqcHandshakeCompleted),
             "on_pqc_policy_migrated" | "pqc_policy_migrated" | "pqc_migrate" => Some(Self::PqcPolicyMigrated),
             "on_pqc_degraded_fallback_detected" | "pqc_degraded_fallback_detected" | "pqc_fallback" => Some(Self::PqcDegradedFallbackDetected),
+            "on_hsm_token_inserted" | "hsm_token_inserted" | "token_inserted" => Some(Self::HsmTokenInserted),
+            "on_enclave_attestation_verified" | "enclave_attestation_verified" | "attestation_verified" => Some(Self::EnclaveAttestationVerified),
+            "on_zk_membership_validated" | "zk_membership_validated" | "membership_validated" => Some(Self::ZkMembershipValidated),
             _ => None,
         }
     }
@@ -252,6 +261,9 @@ impl LifecycleEvent {
             Self::PqcHandshakeCompleted,
             Self::PqcPolicyMigrated,
             Self::PqcDegradedFallbackDetected,
+            Self::HsmTokenInserted,
+            Self::EnclaveAttestationVerified,
+            Self::ZkMembershipValidated,
         ]
     }
 }

@@ -1301,6 +1301,61 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::HsmGetStatus => {
+                let service = crate::hsm_service::HsmService::global(supervisor.paths());
+                let resp = match service.get_status() {
+                    Ok(summary) => IpcResponse::HsmStatus { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::HsmGenerateKey { label, key_type } => {
+                let service = crate::hsm_service::HsmService::global(supervisor.paths());
+                let resp = match service.generate_key(&label, key_type) {
+                    Ok(key) => IpcResponse::HsmKeyResult { key },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::HsmSign { label, data } => {
+                let service = crate::hsm_service::HsmService::global(supervisor.paths());
+                let resp = match service.sign_data(&label, &data) {
+                    Ok(signature) => IpcResponse::HsmSignResult { signature },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::HsmAttest { nonce, pcr_mask } => {
+                let service = crate::hsm_service::HsmService::global(supervisor.paths());
+                let resp = match service.attest_enclave(pcr_mask, nonce) {
+                    Ok(quote) => IpcResponse::HsmAttestResult { quote },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::HsmZkProve { cluster_id } => {
+                let service = crate::hsm_service::HsmService::global(supervisor.paths());
+                let resp = match service.prove_zk_membership(&cluster_id) {
+                    Ok(proof) => IpcResponse::HsmZkProveResult { proof },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::HsmZkVerify { cluster_id: _, proof } => {
+                let service = crate::hsm_service::HsmService::global(supervisor.paths());
+                let resp = match service.verify_zk_membership(&proof) {
+                    Ok(valid) => IpcResponse::HsmZkVerifyResult {
+                        valid,
+                        message: if valid {
+                            "Zero-knowledge cluster membership proof verified successfully".to_string()
+                        } else {
+                            "Zero-knowledge cluster membership proof verification failed".to_string()
+                        },
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -2747,6 +2802,92 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::PqcMigrationResult { new_phase, message } => Ok((new_phase, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_hsm_status(&mut self) -> Result<craft_core::hsm::HsmStatusSummary> {
+        match self.request(IpcRequest::HsmGetStatus).await? {
+            IpcResponse::HsmStatus { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn generate_hsm_key(
+        &mut self,
+        label: &str,
+        key_type: craft_core::hsm::HsmKeyType,
+    ) -> Result<craft_core::hsm::HsmKeyHandle> {
+        match self
+            .request(IpcRequest::HsmGenerateKey {
+                label: label.to_string(),
+                key_type,
+            })
+            .await?
+        {
+            IpcResponse::HsmKeyResult { key } => Ok(key),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn sign_with_hsm(&mut self, label: &str, data: &[u8]) -> Result<Vec<u8>> {
+        match self
+            .request(IpcRequest::HsmSign {
+                label: label.to_string(),
+                data: data.to_vec(),
+            })
+            .await?
+        {
+            IpcResponse::HsmSignResult { signature } => Ok(signature),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn attest_hsm(
+        &mut self,
+        pcr_mask: u32,
+        nonce: Option<[u8; 32]>,
+    ) -> Result<craft_core::hsm::PcrQuote> {
+        match self.request(IpcRequest::HsmAttest { nonce, pcr_mask }).await? {
+            IpcResponse::HsmAttestResult { quote } => Ok(quote),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn prove_hsm_zk(
+        &mut self,
+        cluster_id: &str,
+    ) -> Result<craft_core::hsm::ZkMembershipProof> {
+        match self
+            .request(IpcRequest::HsmZkProve {
+                cluster_id: cluster_id.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::HsmZkProveResult { proof } => Ok(proof),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn verify_hsm_zk(
+        &mut self,
+        cluster_id: &str,
+        proof: craft_core::hsm::ZkMembershipProof,
+    ) -> Result<(bool, String)> {
+        match self
+            .request(IpcRequest::HsmZkVerify {
+                cluster_id: cluster_id.to_string(),
+                proof,
+            })
+            .await?
+        {
+            IpcResponse::HsmZkVerifyResult { valid, message } => Ok((valid, message)),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }
