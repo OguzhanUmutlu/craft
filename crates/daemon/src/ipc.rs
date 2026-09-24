@@ -1515,6 +1515,64 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::ShmGetStatus { server } => {
+                let service = crate::shm_service::ShmService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(summary) => IpcResponse::ShmStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::ShmCreateChannel { server, channel, slot_size, slot_count } => {
+                let service = crate::shm_service::ShmService::global(supervisor.paths());
+                let resp = match service.create_channel(&server, &channel, slot_size, slot_count) {
+                    Ok(meta) => IpcResponse::ShmChannelCreatedResult { meta },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::ShmCloseChannel { server, channel } => {
+                let service = crate::shm_service::ShmService::global(supervisor.paths());
+                let resp = match service.close_channel(&server, &channel) {
+                    Ok(closed) => IpcResponse::ShmChannelClosedResult { closed },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::ShmWriteEvent { server, channel, payload } => {
+                let service = crate::shm_service::ShmService::global(supervisor.paths());
+                let resp = match service.write_event(&server, &channel, &payload) {
+                    Ok(sequence) => IpcResponse::ShmEventWrittenResult { sequence },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::ShmReadEvents { server, channel, limit } => {
+                let service = crate::shm_service::ShmService::global(supervisor.paths());
+                let resp = match service.read_events(&server, &channel, limit) {
+                    Ok(events) => IpcResponse::ShmEventsReadResult { events },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::ShmRunBench { message_count, payload_size } => {
+                let service = crate::shm_service::ShmService::global(supervisor.paths());
+                let resp = match service.run_bench(message_count, payload_size) {
+                    Ok(metrics) => IpcResponse::ShmBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::ShmResetMetrics { server } => {
+                let service = crate::shm_service::ShmService::global(supervisor.paths());
+                let resp = match service.reset_metrics(server.as_deref()) {
+                    Ok(_) => IpcResponse::ShmMetricsResetResult {
+                        message: "SHM metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -3235,6 +3293,97 @@ impl DaemonClient {
     pub async fn reset_pmu_metrics(&mut self) -> Result<String> {
         match self.request(IpcRequest::PmuResetMetrics).await? {
             IpcResponse::PmuMetricsResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_shm_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<craft_core::shm::ShmStatusSummary> {
+        match self.request(IpcRequest::ShmGetStatus { server }).await? {
+            IpcResponse::ShmStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn create_shm_channel(
+        &mut self,
+        server: String,
+        channel: String,
+        slot_size: usize,
+        slot_count: usize,
+    ) -> Result<craft_core::shm::ShmSegmentMeta> {
+        match self
+            .request(IpcRequest::ShmCreateChannel {
+                server,
+                channel,
+                slot_size,
+                slot_count,
+            })
+            .await?
+        {
+            IpcResponse::ShmChannelCreatedResult { meta } => Ok(meta),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn close_shm_channel(
+        &mut self,
+        server: String,
+        channel: String,
+    ) -> Result<bool> {
+        match self.request(IpcRequest::ShmCloseChannel { server, channel }).await? {
+            IpcResponse::ShmChannelClosedResult { closed } => Ok(closed),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn write_shm_event(
+        &mut self,
+        server: String,
+        channel: String,
+        payload: Vec<u8>,
+    ) -> Result<u64> {
+        match self.request(IpcRequest::ShmWriteEvent { server, channel, payload }).await? {
+            IpcResponse::ShmEventWrittenResult { sequence } => Ok(sequence),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn read_shm_events(
+        &mut self,
+        server: String,
+        channel: String,
+        limit: usize,
+    ) -> Result<Vec<Vec<u8>>> {
+        match self.request(IpcRequest::ShmReadEvents { server, channel, limit }).await? {
+            IpcResponse::ShmEventsReadResult { events } => Ok(events),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_shm_bench(
+        &mut self,
+        message_count: usize,
+        payload_size: usize,
+    ) -> Result<craft_core::shm::ShmBenchmarkMetrics> {
+        match self.request(IpcRequest::ShmRunBench { message_count, payload_size }).await? {
+            IpcResponse::ShmBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_shm_metrics(&mut self, server: Option<String>) -> Result<String> {
+        match self.request(IpcRequest::ShmResetMetrics { server }).await? {
+            IpcResponse::ShmMetricsResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

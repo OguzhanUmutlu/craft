@@ -185,6 +185,7 @@ pub async fn generate_prometheus_metrics(
     out.push_str(&crate::compaction_service::CompactionService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::xdp_service::XdpService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::pmu_service::PmuService::global(paths).generate_prometheus_metrics());
+    out.push_str(&crate::shm_service::ShmService::global(paths).generate_prometheus_metrics());
 
     out
 }

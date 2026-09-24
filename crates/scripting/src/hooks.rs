@@ -79,6 +79,10 @@ pub enum LifecycleEvent {
     PmuHotspotDetected,
     CacheMissThresholdExceeded,
     BranchMispredictionSurge,
+    ShmChannelOpened,
+    ShmChannelClosed,
+    ShmLeaseExpired,
+    ShmThroughputThresholdExceeded,
 }
 
 impl LifecycleEvent {
@@ -152,6 +156,10 @@ impl LifecycleEvent {
             Self::PmuHotspotDetected => "on_pmu_hotspot_detected",
             Self::CacheMissThresholdExceeded => "on_cache_miss_threshold_exceeded",
             Self::BranchMispredictionSurge => "on_branch_misprediction_surge",
+            Self::ShmChannelOpened => "on_shm_channel_opened",
+            Self::ShmChannelClosed => "on_shm_channel_closed",
+            Self::ShmLeaseExpired => "on_shm_lease_expired",
+            Self::ShmThroughputThresholdExceeded => "on_shm_throughput_threshold_exceeded",
         }
     }
 
@@ -226,6 +234,10 @@ impl LifecycleEvent {
             "on_pmu_hotspot_detected" | "pmu_hotspot_detected" | "pmu_hotspot" => Some(Self::PmuHotspotDetected),
             "on_cache_miss_threshold_exceeded" | "cache_miss_threshold_exceeded" | "cache_miss" => Some(Self::CacheMissThresholdExceeded),
             "on_branch_misprediction_surge" | "branch_misprediction_surge" | "branch_surge" => Some(Self::BranchMispredictionSurge),
+            "on_shm_channel_opened" | "shm_channel_opened" | "shm_opened" => Some(Self::ShmChannelOpened),
+            "on_shm_channel_closed" | "shm_channel_closed" | "shm_closed" => Some(Self::ShmChannelClosed),
+            "on_shm_lease_expired" | "shm_lease_expired" | "shm_expired" => Some(Self::ShmLeaseExpired),
+            "on_shm_throughput_threshold_exceeded" | "shm_throughput_threshold_exceeded" | "shm_throughput" => Some(Self::ShmThroughputThresholdExceeded),
             _ => None,
         }
     }
@@ -300,6 +312,10 @@ impl LifecycleEvent {
             Self::PmuHotspotDetected,
             Self::CacheMissThresholdExceeded,
             Self::BranchMispredictionSurge,
+            Self::ShmChannelOpened,
+            Self::ShmChannelClosed,
+            Self::ShmLeaseExpired,
+            Self::ShmThroughputThresholdExceeded,
         ]
     }
 }
@@ -502,6 +518,14 @@ pub struct HookContext {
     pub bmpi: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ipc: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shm_segment_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shm_channel_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shm_messages_per_sec: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shm_latency_ns: Option<f64>,
 }
 
 impl HookContext {
@@ -687,6 +711,49 @@ impl HookContext {
             bmpi, threshold
         ));
         ctx
+    }
+
+    pub fn for_shm_channel_opened(segment: &str, channel: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::ShmChannelOpened);
+        ctx.shm_segment_name = Some(segment.to_string());
+        ctx.shm_channel_type = Some(channel.to_string());
+        ctx.details = Some(format!("POSIX shared memory channel '{}' opened ({})", segment, channel));
+        ctx
+    }
+
+    pub fn for_shm_channel_closed(segment: &str, channel: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::ShmChannelClosed);
+        ctx.shm_segment_name = Some(segment.to_string());
+        ctx.shm_channel_type = Some(channel.to_string());
+        ctx.details = Some(format!("POSIX shared memory channel '{}' closed ({})", segment, channel));
+        ctx
+    }
+
+    pub fn for_shm_lease_expired(segment: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::ShmLeaseExpired);
+        ctx.shm_segment_name = Some(segment.to_string());
+        ctx.details = Some(format!("POSIX shared memory segment '{}' lease expired, reclaimed by watchdog", segment));
+        ctx
+    }
+
+    pub fn for_shm_throughput(segment: &str, msgs_per_sec: f64, latency_ns: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::ShmThroughputThresholdExceeded);
+        ctx.shm_segment_name = Some(segment.to_string());
+        ctx.shm_messages_per_sec = Some(msgs_per_sec);
+        ctx.shm_latency_ns = Some(latency_ns);
+        ctx.details = Some(format!(
+            "Shared memory channel '{}' throughput: {:.1} msgs/sec, latency: {:.2} ns",
+            segment, msgs_per_sec, latency_ns
+        ));
+        ctx
+    }
+
+    pub fn with_shm_context(mut self, segment: &str, channel: &str, msgs_per_sec: f64, latency_ns: f64) -> Self {
+        self.shm_segment_name = Some(segment.to_string());
+        self.shm_channel_type = Some(channel.to_string());
+        self.shm_messages_per_sec = Some(msgs_per_sec);
+        self.shm_latency_ns = Some(latency_ns);
+        self
     }
 }
 

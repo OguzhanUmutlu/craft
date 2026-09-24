@@ -33,6 +33,7 @@ pub mod web_dashboard;
 pub mod webhooks;
 pub mod xdp_service;
 pub mod pmu_service;
+pub mod shm_service;
 
 pub use anvil_service::AnvilService;
 pub use compaction_service::CompactionService;
@@ -46,6 +47,7 @@ pub use pqc_service::PqcService;
 pub use supply_chain_service::SupplyChainService;
 pub use xdp_service::XdpService;
 pub use pmu_service::PmuService;
+pub use shm_service::ShmService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

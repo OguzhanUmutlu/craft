@@ -654,6 +654,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<PmuCommands>,
     },
+    /// Autonomous Memory-Mapped Persistent Shared Memory (POSIX shm), Zero-Copy IPC & High-Speed Ring Bus
+    #[command(name = "shm", alias = "shared-memory", alias = "shmem", alias = "ipc-ring")]
+    Shm {
+        #[command(subcommand)]
+        action: Option<ShmCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2126,6 +2132,71 @@ pub enum PmuCommands {
         json: bool,
     },
 }
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum ShmCommands {
+    /// Inspect active shared memory segments, ring buffer states, throughput, and lease health
+    Status {
+        /// Filter by target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Create a high-speed zero-copy shared memory ring buffer channel
+    Create {
+        /// Target server name
+        #[arg(short, long)]
+        server: String,
+        /// Channel / ring buffer identifier (e.g. packet_bus, state_sync)
+        #[arg(short, long)]
+        channel: String,
+        /// Ring buffer slot payload size in bytes (default: 4096)
+        #[arg(long, default_value_t = 4096)]
+        slot_size: usize,
+        /// Number of slots in the circular ring buffer (default: 1024)
+        #[arg(long, default_value_t = 1024)]
+        slots: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Close an active shared memory segment and unlink its POSIX handle
+    Close {
+        /// Target server name
+        #[arg(short, long)]
+        server: String,
+        /// Channel / ring buffer identifier
+        #[arg(short, long)]
+        channel: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark microsecond zero-copy throughput and SPSC latency
+    Bench {
+        /// Number of messages to stream through the benchmark ring
+        #[arg(long, default_value_t = 20_000)]
+        messages: usize,
+        /// Payload size in bytes per message
+        #[arg(long, default_value_t = 128)]
+        size: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset shared memory cumulative throughput metrics and clear expired leases
+    ResetMetrics {
+        /// Target server name (resets all if omitted)
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
 pub enum XdpRuleSubcommands {
@@ -5026,6 +5097,85 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Pmu ResetMetrics command"),
+        }
+    }
+
+    #[test]
+    fn test_shm_cli_parsing() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "shm", "status", "--server", "lobby", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Shm { action: Some(ShmCommands::Status { server, json }) }) => {
+                assert_eq!(server, Some("lobby".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Shm Status command"),
+        }
+
+        // Alias: shared-memory status
+        let cli_shm_alias = Cli::try_parse_from(["craft", "shared-memory", "status"]).unwrap();
+        match cli_shm_alias.command {
+            Some(Commands::Shm { action: Some(ShmCommands::Status { server, json }) }) => {
+                assert_eq!(server, None);
+                assert!(!json);
+            }
+            _ => panic!("Expected Shm Status command via alias 'shared-memory'"),
+        }
+
+        // Alias: shmem create
+        let cli_create = Cli::try_parse_from([
+            "craft", "shmem", "create", "-s", "survival", "-c", "packet_bus", "--slot-size", "8192", "--slots", "512", "--json",
+        ])
+        .unwrap();
+        match cli_create.command {
+            Some(Commands::Shm {
+                action: Some(ShmCommands::Create { server, channel, slot_size, slots, json }),
+            }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(channel, "packet_bus");
+                assert_eq!(slot_size, 8192);
+                assert_eq!(slots, 512);
+                assert!(json);
+            }
+            _ => panic!("Expected Shm Create command via alias 'shmem'"),
+        }
+
+        // Alias: ipc-ring close
+        let cli_close = Cli::try_parse_from(["craft", "ipc-ring", "close", "-s", "survival", "-c", "packet_bus"]).unwrap();
+        match cli_close.command {
+            Some(Commands::Shm {
+                action: Some(ShmCommands::Close { server, channel, json }),
+            }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(channel, "packet_bus");
+                assert!(!json);
+            }
+            _ => panic!("Expected Shm Close command via alias 'ipc-ring'"),
+        }
+
+        // Bench command
+        let cli_bench = Cli::try_parse_from(["craft", "shm", "bench", "--messages", "10000", "--size", "256", "--json"]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Shm {
+                action: Some(ShmCommands::Bench { messages, size, json }),
+            }) => {
+                assert_eq!(messages, 10000);
+                assert_eq!(size, 256);
+                assert!(json);
+            }
+            _ => panic!("Expected Shm Bench command"),
+        }
+
+        // ResetMetrics command
+        let cli_reset = Cli::try_parse_from(["craft", "shm", "reset-metrics", "-s", "survival", "--json"]).unwrap();
+        match cli_reset.command {
+            Some(Commands::Shm {
+                action: Some(ShmCommands::ResetMetrics { server, json }),
+            }) => {
+                assert_eq!(server, Some("survival".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Shm ResetMetrics command"),
         }
     }
 }

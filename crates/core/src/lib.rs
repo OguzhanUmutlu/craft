@@ -41,6 +41,7 @@ pub mod version;
 pub mod webhook_config;
 pub mod xdp;
 pub mod pmu;
+pub mod shm;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -194,6 +195,12 @@ pub use xdp::{
 pub use pmu::{
     HotspotSymbol, PmuEventType, PmuMetricsSummary, PmuProbeConfig, PmuProbeStatus,
     PmuRegistry, PmuSampleRecord,
+};
+pub use shm::{
+    ShmBenchmarkMetrics, ShmChannelType, ShmRegion, ShmRegistry, ShmRingHeader,
+    ShmSegmentConfig, ShmSegmentMeta, ShmSlotHeader, ShmStatusSummary,
+    CRAFT_SHM_MAGIC, DEFAULT_SLOT_COUNT, DEFAULT_SLOT_SIZE, LEASE_TIMEOUT_SECONDS,
+    SHM_FLAG_EMPTY, SHM_FLAG_READ, SHM_FLAG_READY, SHM_VERSION,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

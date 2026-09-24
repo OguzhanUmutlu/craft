@@ -570,6 +570,9 @@ async fn main() {
         Some(Commands::Pmu { action }) => {
             commands::pmu::handle_pmu(&paths, action).await
         }
+        Some(Commands::Shm { action }) => {
+            commands::shm::handle_shm(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

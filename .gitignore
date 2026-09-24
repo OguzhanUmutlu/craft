@@ -45,6 +45,7 @@ cargo-timing.html
 !/tools/test_memory_compaction_pipeline.py
 !/tools/test_xdp_firewall_pipeline.py
 !/tools/test_pmu_cache_profiling.py
+!/tools/test_shm_zero_copy_bus.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

@@ -1558,6 +1558,93 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Fetches POSIX shared memory status summary from the remote host
+    pub fn get_remote_shm_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft shm status --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SHM status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Creates a new high-speed shared memory channel on the remote host
+    pub fn create_remote_shm_channel(
+        &self,
+        server: &str,
+        channel: &str,
+        slot_size: Option<usize>,
+        slots: Option<usize>,
+    ) -> Result<String> {
+        let mut cmd = format!("craft shm create --server {} --channel {}", server, channel);
+        if let Some(sz) = slot_size {
+            cmd.push_str(&format!(" --slot-size {}", sz));
+        }
+        if let Some(cnt) = slots {
+            cmd.push_str(&format!(" --slots {}", cnt));
+        }
+        cmd.push_str(" --json");
+
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SHM channel creation failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Closes and unlinks a shared memory channel on the remote host
+    pub fn close_remote_shm_channel(&self, server: &str, channel: &str) -> Result<String> {
+        let cmd = format!("craft shm close --server {} --channel {} --json", server, channel);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SHM channel close failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs a zero-copy throughput and latency benchmark on the remote host
+    pub fn run_remote_shm_bench(
+        &self,
+        message_count: Option<usize>,
+        payload_size: Option<usize>,
+    ) -> Result<String> {
+        let mut cmd = "craft shm bench".to_string();
+        if let Some(cnt) = message_count {
+            cmd.push_str(&format!(" --messages {}", cnt));
+        }
+        if let Some(sz) = payload_size {
+            cmd.push_str(&format!(" --size {}", sz));
+        }
+        cmd.push_str(" --json");
+
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SHM benchmark failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets shared memory counters and metrics on the remote host
+    pub fn reset_remote_shm_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft shm reset-metrics --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote SHM metrics reset failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

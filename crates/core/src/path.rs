@@ -109,6 +109,10 @@ pub struct CraftPaths {
     pub pmu_probes_file: PathBuf,
     pub pmu_state_file: PathBuf,
     pub pmu_lock: PathBuf,
+    pub shm_dir: PathBuf,
+    pub shm_registry_file: PathBuf,
+    pub shm_state_file: PathBuf,
+    pub shm_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -217,6 +221,10 @@ impl CraftPaths {
         let pmu_probes_file = pmu_dir.join("probes.json");
         let pmu_state_file = pmu_dir.join("state.json");
         let pmu_lock = locks_dir.join("pmu.lock");
+        let shm_dir = home.join("shm");
+        let shm_registry_file = shm_dir.join("registry.json");
+        let shm_state_file = shm_dir.join("state.json");
+        let shm_lock = locks_dir.join("shm.lock");
 
         Self {
             home,
@@ -323,6 +331,10 @@ impl CraftPaths {
             pmu_probes_file,
             pmu_state_file,
             pmu_lock,
+            shm_dir,
+            shm_registry_file,
+            shm_state_file,
+            shm_lock,
         }
     }
 
@@ -386,6 +398,7 @@ impl CraftPaths {
         let hsm_zk_dir = hsm_dir.join("zk");
         let xdp_dir = home.join("xdp");
         let pmu_dir = home.join("pmu");
+        let shm_dir = home.join("shm");
 
         // Ensure all primary directories exist
         for dir in [
@@ -436,6 +449,7 @@ impl CraftPaths {
             &hsm_zk_dir,
             &xdp_dir,
             &pmu_dir,
+            &shm_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -499,6 +513,9 @@ impl CraftPaths {
         let pmu_probes_file = pmu_dir.join("probes.json");
         let pmu_state_file = pmu_dir.join("state.json");
         let pmu_lock = locks_dir.join("pmu.lock");
+        let shm_registry_file = shm_dir.join("registry.json");
+        let shm_state_file = shm_dir.join("state.json");
+        let shm_lock = locks_dir.join("shm.lock");
 
         Ok(Self {
             home,
@@ -605,7 +622,17 @@ impl CraftPaths {
             pmu_probes_file,
             pmu_state_file,
             pmu_lock,
+            shm_dir,
+            shm_registry_file,
+            shm_state_file,
+            shm_lock,
         })
+    }
+
+    /// Returns the SHM segment file path for a specific channel name
+    pub fn shm_segment_path(&self, name: &str) -> PathBuf {
+        let clean = name.trim_start_matches('/');
+        self.shm_dir.join(format!("{}.shm", clean))
     }
 
     /// Returns the PMU probes file path

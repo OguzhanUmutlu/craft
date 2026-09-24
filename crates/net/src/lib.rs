@@ -24,6 +24,7 @@ pub mod tick_profiler;
 pub mod wireguard;
 pub mod xdp_pipeline;
 pub mod pmu_sampler;
+pub mod shm_bus;
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
 pub use chunk_packet::{
@@ -86,6 +87,7 @@ pub use xdp_pipeline::{
     XdpBenchmarkResult, XdpPacketDescriptor, XdpPipeline, RAKNET_OFFLINE_MAGIC,
 };
 pub use pmu_sampler::{demangle_symbol, MemoryChurnReport, PmuSampler};
+pub use shm_bus::{benchmark_shm_throughput, ShmConsumer, ShmProducer, ShmRingBus};
 
 
 

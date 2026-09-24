@@ -308,6 +308,36 @@ pub enum IpcRequest {
         iterations: usize,
     },
     PmuResetMetrics,
+    ShmGetStatus {
+        server: Option<String>,
+    },
+    ShmCreateChannel {
+        server: String,
+        channel: String,
+        slot_size: usize,
+        slot_count: usize,
+    },
+    ShmCloseChannel {
+        server: String,
+        channel: String,
+    },
+    ShmWriteEvent {
+        server: String,
+        channel: String,
+        payload: Vec<u8>,
+    },
+    ShmReadEvents {
+        server: String,
+        channel: String,
+        limit: usize,
+    },
+    ShmRunBench {
+        message_count: usize,
+        payload_size: usize,
+    },
+    ShmResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -609,6 +639,27 @@ pub enum IpcResponse {
         report: craft_net::MemoryChurnReport,
     },
     PmuMetricsResetResult {
+        message: String,
+    },
+    ShmStatusResult {
+        summary: craft_core::shm::ShmStatusSummary,
+    },
+    ShmChannelCreatedResult {
+        meta: craft_core::shm::ShmSegmentMeta,
+    },
+    ShmChannelClosedResult {
+        closed: bool,
+    },
+    ShmEventWrittenResult {
+        sequence: u64,
+    },
+    ShmEventsReadResult {
+        events: Vec<Vec<u8>>,
+    },
+    ShmBenchResult {
+        metrics: craft_core::shm::ShmBenchmarkMetrics,
+    },
+    ShmMetricsResetResult {
         message: String,
     },
     Error { error: String },

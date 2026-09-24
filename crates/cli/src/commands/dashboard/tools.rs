@@ -1805,6 +1805,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             MemoryCompaction,
             XdpFirewall,
             HardwarePerformanceCounters,
+            SharedMemoryRingBus,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1994,6 +1995,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::HardwarePerformanceCounters);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Memory-Mapped Shared Memory & Zero-Copy Ring Bus",
+            )
+            .with_aliases(&["shm", "shared-memory", "shmem", "ipc-ring"]),
+        );
+        actions.push(ToolItemAction::SharedMemoryRingBus);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2080,6 +2091,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::HardwarePerformanceCounters => {
                     pmu_tui(paths).await?;
+                }
+                ToolItemAction::SharedMemoryRingBus => {
+                    shm_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3616,6 +3630,40 @@ async fn pmu_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("HARDWARE PMU & CACHE PROFILING", &lines, false)?;
     Ok(())
 }
+
+async fn shm_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::ShmService::global(paths);
+    let status = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS MEMORY-MAPPED PERSISTENT SHARED MEMORY & RING BUS".bold().to_string());
+    lines.push("POSIX shm, Zero-Copy IPC & High-Speed SPSC/MPSC Ring Buffers".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Active Segments:        {}", status.active_segments));
+    lines.push(format!("Total Allocated Memory: {} bytes ({:.2} MB)", status.total_allocated_bytes, status.total_allocated_bytes as f64 / 1_048_576.0));
+    lines.push(format!("Messages Written:       {}", status.messages_written_total));
+    lines.push(format!("Messages Read:          {}", status.messages_read_total));
+    lines.push(format!("Watchdog Reclaimed:     {}", status.watchdog_reclaimed_segments));
+    lines.push(format!("Avg IPC Latency:        {:.2} ns", status.avg_latency_ns));
+    lines.push("".to_string());
+    if !status.segments.is_empty() {
+        lines.push("Active Ring Buffers:".bold().to_string());
+        for seg in status.segments.iter().take(3) {
+            lines.push(format!("  {} / {} ({} slots, {} B/slot)", seg.server, seg.channel_type.as_str(), seg.slot_count, seg.slot_size).dimmed().to_string());
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft shm status [--server <S>]       Inspect active shared memory segments & latency".green().to_string());
+    lines.push("  craft shm create -s <S> -c <C>        Create a zero-copy shared memory ring buffer".green().to_string());
+    lines.push("  craft shm close -s <S> -c <C>         Close shared memory segment & unlink handle".green().to_string());
+    lines.push("  craft shm bench [--messages <N>]      Benchmark zero-copy throughput & SPSC latency".green().to_string());
+    lines.push("  craft shm reset-metrics               Reset cumulative throughput & clear leases".green().to_string());
+
+    show_modal_message("POSIX SHARED MEMORY & RING BUS", &lines, false)?;
+    Ok(())
+}
+
 
 
 
