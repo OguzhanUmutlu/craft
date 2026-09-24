@@ -83,6 +83,9 @@ pub enum LifecycleEvent {
     ShmChannelClosed,
     ShmLeaseExpired,
     ShmThroughputThresholdExceeded,
+    PatchApplied,
+    PatchRolledBack,
+    PatchSafetyCheckFailed,
 }
 
 impl LifecycleEvent {
@@ -160,6 +163,9 @@ impl LifecycleEvent {
             Self::ShmChannelClosed => "on_shm_channel_closed",
             Self::ShmLeaseExpired => "on_shm_lease_expired",
             Self::ShmThroughputThresholdExceeded => "on_shm_throughput_threshold_exceeded",
+            Self::PatchApplied => "on_patch_applied",
+            Self::PatchRolledBack => "on_patch_rolled_back",
+            Self::PatchSafetyCheckFailed => "on_patch_safety_check_failed",
         }
     }
 
@@ -238,6 +244,9 @@ impl LifecycleEvent {
             "on_shm_channel_closed" | "shm_channel_closed" | "shm_closed" => Some(Self::ShmChannelClosed),
             "on_shm_lease_expired" | "shm_lease_expired" | "shm_expired" => Some(Self::ShmLeaseExpired),
             "on_shm_throughput_threshold_exceeded" | "shm_throughput_threshold_exceeded" | "shm_throughput" => Some(Self::ShmThroughputThresholdExceeded),
+            "on_patch_applied" | "patch_applied" | "patch_apply" => Some(Self::PatchApplied),
+            "on_patch_rolled_back" | "patch_rolled_back" | "patch_rollback" => Some(Self::PatchRolledBack),
+            "on_patch_safety_check_failed" | "patch_safety_check_failed" | "patch_safety_failed" => Some(Self::PatchSafetyCheckFailed),
             _ => None,
         }
     }
@@ -316,6 +325,9 @@ impl LifecycleEvent {
             Self::ShmChannelClosed,
             Self::ShmLeaseExpired,
             Self::ShmThroughputThresholdExceeded,
+            Self::PatchApplied,
+            Self::PatchRolledBack,
+            Self::PatchSafetyCheckFailed,
         ]
     }
 }
@@ -526,6 +538,14 @@ pub struct HookContext {
     pub shm_messages_per_sec: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shm_latency_ns: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_target_symbol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_apply_duration_micros: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_rejection_reason: Option<String>,
 }
 
 impl HookContext {
@@ -755,6 +775,41 @@ impl HookContext {
         self.shm_latency_ns = Some(latency_ns);
         self
     }
+
+    pub fn for_patch_applied(patch_name: &str, target_symbol: &str, duration_micros: u64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::PatchApplied);
+        ctx.patch_name = Some(patch_name.to_string());
+        ctx.patch_target_symbol = Some(target_symbol.to_string());
+        ctx.patch_apply_duration_micros = Some(duration_micros);
+        ctx.details = Some(format!(
+            "Dynamic patch '{}' applied to symbol '{}' in {} us",
+            patch_name, target_symbol, duration_micros
+        ));
+        ctx
+    }
+
+    pub fn for_patch_rolled_back(patch_name: &str, target_symbol: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::PatchRolledBack);
+        ctx.patch_name = Some(patch_name.to_string());
+        ctx.patch_target_symbol = Some(target_symbol.to_string());
+        ctx.details = Some(format!(
+            "Dynamic patch '{}' rolled back from symbol '{}'",
+            patch_name, target_symbol
+        ));
+        ctx
+    }
+
+    pub fn for_patch_safety_failed(patch_name: &str, target_symbol: &str, reason: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::PatchSafetyCheckFailed);
+        ctx.patch_name = Some(patch_name.to_string());
+        ctx.patch_target_symbol = Some(target_symbol.to_string());
+        ctx.patch_rejection_reason = Some(reason.to_string());
+        ctx.details = Some(format!(
+            "Dynamic patch '{}' on symbol '{}' rejected by CFG dominance check: {}",
+            patch_name, target_symbol, reason
+        ));
+        ctx
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -905,12 +960,18 @@ impl HookBus {
         context: HookContext,
         timeout_secs: u64,
     ) {
-        tokio::spawn(async move {
-            let _ = tokio::task::spawn_blocking(move || {
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                let _ = tokio::task::spawn_blocking(move || {
+                    Self::dispatch(&paths, event, &context, timeout_secs);
+                })
+                .await;
+            });
+        } else {
+            std::thread::spawn(move || {
                 Self::dispatch(&paths, event, &context, timeout_secs);
-            })
-            .await;
-        });
+            });
+        }
     }
 
     fn execute_hook_script(

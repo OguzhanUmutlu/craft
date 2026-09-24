@@ -1645,6 +1645,95 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries dynamic binary patch summary status from the remote host
+    pub fn get_remote_patch_status(&self, server: Option<&str>) -> Result<craft_core::patch::PatchStatusSummary> {
+        let mut cmd = "craft patch status --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote patch status failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote patch status: {}", e)))
+    }
+
+    /// Applies a dynamic binary patch on the remote host
+    pub fn apply_remote_patch(
+        &self,
+        server: &str,
+        patch: &str,
+        target: &str,
+        bytes: &str,
+    ) -> Result<craft_core::patch::PatchManifest> {
+        let cmd = format!(
+            "craft patch apply --server {} --patch {} --target {} --bytes {} --json",
+            server, patch, target, bytes
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote patch apply failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote patch manifest: {}", e)))
+    }
+
+    /// Rolls back an active dynamic binary patch on the remote host
+    pub fn rollback_remote_patch(&self, server: &str, patch: &str) -> Result<bool> {
+        let cmd = format!(
+            "craft patch rollback --server {} --patch {} --json",
+            server, patch
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote patch rollback failed: {}", err.trim())));
+        }
+        let parsed: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|e| CraftError::Other(format!("Failed to parse remote rollback response: {}", e)))?;
+        Ok(parsed.get("success").and_then(|v| v.as_bool()).unwrap_or(true))
+    }
+
+    /// Retrieves unified diff disassembly for a patch on the remote host
+    pub fn get_remote_patch_diff(&self, server: &str, patch: &str) -> Result<String> {
+        let cmd = format!(
+            "craft patch diff --server {} --patch {} --json",
+            server, patch
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote patch diff failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Executes synthetic patch application throughput benchmark on the remote host
+    pub fn run_remote_patch_bench(&self, iterations: usize) -> Result<craft_core::patch::PatchBenchmarkMetrics> {
+        let cmd = format!("craft patch bench --iterations {} --json", iterations);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote patch bench failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote patch bench metrics: {}", e)))
+    }
+
+    /// Resets patch runtime metrics and telemetry on the remote host
+    pub fn reset_remote_patch_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft patch reset-metrics --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote patch metrics reset failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

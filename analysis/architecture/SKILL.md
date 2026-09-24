@@ -536,6 +536,35 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Aliases: `craft shared-memory`, `craft shmem`, `craft ipc-ring`.
   - Full-screen centered interactive TUI panel (`Tools -> Memory-Mapped Shared Memory & Zero-Copy Ring Bus`) powered by ModalX.
 
+### 3.15. Autonomous Dynamic Binary Rewriting, Trampoline Patching & Zero-Downtime Hot Code Replacement (Phase 39)
+- **Core Trampoline & Instruction Rewriting (`craft-core`)**:
+  - Architecture-specific models (`ArchInstructionSet`, `TrampolinePatchType`: `Rel32Jmp`, `Abs64Jmp`, `Aarch64BranchImm`, `Aarch64LiteralLdr`, `BytecodeMethodSwap`).
+  - Target symbol representations (`PatchTargetType::NativeSymbol`, `PatchTargetType::JvmClassMethod` with `Display` trait implementation).
+  - CFG Dominance Pre-flight Validator (`ControlFlowGraph`, `DominanceValidator` computing entry-dominating blocks, natural loop headers, and hook boundary safety to eliminate invalid mid-instruction branches).
+  - Page permission safety guard (`PagePermissionGuard` verifying memory protection transitions `PROT_READ | PROT_WRITE | PROT_EXEC`).
+  - Advisory file locking (`patch.lock`) on `~/.craft/patches/registry.json` prevents concurrent patch collisions.
+- **Dynamic Trampoline Engine & Bytecode Diffing (`craft-net`)**:
+  - `NativeTrampolineEngine`: encodes 5-byte rel32 jumps (`0xE9 <rel32>`), 14-byte 64-bit absolute indirect jumps (`FF 25 00 00 00 00 <u64>`), 4-byte AArch64 immediate branch (`B <imm26>`), and 16-byte AArch64 literal load (`LDR X16, #8; BR X16; <u64>`).
+  - Stolen prologue preservation and shadow trampoline linking back to the unpatched continuation address.
+  - `JvmBytecodeEngine`: bytecode class method replacement manifests and unified disassembly diff computation.
+  - Pre-flight `PatchSafetyVerifier` and synthetic throughput benchmark (`benchmark_patch_throughput`) demonstrating >690k patches/sec generation throughput and ~0.17 us average latency.
+- **Daemon Supervision, Prologue Backup & Rollback (`craft-daemon`)**:
+  - `DynamicPatchService` singleton coordinating atomic patch lifecycle, prologue disk backups (`~/.craft/patches/backups/`), CFG dominance validation, state fallback persistence in `~/.craft/patches/state.json`, and Prometheus metric exposition (`craft_patch_*`).
+  - 6 typed IPC requests and responses: `PatchGetStatus`, `PatchApply`, `PatchRollback`, `PatchGetDiff`, `PatchRunBench`, `PatchResetMetrics`.
+  - Prometheus metrics exposition (`craft_patch_*`): `craft_patch_active`, `craft_patch_total_applied`, `craft_patch_total_rollbacks`, `craft_patch_safety_rejections`, `craft_patch_avg_apply_micros`.
+- **Remote Federation & Scripting Hooks**:
+  - `RemoteCraftClient` provides `get_remote_patch_status`, `apply_remote_patch`, `rollback_remote_patch`, `get_remote_patch_diff`, `run_remote_patch_bench`, and `reset_remote_patch_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `PatchApplied`, `PatchRolledBack`, `PatchSafetyCheckFailed` with structured metrics context.
+- **Unified CLI Commands & ModalX Centered TUI**:
+  - `craft patch status [--server <name>] [--json]`
+  - `craft patch apply -s <server> -p <patch> -t <target> [-b <bytes>] [--json]`
+  - `craft patch rollback -s <server> -p <patch> [--json]`
+  - `craft patch diff -s <server> -p <patch> [--json]`
+  - `craft patch bench [--iterations <count>] [--json]`
+  - `craft patch reset-metrics [--server <name>] [--json]`
+  - Aliases: `craft hot-swap`, `craft hotpatch`, `craft live-patch`.
+  - Full-screen centered interactive TUI panel (`Tools -> Dynamic Binary Rewriting & Trampoline Hot Patching`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

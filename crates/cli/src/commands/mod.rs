@@ -61,4 +61,5 @@ pub mod world;
 pub mod xdp;
 pub mod pmu;
 pub mod shm;
+pub mod patch;
 

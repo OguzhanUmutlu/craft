@@ -1573,6 +1573,66 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::PatchGetStatus { server } => {
+                let service = crate::patch_service::DynamicPatchService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(summary) => IpcResponse::PatchStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PatchApply {
+                server,
+                patch_name,
+                target_symbol,
+                shadow_bytes_hex,
+            } => {
+                let service = crate::patch_service::DynamicPatchService::global(supervisor.paths());
+                let resp = match service.apply_patch(
+                    &server,
+                    &patch_name,
+                    &target_symbol,
+                    &shadow_bytes_hex,
+                ) {
+                    Ok(manifest) => IpcResponse::PatchAppliedResult { manifest },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PatchRollback { server, patch_name } => {
+                let service = crate::patch_service::DynamicPatchService::global(supervisor.paths());
+                let resp = match service.rollback_patch(&server, &patch_name) {
+                    Ok(rolled_back) => IpcResponse::PatchRolledBackResult { rolled_back },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PatchGetDiff { server, patch_name } => {
+                let service = crate::patch_service::DynamicPatchService::global(supervisor.paths());
+                let resp = match service.get_diff(&server, &patch_name) {
+                    Ok(diff) => IpcResponse::PatchDiffResult { diff },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PatchRunBench { iterations } => {
+                let service = crate::patch_service::DynamicPatchService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations) {
+                    Ok(metrics) => IpcResponse::PatchBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PatchResetMetrics { server } => {
+                let service = crate::patch_service::DynamicPatchService::global(supervisor.paths());
+                let resp = match service.reset_metrics(server.as_deref()) {
+                    Ok(_) => IpcResponse::PatchMetricsResetResult {
+                        message: "Dynamic patch metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -3384,6 +3444,88 @@ impl DaemonClient {
     pub async fn reset_shm_metrics(&mut self, server: Option<String>) -> Result<String> {
         match self.request(IpcRequest::ShmResetMetrics { server }).await? {
             IpcResponse::ShmMetricsResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_patch_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<craft_core::patch::PatchStatusSummary> {
+        match self.request(IpcRequest::PatchGetStatus { server }).await? {
+            IpcResponse::PatchStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn apply_patch(
+        &mut self,
+        server: String,
+        patch_name: String,
+        target_symbol: String,
+        shadow_bytes_hex: String,
+    ) -> Result<craft_core::patch::PatchManifest> {
+        match self
+            .request(IpcRequest::PatchApply {
+                server,
+                patch_name,
+                target_symbol,
+                shadow_bytes_hex,
+            })
+            .await?
+        {
+            IpcResponse::PatchAppliedResult { manifest } => Ok(manifest),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn rollback_patch(
+        &mut self,
+        server: String,
+        patch_name: String,
+    ) -> Result<bool> {
+        match self
+            .request(IpcRequest::PatchRollback { server, patch_name })
+            .await?
+        {
+            IpcResponse::PatchRolledBackResult { rolled_back } => Ok(rolled_back),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_patch_diff(
+        &mut self,
+        server: String,
+        patch_name: String,
+    ) -> Result<String> {
+        match self
+            .request(IpcRequest::PatchGetDiff { server, patch_name })
+            .await?
+        {
+            IpcResponse::PatchDiffResult { diff } => Ok(diff),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_patch_bench(
+        &mut self,
+        iterations: usize,
+    ) -> Result<craft_core::patch::PatchBenchmarkMetrics> {
+        match self.request(IpcRequest::PatchRunBench { iterations }).await? {
+            IpcResponse::PatchBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_patch_metrics(&mut self, server: Option<String>) -> Result<String> {
+        match self.request(IpcRequest::PatchResetMetrics { server }).await? {
+            IpcResponse::PatchMetricsResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

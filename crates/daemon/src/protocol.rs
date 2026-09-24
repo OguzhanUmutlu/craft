@@ -338,6 +338,29 @@ pub enum IpcRequest {
     ShmResetMetrics {
         server: Option<String>,
     },
+    PatchGetStatus {
+        server: Option<String>,
+    },
+    PatchApply {
+        server: String,
+        patch_name: String,
+        target_symbol: String,
+        shadow_bytes_hex: String,
+    },
+    PatchRollback {
+        server: String,
+        patch_name: String,
+    },
+    PatchGetDiff {
+        server: String,
+        patch_name: String,
+    },
+    PatchRunBench {
+        iterations: usize,
+    },
+    PatchResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -660,6 +683,24 @@ pub enum IpcResponse {
         metrics: craft_core::shm::ShmBenchmarkMetrics,
     },
     ShmMetricsResetResult {
+        message: String,
+    },
+    PatchStatusResult {
+        summary: craft_core::patch::PatchStatusSummary,
+    },
+    PatchAppliedResult {
+        manifest: craft_core::patch::PatchManifest,
+    },
+    PatchRolledBackResult {
+        rolled_back: bool,
+    },
+    PatchDiffResult {
+        diff: String,
+    },
+    PatchBenchResult {
+        metrics: craft_core::patch::PatchBenchmarkMetrics,
+    },
+    PatchMetricsResetResult {
         message: String,
     },
     Error { error: String },

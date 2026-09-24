@@ -113,6 +113,10 @@ pub struct CraftPaths {
     pub shm_registry_file: PathBuf,
     pub shm_state_file: PathBuf,
     pub shm_lock: PathBuf,
+    pub patch_dir: PathBuf,
+    pub patch_registry_file: PathBuf,
+    pub patch_state_file: PathBuf,
+    pub patch_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -225,6 +229,10 @@ impl CraftPaths {
         let shm_registry_file = shm_dir.join("registry.json");
         let shm_state_file = shm_dir.join("state.json");
         let shm_lock = locks_dir.join("shm.lock");
+        let patch_dir = home.join("patching");
+        let patch_registry_file = patch_dir.join("registry.json");
+        let patch_state_file = patch_dir.join("state.json");
+        let patch_lock = locks_dir.join("patch.lock");
 
         Self {
             home,
@@ -335,6 +343,10 @@ impl CraftPaths {
             shm_registry_file,
             shm_state_file,
             shm_lock,
+            patch_dir,
+            patch_registry_file,
+            patch_state_file,
+            patch_lock,
         }
     }
 
@@ -399,6 +411,7 @@ impl CraftPaths {
         let xdp_dir = home.join("xdp");
         let pmu_dir = home.join("pmu");
         let shm_dir = home.join("shm");
+        let patch_dir = home.join("patching");
 
         // Ensure all primary directories exist
         for dir in [
@@ -450,6 +463,7 @@ impl CraftPaths {
             &xdp_dir,
             &pmu_dir,
             &shm_dir,
+            &patch_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -516,6 +530,9 @@ impl CraftPaths {
         let shm_registry_file = shm_dir.join("registry.json");
         let shm_state_file = shm_dir.join("state.json");
         let shm_lock = locks_dir.join("shm.lock");
+        let patch_registry_file = patch_dir.join("registry.json");
+        let patch_state_file = patch_dir.join("state.json");
+        let patch_lock = locks_dir.join("patch.lock");
 
         Ok(Self {
             home,
@@ -626,7 +643,16 @@ impl CraftPaths {
             shm_registry_file,
             shm_state_file,
             shm_lock,
+            patch_dir,
+            patch_registry_file,
+            patch_state_file,
+            patch_lock,
         })
+    }
+
+    /// Returns the patch backup/prologue storage path
+    pub fn patch_backup_path(&self, server: &str, patch_name: &str) -> PathBuf {
+        self.patch_dir.join(format!("{}_{}.prologue", server.replace('/', "_"), patch_name.replace('/', "_")))
     }
 
     /// Returns the SHM segment file path for a specific channel name

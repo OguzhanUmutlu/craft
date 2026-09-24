@@ -25,6 +25,8 @@ pub mod wireguard;
 pub mod xdp_pipeline;
 pub mod pmu_sampler;
 pub mod shm_bus;
+pub mod patch_engine;
+
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
 pub use chunk_packet::{
@@ -88,6 +90,9 @@ pub use xdp_pipeline::{
 };
 pub use pmu_sampler::{demangle_symbol, MemoryChurnReport, PmuSampler};
 pub use shm_bus::{benchmark_shm_throughput, ShmConsumer, ShmProducer, ShmRingBus};
+pub use patch_engine::{
+    benchmark_patch_throughput, JvmBytecodeEngine, NativeTrampolineEngine, PatchSafetyVerifier,
+};
 
 
 

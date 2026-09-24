@@ -1806,6 +1806,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             XdpFirewall,
             HardwarePerformanceCounters,
             SharedMemoryRingBus,
+            DynamicBinaryPatching,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2005,6 +2006,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::SharedMemoryRingBus);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Dynamic Binary Rewriting & Trampoline Hot Patching",
+            )
+            .with_aliases(&["patch", "hot-swap", "hotpatch", "live-patch"]),
+        );
+        actions.push(ToolItemAction::DynamicBinaryPatching);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2094,6 +2105,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::SharedMemoryRingBus => {
                     shm_tui(paths).await?;
+                }
+                ToolItemAction::DynamicBinaryPatching => {
+                    patch_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3661,6 +3675,39 @@ async fn shm_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft shm reset-metrics               Reset cumulative throughput & clear leases".green().to_string());
 
     show_modal_message("POSIX SHARED MEMORY & RING BUS", &lines, false)?;
+    Ok(())
+}
+
+async fn patch_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::DynamicPatchService::global(paths);
+    let status = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS DYNAMIC BINARY REWRITING & TRAMPOLINE HOT PATCHING".bold().to_string());
+    lines.push("Zero-Downtime Hot Code Replacement, x86_64/AArch64 Trampolines & Bytecode Swaps".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Active Patches:         {}", status.active_patches));
+    lines.push(format!("Total Patches Applied:  {}", status.total_applied));
+    lines.push(format!("Total Rollbacks:        {}", status.total_rollbacks));
+    lines.push(format!("Safety Rejections:      {}", status.safety_rejections));
+    lines.push(format!("Avg Apply Latency:      {:.2} us", status.avg_apply_micros));
+    lines.push("".to_string());
+    if !status.patches.is_empty() {
+        lines.push("Active Patches:".bold().to_string());
+        for p in status.patches.iter().take(3) {
+            lines.push(format!("  {} / {} ({:?}, {} us)", p.server, p.name, p.descriptor.patch_type, p.apply_duration_micros).dimmed().to_string());
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft patch status [--server <S>]       Inspect active binary patches & latencies".green().to_string());
+    lines.push("  craft patch apply -s <S> -p <P> -t <T>  Apply atomic binary/bytecode trampoline patch".green().to_string());
+    lines.push("  craft patch rollback -s <S> -p <P>      Rollback patch and restore original prologue".green().to_string());
+    lines.push("  craft patch diff -s <S> -p <P>          View unified disassembly/bytecode patch diff".green().to_string());
+    lines.push("  craft patch bench [--iterations <N>]    Benchmark trampoline patch generation".green().to_string());
+    lines.push("  craft patch reset-metrics               Reset cumulative patch latency counters".green().to_string());
+
+    show_modal_message("DYNAMIC BINARY REWRITING & TRAMPOLINES", &lines, false)?;
     Ok(())
 }
 

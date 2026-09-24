@@ -660,6 +660,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<ShmCommands>,
     },
+    /// Autonomous Dynamic Binary Rewriting, Trampoline Patching & Zero-Downtime Hot Code Replacement
+    #[command(name = "patch", alias = "hot-swap", alias = "hotpatch", alias = "live-patch")]
+    Patch {
+        #[command(subcommand)]
+        action: Option<PatchCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2187,6 +2193,79 @@ pub enum ShmCommands {
         json: bool,
     },
     /// Reset shared memory cumulative throughput metrics and clear expired leases
+    ResetMetrics {
+        /// Target server name (resets all if omitted)
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum PatchCommands {
+    /// Inspect active dynamic binary patches, target symbols, and application latencies
+    Status {
+        /// Filter by target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Apply an atomic dynamic binary trampoline patch or bytecode swap
+    Apply {
+        /// Target server name
+        #[arg(short, long)]
+        server: String,
+        /// Patch identifier name
+        #[arg(short, long)]
+        patch: String,
+        /// Target function symbol or method signature
+        #[arg(short, long)]
+        target: String,
+        /// Hex-encoded replacement machine code or bytecode payload
+        #[arg(short, long, default_value = "90909090")]
+        bytes: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Rollback an active patch and restore original function prologue
+    Rollback {
+        /// Target server name
+        #[arg(short, long)]
+        server: String,
+        /// Patch identifier name
+        #[arg(short, long)]
+        patch: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Display unified diff disassembly or bytecode instructions between original and patched code
+    Diff {
+        /// Target server name
+        #[arg(short, long)]
+        server: String,
+        /// Patch identifier name
+        #[arg(short, long)]
+        patch: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark dynamic binary trampoline patch generation and safety verification throughput
+    Bench {
+        /// Number of iterations to execute
+        #[arg(long, default_value_t = 1000)]
+        iterations: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset dynamic binary patching metrics and latency counters
     ResetMetrics {
         /// Target server name (resets all if omitted)
         #[arg(short, long)]
@@ -5176,6 +5255,89 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Shm ResetMetrics command"),
+        }
+    }
+
+    #[test]
+    fn test_patch_cli_parsing() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "patch", "status", "-s", "survival", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Patch {
+                action: Some(PatchCommands::Status { server, json }),
+            }) => {
+                assert_eq!(server, Some("survival".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Patch Status command"),
+        }
+
+        // Apply command
+        let cli_apply = Cli::try_parse_from([
+            "craft", "patch", "apply", "-s", "survival", "-p", "fix_exploit", "-t", "handle_packet", "-b", "90909090", "--json",
+        ])
+        .unwrap();
+        match cli_apply.command {
+            Some(Commands::Patch {
+                action: Some(PatchCommands::Apply { server, patch, target, bytes, json }),
+            }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(patch, "fix_exploit");
+                assert_eq!(target, "handle_packet");
+                assert_eq!(bytes, "90909090");
+                assert!(json);
+            }
+            _ => panic!("Expected Patch Apply command"),
+        }
+
+        // Rollback command via alias 'hotpatch'
+        let cli_rb = Cli::try_parse_from(["craft", "hotpatch", "rollback", "-s", "survival", "-p", "fix_exploit"]).unwrap();
+        match cli_rb.command {
+            Some(Commands::Patch {
+                action: Some(PatchCommands::Rollback { server, patch, json }),
+            }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(patch, "fix_exploit");
+                assert!(!json);
+            }
+            _ => panic!("Expected Patch Rollback command via alias 'hotpatch'"),
+        }
+
+        // Diff command
+        let cli_diff = Cli::try_parse_from(["craft", "patch", "diff", "-s", "survival", "-p", "fix_exploit", "--json"]).unwrap();
+        match cli_diff.command {
+            Some(Commands::Patch {
+                action: Some(PatchCommands::Diff { server, patch, json }),
+            }) => {
+                assert_eq!(server, "survival");
+                assert_eq!(patch, "fix_exploit");
+                assert!(json);
+            }
+            _ => panic!("Expected Patch Diff command"),
+        }
+
+        // Bench command
+        let cli_bench = Cli::try_parse_from(["craft", "patch", "bench", "--iterations", "500", "--json"]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Patch {
+                action: Some(PatchCommands::Bench { iterations, json }),
+            }) => {
+                assert_eq!(iterations, 500);
+                assert!(json);
+            }
+            _ => panic!("Expected Patch Bench command"),
+        }
+
+        // ResetMetrics command
+        let cli_reset = Cli::try_parse_from(["craft", "patch", "reset-metrics", "-s", "survival", "--json"]).unwrap();
+        match cli_reset.command {
+            Some(Commands::Patch {
+                action: Some(PatchCommands::ResetMetrics { server, json }),
+            }) => {
+                assert_eq!(server, Some("survival".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Patch ResetMetrics command"),
         }
     }
 }

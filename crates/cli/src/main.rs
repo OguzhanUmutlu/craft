@@ -573,6 +573,9 @@ async fn main() {
         Some(Commands::Shm { action }) => {
             commands::shm::handle_shm(&paths, action).await
         }
+        Some(Commands::Patch { action }) => {
+            commands::patch::handle_patch(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

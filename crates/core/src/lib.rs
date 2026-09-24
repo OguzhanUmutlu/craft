@@ -42,6 +42,7 @@ pub mod webhook_config;
 pub mod xdp;
 pub mod pmu;
 pub mod shm;
+pub mod patch;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -201,6 +202,11 @@ pub use shm::{
     ShmSegmentConfig, ShmSegmentMeta, ShmSlotHeader, ShmStatusSummary,
     CRAFT_SHM_MAGIC, DEFAULT_SLOT_COUNT, DEFAULT_SLOT_SIZE, LEASE_TIMEOUT_SECONDS,
     SHM_FLAG_EMPTY, SHM_FLAG_READ, SHM_FLAG_READY, SHM_VERSION,
+};
+pub use patch::{
+    ArchInstructionSet, BasicBlock, ControlFlowGraph, DominanceValidator, PagePermissionGuard,
+    PatchBenchmarkMetrics, PatchManifest, PatchRegistry, PatchState, PatchStatusSummary,
+    PatchTargetType, TrampolineDescriptor, TrampolinePatchType,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");
