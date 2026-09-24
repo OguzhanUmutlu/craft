@@ -1983,6 +1983,75 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::VpnGetStatus { server } => {
+                let service = crate::vpn_service::VpnMeshService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok((summary, tunnels)) => IpcResponse::VpnStatusResult { summary, tunnels },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VpnCreateTunnel { tunnel_id, address, port, crypto_mode } => {
+                let service = crate::vpn_service::VpnMeshService::global(supervisor.paths());
+                let resp = match service.create_tunnel(&tunnel_id, &address, port, crypto_mode.as_deref()) {
+                    Ok(tunnel) => IpcResponse::VpnTunnelCreatedResult { tunnel },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VpnDeleteTunnel { tunnel_id } => {
+                let service = crate::vpn_service::VpnMeshService::global(supervisor.paths());
+                let resp = match service.delete_tunnel(&tunnel_id) {
+                    Ok(success) => IpcResponse::VpnTunnelDeletedResult { tunnel_id, success },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VpnAddPeer { tunnel_id, peer_id, endpoint, allowed_ips } => {
+                let service = crate::vpn_service::VpnMeshService::global(supervisor.paths());
+                let resp = match service.add_peer(&tunnel_id, &peer_id, &endpoint, allowed_ips) {
+                    Ok(peer) => IpcResponse::VpnPeerAddedResult { tunnel_id, peer },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VpnRemovePeer { tunnel_id, peer_id } => {
+                let service = crate::vpn_service::VpnMeshService::global(supervisor.paths());
+                let resp = match service.remove_peer(&tunnel_id, &peer_id) {
+                    Ok(success) => IpcResponse::VpnPeerRemovedResult { tunnel_id, peer_id, success },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VpnRotateKey { tunnel_id, peer_id } => {
+                let service = crate::vpn_service::VpnMeshService::global(supervisor.paths());
+                let resp = match service.rotate_key(&tunnel_id, peer_id.as_deref()) {
+                    Ok(renegotiation_latency_micros) => IpcResponse::VpnKeyRotatedResult {
+                        tunnel_id,
+                        renegotiation_latency_micros,
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VpnRunBench { iterations, packet_size } => {
+                let service = crate::vpn_service::VpnMeshService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations, packet_size) {
+                    Ok(metrics) => IpcResponse::VpnBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::VpnResetMetrics => {
+                let service = crate::vpn_service::VpnMeshService::global(supervisor.paths());
+                let resp = match service.reset_metrics() {
+                    Ok(_) => IpcResponse::VpnResetResult {
+                        message: "VPN mesh telemetry metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -4376,6 +4445,124 @@ impl DaemonClient {
     pub async fn reset_nvme_metrics(&mut self) -> Result<String> {
         match self.request(IpcRequest::NvmeResetMetrics).await? {
             IpcResponse::NvmeResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_vpn_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<(craft_core::vpn::VpnStatusSummary, Vec<craft_core::vpn::VpnTunnelDescriptor>)> {
+        match self.request(IpcRequest::VpnGetStatus { server }).await? {
+            IpcResponse::VpnStatusResult { summary, tunnels } => Ok((summary, tunnels)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn create_vpn_tunnel(
+        &mut self,
+        tunnel_id: String,
+        address: String,
+        port: u16,
+        crypto_mode: Option<String>,
+    ) -> Result<craft_core::vpn::VpnTunnelDescriptor> {
+        match self
+            .request(IpcRequest::VpnCreateTunnel {
+                tunnel_id,
+                address,
+                port,
+                crypto_mode,
+            })
+            .await?
+        {
+            IpcResponse::VpnTunnelCreatedResult { tunnel } => Ok(tunnel),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn delete_vpn_tunnel(&mut self, tunnel_id: String) -> Result<bool> {
+        match self.request(IpcRequest::VpnDeleteTunnel { tunnel_id }).await? {
+            IpcResponse::VpnTunnelDeletedResult { success, .. } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn add_vpn_peer(
+        &mut self,
+        tunnel_id: String,
+        peer_id: String,
+        endpoint: String,
+        allowed_ips: Vec<String>,
+    ) -> Result<craft_core::vpn::VpnPeerConfig> {
+        match self
+            .request(IpcRequest::VpnAddPeer {
+                tunnel_id,
+                peer_id,
+                endpoint,
+                allowed_ips,
+            })
+            .await?
+        {
+            IpcResponse::VpnPeerAddedResult { peer, .. } => Ok(peer),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn remove_vpn_peer(&mut self, tunnel_id: String, peer_id: String) -> Result<bool> {
+        match self
+            .request(IpcRequest::VpnRemovePeer { tunnel_id, peer_id })
+            .await?
+        {
+            IpcResponse::VpnPeerRemovedResult { success, .. } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn rotate_vpn_key(
+        &mut self,
+        tunnel_id: String,
+        peer_id: Option<String>,
+    ) -> Result<u64> {
+        match self
+            .request(IpcRequest::VpnRotateKey { tunnel_id, peer_id })
+            .await?
+        {
+            IpcResponse::VpnKeyRotatedResult {
+                renegotiation_latency_micros,
+                ..
+            } => Ok(renegotiation_latency_micros),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_vpn_bench(
+        &mut self,
+        iterations: usize,
+        packet_size: usize,
+    ) -> Result<craft_core::vpn::VpnBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::VpnRunBench {
+                iterations,
+                packet_size,
+            })
+            .await?
+        {
+            IpcResponse::VpnBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_vpn_metrics(&mut self) -> Result<String> {
+        match self.request(IpcRequest::VpnResetMetrics).await? {
+            IpcResponse::VpnResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

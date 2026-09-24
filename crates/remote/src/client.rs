@@ -2351,6 +2351,154 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries WireGuard PQXDH VPN mesh status on the remote host
+    pub fn get_remote_vpn_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft vpn status --json".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote VPN get status failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Creates a WireGuard PQXDH VPN tunnel on the remote host
+    pub fn create_remote_vpn_tunnel(
+        &self,
+        tunnel_id: &str,
+        address: &str,
+        port: u16,
+        crypto_mode: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!(
+            "craft vpn tunnel-create --tunnel-id {} --address {} --port {} --json",
+            tunnel_id, address, port
+        );
+        if let Some(mode) = crypto_mode {
+            cmd.push_str(&format!(" --crypto-mode {}", mode));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote VPN tunnel create failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Deletes a WireGuard PQXDH VPN tunnel on the remote host
+    pub fn delete_remote_vpn_tunnel(&self, tunnel_id: &str) -> Result<String> {
+        let cmd = format!("craft vpn tunnel-delete --tunnel-id {} --json", tunnel_id);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote VPN tunnel delete failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Adds a peer to a WireGuard PQXDH VPN tunnel on the remote host
+    pub fn add_remote_vpn_peer(
+        &self,
+        tunnel_id: &str,
+        peer_id: &str,
+        endpoint: &str,
+        allowed_ips: &[String],
+    ) -> Result<String> {
+        let mut cmd = format!(
+            "craft vpn peer-add --tunnel-id {} --peer-id {} --endpoint {} --json",
+            tunnel_id, peer_id, endpoint
+        );
+        for ip in allowed_ips {
+            cmd.push_str(&format!(" --allowed-ip {}", ip));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote VPN peer add failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Removes a peer from a WireGuard PQXDH VPN tunnel on the remote host
+    pub fn remove_remote_vpn_peer(&self, tunnel_id: &str, peer_id: &str) -> Result<String> {
+        let cmd = format!(
+            "craft vpn peer-rm --tunnel-id {} --peer-id {} --json",
+            tunnel_id, peer_id
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote VPN peer remove failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Executes zero-loss PQXDH key rotation on the remote host
+    pub fn rotate_remote_vpn_key(&self, tunnel_id: &str, peer_id: Option<&str>) -> Result<String> {
+        let mut cmd = format!("craft vpn rotate-key --tunnel-id {} --json", tunnel_id);
+        if let Some(pid) = peer_id {
+            cmd.push_str(&format!(" --peer-id {}", pid));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote VPN key rotation failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs end-to-end VPN mesh benchmark on the remote host
+    pub fn run_remote_vpn_bench(&self, iterations: usize, packet_size: usize) -> Result<String> {
+        let cmd = format!(
+            "craft vpn bench --iterations {} --packet-size {} --json",
+            iterations, packet_size
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote VPN bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets VPN mesh telemetry counters on the remote host
+    pub fn reset_remote_vpn_metrics(&self) -> Result<String> {
+        let cmd = "craft vpn reset-metrics --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote VPN metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

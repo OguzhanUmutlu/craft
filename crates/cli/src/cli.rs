@@ -563,7 +563,7 @@ pub enum Commands {
     },
 
     /// Zero-trust inter-server microsegmentation, eBPF packet filtering, and WireGuard overlay mesh
-    #[command(name = "sdn", alias = "overlay", alias = "wireguard")]
+    #[command(name = "sdn", alias = "overlay", alias = "sdn-mesh")]
     Sdn {
         #[command(subcommand)]
         action: SdnCommands,
@@ -701,6 +701,12 @@ pub enum Commands {
     Nvme {
         #[command(subcommand)]
         action: Option<NvmeCommands>,
+    },
+    /// Autonomous Quantum-Encrypted Inter-Cluster VPN Mesh, WireGuard PQXDH & P4 Crypto Offloading
+    #[command(name = "vpn", alias = "wireguard", alias = "pqxdh", alias = "mesh-vpn")]
+    Vpn {
+        #[command(subcommand)]
+        action: Option<VpnCommands>,
     },
 }
 
@@ -2776,6 +2782,122 @@ pub enum NvmeCommands {
         /// Associated server name
         #[arg(short, long)]
         server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum VpnCommands {
+    /// Inspect WireGuard PQXDH VPN mesh status, active tunnels, and quantum defense grade
+    Status {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List all configured WireGuard PQXDH tunnels and peer topology
+    #[command(name = "tunnels", alias = "list")]
+    Tunnels {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Dynamically create a new WireGuard PQXDH mesh tunnel interface
+    #[command(name = "tunnel-create", alias = "create-tunnel")]
+    TunnelCreate {
+        /// Tunnel interface identifier (e.g. craft-wg0)
+        #[arg(short = 't', long = "tunnel-id")]
+        tunnel_id: String,
+        /// Local IPv4/IPv6 CIDR address (e.g. 10.42.0.1/24)
+        #[arg(short = 'a', long = "address")]
+        address: String,
+        /// Listening UDP port (default: 51820)
+        #[arg(short = 'p', long = "port", default_value_t = 51820)]
+        port: u16,
+        /// Cryptographic engine mode (hardware_p4, hybrid_kyber_chacha, software_kernel)
+        #[arg(short = 'm', long = "crypto-mode")]
+        crypto_mode: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Delete an existing WireGuard PQXDH mesh tunnel interface
+    #[command(name = "tunnel-delete", alias = "delete-tunnel")]
+    TunnelDelete {
+        /// Tunnel identifier to remove
+        #[arg(short = 't', long = "tunnel-id")]
+        tunnel_id: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Add or update a peer endpoint in a WireGuard PQXDH tunnel
+    #[command(name = "peer-add", alias = "add-peer")]
+    PeerAdd {
+        /// Target tunnel identifier
+        #[arg(short = 't', long = "tunnel-id")]
+        tunnel_id: String,
+        /// Unique peer identifier
+        #[arg(short = 'p', long = "peer-id")]
+        peer_id: String,
+        /// Remote socket endpoint address (e.g. 198.51.100.10:51820)
+        #[arg(short = 'e', long = "endpoint")]
+        endpoint: String,
+        /// Allowed IPs routed through peer tunnel
+        #[arg(long = "allowed-ip")]
+        allowed_ips: Vec<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Remove a peer endpoint from a WireGuard PQXDH tunnel
+    #[command(name = "peer-rm", alias = "peer-delete", alias = "rm-peer")]
+    PeerRm {
+        /// Target tunnel identifier
+        #[arg(short = 't', long = "tunnel-id")]
+        tunnel_id: String,
+        /// Target peer identifier to remove
+        #[arg(short = 'p', long = "peer-id")]
+        peer_id: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Trigger zero-loss sub-100us ephemeral key rotation on a tunnel or peer
+    #[command(name = "rotate-key", alias = "rekey")]
+    RotateKey {
+        /// Target tunnel identifier
+        #[arg(short = 't', long = "tunnel-id")]
+        tunnel_id: String,
+        /// Specific peer identifier to re-key (all peers if omitted)
+        #[arg(short = 'p', long = "peer-id")]
+        peer_id: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark >10Gbps line-rate encryption, Kyber-1024 handshakes, and key renegotiation
+    Bench {
+        /// Number of benchmark packet iterations
+        #[arg(short = 'i', long = "iterations", default_value_t = 1000)]
+        iterations: usize,
+        /// Packet payload size in bytes
+        #[arg(short = 's', long = "packet-size", default_value_t = 1024)]
+        packet_size: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset VPN mesh telemetry counters and performance statistics
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
         /// Output in machine-readable JSON format
         #[arg(long)]
         json: bool,
@@ -6281,6 +6403,90 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Nvme Bench command"),
+        }
+    }
+
+    #[test]
+    fn test_vpn_cli_commands() {
+        // VPN Status command
+        let cli_vpn_status = Cli::try_parse_from(["craft", "vpn", "status", "--json"]).unwrap();
+        match cli_vpn_status.command {
+            Some(Commands::Vpn {
+                action: Some(VpnCommands::Status { server: None, json }),
+            }) => assert!(json),
+            _ => panic!("Expected Vpn Status command"),
+        }
+
+        // VPN wireguard alias and tunnel-create
+        let cli_wg = Cli::try_parse_from([
+            "craft", "wireguard", "tunnel-create",
+            "-t", "craft-wg0",
+            "-a", "10.42.0.1/24",
+            "-p", "51820",
+            "-m", "hardware_p4",
+            "--json",
+        ]).unwrap();
+        match cli_wg.command {
+            Some(Commands::Vpn {
+                action: Some(VpnCommands::TunnelCreate {
+                    tunnel_id,
+                    address,
+                    port,
+                    crypto_mode,
+                    json,
+                }),
+            }) => {
+                assert_eq!(tunnel_id, "craft-wg0");
+                assert_eq!(address, "10.42.0.1/24");
+                assert_eq!(port, 51820);
+                assert_eq!(crypto_mode.as_deref(), Some("hardware_p4"));
+                assert!(json);
+            }
+            _ => panic!("Expected Vpn TunnelCreate command"),
+        }
+
+        // VPN pqxdh alias and rotate-key
+        let cli_pqxdh = Cli::try_parse_from([
+            "craft", "pqxdh", "rotate-key",
+            "-t", "craft-wg0",
+            "-p", "peer-eu",
+            "--json",
+        ]).unwrap();
+        match cli_pqxdh.command {
+            Some(Commands::Vpn {
+                action: Some(VpnCommands::RotateKey {
+                    tunnel_id,
+                    peer_id,
+                    json,
+                }),
+            }) => {
+                assert_eq!(tunnel_id, "craft-wg0");
+                assert_eq!(peer_id.as_deref(), Some("peer-eu"));
+                assert!(json);
+            }
+            _ => panic!("Expected Vpn RotateKey command"),
+        }
+
+        // VPN mesh-vpn alias and bench
+        let cli_mesh = Cli::try_parse_from([
+            "craft", "mesh-vpn", "bench",
+            "-i", "100",
+            "-s", "512",
+            "--json",
+        ]).unwrap();
+        match cli_mesh.command {
+            Some(Commands::Vpn {
+                action: Some(VpnCommands::Bench {
+                    iterations,
+                    packet_size,
+                    json,
+                }),
+            }) => {
+                assert_eq!(iterations, 100);
+                assert_eq!(packet_size, 512);
+                assert!(json);
+            }
+            _ => panic!("Expected Vpn Bench command"),
         }
     }
 }

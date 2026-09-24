@@ -496,6 +496,37 @@ pub enum IpcRequest {
         iterations: usize,
     },
     NvmeResetMetrics,
+    VpnGetStatus {
+        server: Option<String>,
+    },
+    VpnCreateTunnel {
+        tunnel_id: String,
+        address: String,
+        port: u16,
+        crypto_mode: Option<String>,
+    },
+    VpnDeleteTunnel {
+        tunnel_id: String,
+    },
+    VpnAddPeer {
+        tunnel_id: String,
+        peer_id: String,
+        endpoint: String,
+        allowed_ips: Vec<String>,
+    },
+    VpnRemovePeer {
+        tunnel_id: String,
+        peer_id: String,
+    },
+    VpnRotateKey {
+        tunnel_id: String,
+        peer_id: Option<String>,
+    },
+    VpnRunBench {
+        iterations: usize,
+        packet_size: usize,
+    },
+    VpnResetMetrics,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -951,6 +982,36 @@ pub enum IpcResponse {
         metrics: craft_core::nvme::NvmeBenchmarkMetrics,
     },
     NvmeResetResult {
+        message: String,
+    },
+    VpnStatusResult {
+        summary: craft_core::vpn::VpnStatusSummary,
+        tunnels: Vec<craft_core::vpn::VpnTunnelDescriptor>,
+    },
+    VpnTunnelCreatedResult {
+        tunnel: craft_core::vpn::VpnTunnelDescriptor,
+    },
+    VpnTunnelDeletedResult {
+        tunnel_id: String,
+        success: bool,
+    },
+    VpnPeerAddedResult {
+        tunnel_id: String,
+        peer: craft_core::vpn::VpnPeerConfig,
+    },
+    VpnPeerRemovedResult {
+        tunnel_id: String,
+        peer_id: String,
+        success: bool,
+    },
+    VpnKeyRotatedResult {
+        tunnel_id: String,
+        renegotiation_latency_micros: u64,
+    },
+    VpnBenchResult {
+        metrics: craft_core::vpn::VpnBenchmarkMetrics,
+    },
+    VpnResetResult {
         message: String,
     },
     Error { error: String },

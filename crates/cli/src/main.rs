@@ -594,6 +594,9 @@ async fn main() {
         Some(Commands::Nvme { action }) => {
             commands::nvme::handle_nvme(&paths, action).await
         }
+        Some(Commands::Vpn { action }) => {
+            commands::vpn::handle_vpn(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

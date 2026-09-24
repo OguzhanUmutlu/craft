@@ -105,6 +105,10 @@ pub enum LifecycleEvent {
     NvmeNamespaceDeleted,
     NvmeMultipathFailoverTriggered,
     NvmePoolCapacityAlert,
+    VpnTunnelEstablished,
+    VpnKeyRotated,
+    VpnPeerConnected,
+    VpnSecurityDegradedAlert,
 }
 
 impl LifecycleEvent {
@@ -204,6 +208,10 @@ impl LifecycleEvent {
             Self::NvmeNamespaceDeleted => "on_nvme_namespace_deleted",
             Self::NvmeMultipathFailoverTriggered => "on_nvme_multipath_failover",
             Self::NvmePoolCapacityAlert => "on_nvme_pool_capacity_alert",
+            Self::VpnTunnelEstablished => "on_vpn_tunnel_established",
+            Self::VpnKeyRotated => "on_vpn_key_rotated",
+            Self::VpnPeerConnected => "on_vpn_peer_connected",
+            Self::VpnSecurityDegradedAlert => "on_vpn_security_degraded_alert",
         }
     }
 
@@ -304,6 +312,10 @@ impl LifecycleEvent {
             "on_nvme_namespace_deleted" | "nvme_namespace_deleted" | "namespace_deleted" => Some(Self::NvmeNamespaceDeleted),
             "on_nvme_multipath_failover" | "nvme_multipath_failover" | "multipath_failover" => Some(Self::NvmeMultipathFailoverTriggered),
             "on_nvme_pool_capacity_alert" | "nvme_pool_capacity_alert" | "nvme_pool_alert" => Some(Self::NvmePoolCapacityAlert),
+            "on_vpn_tunnel_established" | "vpn_tunnel_established" | "vpn_established" | "tunnel_established" => Some(Self::VpnTunnelEstablished),
+            "on_vpn_key_rotated" | "vpn_key_rotated" | "vpn_rekey" | "key_rotated" => Some(Self::VpnKeyRotated),
+            "on_vpn_peer_connected" | "vpn_peer_connected" | "peer_connected" => Some(Self::VpnPeerConnected),
+            "on_vpn_security_degraded_alert" | "vpn_security_degraded_alert" | "vpn_degraded" | "security_degraded" => Some(Self::VpnSecurityDegradedAlert),
             _ => None,
         }
     }
@@ -404,6 +416,10 @@ impl LifecycleEvent {
             Self::NvmeNamespaceDeleted,
             Self::NvmeMultipathFailoverTriggered,
             Self::NvmePoolCapacityAlert,
+            Self::VpnTunnelEstablished,
+            Self::VpnKeyRotated,
+            Self::VpnPeerConnected,
+            Self::VpnSecurityDegradedAlert,
         ]
     }
 }
@@ -692,6 +708,16 @@ pub struct HookContext {
     pub nvme_latency_micros: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nvme_pool_utilization_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vpn_tunnel_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vpn_peer_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vpn_crypto_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vpn_throughput_gbps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vpn_renegotiation_micros: Option<u64>,
 }
 
 impl HookContext {
@@ -1183,6 +1209,50 @@ impl HookContext {
         ctx.details = Some(format!(
             "NVMe flash block pool capacity alert: {:.1}% utilized ({} / {} bytes)",
             util_pct, allocated_bytes, total_bytes
+        ));
+        ctx
+    }
+
+    pub fn for_vpn_tunnel_established(tunnel_id: &str, crypto_mode: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::VpnTunnelEstablished);
+        ctx.vpn_tunnel_id = Some(tunnel_id.to_string());
+        ctx.vpn_crypto_mode = Some(crypto_mode.to_string());
+        ctx.details = Some(format!(
+            "WireGuard PQXDH VPN tunnel '{}' established with cipher mode {}",
+            tunnel_id, crypto_mode
+        ));
+        ctx
+    }
+
+    pub fn for_vpn_key_rotated(tunnel_id: &str, peer_id: &str, reneg_micros: u64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::VpnKeyRotated);
+        ctx.vpn_tunnel_id = Some(tunnel_id.to_string());
+        ctx.vpn_peer_id = Some(peer_id.to_string());
+        ctx.vpn_renegotiation_micros = Some(reneg_micros);
+        ctx.details = Some(format!(
+            "Zero-loss PQXDH key rotated for tunnel '{}' peer '{}' in {} us",
+            tunnel_id, peer_id, reneg_micros
+        ));
+        ctx
+    }
+
+    pub fn for_vpn_peer_connected(tunnel_id: &str, peer_id: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::VpnPeerConnected);
+        ctx.vpn_tunnel_id = Some(tunnel_id.to_string());
+        ctx.vpn_peer_id = Some(peer_id.to_string());
+        ctx.details = Some(format!(
+            "WireGuard PQXDH mesh peer '{}' connected to tunnel '{}'",
+            peer_id, tunnel_id
+        ));
+        ctx
+    }
+
+    pub fn for_vpn_security_degraded(tunnel_id: &str, reason: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::VpnSecurityDegradedAlert);
+        ctx.vpn_tunnel_id = Some(tunnel_id.to_string());
+        ctx.details = Some(format!(
+            "VPN security degraded alert on tunnel '{}': {}",
+            tunnel_id, reason
         ));
         ctx
     }
@@ -2100,5 +2170,36 @@ mod tests {
         let alert_ctx = HookContext::for_nvme_pool_capacity_alert(92.4, 900_000_000_000, 1_000_000_000_000);
         assert_eq!(alert_ctx.event, "on_nvme_pool_capacity_alert");
         assert_eq!(alert_ctx.nvme_pool_utilization_percent, Some(92.4));
+    }
+
+    #[test]
+    fn test_vpn_lifecycle_hooks() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_vpn_tunnel_established"),
+            Some(LifecycleEvent::VpnTunnelEstablished)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("vpn_key_rotated"),
+            Some(LifecycleEvent::VpnKeyRotated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("peer_connected"),
+            Some(LifecycleEvent::VpnPeerConnected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("security_degraded"),
+            Some(LifecycleEvent::VpnSecurityDegradedAlert)
+        );
+
+        let vpn_ctx = HookContext::for_vpn_tunnel_established("craft-wg0", "hardware_p4");
+        assert_eq!(vpn_ctx.event, "on_vpn_tunnel_established");
+        assert_eq!(vpn_ctx.vpn_tunnel_id.as_deref(), Some("craft-wg0"));
+        assert_eq!(vpn_ctx.vpn_crypto_mode.as_deref(), Some("hardware_p4"));
+
+        let rekey_ctx = HookContext::for_vpn_key_rotated("craft-wg0", "eu-central", 42);
+        assert_eq!(rekey_ctx.event, "on_vpn_key_rotated");
+        assert_eq!(rekey_ctx.vpn_tunnel_id.as_deref(), Some("craft-wg0"));
+        assert_eq!(rekey_ctx.vpn_peer_id.as_deref(), Some("eu-central"));
+        assert_eq!(rekey_ctx.vpn_renegotiation_micros, Some(42));
     }
 }

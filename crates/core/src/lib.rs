@@ -49,6 +49,7 @@ pub mod rdma;
 pub mod smartnic;
 pub mod memfabric;
 pub mod nvme;
+pub mod vpn;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -248,6 +249,12 @@ pub use nvme::{
     format_bytes, render_nvme_bench_text, render_nvme_namespaces_text, render_nvme_status_text,
     render_nvme_subsystems_text, NvmeBenchmarkMetrics, NvmeNamespaceDescriptor, NvmePort,
     NvmeRegistry, NvmeStatusSummary, NvmeSubsystemDescriptor, NvmeSubsystemType, NvmeTransportType,
+};
+pub use vpn::{
+    render_vpn_bench_text, render_vpn_peers_text, render_vpn_status_text, render_vpn_tunnels_text,
+    PqxdhHandshakeStage, PqxdhHandshakeState, VpnBenchmarkMetrics, VpnCryptoMode,
+    VpnKeyRotationPolicy, VpnPeerConfig, VpnRegistry, VpnStatusSummary, VpnTunnelDescriptor,
+    VpnTunnelState,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

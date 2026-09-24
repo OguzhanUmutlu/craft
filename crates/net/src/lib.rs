@@ -32,6 +32,7 @@ pub mod rdma;
 pub mod smartnic;
 pub mod memfabric;
 pub mod nvme;
+pub mod vpn;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -128,6 +129,12 @@ pub use nvme::{
     NVME_OPCODE_FLUSH, NVME_OPCODE_READ, NVME_OPCODE_WRITE, NVME_OPCODE_WRITE_ZEROES,
     NVME_STATUS_SUCCESS,
 };
+pub use vpn::{
+    benchmark_vpn_mesh, compute_mac1, hkdf_sha256, PqxdhEngine, PqxdhInitiatorState,
+    PqxdhSession, SmartNicCryptoOffloadEngine, WgPqxdhDataPacket, WgPqxdhInitMessage,
+    WgPqxdhResponseMessage, WireGuardMeshEngine,
+};
+
 
 
 

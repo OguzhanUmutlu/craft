@@ -1813,6 +1813,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             SmartNicAcceleration,
             MemFabricPaging,
             NvmeStorageFabric,
+            VpnMesh,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2082,6 +2083,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::NvmeStorageFabric);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Quantum-Encrypted WireGuard VPN Mesh & PQXDH Offloading",
+            )
+            .with_aliases(&["vpn", "wireguard", "pqxdh", "mesh-vpn"]),
+        );
+        actions.push(ToolItemAction::VpnMesh);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2192,6 +2203,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::NvmeStorageFabric => {
                     nvme_tui(paths).await?;
+                }
+                ToolItemAction::VpnMesh => {
+                    vpn_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4081,6 +4095,48 @@ async fn nvme_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("ZERO-COPY NVME-OF STORAGE FABRICS", &lines, false)?;
     Ok(())
 }
+
+async fn vpn_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::VpnMeshService::global(paths);
+    let (summary, tunnels) = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS QUANTUM-ENCRYPTED INTER-CLUSTER VPN MESH".bold().to_string());
+    lines.push("WireGuard Kernel Tunnels, PQXDH / Kyber-1024 Handshakes & SmartNIC Offloading".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Active Tunnels:         {}", summary.active_tunnels));
+    lines.push(format!("Connected Peers:        {}", summary.active_peers));
+    lines.push(format!("Throughput (Gbps):      {:.2} Gbps", summary.throughput_gbps));
+    lines.push(format!("Average Latency:        {:.2} us", summary.avg_latency_micros));
+    lines.push(format!("Key Rotations Total:    {}", summary.key_rotations_total));
+    lines.push(format!("Quantum Defense Grade:  {:.1}% (Kyber-1024)", summary.quantum_defense_score));
+    lines.push(format!("Hardware P4 Offload:    {}", if summary.hardware_offload_active { "ACTIVE" } else { "FALLBACK" }));
+    lines.push("".to_string());
+    if !tunnels.is_empty() {
+        lines.push("Configured Tunnels:".bold().to_string());
+        for t in tunnels.iter().take(3) {
+            lines.push(
+                format!("  {:<16} Addr: {:<16} Port: {} | Peers: {} | Mode: {}",
+                    t.tunnel_id, t.local_address, t.listen_port, t.peers.len(), t.crypto_mode
+                ).dimmed().to_string()
+            );
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft vpn status [--server <S>]            Inspect VPN mesh, tunnels, peers & defense grade".green().to_string());
+    lines.push("  craft vpn tunnel-create -t <ID> -a <ADDR>  Create WireGuard PQXDH mesh tunnel interface".green().to_string());
+    lines.push("  craft vpn tunnel-delete -t <ID>            Delete WireGuard PQXDH mesh tunnel interface".green().to_string());
+    lines.push("  craft vpn peer-add -t <ID> -p <P> -e <EP>  Register remote mesh peer endpoint & allowed IPs".green().to_string());
+    lines.push("  craft vpn peer-rm -t <ID> -p <P>           Remove remote mesh peer endpoint".green().to_string());
+    lines.push("  craft vpn rotate-key -t <ID> [-p <P>]      Execute zero-loss sub-100us ephemeral rekey".green().to_string());
+    lines.push("  craft vpn bench                            Benchmark >10Gbps line rate & Kyber-1024 handshake".green().to_string());
+    lines.push("  craft vpn reset-metrics                    Reset cumulative telemetry counters".green().to_string());
+
+    show_modal_message("QUANTUM-ENCRYPTED WIREGUARD VPN MESH", &lines, false)?;
+    Ok(())
+}
+
 
 
 

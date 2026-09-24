@@ -144,6 +144,12 @@ pub struct CraftPaths {
     pub nvme_registry_file: PathBuf,
     pub nvme_state_file: PathBuf,
     pub nvme_lock: PathBuf,
+    pub vpn_dir: PathBuf,
+    pub vpn_tunnels_dir: PathBuf,
+    pub vpn_keys_dir: PathBuf,
+    pub vpn_registry_file: PathBuf,
+    pub vpn_state_file: PathBuf,
+    pub vpn_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -287,6 +293,12 @@ impl CraftPaths {
         let nvme_registry_file = nvme_dir.join("registry.json");
         let nvme_state_file = nvme_dir.join("state.json");
         let nvme_lock = locks_dir.join("nvme.lock");
+        let vpn_dir = home.join("vpn");
+        let vpn_tunnels_dir = vpn_dir.join("tunnels");
+        let vpn_keys_dir = vpn_dir.join("keys");
+        let vpn_registry_file = vpn_dir.join("registry.json");
+        let vpn_state_file = vpn_dir.join("state.json");
+        let vpn_lock = locks_dir.join("vpn.lock");
 
         Self {
             home,
@@ -428,6 +440,12 @@ impl CraftPaths {
             nvme_registry_file,
             nvme_state_file,
             nvme_lock,
+            vpn_dir,
+            vpn_tunnels_dir,
+            vpn_keys_dir,
+            vpn_registry_file,
+            vpn_state_file,
+            vpn_lock,
         }
     }
 
@@ -502,6 +520,9 @@ impl CraftPaths {
         let memfabric_dir = home.join("memfabric");
         let nvme_dir = home.join("nvme");
         let nvme_pools_dir = nvme_dir.join("pools");
+        let vpn_dir = home.join("vpn");
+        let vpn_tunnels_dir = vpn_dir.join("tunnels");
+        let vpn_keys_dir = vpn_dir.join("keys");
 
         // Ensure all primary directories exist
         for dir in [
@@ -563,6 +584,9 @@ impl CraftPaths {
             &memfabric_dir,
             &nvme_dir,
             &nvme_pools_dir,
+            &vpn_dir,
+            &vpn_tunnels_dir,
+            &vpn_keys_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -650,6 +674,9 @@ impl CraftPaths {
         let nvme_registry_file = nvme_dir.join("registry.json");
         let nvme_state_file = nvme_dir.join("state.json");
         let nvme_lock = locks_dir.join("nvme.lock");
+        let vpn_registry_file = vpn_dir.join("registry.json");
+        let vpn_state_file = vpn_dir.join("state.json");
+        let vpn_lock = locks_dir.join("vpn.lock");
 
         Ok(Self {
             home,
@@ -791,7 +818,18 @@ impl CraftPaths {
             nvme_registry_file,
             nvme_state_file,
             nvme_lock,
+            vpn_dir,
+            vpn_tunnels_dir,
+            vpn_keys_dir,
+            vpn_registry_file,
+            vpn_state_file,
+            vpn_lock,
         })
+    }
+
+    /// Returns the configuration path for a VPN tunnel interface
+    pub fn vpn_tunnel_path(&self, tunnel_id: &str) -> PathBuf {
+        self.vpn_tunnels_dir.join(format!("{}.conf", tunnel_id))
     }
 
     /// Returns the raw flash block storage path for an NVMe namespace ID
