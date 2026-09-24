@@ -1812,6 +1812,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             RdmaAcceleration,
             SmartNicAcceleration,
             MemFabricPaging,
+            NvmeStorageFabric,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2071,6 +2072,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::MemFabricPaging);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "NVMe-oF Storage Fabrics & Distributed Flash Block Pool",
+            )
+            .with_aliases(&["nvme", "nvmeof", "fabrics", "storage-pool"]),
+        );
+        actions.push(ToolItemAction::NvmeStorageFabric);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2178,6 +2189,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::MemFabricPaging => {
                     memfabric_tui(paths).await?;
+                }
+                ToolItemAction::NvmeStorageFabric => {
+                    nvme_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4023,6 +4037,51 @@ async fn memfabric_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("DISTRIBUTED MEMORY FABRIC & NVRAM POOL", &lines, false)?;
     Ok(())
 }
+
+async fn nvme_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::NvmeTargetService::global(paths);
+    let (summary, subsys) = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("ZERO-COPY NVME-OF STORAGE FABRICS & DISTRIBUTED FLASH POOL".bold().to_string());
+    lines.push("Wire NVMe-oF Target, Sub-20us RDMA/TCP Fabrics & Dimension Chunk Pools".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Active Subsystems:      {}", summary.active_subsystems));
+    lines.push(format!("Active Namespaces:      {}", summary.active_namespaces));
+    lines.push(format!("Active Controllers:     {}", summary.active_controllers));
+    lines.push(format!("Flash Pool Capacity:    {:.2} GB (Alloc: {:.2} GB, {:.1}%)",
+        summary.total_pool_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+        summary.allocated_pool_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+        summary.pool_utilization_percent
+    ));
+    lines.push(format!("Current I/O Throughput: {:.1} IOPS", summary.iops_current));
+    lines.push(format!("Average Fabric Latency: {:.2} us", summary.avg_latency_micros));
+    lines.push(format!("Multipath Failovers:    {}", summary.multipath_failovers_total));
+    lines.push("".to_string());
+    if !subsys.is_empty() {
+        lines.push("Target Subsystems:".bold().to_string());
+        for s in subsys.iter().take(3) {
+            lines.push(
+                format!("  {:<48} Namespaces: {} | Controllers: {}",
+                    s.nqn, s.namespaces.len(), s.controllers
+                ).dimmed().to_string()
+            );
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft nvme status [--server <S>]           Inspect target subsystem, namespaces & pool status".green().to_string());
+    lines.push("  craft nvme ns-create --nsid <N> --size <M> Provision flash namespace for dimension chunks".green().to_string());
+    lines.push("  craft nvme ns-delete --nsid <N>            Deprovision flash namespace and reclaim blocks".green().to_string());
+    lines.push("  craft nvme namespaces                      List provisioned NVMe-oF namespaces".green().to_string());
+    lines.push("  craft nvme subsystems                      List configured NVMe-oF target subsystems".green().to_string());
+    lines.push("  craft nvme bench                           Benchmark NVMe-oF RDMA/TCP IOPS & latency".green().to_string());
+    lines.push("  craft nvme reset-metrics                   Reset cumulative performance & failover counters".green().to_string());
+
+    show_modal_message("ZERO-COPY NVME-OF STORAGE FABRICS", &lines, false)?;
+    Ok(())
+}
+
 
 
 

@@ -31,6 +31,7 @@ pub mod crash_triage;
 pub mod rdma;
 pub mod smartnic;
 pub mod memfabric;
+pub mod nvme;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -119,6 +120,13 @@ pub use memfabric::{
     benchmark_remote_paging, DimensionEvictionSummary, DimensionMemoryFabric,
     DimensionTouchSummary, PageFaultEventType, PageFaultRecord, RemotePagingEngine,
     UserfaultPageHandler, BASE_VIRTUAL_ADDR, PAGE_SIZE_2M, PAGE_SIZE_4K,
+};
+pub use nvme::{
+    benchmark_nvme_fabric, FlashBlockPoolEngine, NvmeCommandCapsule, NvmeCompletionCapsule,
+    NvmeConnectPayload, NvmeTargetEngine, NVME_COMMAND_SIZE, NVME_COMPLETION_SIZE,
+    NVME_DEFAULT_BLOCK_SIZE, NVME_FABRICS_OPCODE, NVME_OPCODE_DATASET_MGMT,
+    NVME_OPCODE_FLUSH, NVME_OPCODE_READ, NVME_OPCODE_WRITE, NVME_OPCODE_WRITE_ZEROES,
+    NVME_STATUS_SUCCESS,
 };
 
 

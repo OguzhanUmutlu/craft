@@ -1914,6 +1914,75 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::NvmeGetStatus { server } => {
+                let service = crate::nvme_service::NvmeTargetService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok((summary, subsystems)) => IpcResponse::NvmeStatusResult { summary, subsystems },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NvmeCreateNamespace {
+                nsid,
+                size_mb,
+                block_size,
+                server_id,
+                dimension,
+            } => {
+                let service = crate::nvme_service::NvmeTargetService::global(supervisor.paths());
+                let resp = match service.create_namespace(nsid, size_mb, block_size, server_id, dimension) {
+                    Ok(namespace) => IpcResponse::NvmeNamespaceResult { namespace },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NvmeDeleteNamespace { nsid } => {
+                let service = crate::nvme_service::NvmeTargetService::global(supervisor.paths());
+                let resp = match service.delete_namespace(nsid) {
+                    Ok(success) => IpcResponse::NvmeDeleteResult {
+                        nsid,
+                        success,
+                        message: format!("Namespace ID {} deleted successfully", nsid),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NvmeListNamespaces { server } => {
+                let service = crate::nvme_service::NvmeTargetService::global(supervisor.paths());
+                let resp = match service.list_namespaces(server.as_deref()) {
+                    Ok(namespaces) => IpcResponse::NvmeNamespacesListResult { namespaces },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NvmeListSubsystems => {
+                let service = crate::nvme_service::NvmeTargetService::global(supervisor.paths());
+                let resp = match service.list_subsystems() {
+                    Ok(subsystems) => IpcResponse::NvmeSubsystemsListResult { subsystems },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NvmeRunBench {
+                block_size,
+                iterations,
+            } => {
+                let service = crate::nvme_service::NvmeTargetService::global(supervisor.paths());
+                let resp = match service.run_bench(block_size, iterations) {
+                    Ok(metrics) => IpcResponse::NvmeBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NvmeResetMetrics => {
+                let service = crate::nvme_service::NvmeTargetService::global(supervisor.paths());
+                let resp = match service.reset_metrics(None) {
+                    Ok(message) => IpcResponse::NvmeResetResult { message },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -4217,6 +4286,96 @@ impl DaemonClient {
     ) -> Result<String> {
         match self.request(IpcRequest::MemFabricResetMetrics { server }).await? {
             IpcResponse::MemFabricResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_nvme_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<(craft_core::nvme::NvmeStatusSummary, Vec<craft_core::nvme::NvmeSubsystemDescriptor>)> {
+        match self.request(IpcRequest::NvmeGetStatus { server }).await? {
+            IpcResponse::NvmeStatusResult { summary, subsystems } => Ok((summary, subsystems)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn create_nvme_namespace(
+        &mut self,
+        nsid: u32,
+        size_mb: u64,
+        block_size: u32,
+        server_id: Option<String>,
+        dimension: Option<String>,
+    ) -> Result<craft_core::nvme::NvmeNamespaceDescriptor> {
+        match self
+            .request(IpcRequest::NvmeCreateNamespace {
+                nsid,
+                size_mb,
+                block_size,
+                server_id,
+                dimension,
+            })
+            .await?
+        {
+            IpcResponse::NvmeNamespaceResult { namespace } => Ok(namespace),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn delete_nvme_namespace(&mut self, nsid: u32) -> Result<bool> {
+        match self.request(IpcRequest::NvmeDeleteNamespace { nsid }).await? {
+            IpcResponse::NvmeDeleteResult { success, .. } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_nvme_namespaces(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<Vec<craft_core::nvme::NvmeNamespaceDescriptor>> {
+        match self.request(IpcRequest::NvmeListNamespaces { server }).await? {
+            IpcResponse::NvmeNamespacesListResult { namespaces } => Ok(namespaces),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_nvme_subsystems(
+        &mut self,
+    ) -> Result<Vec<craft_core::nvme::NvmeSubsystemDescriptor>> {
+        match self.request(IpcRequest::NvmeListSubsystems).await? {
+            IpcResponse::NvmeSubsystemsListResult { subsystems } => Ok(subsystems),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_nvme_bench(
+        &mut self,
+        block_size: usize,
+        iterations: usize,
+    ) -> Result<craft_core::nvme::NvmeBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::NvmeRunBench {
+                block_size,
+                iterations,
+            })
+            .await?
+        {
+            IpcResponse::NvmeBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_nvme_metrics(&mut self) -> Result<String> {
+        match self.request(IpcRequest::NvmeResetMetrics).await? {
+            IpcResponse::NvmeResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

@@ -48,6 +48,7 @@ pub mod crash;
 pub mod rdma;
 pub mod smartnic;
 pub mod memfabric;
+pub mod nvme;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -242,6 +243,11 @@ pub use memfabric::{
     render_memfabric_bench_text, render_memfabric_pages_text, render_memfabric_status_text,
     MemFabricBenchmarkMetrics, MemFabricNodeInfo, MemFabricRegistry, MemFabricStatusSummary,
     MemoryTier, PageProtection, RemotePageDescriptor,
+};
+pub use nvme::{
+    format_bytes, render_nvme_bench_text, render_nvme_namespaces_text, render_nvme_status_text,
+    render_nvme_subsystems_text, NvmeBenchmarkMetrics, NvmeNamespaceDescriptor, NvmePort,
+    NvmeRegistry, NvmeStatusSummary, NvmeSubsystemDescriptor, NvmeSubsystemType, NvmeTransportType,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

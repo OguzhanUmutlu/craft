@@ -474,6 +474,28 @@ pub enum IpcRequest {
     MemFabricResetMetrics {
         server: Option<String>,
     },
+    NvmeGetStatus {
+        server: Option<String>,
+    },
+    NvmeCreateNamespace {
+        nsid: u32,
+        size_mb: u64,
+        block_size: u32,
+        server_id: Option<String>,
+        dimension: Option<String>,
+    },
+    NvmeDeleteNamespace {
+        nsid: u32,
+    },
+    NvmeListNamespaces {
+        server: Option<String>,
+    },
+    NvmeListSubsystems,
+    NvmeRunBench {
+        block_size: usize,
+        iterations: usize,
+    },
+    NvmeResetMetrics,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -905,6 +927,30 @@ pub enum IpcResponse {
         metrics: craft_core::memfabric::MemFabricBenchmarkMetrics,
     },
     MemFabricResetResult {
+        message: String,
+    },
+    NvmeStatusResult {
+        summary: craft_core::nvme::NvmeStatusSummary,
+        subsystems: Vec<craft_core::nvme::NvmeSubsystemDescriptor>,
+    },
+    NvmeNamespaceResult {
+        namespace: craft_core::nvme::NvmeNamespaceDescriptor,
+    },
+    NvmeDeleteResult {
+        nsid: u32,
+        success: bool,
+        message: String,
+    },
+    NvmeNamespacesListResult {
+        namespaces: Vec<craft_core::nvme::NvmeNamespaceDescriptor>,
+    },
+    NvmeSubsystemsListResult {
+        subsystems: Vec<craft_core::nvme::NvmeSubsystemDescriptor>,
+    },
+    NvmeBenchResult {
+        metrics: craft_core::nvme::NvmeBenchmarkMetrics,
+    },
+    NvmeResetResult {
         message: String,
     },
     Error { error: String },

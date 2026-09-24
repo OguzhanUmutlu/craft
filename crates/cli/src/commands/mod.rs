@@ -67,3 +67,4 @@ pub mod crash;
 pub mod rdma;
 pub mod smartnic;
 pub mod memfabric;
+pub mod nvme;

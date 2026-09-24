@@ -591,6 +591,9 @@ async fn main() {
         Some(Commands::MemFabric { action }) => {
             commands::memfabric::handle_memfabric(&paths, action).await
         }
+        Some(Commands::Nvme { action }) => {
+            commands::nvme::handle_nvme(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

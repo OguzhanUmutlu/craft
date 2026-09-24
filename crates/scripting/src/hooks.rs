@@ -101,6 +101,10 @@ pub enum LifecycleEvent {
     MemFabricPageFaultResolved,
     MemFabricDimensionPaged,
     MemFabricPoolSaturated,
+    NvmeNamespaceCreated,
+    NvmeNamespaceDeleted,
+    NvmeMultipathFailoverTriggered,
+    NvmePoolCapacityAlert,
 }
 
 impl LifecycleEvent {
@@ -196,6 +200,10 @@ impl LifecycleEvent {
             Self::MemFabricPageFaultResolved => "on_memfabric_page_fault_resolved",
             Self::MemFabricDimensionPaged => "on_memfabric_dimension_paged",
             Self::MemFabricPoolSaturated => "on_memfabric_pool_saturated",
+            Self::NvmeNamespaceCreated => "on_nvme_namespace_created",
+            Self::NvmeNamespaceDeleted => "on_nvme_namespace_deleted",
+            Self::NvmeMultipathFailoverTriggered => "on_nvme_multipath_failover",
+            Self::NvmePoolCapacityAlert => "on_nvme_pool_capacity_alert",
         }
     }
 
@@ -292,6 +300,10 @@ impl LifecycleEvent {
             "on_memfabric_page_fault_resolved" | "memfabric_page_fault_resolved" | "page_fault_resolved" => Some(Self::MemFabricPageFaultResolved),
             "on_memfabric_dimension_paged" | "memfabric_dimension_paged" | "dimension_paged" => Some(Self::MemFabricDimensionPaged),
             "on_memfabric_pool_saturated" | "memfabric_pool_saturated" | "memfabric_saturated" => Some(Self::MemFabricPoolSaturated),
+            "on_nvme_namespace_created" | "nvme_namespace_created" | "namespace_created" => Some(Self::NvmeNamespaceCreated),
+            "on_nvme_namespace_deleted" | "nvme_namespace_deleted" | "namespace_deleted" => Some(Self::NvmeNamespaceDeleted),
+            "on_nvme_multipath_failover" | "nvme_multipath_failover" | "multipath_failover" => Some(Self::NvmeMultipathFailoverTriggered),
+            "on_nvme_pool_capacity_alert" | "nvme_pool_capacity_alert" | "nvme_pool_alert" => Some(Self::NvmePoolCapacityAlert),
             _ => None,
         }
     }
@@ -388,6 +400,10 @@ impl LifecycleEvent {
             Self::MemFabricPageFaultResolved,
             Self::MemFabricDimensionPaged,
             Self::MemFabricPoolSaturated,
+            Self::NvmeNamespaceCreated,
+            Self::NvmeNamespaceDeleted,
+            Self::NvmeMultipathFailoverTriggered,
+            Self::NvmePoolCapacityAlert,
         ]
     }
 }
@@ -664,6 +680,18 @@ pub struct HookContext {
     pub memfabric_dram_percent: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memfabric_nvram_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nvme_nqn: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nvme_nsid: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nvme_transport: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nvme_iops: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nvme_latency_micros: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nvme_pool_utilization_percent: Option<f64>,
 }
 
 impl HookContext {
@@ -1111,6 +1139,50 @@ impl HookContext {
         ctx.details = Some(format!(
             "MemFabric cluster pool saturated: DRAM at {:.1}%, NVRAM at {:.1}%",
             dram_util_pct, nvram_util_pct
+        ));
+        ctx
+    }
+
+    pub fn for_nvme_namespace_created(
+        nsid: u32,
+        size_mb: u64,
+        server_id: Option<&str>,
+        dimension: Option<&str>,
+    ) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::NvmeNamespaceCreated);
+        ctx.nvme_nsid = Some(nsid);
+        ctx.server_name = server_id.map(|s| s.to_string());
+        ctx.details = Some(format!(
+            "NVMe storage namespace NSID {} created ({} MB, server: {:?}, dimension: {:?})",
+            nsid, size_mb, server_id, dimension
+        ));
+        ctx
+    }
+
+    pub fn for_nvme_namespace_deleted(nsid: u32) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::NvmeNamespaceDeleted);
+        ctx.nvme_nsid = Some(nsid);
+        ctx.details = Some(format!("NVMe storage namespace NSID {} deleted from flash pool", nsid));
+        ctx
+    }
+
+    pub fn for_nvme_multipath_failover(nqn: &str, active_tr: &str, prev_tr: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::NvmeMultipathFailoverTriggered);
+        ctx.nvme_nqn = Some(nqn.to_string());
+        ctx.nvme_transport = Some(active_tr.to_string());
+        ctx.details = Some(format!(
+            "NVMe multipath failover triggered on '{}': switched from {} to {}",
+            nqn, prev_tr, active_tr
+        ));
+        ctx
+    }
+
+    pub fn for_nvme_pool_capacity_alert(util_pct: f64, allocated_bytes: u64, total_bytes: u64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::NvmePoolCapacityAlert);
+        ctx.nvme_pool_utilization_percent = Some(util_pct);
+        ctx.details = Some(format!(
+            "NVMe flash block pool capacity alert: {:.1}% utilized ({} / {} bytes)",
+            util_pct, allocated_bytes, total_bytes
         ));
         ctx
     }
@@ -2001,5 +2073,32 @@ mod tests {
         assert_eq!(sat_ctx.event, "on_memfabric_pool_saturated");
         assert_eq!(sat_ctx.memfabric_dram_percent, Some(88.5));
         assert_eq!(sat_ctx.memfabric_nvram_percent, Some(94.2));
+
+        assert_eq!(
+            LifecycleEvent::from_name("on_nvme_namespace_created"),
+            Some(LifecycleEvent::NvmeNamespaceCreated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("namespace_created"),
+            Some(LifecycleEvent::NvmeNamespaceCreated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_nvme_multipath_failover"),
+            Some(LifecycleEvent::NvmeMultipathFailoverTriggered)
+        );
+
+        let ns_ctx = HookContext::for_nvme_namespace_created(1, 1024, Some("lobby"), Some("overworld"));
+        assert_eq!(ns_ctx.event, "on_nvme_namespace_created");
+        assert_eq!(ns_ctx.nvme_nsid, Some(1));
+        assert_eq!(ns_ctx.server_name.as_deref(), Some("lobby"));
+
+        let fo_ctx = HookContext::for_nvme_multipath_failover("nqn.primary", "tcp", "rdma");
+        assert_eq!(fo_ctx.event, "on_nvme_multipath_failover");
+        assert_eq!(fo_ctx.nvme_nqn.as_deref(), Some("nqn.primary"));
+        assert_eq!(fo_ctx.nvme_transport.as_deref(), Some("tcp"));
+
+        let alert_ctx = HookContext::for_nvme_pool_capacity_alert(92.4, 900_000_000_000, 1_000_000_000_000);
+        assert_eq!(alert_ctx.event, "on_nvme_pool_capacity_alert");
+        assert_eq!(alert_ctx.nvme_pool_utilization_percent, Some(92.4));
     }
 }

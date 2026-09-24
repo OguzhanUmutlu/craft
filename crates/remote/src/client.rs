@@ -2228,6 +2228,129 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Fetches NVMe-oF target and distributed flash pool status from the remote host
+    pub fn get_remote_nvme_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft nvme status --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote NVMe status query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Dynamically provisions an NVMe namespace in the remote flash block pool
+    pub fn create_remote_nvme_namespace(
+        &self,
+        nsid: u32,
+        size_mb: u64,
+        block_size: u32,
+        server: Option<&str>,
+        dimension: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!(
+            "craft nvme ns-create --nsid {} --size-mb {} --block-size {} --json",
+            nsid, size_mb, block_size
+        );
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        if let Some(dim) = dimension {
+            cmd.push_str(&format!(" --dimension {}", dim));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote NVMe namespace creation failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Deletes an NVMe namespace on the remote host
+    pub fn delete_remote_nvme_namespace(&self, nsid: u32) -> Result<String> {
+        let cmd = format!("craft nvme ns-delete --nsid {} --json", nsid);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote NVMe namespace deletion failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Lists NVMe namespaces on the remote host
+    pub fn list_remote_nvme_namespaces(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft nvme namespaces --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote NVMe namespaces list failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Lists NVMe-oF target subsystems on the remote host
+    pub fn list_remote_nvme_subsystems(&self) -> Result<String> {
+        let cmd = "craft nvme subsystems --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote NVMe subsystems list failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Benchmarks 4KB flash block fabric I/O on the remote host
+    pub fn run_remote_nvme_bench(&self, block_size: usize, iterations: usize) -> Result<String> {
+        let cmd = format!(
+            "craft nvme bench --block-size {} --iterations {} --json",
+            block_size, iterations
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote NVMe bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets NVMe storage fabric telemetry counters on the remote host
+    pub fn reset_remote_nvme_metrics(&self) -> Result<String> {
+        let cmd = "craft nvme reset-metrics --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote NVMe metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

@@ -139,6 +139,11 @@ pub struct CraftPaths {
     pub memfabric_registry_file: PathBuf,
     pub memfabric_state_file: PathBuf,
     pub memfabric_lock: PathBuf,
+    pub nvme_dir: PathBuf,
+    pub nvme_pools_dir: PathBuf,
+    pub nvme_registry_file: PathBuf,
+    pub nvme_state_file: PathBuf,
+    pub nvme_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -277,6 +282,11 @@ impl CraftPaths {
         let memfabric_registry_file = memfabric_dir.join("registry.json");
         let memfabric_state_file = memfabric_dir.join("state.json");
         let memfabric_lock = locks_dir.join("memfabric.lock");
+        let nvme_dir = home.join("nvme");
+        let nvme_pools_dir = nvme_dir.join("pools");
+        let nvme_registry_file = nvme_dir.join("registry.json");
+        let nvme_state_file = nvme_dir.join("state.json");
+        let nvme_lock = locks_dir.join("nvme.lock");
 
         Self {
             home,
@@ -413,6 +423,11 @@ impl CraftPaths {
             memfabric_registry_file,
             memfabric_state_file,
             memfabric_lock,
+            nvme_dir,
+            nvme_pools_dir,
+            nvme_registry_file,
+            nvme_state_file,
+            nvme_lock,
         }
     }
 
@@ -485,6 +500,8 @@ impl CraftPaths {
         let rdma_dir = home.join("rdma");
         let smartnic_dir = home.join("smartnic");
         let memfabric_dir = home.join("memfabric");
+        let nvme_dir = home.join("nvme");
+        let nvme_pools_dir = nvme_dir.join("pools");
 
         // Ensure all primary directories exist
         for dir in [
@@ -544,6 +561,8 @@ impl CraftPaths {
             &rdma_dir,
             &smartnic_dir,
             &memfabric_dir,
+            &nvme_dir,
+            &nvme_pools_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -628,6 +647,9 @@ impl CraftPaths {
         let memfabric_registry_file = memfabric_dir.join("registry.json");
         let memfabric_state_file = memfabric_dir.join("state.json");
         let memfabric_lock = locks_dir.join("memfabric.lock");
+        let nvme_registry_file = nvme_dir.join("registry.json");
+        let nvme_state_file = nvme_dir.join("state.json");
+        let nvme_lock = locks_dir.join("nvme.lock");
 
         Ok(Self {
             home,
@@ -764,7 +786,17 @@ impl CraftPaths {
             memfabric_registry_file,
             memfabric_state_file,
             memfabric_lock,
+            nvme_dir,
+            nvme_pools_dir,
+            nvme_registry_file,
+            nvme_state_file,
+            nvme_lock,
         })
+    }
+
+    /// Returns the raw flash block storage path for an NVMe namespace ID
+    pub fn nvme_namespace_path(&self, nsid: u32) -> PathBuf {
+        self.nvme_pools_dir.join(format!("ns_{}.raw", nsid))
     }
 
     /// Returns the page binary snapshot path for a specific page ID

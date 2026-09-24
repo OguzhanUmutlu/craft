@@ -696,6 +696,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<MemFabricCommands>,
     },
+    /// Autonomous Zero-Copy Storage Fabrics, NVMe-oF Target & Distributed Flash Block Pool
+    #[command(name = "nvme", alias = "nvmeof", alias = "fabrics", alias = "storage-pool")]
+    Nvme {
+        #[command(subcommand)]
+        action: Option<NvmeCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2684,6 +2690,90 @@ pub enum MemFabricCommands {
     /// Reset memory fabric telemetry counters and page fault history
     ResetMetrics {
         /// Filter or associate with server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum NvmeCommands {
+    /// Inspect NVMe-oF target status, subsystem NQNs, and flash pool capacity
+    Status {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Dynamically allocate a new storage namespace in the distributed flash pool
+    #[command(name = "ns-create", alias = "create-ns")]
+    NsCreate {
+        /// Namespace ID (NSID 1..N)
+        #[arg(short = 'n', long = "nsid")]
+        nsid: u32,
+        /// Size of the namespace in megabytes (MB)
+        #[arg(short = 's', long = "size-mb", default_value_t = 1024)]
+        size_mb: u64,
+        /// Logical block size in bytes (default: 4096)
+        #[arg(short = 'b', long = "block-size", default_value_t = 4096)]
+        block_size: u32,
+        /// Associated server name
+        #[arg(long)]
+        server: Option<String>,
+        /// Optional associated Minecraft dimension (e.g. the_nether, the_end)
+        #[arg(short = 'd', long = "dimension")]
+        dimension: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Delete an existing storage namespace from the flash pool
+    #[command(name = "ns-delete", alias = "delete-ns")]
+    NsDelete {
+        /// Target Namespace ID to remove
+        #[arg(short = 'n', long = "nsid")]
+        nsid: u32,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List all allocated storage namespaces in the flash pool
+    #[command(name = "namespaces", alias = "ns-list")]
+    Namespaces {
+        /// Filter by server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List all configured NVMe-oF target subsystems and transport ports
+    #[command(name = "subsystems", alias = "subs")]
+    Subsystems {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark 4KB random flash block I/O throughput and multipath failover
+    Bench {
+        /// Benchmark iteration count
+        #[arg(short = 'i', long = "iterations", default_value_t = 50)]
+        iterations: usize,
+        /// Block transfer size in bytes
+        #[arg(short = 'b', long = "block-size", default_value_t = 4096)]
+        block_size: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset NVMe storage fabric telemetry counters and performance statistics
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
+        /// Associated server name
         #[arg(short, long)]
         server: Option<String>,
         /// Output in machine-readable JSON format
@@ -6126,6 +6216,71 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected MemFabric ResetMetrics command"),
+        }
+    }
+
+    #[test]
+    fn test_nvme_cli_commands() {
+        // NVMe Status command
+        let cli_nvme_status = Cli::try_parse_from(["craft", "nvme", "status", "--json"]).unwrap();
+        match cli_nvme_status.command {
+            Some(Commands::Nvme {
+                action: Some(NvmeCommands::Status { server: None, json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Nvme Status command"),
+        }
+
+        // NVMe NsCreate command
+        let cli_nvme_create = Cli::try_parse_from([
+            "craft", "nvme", "ns-create",
+            "-n", "1",
+            "-s", "512",
+            "-b", "4096",
+            "-d", "overworld",
+            "--json",
+        ]).unwrap();
+        match cli_nvme_create.command {
+            Some(Commands::Nvme {
+                action: Some(NvmeCommands::NsCreate {
+                    nsid,
+                    size_mb,
+                    block_size,
+                    server: None,
+                    dimension,
+                    json,
+                }),
+            }) => {
+                assert_eq!(nsid, 1);
+                assert_eq!(size_mb, 512);
+                assert_eq!(block_size, 4096);
+                assert_eq!(dimension.as_deref(), Some("overworld"));
+                assert!(json);
+            }
+            _ => panic!("Expected Nvme NsCreate command"),
+        }
+
+        // NVMe Bench command
+        let cli_nvme_bench = Cli::try_parse_from([
+            "craft", "nvme", "bench",
+            "-i", "50",
+            "-b", "4096",
+            "--json",
+        ]).unwrap();
+        match cli_nvme_bench.command {
+            Some(Commands::Nvme {
+                action: Some(NvmeCommands::Bench {
+                    iterations,
+                    block_size,
+                    json,
+                }),
+            }) => {
+                assert_eq!(iterations, 50);
+                assert_eq!(block_size, 4096);
+                assert!(json);
+            }
+            _ => panic!("Expected Nvme Bench command"),
         }
     }
 }
