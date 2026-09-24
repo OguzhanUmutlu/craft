@@ -292,6 +292,22 @@ pub enum IpcRequest {
         rule_id: String,
     },
     XdpResetMetrics,
+    PmuGetStatus,
+    PmuStartSampling {
+        target_pid: Option<u32>,
+        sample_rate_hz: u32,
+    },
+    PmuStopSampling,
+    PmuSampleNow {
+        target_pid: Option<u32>,
+    },
+    PmuGetHotspots {
+        limit: usize,
+    },
+    PmuRunBench {
+        iterations: usize,
+    },
+    PmuResetMetrics,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -578,6 +594,21 @@ pub enum IpcResponse {
         message: String,
     },
     XdpMetricsResetResult {
+        message: String,
+    },
+    PmuStatusResult {
+        summary: craft_core::pmu::PmuMetricsSummary,
+    },
+    PmuSampleResult {
+        sample: craft_core::pmu::PmuSampleRecord,
+    },
+    PmuHotspotsResult {
+        hotspots: Vec<craft_core::pmu::HotspotSymbol>,
+    },
+    PmuBenchResult {
+        report: craft_net::MemoryChurnReport,
+    },
+    PmuMetricsResetResult {
         message: String,
     },
     Error { error: String },

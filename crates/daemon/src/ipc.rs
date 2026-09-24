@@ -1457,6 +1457,64 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::PmuGetStatus => {
+                let service = crate::pmu_service::PmuService::global(supervisor.paths());
+                let resp = match service.get_status() {
+                    Ok(summary) => IpcResponse::PmuStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PmuStartSampling { target_pid, sample_rate_hz } => {
+                let service = crate::pmu_service::PmuService::global(supervisor.paths());
+                let resp = match service.start_sampling(target_pid, sample_rate_hz) {
+                    Ok(summary) => IpcResponse::PmuStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PmuStopSampling => {
+                let service = crate::pmu_service::PmuService::global(supervisor.paths());
+                let resp = match service.stop_sampling() {
+                    Ok(summary) => IpcResponse::PmuStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PmuSampleNow { target_pid } => {
+                let service = crate::pmu_service::PmuService::global(supervisor.paths());
+                let resp = match service.sample_now(target_pid) {
+                    Ok(sample) => IpcResponse::PmuSampleResult { sample },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PmuGetHotspots { limit } => {
+                let service = crate::pmu_service::PmuService::global(supervisor.paths());
+                let resp = match service.get_hotspots(limit) {
+                    Ok(hotspots) => IpcResponse::PmuHotspotsResult { hotspots },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PmuRunBench { iterations } => {
+                let service = crate::pmu_service::PmuService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations) {
+                    Ok(report) => IpcResponse::PmuBenchResult { report },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PmuResetMetrics => {
+                let service = crate::pmu_service::PmuService::global(supervisor.paths());
+                let resp = match service.reset_metrics() {
+                    Ok(_) => IpcResponse::PmuMetricsResetResult {
+                        message: "PMU metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -3102,6 +3160,81 @@ impl DaemonClient {
     pub async fn reset_xdp_metrics(&mut self) -> Result<String> {
         match self.request(IpcRequest::XdpResetMetrics).await? {
             IpcResponse::XdpMetricsResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_pmu_status(&mut self) -> Result<craft_core::pmu::PmuMetricsSummary> {
+        match self.request(IpcRequest::PmuGetStatus).await? {
+            IpcResponse::PmuStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn start_pmu_sampling(
+        &mut self,
+        target_pid: Option<u32>,
+        sample_rate_hz: u32,
+    ) -> Result<craft_core::pmu::PmuMetricsSummary> {
+        match self
+            .request(IpcRequest::PmuStartSampling {
+                target_pid,
+                sample_rate_hz,
+            })
+            .await?
+        {
+            IpcResponse::PmuStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn stop_pmu_sampling(&mut self) -> Result<craft_core::pmu::PmuMetricsSummary> {
+        match self.request(IpcRequest::PmuStopSampling).await? {
+            IpcResponse::PmuStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn sample_pmu_now(
+        &mut self,
+        target_pid: Option<u32>,
+    ) -> Result<craft_core::pmu::PmuSampleRecord> {
+        match self.request(IpcRequest::PmuSampleNow { target_pid }).await? {
+            IpcResponse::PmuSampleResult { sample } => Ok(sample),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_pmu_hotspots(
+        &mut self,
+        limit: usize,
+    ) -> Result<Vec<craft_core::pmu::HotspotSymbol>> {
+        match self.request(IpcRequest::PmuGetHotspots { limit }).await? {
+            IpcResponse::PmuHotspotsResult { hotspots } => Ok(hotspots),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_pmu_bench(
+        &mut self,
+        iterations: usize,
+    ) -> Result<craft_net::MemoryChurnReport> {
+        match self.request(IpcRequest::PmuRunBench { iterations }).await? {
+            IpcResponse::PmuBenchResult { report } => Ok(report),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_pmu_metrics(&mut self) -> Result<String> {
+        match self.request(IpcRequest::PmuResetMetrics).await? {
+            IpcResponse::PmuMetricsResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

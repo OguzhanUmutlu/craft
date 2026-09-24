@@ -567,6 +567,9 @@ async fn main() {
         Some(Commands::Xdp { action }) => {
             commands::xdp::handle_xdp(&paths, action).await
         }
+        Some(Commands::Pmu { action }) => {
+            commands::pmu::handle_pmu(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

@@ -32,6 +32,7 @@ pub mod tracing_service;
 pub mod web_dashboard;
 pub mod webhooks;
 pub mod xdp_service;
+pub mod pmu_service;
 
 pub use anvil_service::AnvilService;
 pub use compaction_service::CompactionService;
@@ -44,6 +45,7 @@ pub use multi_raft_service::MultiRaftService;
 pub use pqc_service::PqcService;
 pub use supply_chain_service::SupplyChainService;
 pub use xdp_service::XdpService;
+pub use pmu_service::PmuService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

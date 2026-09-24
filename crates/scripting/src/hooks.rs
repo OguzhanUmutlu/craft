@@ -76,6 +76,9 @@ pub enum LifecycleEvent {
     XdpDdosAttackMitigated,
     XdpFlowRateLimitExceeded,
     XdpInterfaceAttached,
+    PmuHotspotDetected,
+    CacheMissThresholdExceeded,
+    BranchMispredictionSurge,
 }
 
 impl LifecycleEvent {
@@ -146,6 +149,9 @@ impl LifecycleEvent {
             Self::XdpDdosAttackMitigated => "on_xdp_ddos_attack_mitigated",
             Self::XdpFlowRateLimitExceeded => "on_xdp_flow_rate_limit_exceeded",
             Self::XdpInterfaceAttached => "on_xdp_interface_attached",
+            Self::PmuHotspotDetected => "on_pmu_hotspot_detected",
+            Self::CacheMissThresholdExceeded => "on_cache_miss_threshold_exceeded",
+            Self::BranchMispredictionSurge => "on_branch_misprediction_surge",
         }
     }
 
@@ -217,6 +223,9 @@ impl LifecycleEvent {
             "on_xdp_ddos_attack_mitigated" | "xdp_ddos_attack_mitigated" | "ddos_mitigated" | "ddos" => Some(Self::XdpDdosAttackMitigated),
             "on_xdp_flow_rate_limit_exceeded" | "xdp_flow_rate_limit_exceeded" | "flow_rate_limited" | "rate_limited" => Some(Self::XdpFlowRateLimitExceeded),
             "on_xdp_interface_attached" | "xdp_interface_attached" | "interface_attached" | "xdp_attached" => Some(Self::XdpInterfaceAttached),
+            "on_pmu_hotspot_detected" | "pmu_hotspot_detected" | "pmu_hotspot" => Some(Self::PmuHotspotDetected),
+            "on_cache_miss_threshold_exceeded" | "cache_miss_threshold_exceeded" | "cache_miss" => Some(Self::CacheMissThresholdExceeded),
+            "on_branch_misprediction_surge" | "branch_misprediction_surge" | "branch_surge" => Some(Self::BranchMispredictionSurge),
             _ => None,
         }
     }
@@ -288,6 +297,9 @@ impl LifecycleEvent {
             Self::XdpDdosAttackMitigated,
             Self::XdpFlowRateLimitExceeded,
             Self::XdpInterfaceAttached,
+            Self::PmuHotspotDetected,
+            Self::CacheMissThresholdExceeded,
+            Self::BranchMispredictionSurge,
         ]
     }
 }
@@ -482,6 +494,14 @@ pub struct HookContext {
     pub drop_rate_pps: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub xdp_action: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hotspot_symbol: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cmpi: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bmpi: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ipc: Option<f64>,
 }
 
 impl HookContext {
@@ -635,6 +655,37 @@ impl HookContext {
         let mut ctx = Self::new(LifecycleEvent::XdpInterfaceAttached);
         ctx.xdp_interface = Some(iface.to_string());
         ctx.details = Some(format!("eBPF XDP firewall attached to interface '{}' (mode: {})", iface, mode));
+        ctx
+    }
+
+    pub fn for_pmu_hotspot(symbol: &str, percentage: f64, ipc: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::PmuHotspotDetected);
+        ctx.hotspot_symbol = Some(symbol.to_string());
+        ctx.ipc = Some(ipc);
+        ctx.details = Some(format!(
+            "Hardware PMU hotspot detected in '{}': {:.2}% sample share (IPC: {:.3})",
+            symbol, percentage * 100.0, ipc
+        ));
+        ctx
+    }
+
+    pub fn for_cache_miss_threshold(cmpi: f64, threshold: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CacheMissThresholdExceeded);
+        ctx.cmpi = Some(cmpi);
+        ctx.details = Some(format!(
+            "Hardware PMU cache miss threshold exceeded: CMPI {:.6} > {:.6}",
+            cmpi, threshold
+        ));
+        ctx
+    }
+
+    pub fn for_branch_misprediction(bmpi: f64, threshold: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::BranchMispredictionSurge);
+        ctx.bmpi = Some(bmpi);
+        ctx.details = Some(format!(
+            "Hardware PMU branch misprediction surge: BMPI {:.6} > {:.6}",
+            bmpi, threshold
+        ));
         ctx
     }
 }

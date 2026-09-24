@@ -59,4 +59,5 @@ pub mod view;
 pub mod webhook;
 pub mod world;
 pub mod xdp;
+pub mod pmu;
 

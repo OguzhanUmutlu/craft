@@ -105,6 +105,10 @@ pub struct CraftPaths {
     pub xdp_rules_file: PathBuf,
     pub xdp_state_file: PathBuf,
     pub xdp_lock: PathBuf,
+    pub pmu_dir: PathBuf,
+    pub pmu_probes_file: PathBuf,
+    pub pmu_state_file: PathBuf,
+    pub pmu_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -209,6 +213,10 @@ impl CraftPaths {
         let xdp_rules_file = xdp_dir.join("rules.json");
         let xdp_state_file = xdp_dir.join("state.json");
         let xdp_lock = locks_dir.join("xdp.lock");
+        let pmu_dir = home.join("pmu");
+        let pmu_probes_file = pmu_dir.join("probes.json");
+        let pmu_state_file = pmu_dir.join("state.json");
+        let pmu_lock = locks_dir.join("pmu.lock");
 
         Self {
             home,
@@ -311,6 +319,10 @@ impl CraftPaths {
             xdp_rules_file,
             xdp_state_file,
             xdp_lock,
+            pmu_dir,
+            pmu_probes_file,
+            pmu_state_file,
+            pmu_lock,
         }
     }
 
@@ -373,6 +385,7 @@ impl CraftPaths {
         let hsm_pcr_dir = hsm_dir.join("pcr");
         let hsm_zk_dir = hsm_dir.join("zk");
         let xdp_dir = home.join("xdp");
+        let pmu_dir = home.join("pmu");
 
         // Ensure all primary directories exist
         for dir in [
@@ -422,6 +435,7 @@ impl CraftPaths {
             &hsm_pcr_dir,
             &hsm_zk_dir,
             &xdp_dir,
+            &pmu_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -482,6 +496,9 @@ impl CraftPaths {
         let xdp_rules_file = xdp_dir.join("rules.json");
         let xdp_state_file = xdp_dir.join("state.json");
         let xdp_lock = locks_dir.join("xdp.lock");
+        let pmu_probes_file = pmu_dir.join("probes.json");
+        let pmu_state_file = pmu_dir.join("state.json");
+        let pmu_lock = locks_dir.join("pmu.lock");
 
         Ok(Self {
             home,
@@ -584,7 +601,16 @@ impl CraftPaths {
             xdp_rules_file,
             xdp_state_file,
             xdp_lock,
+            pmu_dir,
+            pmu_probes_file,
+            pmu_state_file,
+            pmu_lock,
         })
+    }
+
+    /// Returns the PMU probes file path
+    pub fn pmu_probes_path(&self) -> PathBuf {
+        self.pmu_probes_file.clone()
     }
 
     /// Returns the XDP rules file path

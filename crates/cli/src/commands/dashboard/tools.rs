@@ -1804,6 +1804,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             HardwareSecurityModule,
             MemoryCompaction,
             XdpFirewall,
+            HardwarePerformanceCounters,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1983,6 +1984,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::XdpFirewall);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Hardware PMU Counters & Cache Miss Profiling",
+            )
+            .with_aliases(&["pmu", "counters", "hw-counters", "cache-profile"]),
+        );
+        actions.push(ToolItemAction::HardwarePerformanceCounters);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2066,6 +2077,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::XdpFirewall => {
                     xdp_firewall_tui(paths).await?;
+                }
+                ToolItemAction::HardwarePerformanceCounters => {
+                    pmu_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3563,6 +3577,46 @@ async fn xdp_firewall_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("eBPF XDP FIREWALL & ANTI-DDOS", &lines, false)?;
     Ok(())
 }
+
+async fn pmu_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::PmuService::global(paths);
+    let status = service.get_status()?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS HARDWARE PMU & CACHE MISS PROFILING".bold().to_string());
+    lines.push("Dynamic Binary Instrumentation, Hardware PMU Counters & Cache Miss Ratios".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Execution Mode:         {}", if status.simulation_mode { "Simulation (Fallback)" } else { "Hardware PMU (Native)" }));
+    lines.push(format!("Active Probes:          {}", status.active_probes));
+    lines.push(format!("Total Samples:          {}", status.total_samples));
+    lines.push(format!("Retired Instructions:   {}", status.instructions_retired));
+    lines.push(format!("CPU Cycles:             {}", status.cpu_cycles));
+    lines.push(format!("IPC (Instr/Cycle):      {:.3}", status.ipc));
+    lines.push(format!("L1D Cache Misses:       {}", status.l1d_misses));
+    lines.push(format!("L1D CMPI:               {:.6}", status.cmpi_l1d));
+    lines.push(format!("LLC Cache Misses:       {}", status.llc_misses));
+    lines.push(format!("LLC CMPI:               {:.6}", status.cmpi_llc));
+    lines.push(format!("Branch Mispredictions:  {}", status.branch_mispredictions));
+    lines.push(format!("BMPI:                   {:.6}", status.bmpi));
+    lines.push("".to_string());
+    if !status.top_hotspots.is_empty() {
+        lines.push("Top Execution Hotspots:".bold().to_string());
+        for (idx, hot) in status.top_hotspots.iter().enumerate().take(3) {
+            lines.push(format!("  #{:<2} {:>5.1}% {}", idx + 1, hot.percentage * 100.0, hot.demangled_symbol).dimmed().to_string());
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft pmu status                       Display hardware counters, CMPI/BMPI & hotspots".green().to_string());
+    lines.push("  craft pmu sample [--pid <P>] [--rate]  Start continuous hardware PMU counter sampling".green().to_string());
+    lines.push("  craft pmu hotspots [--limit <N>]       Inspect top execution hotspots & JIT methods".green().to_string());
+    lines.push("  craft pmu bench [--iterations <N>]     Benchmark synthetic sequential vs strided cache churn".green().to_string());
+    lines.push("  craft pmu reset-metrics                Reset all PMU counters & sample ring buffers".green().to_string());
+
+    show_modal_message("HARDWARE PMU & CACHE PROFILING", &lines, false)?;
+    Ok(())
+}
+
 
 
 

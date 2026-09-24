@@ -23,6 +23,7 @@ pub mod raft_transport;
 pub mod tick_profiler;
 pub mod wireguard;
 pub mod xdp_pipeline;
+pub mod pmu_sampler;
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
 pub use chunk_packet::{
@@ -84,5 +85,7 @@ pub use xdp_pipeline::{
     compute_syn_cookie, validate_raknet_packet, validate_syn_cookie, RakNetValidationResult,
     XdpBenchmarkResult, XdpPacketDescriptor, XdpPipeline, RAKNET_OFFLINE_MAGIC,
 };
+pub use pmu_sampler::{demangle_symbol, MemoryChurnReport, PmuSampler};
+
 
 

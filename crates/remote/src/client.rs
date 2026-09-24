@@ -1505,6 +1505,59 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Fetches PMU and cache miss profiling status from the remote host
+    pub fn get_remote_pmu_status(&self) -> Result<String> {
+        let cmd = "craft pmu status --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote PMU status failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Starts PMU sampling on the remote host
+    pub fn start_remote_pmu_sampling(&self, pid: Option<u32>, rate_hz: Option<u32>) -> Result<String> {
+        let mut cmd = "craft pmu sample".to_string();
+        if let Some(p) = pid {
+            cmd.push_str(&format!(" --pid {}", p));
+        }
+        if let Some(r) = rate_hz {
+            cmd.push_str(&format!(" --rate {}", r));
+        }
+        cmd.push_str(" --json");
+
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote PMU start sampling failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Fetches top execution hotspot symbols from the remote host
+    pub fn get_remote_pmu_hotspots(&self, limit: Option<usize>) -> Result<String> {
+        let limit_val = limit.unwrap_or(10);
+        let cmd = format!("craft pmu hotspots --limit {} --json", limit_val);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote PMU hotspots query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets PMU counter metrics and clear sample buffers on the remote host
+    pub fn reset_remote_pmu_metrics(&self) -> Result<String> {
+        let cmd = "craft pmu reset-metrics --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote PMU metrics reset failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

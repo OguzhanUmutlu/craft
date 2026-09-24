@@ -648,6 +648,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<XdpCommands>,
     },
+    /// Autonomous Dynamic Binary Instrumentation, Hardware Performance Counters & Cache Miss Profiling
+    #[command(name = "pmu", alias = "hw-counters", alias = "cache-profile", alias = "counters")]
+    Pmu {
+        #[command(subcommand)]
+        action: Option<PmuCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2066,6 +2072,55 @@ pub enum XdpCommands {
         /// Ratio of attack packets to generate (0.0 - 1.0)
         #[arg(long, default_value = "0.7")]
         attack_ratio: f64,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum PmuCommands {
+    /// Show current hardware PMU counters, CMPI/BMPI metrics, and execution hotspots
+    Status {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Start hardware PMU counter sampling or sample once
+    Sample {
+        /// Target process PID to profile (defaults to global system / Minecraft server)
+        #[arg(short, long)]
+        pid: Option<u32>,
+        /// Sampling rate in Hertz (samples per second)
+        #[arg(short, long, default_value = "100")]
+        rate: u32,
+        /// Stop active background sampling session
+        #[arg(long)]
+        stop: bool,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect top execution hotspot symbols, JIT methods, and CPU percentage
+    Hotspots {
+        /// Number of top hotspots to display
+        #[arg(short, long, default_value = "10")]
+        limit: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark hardware cache performance using synthetic sequential vs strided memory churn
+    Bench {
+        /// Total iterations to execute
+        #[arg(short, long, default_value = "5000")]
+        iterations: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset hardware PMU counter aggregates and clear sample ring buffers
+    ResetMetrics {
         /// Output in machine-readable JSON format
         #[arg(long)]
         json: bool,
@@ -4900,6 +4955,77 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Xdp Bench command"),
+        }
+    }
+
+    #[test]
+    fn test_pmu_cli_parsing() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "pmu", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Pmu { action: Some(PmuCommands::Status { json }) }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Pmu Status command"),
+        }
+
+        // Alias: counters status
+        let cli_counters = Cli::try_parse_from(["craft", "counters", "status"]).unwrap();
+        match cli_counters.command {
+            Some(Commands::Pmu { action: Some(PmuCommands::Status { json }) }) => {
+                assert!(!json);
+            }
+            _ => panic!("Expected Pmu Status command via alias 'counters'"),
+        }
+
+        // Alias: hw-counters sample
+        let cli_sample = Cli::try_parse_from([
+            "craft", "hw-counters", "sample", "--pid", "1234", "--rate", "250", "--json",
+        ])
+        .unwrap();
+        match cli_sample.command {
+            Some(Commands::Pmu {
+                action: Some(PmuCommands::Sample { pid, rate, stop, json }),
+            }) => {
+                assert_eq!(pid, Some(1234));
+                assert_eq!(rate, 250);
+                assert!(!stop);
+                assert!(json);
+            }
+            _ => panic!("Expected Pmu Sample command via alias 'hw-counters'"),
+        }
+
+        // Alias: cache-profile hotspots
+        let cli_hotspots = Cli::try_parse_from(["craft", "cache-profile", "hotspots", "--limit", "5"]).unwrap();
+        match cli_hotspots.command {
+            Some(Commands::Pmu {
+                action: Some(PmuCommands::Hotspots { limit, json }),
+            }) => {
+                assert_eq!(limit, 5);
+                assert!(!json);
+            }
+            _ => panic!("Expected Pmu Hotspots command via alias 'cache-profile'"),
+        }
+
+        // Bench command
+        let cli_bench = Cli::try_parse_from(["craft", "pmu", "bench", "--iterations", "3000", "--json"]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Pmu {
+                action: Some(PmuCommands::Bench { iterations, json }),
+            }) => {
+                assert_eq!(iterations, 3000);
+                assert!(json);
+            }
+            _ => panic!("Expected Pmu Bench command"),
+        }
+
+        // ResetMetrics command
+        let cli_reset = Cli::try_parse_from(["craft", "pmu", "reset-metrics", "--json"]).unwrap();
+        match cli_reset.command {
+            Some(Commands::Pmu { action: Some(PmuCommands::ResetMetrics { json }) }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Pmu ResetMetrics command"),
         }
     }
 }
