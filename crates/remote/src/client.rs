@@ -1326,6 +1326,58 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Fetches the remote host's post-quantum cryptographic status and harvest defense score
+    pub fn get_remote_pqc_status(&self) -> Result<String> {
+        let (code, stdout, stderr) = self.session.exec("craft pqc status --json")?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote PQC status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Updates the remote host's post-quantum policy enforcement mode and ciphersuite
+    pub fn set_remote_pqc_policy(
+        &self,
+        mode: &str,
+        suite: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!("craft pqc policy --set-mode {}", mode);
+        if let Some(s) = suite {
+            cmd.push_str(&format!(" --ciphersuite {}", s));
+        }
+        cmd.push_str(" --json");
+
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote PQC policy update failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs a hardware/software post-quantum cryptographic benchmark on the remote host
+    pub fn benchmark_remote_pqc(&self, iterations: usize) -> Result<String> {
+        let cmd = format!("craft pqc bench --iterations {} --json", iterations);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote PQC benchmark failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Transitions the remote host's post-quantum migration phase
+    pub fn migrate_remote_pqc_node(&self, phase: &str) -> Result<String> {
+        let cmd = format!("craft pqc migrate --phase {} --json", phase);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote PQC node migration failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

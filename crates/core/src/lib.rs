@@ -22,6 +22,7 @@ pub mod nbt;
 pub mod numa;
 pub mod optimizer;
 pub mod path;
+pub mod pqc;
 pub mod process;
 pub mod properties;
 pub mod raft;
@@ -108,6 +109,17 @@ pub use rbac::{Permission, RbacRegistry, Role, UserAccount};
 pub use rollout::{
     CanaryHealthCriteria, FleetHealingAction, FleetHealthStatus, NodeHealth, RolloutPlan,
     RolloutRecord, RolloutRegistry, RolloutStage, RolloutStrategy,
+};
+pub use pqc::{
+    barrett_reduce, derive_pqc_prng, fqmul, montgomery_reduce, x25519_keypair, x25519_scalar_mult,
+    HybridCiphertext, HybridKeyExchange, HybridPublicKey, HybridSecretKey, MlDsa65,
+    MlDsa65PublicKey, MlDsa65SecretKey, MlKem1024, MlKem1024PublicKey, MlKem1024SecretKey,
+    MlKem768, MlKem768PublicKey, MlKem768SecretKey, Poly, PqcBenchmarkReport, PqcCipherSuite,
+    PqcEnforcementMode, PqcKeyPair, PqcMigrationPhase, PqcPolicy, PqcRegistry,
+    PqcSigningAlgorithm, PqcStatusSummary, KYBER_N, KYBER_Q, MLDSA65_PUBLIC_KEY_BYTES,
+    MLDSA65_SECRET_KEY_BYTES, MLDSA65_SIGNATURE_BYTES, MLKEM1024_CIPHERTEXT_BYTES,
+    MLKEM1024_PUBLIC_KEY_BYTES, MLKEM1024_SECRET_KEY_BYTES, MLKEM768_CIPHERTEXT_BYTES,
+    MLKEM768_PUBLIC_KEY_BYTES, MLKEM768_SECRET_KEY_BYTES,
 };
 pub use sdn::{
     FilterAction, FilterProtocol, IsolationZone, LocalNodeConfig, MicrosegmentationPolicy,

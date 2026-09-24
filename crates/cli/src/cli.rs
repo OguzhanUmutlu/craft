@@ -624,6 +624,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: AttestCommands,
     },
+    /// Autonomous quantum-resistant cryptographic transition, ML-KEM key exchange & state machine post-quantum hardening
+    #[command(name = "pqc", alias = "post-quantum", alias = "quantum", alias = "mlkem")]
+    Pqc {
+        #[command(subcommand)]
+        action: Option<PqcCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1836,6 +1842,61 @@ pub enum AttestCommands {
         /// Allow outbound network egress during build
         #[arg(long)]
         allow_network: bool,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum PqcCommands {
+    /// Inspect post-quantum cryptography status, harvest defense score, and active keypairs
+    Status {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inspect or modify post-quantum policy enforcement mode and ciphersuite
+    Policy {
+        /// Set enforcement mode (classic_only, hybrid, post_quantum_only)
+        #[arg(long = "set-mode")]
+        set_mode: Option<String>,
+        /// Preferred post-quantum ciphersuite (x25519, hybrid_x25519_ml_kem_768, ml_kem_768, ml_kem_1024)
+        #[arg(long = "ciphersuite")]
+        ciphersuite: Option<String>,
+        /// Allow classical fallback if peer lacks post-quantum support (true/false)
+        #[arg(long = "allow-fallback")]
+        allow_fallback: Option<bool>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Generate a new NIST FIPS 203/204 post-quantum keypair (ML-KEM or ML-DSA)
+    Keygen {
+        /// Post-quantum key encapsulation suite (hybrid, mlkem768, mlkem1024)
+        #[arg(long = "suite")]
+        suite: Option<String>,
+        /// Post-quantum signature algorithm (mldsa65)
+        #[arg(long = "algo")]
+        algo: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run pure-Rust hardware/software micro-benchmarks for ML-KEM and ML-DSA
+    Bench {
+        /// Number of benchmark iterations
+        #[arg(long = "iterations", default_value = "10")]
+        iterations: usize,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Transition the cluster post-quantum migration phase (planning, dual_stack, enforced_pqc)
+    Migrate {
+        /// Target migration phase
+        #[arg(long = "phase")]
+        phase: String,
         /// Output as JSON
         #[arg(long)]
         json: bool,
@@ -4241,6 +4302,117 @@ mod tests {
                 assert!(!json);
             }
             _ => panic!("Expected Numa BootArgs command"),
+        }
+    }
+
+    #[test]
+    fn test_pqc_cli_parsing() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "pqc", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Pqc {
+                action: Some(PqcCommands::Status { json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Pqc Status command"),
+        }
+
+        // Aliases test
+        let cli_alias1 = Cli::try_parse_from(["craft", "post-quantum", "status"]).unwrap();
+        assert!(matches!(
+            cli_alias1.command,
+            Some(Commands::Pqc {
+                action: Some(PqcCommands::Status { json: false })
+            })
+        ));
+
+        let cli_alias2 = Cli::try_parse_from(["craft", "quantum", "status"]).unwrap();
+        assert!(matches!(
+            cli_alias2.command,
+            Some(Commands::Pqc {
+                action: Some(PqcCommands::Status { json: false })
+            })
+        ));
+
+        let cli_alias3 = Cli::try_parse_from(["craft", "mlkem", "status"]).unwrap();
+        assert!(matches!(
+            cli_alias3.command,
+            Some(Commands::Pqc {
+                action: Some(PqcCommands::Status { json: false })
+            })
+        ));
+
+        // Policy command
+        let cli_policy = Cli::try_parse_from([
+            "craft",
+            "pqc",
+            "policy",
+            "--set-mode",
+            "post_quantum_only",
+            "--ciphersuite",
+            "pure_mlkem1024",
+            "--allow-fallback",
+            "false",
+        ])
+        .unwrap();
+        match cli_policy.command {
+            Some(Commands::Pqc {
+                action:
+                    Some(PqcCommands::Policy {
+                        set_mode,
+                        ciphersuite,
+                        allow_fallback,
+                        json,
+                    }),
+            }) => {
+                assert_eq!(set_mode, Some("post_quantum_only".to_string()));
+                assert_eq!(ciphersuite, Some("pure_mlkem1024".to_string()));
+                assert_eq!(allow_fallback, Some(false));
+                assert!(!json);
+            }
+            _ => panic!("Expected Pqc Policy command"),
+        }
+
+        // Keygen command
+        let cli_keygen =
+            Cli::try_parse_from(["craft", "pqc", "keygen", "--suite", "mlkem768", "--json"])
+                .unwrap();
+        match cli_keygen.command {
+            Some(Commands::Pqc {
+                action: Some(PqcCommands::Keygen { suite, algo, json }),
+            }) => {
+                assert_eq!(suite, Some("mlkem768".to_string()));
+                assert_eq!(algo, None);
+                assert!(json);
+            }
+            _ => panic!("Expected Pqc Keygen command"),
+        }
+
+        // Bench command
+        let cli_bench =
+            Cli::try_parse_from(["craft", "pqc", "bench", "--iterations", "25"]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Pqc {
+                action: Some(PqcCommands::Bench { iterations, json }),
+            }) => {
+                assert_eq!(iterations, 25);
+                assert!(!json);
+            }
+            _ => panic!("Expected Pqc Bench command"),
+        }
+
+        // Migrate command
+        let cli_migrate =
+            Cli::try_parse_from(["craft", "pqc", "migrate", "--phase", "enforced_pqc"]).unwrap();
+        match cli_migrate.command {
+            Some(Commands::Pqc {
+                action: Some(PqcCommands::Migrate { phase, json }),
+            }) => {
+                assert_eq!(phase, "enforced_pqc");
+                assert!(!json);
+            }
+            _ => panic!("Expected Pqc Migrate command"),
         }
     }
 }

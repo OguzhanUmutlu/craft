@@ -180,7 +180,60 @@ Craft implements end-to-end cryptographic supply chain verification, in-toto Sta
 6. **Daemon Supervisor & IPC Commands**:
    - `SupplyChainService` coordinates in-process verification, background attestation downloads, and Prometheus metrics (`craft_supply_chain_verifications_total`, `craft_supply_chain_violations_total`, `craft_supply_chain_strict_blocked_total`, `craft_supply_chain_trust_anchors_active`).
    - IPC commands: `SupplyChainVerify`, `SupplyChainGetPolicy`, `SupplyChainSetPolicy`, `SupplyChainInspectAttestation`, `HermeticBuildRun`.
-7. **Lifecycle Event Hooks**:
+8. Lifecycle Event Hooks:
    - `HookBus` dispatches: `SupplyChainVerified`, `SupplyChainViolationBlocked`, `HermeticBuildCompleted` with context (`artifact_sha256`, `slsa_level`, `signer_identity`, `build_digest`, `violation_reasons`).
+
+---
+
+## 7. Autonomous Quantum-Resistant Cryptography, ML-KEM & State Machine Post-Quantum Hardening
+
+Phase 33 incorporates pure-Rust post-quantum cryptography to defend against Harvest-Now-Decrypt-Later (HNDL) adversaries and secure inter-server communication, Raft consensus commits, and remote management channels.
+
+```
+[ Client / Peer Node ]                                 [ Server / Supervisor Daemon ]
+         │                                                            │
+         │  1. PqcHandshakeProposal (CRAFT_PQC_MAGIC = "PQCS")        │
+         ├───────────────────────────────────────────────────────────►│
+         │     supported_suites: [HybridX25519MlKem768, PureMlKem768] │  2. Policy & Downgrade Evaluation
+         │     client_ephemeral_pk: (x25519_pk || mlkem768_pk)        │     reject_classical_downgrade()
+         │                                                            │
+         │  3. PqcHandshakeResponse                                   │
+         │◄───────────────────────────────────────────────────────────┤
+         │     selected_suite: HybridX25519MlKem768                   │
+         │     ciphertext: (x25519_eph || mlkem768_ct)                │
+         │     node_cert_signature: ML-DSA-65 signature               │
+         │                                                            │
+         ▼                                                            ▼
+[ Derive Shared Secret SS ]                                  [ Derive Shared Secret SS ]
+  SS = HKDF-SHA256(ss_x25519 || ss_mlkem, "craft-pqc-hybrid-v1")
+```
+
+### Invariants & Mathematical Formulations:
+1. **Pure-Rust NIST FIPS 203 ML-KEM (Kyber-768/1024)**:
+   - Ring arithmetic in $R_q = \mathbb{Z}_q[X]/(X^{256}+1)$ with $q=3329$.
+   - NTT polynomial representation using official NIST FIPS 203 `ZETAS[128]` bit-reversed table.
+   - Fast Montgomery reduction ($\mu \equiv -q^{-1} \pmod{2^{16}} = -3327$) and Barrett reduction.
+   - Cooley-Tukey forward NTT and Gentleman-Sande inverse NTT with scaling by $n^{-1} \equiv 3303 \pmod{3329}$.
+   - Centered Binomial Distribution (CBD2) noise sampling and byte-aligned packing (`pack_10`/`unpack_10`, `pack_4`/`unpack_4`, `pack_11`/`unpack_11`, `pack_5`/`unpack_5`).
+2. **Pure-Rust RFC 7748 Curve25519 & Hybrid KEM**:
+   - 5-limb radix-$2^{51}$ field arithmetic over $\mathbb{F}_{2^{255}-19}$ with `fe_reduce` bounds guarantee.
+   - Constant-time Montgomery ladder for $x$-coordinate scalar multiplication without timing side-channels.
+   - Dual-encapsulation combining classical security with quantum resistance:
+     $$SS = \text{HKDF-SHA256}\left(\text{IKM} = ss_{\text{x25519}} \parallel ss_{\text{mlkem768}},\,\text{salt} = \text{"craft-pqc-hybrid-v1"},\,\text{info} = \text{"craft-pqc-kem-session"}\right)$$
+3. **Pure-Rust NIST FIPS 204 ML-DSA-65 (Dilithium)**:
+   - Lattice-based digital signature scheme ensuring quantum-resistant consensus commit integrity.
+   - Verifies state machine updates, mTLS certificate extensions, and provenance attestations with tamper detection.
+4. **Wire Protocol & Downgrade Attack Prevention**:
+   - Binary framing with magic header `CRAFT_PQC_MAGIC = [0x50, 0x51, 0x43, 0x53]` (`PQCS`).
+   - Downgrade attack defense: under `PostQuantumOnly` enforcement mode, any proposal requesting classical-only algorithms (`ClassicX25519`, RSA, ECDSA) is immediately rejected with `DowngradeAttackRejected`.
+5. **Daemon Supervision & IPC**:
+   - In-process `PqcService` calculates Harvest Defense Score (Classic: 0%, Hybrid: 95%, PostQuantum: 100%).
+   - IPC requests: `PqcGetStatus`, `PqcSetPolicy`, `PqcGenerateKeyPair`, `PqcBenchmark`, `PqcMigrateNode`.
+   - Prometheus metrics: `craft_pqc_handshakes_total`, `craft_pqc_quantum_safe_sessions_total`, `craft_pqc_downgrades_blocked_total`, `craft_pqc_harvest_defense_score`, `craft_pqc_enforcement_mode`.
+6. **Cluster Migration State Machine**:
+   - `Planning`: classical-only baseline mode.
+   - `DualStack`: hybrid negotiation with classical fallback permitted (95% defense score).
+   - `EnforcedPqc`: classical fallback forbidden, pure/hybrid post-quantum cipher suites enforced (100% defense score).
+
 
 

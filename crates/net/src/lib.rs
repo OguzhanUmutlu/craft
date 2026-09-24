@@ -11,6 +11,7 @@ pub mod loopback;
 pub mod live_splicer;
 pub mod mtls;
 pub mod packet_inspector;
+pub mod pqc_transport;
 pub mod query;
 pub mod raknet;
 pub mod rcon;
@@ -45,6 +46,11 @@ pub use loopback::{enable_bedrock_loopback, is_bedrock_loopback_enabled};
 pub use mtls::{CertMetadata, MtlsEngine, NodeCertBundle, RootCaBundle};
 pub use packet_inspector::{
     AnomalySeverity, NettyPacketInspector, PacketFloodAnomaly, PacketRateSummary,
+};
+pub use pqc_transport::{
+    decode_pqc_proposal, decode_pqc_response, encode_pqc_proposal, encode_pqc_response,
+    PqcClientHandshake, PqcHandshakeProposal, PqcHandshakeResponse, PqcNodeCertBundle,
+    PqcServerTransport, PqcSessionContext, CRAFT_PQC_MAGIC, CRAFT_PQC_VERSION,
 };
 pub use query::{ping_server_auto, probe_tcp_port, UniversalPingStatus};
 pub use raft_transport::{

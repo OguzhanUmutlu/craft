@@ -64,6 +64,9 @@ pub enum LifecycleEvent {
     SupplyChainVerified,
     SupplyChainViolationBlocked,
     HermeticBuildCompleted,
+    PqcHandshakeCompleted,
+    PqcPolicyMigrated,
+    PqcDegradedFallbackDetected,
 }
 
 impl LifecycleEvent {
@@ -122,6 +125,9 @@ impl LifecycleEvent {
             Self::SupplyChainVerified => "on_supply_chain_verified",
             Self::SupplyChainViolationBlocked => "on_supply_chain_violation_blocked",
             Self::HermeticBuildCompleted => "on_hermetic_build_completed",
+            Self::PqcHandshakeCompleted => "on_pqc_handshake_completed",
+            Self::PqcPolicyMigrated => "on_pqc_policy_migrated",
+            Self::PqcDegradedFallbackDetected => "on_pqc_degraded_fallback_detected",
         }
     }
 
@@ -181,6 +187,9 @@ impl LifecycleEvent {
             "on_supply_chain_verified" | "supply_chain_verified" | "verified" => Some(Self::SupplyChainVerified),
             "on_supply_chain_violation_blocked" | "supply_chain_violation_blocked" | "violation_blocked" => Some(Self::SupplyChainViolationBlocked),
             "on_hermetic_build_completed" | "hermetic_build_completed" | "hermetic_build" => Some(Self::HermeticBuildCompleted),
+            "on_pqc_handshake_completed" | "pqc_handshake_completed" | "pqc_handshake" => Some(Self::PqcHandshakeCompleted),
+            "on_pqc_policy_migrated" | "pqc_policy_migrated" | "pqc_migrate" => Some(Self::PqcPolicyMigrated),
+            "on_pqc_degraded_fallback_detected" | "pqc_degraded_fallback_detected" | "pqc_fallback" => Some(Self::PqcDegradedFallbackDetected),
             _ => None,
         }
     }
@@ -240,6 +249,9 @@ impl LifecycleEvent {
             Self::SupplyChainVerified,
             Self::SupplyChainViolationBlocked,
             Self::HermeticBuildCompleted,
+            Self::PqcHandshakeCompleted,
+            Self::PqcPolicyMigrated,
+            Self::PqcDegradedFallbackDetected,
         ]
     }
 }

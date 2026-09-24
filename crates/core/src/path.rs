@@ -86,6 +86,12 @@ pub struct CraftPaths {
     pub supply_chain_policy_file: PathBuf,
     pub supply_chain_registry_file: PathBuf,
     pub supply_chain_lock: PathBuf,
+    pub pqc_dir: PathBuf,
+    pub pqc_keys_dir: PathBuf,
+    pub pqc_certs_dir: PathBuf,
+    pub pqc_policy_file: PathBuf,
+    pub pqc_registry_file: PathBuf,
+    pub pqc_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -171,6 +177,12 @@ impl CraftPaths {
         let supply_chain_policy_file = supply_chain_dir.join("policy.toml");
         let supply_chain_registry_file = supply_chain_dir.join("registry.toml");
         let supply_chain_lock = locks_dir.join("supply_chain.lock");
+        let pqc_dir = home.join("pqc");
+        let pqc_keys_dir = pqc_dir.join("keys");
+        let pqc_certs_dir = pqc_dir.join("certs");
+        let pqc_policy_file = pqc_dir.join("policy.json");
+        let pqc_registry_file = pqc_dir.join("registry.json");
+        let pqc_lock = locks_dir.join("pqc.lock");
 
         Self {
             home,
@@ -254,6 +266,12 @@ impl CraftPaths {
             supply_chain_policy_file,
             supply_chain_registry_file,
             supply_chain_lock,
+            pqc_dir,
+            pqc_keys_dir,
+            pqc_certs_dir,
+            pqc_policy_file,
+            pqc_registry_file,
+            pqc_lock,
         }
     }
 
@@ -308,6 +326,9 @@ impl CraftPaths {
         let ebpf_flamegraphs_dir = ebpf_dir.join("flamegraphs");
         let supply_chain_dir = home.join("supply_chain");
         let supply_chain_attestations_dir = supply_chain_dir.join("attestations");
+        let pqc_dir = home.join("pqc");
+        let pqc_keys_dir = pqc_dir.join("keys");
+        let pqc_certs_dir = pqc_dir.join("certs");
 
         // Ensure all primary directories exist
         for dir in [
@@ -349,6 +370,9 @@ impl CraftPaths {
             &ebpf_flamegraphs_dir,
             &supply_chain_dir,
             &supply_chain_attestations_dir,
+            &pqc_dir,
+            &pqc_keys_dir,
+            &pqc_certs_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -398,6 +422,9 @@ impl CraftPaths {
         let supply_chain_policy_file = supply_chain_dir.join("policy.toml");
         let supply_chain_registry_file = supply_chain_dir.join("registry.toml");
         let supply_chain_lock = locks_dir.join("supply_chain.lock");
+        let pqc_policy_file = pqc_dir.join("policy.json");
+        let pqc_registry_file = pqc_dir.join("registry.json");
+        let pqc_lock = locks_dir.join("pqc.lock");
 
         Ok(Self {
             home,
@@ -481,7 +508,19 @@ impl CraftPaths {
             supply_chain_policy_file,
             supply_chain_registry_file,
             supply_chain_lock,
+            pqc_dir,
+            pqc_keys_dir,
+            pqc_certs_dir,
+            pqc_policy_file,
+            pqc_registry_file,
+            pqc_lock,
         })
+    }
+
+    /// Returns the public or private key path for a specific PQC key identifier
+    pub fn pqc_key_path(&self, key_id: &str, is_secret: bool) -> PathBuf {
+        let ext = if is_secret { "key" } else { "pub" };
+        self.pqc_keys_dir.join(format!("{}.{}", key_id, ext))
     }
 
     /// Returns the attestation file path for a given artifact SHA-256 digest

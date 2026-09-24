@@ -75,7 +75,8 @@ Full multi-phased task breakdowns and 5–10 line technical specifications are t
 
 | Category | Phase | Focus Area | Status |
 | :--- | :--- | :--- | :--- |
-| **Current** | **Phase 33** | Autonomous Quantum-Resistant Cryptographic Transition, ML-KEM Key Exchange & State Machine Post-Quantum Hardening (ML-KEM/Kyber-768/1024, ML-DSA/Dilithium, hybrid SSH/mTLS, post-quantum Raft) | **READY** |
+| **Current** | **Phase 34** | Autonomous Hardware Security Module (HSM) Integration, PKCS#11 Enclave Attestation & Zero-Knowledge Cluster Membership (Hardware tokens, Nitro enclaves, TPM 2.0, zk-SNARKs) | **READY** |
+| **Done** | **Phase 33** | Autonomous Quantum-Resistant Cryptographic Transition, ML-KEM Key Exchange & State Machine Post-Quantum Hardening (ML-KEM/Kyber-768/1024, ML-DSA/Dilithium, hybrid SSH/mTLS, post-quantum Raft) | **COMPLETED** |
 | **Done** | **Phase 32** | Immutable Cryptographic Supply Chain Verification, Hermetic Build Isolation & Reproducible Artifact Signing (In-toto attestations, SLSA Level 3, Sigstore/Cosign verification, seccomp-bpf namespaces) | **COMPLETED** |
 | **Done** | **Phase 31** | Autonomous eBPF Kernel Observability, Zero-Overhead Syscall Profiling & Deep JVM GC Telemetry (Native eBPF tracepoints, async-profiler integration, JVM safepoint analysis) | **COMPLETED** |
 | **Done** | **Phase 30** | Distributed Heterogeneous Cluster Orchestration, Zero-Downtime Live Migration & Global Anycast Session Continuity (Live migration, memory pre-copy, CRIU checkpointing, BGP/Anycast route steering) | **COMPLETED** |

@@ -33,6 +33,7 @@ pub mod new;
 pub mod numa;
 pub mod optimize;
 pub mod plugin;
+pub mod pqc;
 pub mod profile;
 pub mod prop;
 pub mod quota;

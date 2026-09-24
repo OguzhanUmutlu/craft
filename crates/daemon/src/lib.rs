@@ -13,6 +13,7 @@ pub mod ipc;
 pub mod log_indexer;
 pub mod migration_service;
 pub mod modpack_service;
+pub mod pqc_service;
 pub mod protocol;
 pub mod multi_raft_service;
 pub mod quota_service;
@@ -35,6 +36,7 @@ pub use ebpf_service::EbpfObservabilityService;
 pub use hermetic::{create_reproducible_zip, normalize_filesystem_metadata, sanitize_env, HermeticBuildRunner, SeccompBpfPolicy};
 pub use migration_service::MigrationService;
 pub use multi_raft_service::MultiRaftService;
+pub use pqc_service::PqcService;
 pub use supply_chain_service::SupplyChainService;
 
 pub use autopilot::AutopilotEngine;

@@ -1800,6 +1800,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             LiveMigration,
             EbpfObservability,
             SupplyChain,
+            PostQuantum,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1939,6 +1940,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::SupplyChain);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Post-Quantum Cryptography & ML-KEM Hardening",
+            )
+            .with_aliases(&["pqc", "quantum", "kyber", "mlkem"]),
+        );
+        actions.push(ToolItemAction::PostQuantum);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2010,6 +2021,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::SupplyChain => {
                     supply_chain_tui(paths).await?;
+                }
+                ToolItemAction::PostQuantum => {
+                    pqc_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3364,6 +3378,37 @@ pub async fn supply_chain_tui(paths: &CraftPaths) -> Result<()> {
     )?;
     Ok(())
 }
+
+async fn pqc_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::PqcService::global(paths);
+    let status = service.get_status()?;
+    let policy = service.get_policy()?;
+
+    let mut lines = Vec::new();
+    lines.push("POST-QUANTUM CRYPTOGRAPHY & QUANTUM-HARDENED TRANSITION".bold().to_string());
+    lines.push("Pure-Rust ML-KEM-768/1024, ML-DSA-65 & Hybrid State Machine Security".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Enforcement Mode:       {}", status.enforcement_mode));
+    lines.push(format!("Active Ciphersuite:     {}", status.active_ciphersuite));
+    lines.push(format!("Harvest Defense Score:  {:.1}%", status.harvest_defense_score));
+    lines.push(format!("Migration Phase:        {:?}", status.migration_phase));
+    lines.push(format!("Active PQC Keypairs:    {}", status.active_key_pairs));
+    lines.push(format!("Total Handshakes:       {}", status.total_handshakes));
+    lines.push(format!("Blocked Downgrades:     {}", status.rejected_downgrades));
+    lines.push(format!("Classical Fallback:     {}", if policy.allow_classical_fallback { "Allowed" } else { "Forbidden" }));
+    lines.push(format!("Enforce PQ Signatures:  {}", if policy.enforce_quantum_signatures { "Yes" } else { "No" }));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft pqc status                       Inspect post-quantum status & score".green().to_string());
+    lines.push("  craft pqc policy [--set-mode hybrid]   Query or modify PQC policy rules".green().to_string());
+    lines.push("  craft pqc keygen [--suite hybrid]      Generate new ML-KEM/ML-DSA keypair".green().to_string());
+    lines.push("  craft pqc bench [--iterations 10]      Run micro-benchmarks on host CPU".green().to_string());
+    lines.push("  craft pqc migrate --phase dual_stack   Transition cluster migration phase".green().to_string());
+
+    show_modal_message("POST-QUANTUM CRYPTOGRAPHY (ML-KEM / ML-DSA)", &lines, false)?;
+    Ok(())
+}
+
 
 
 

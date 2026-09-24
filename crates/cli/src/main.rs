@@ -555,6 +555,9 @@ async fn main() {
         Some(Commands::Attest { action }) => {
             commands::attest::handle_attest(action, &paths).await
         }
+        Some(Commands::Pqc { action }) => {
+            commands::pqc::handle_pqc(action, &paths).await
+        }
     };
 
     if let Err(e) = result {

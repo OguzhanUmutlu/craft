@@ -237,6 +237,20 @@ pub enum IpcRequest {
         args: Vec<String>,
         allow_network: bool,
     },
+    PqcGetStatus,
+    PqcSetPolicy {
+        policy: craft_core::pqc::PqcPolicy,
+    },
+    PqcGenerateKeyPair {
+        suite: Option<craft_core::pqc::PqcCipherSuite>,
+        algorithm: Option<craft_core::pqc::PqcSigningAlgorithm>,
+    },
+    PqcBenchmark {
+        iterations: usize,
+    },
+    PqcMigrateNode {
+        target_phase: craft_core::pqc::PqcMigrationPhase,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -462,6 +476,23 @@ pub enum IpcResponse {
     },
     HermeticBuildResult {
         manifest: craft_core::HermeticBuildManifest,
+    },
+    PqcStatus {
+        summary: craft_core::pqc::PqcStatusSummary,
+    },
+    PqcPolicyResult {
+        policy: craft_core::pqc::PqcPolicy,
+        message: String,
+    },
+    PqcKeyPairResult {
+        keypair: craft_core::pqc::PqcKeyPair,
+    },
+    PqcBenchmarkResult {
+        report: craft_core::pqc::PqcBenchmarkReport,
+    },
+    PqcMigrationResult {
+        new_phase: craft_core::pqc::PqcMigrationPhase,
+        message: String,
     },
     Error { error: String },
 }

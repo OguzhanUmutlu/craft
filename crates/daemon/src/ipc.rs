@@ -1255,6 +1255,52 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::PqcGetStatus => {
+                let service = crate::pqc_service::PqcService::global(supervisor.paths());
+                let resp = match service.get_status() {
+                    Ok(summary) => IpcResponse::PqcStatus { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PqcSetPolicy { policy } => {
+                let service = crate::pqc_service::PqcService::global(supervisor.paths());
+                let resp = match service.set_policy(policy.clone()) {
+                    Ok(()) => IpcResponse::PqcPolicyResult {
+                        policy,
+                        message: "PQC policy updated successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PqcGenerateKeyPair { suite, algorithm } => {
+                let service = crate::pqc_service::PqcService::global(supervisor.paths());
+                let resp = match service.generate_keypair(suite, algorithm) {
+                    Ok(keypair) => IpcResponse::PqcKeyPairResult { keypair },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PqcBenchmark { iterations } => {
+                let service = crate::pqc_service::PqcService::global(supervisor.paths());
+                let resp = match service.run_benchmark(iterations) {
+                    Ok(report) => IpcResponse::PqcBenchmarkResult { report },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PqcMigrateNode { target_phase } => {
+                let service = crate::pqc_service::PqcService::global(supervisor.paths());
+                let resp = match service.migrate_phase(target_phase) {
+                    Ok(message) => IpcResponse::PqcMigrationResult {
+                        new_phase: target_phase,
+                        message,
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -2639,6 +2685,68 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::HermeticBuildResult { manifest } => Ok(manifest),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_pqc_status(&mut self) -> Result<craft_core::pqc::PqcStatusSummary> {
+        match self.request(IpcRequest::PqcGetStatus).await? {
+            IpcResponse::PqcStatus { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_pqc_policy(
+        &mut self,
+        policy: craft_core::pqc::PqcPolicy,
+    ) -> Result<(craft_core::pqc::PqcPolicy, String)> {
+        match self.request(IpcRequest::PqcSetPolicy { policy }).await? {
+            IpcResponse::PqcPolicyResult { policy, message } => Ok((policy, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn generate_pqc_keypair(
+        &mut self,
+        suite: Option<craft_core::pqc::PqcCipherSuite>,
+        algorithm: Option<craft_core::pqc::PqcSigningAlgorithm>,
+    ) -> Result<craft_core::pqc::PqcKeyPair> {
+        match self
+            .request(IpcRequest::PqcGenerateKeyPair { suite, algorithm })
+            .await?
+        {
+            IpcResponse::PqcKeyPairResult { keypair } => Ok(keypair),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn benchmark_pqc(
+        &mut self,
+        iterations: usize,
+    ) -> Result<craft_core::pqc::PqcBenchmarkReport> {
+        match self
+            .request(IpcRequest::PqcBenchmark { iterations })
+            .await?
+        {
+            IpcResponse::PqcBenchmarkResult { report } => Ok(report),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn migrate_pqc_node(
+        &mut self,
+        target_phase: craft_core::pqc::PqcMigrationPhase,
+    ) -> Result<(craft_core::pqc::PqcMigrationPhase, String)> {
+        match self
+            .request(IpcRequest::PqcMigrateNode { target_phase })
+            .await?
+        {
+            IpcResponse::PqcMigrationResult { new_phase, message } => Ok((new_phase, message)),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }
