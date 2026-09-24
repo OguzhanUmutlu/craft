@@ -28,6 +28,7 @@ pub mod shm_bus;
 pub mod patch_engine;
 pub mod microvm;
 pub mod crash_triage;
+pub mod rdma;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -101,6 +102,12 @@ pub use microvm::{
 pub use crash_triage::{
     benchmark_crash_triage, signal_name_from_code, AiTriageAdvisor, ElfCoreDumpParser,
     JvmHsErrParser, MemoryLeakDetector, SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSEGV,
+};
+pub use rdma::{
+    benchmark_rdma_fabric, compute_roce_icrc, RdmaFailoverBridge, RdmaProtectionDomain,
+    RdmaVerbsEngine, RoceV2Bth, RoceV2Packet, RoceV2Reth, BTH_OPCODE_ACKNOWLEDGE,
+    BTH_OPCODE_RDMA_READ_REQUEST, BTH_OPCODE_RDMA_READ_RESPONSE, BTH_OPCODE_RDMA_WRITE_ONLY,
+    BTH_OPCODE_SEND_ONLY, ROCE_V2_UDP_PORT,
 };
 
 

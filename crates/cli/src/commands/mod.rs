@@ -64,4 +64,4 @@ pub mod shm;
 pub mod patch;
 pub mod vm;
 pub mod crash;
-
+pub mod rdma;

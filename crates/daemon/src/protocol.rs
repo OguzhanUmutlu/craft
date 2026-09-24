@@ -405,6 +405,29 @@ pub enum IpcRequest {
     CrashResetMetrics {
         server: Option<String>,
     },
+    RdmaGetStatus {
+        server: Option<String>,
+    },
+    RdmaRegisterMr {
+        server: Option<String>,
+        size: usize,
+        read_only: bool,
+    },
+    RdmaConnectPeer {
+        server: Option<String>,
+        peer_address: String,
+        qp_num: u32,
+    },
+    RdmaListPeers {
+        server: Option<String>,
+    },
+    RdmaRunBench {
+        iterations: usize,
+        buffer_size: usize,
+    },
+    RdmaResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -778,6 +801,24 @@ pub enum IpcResponse {
         metrics: craft_core::crash::CrashTriageBenchmarkMetrics,
     },
     CrashMetricsResetResult {
+        message: String,
+    },
+    RdmaStatusResult {
+        summary: craft_core::rdma::RdmaStatusSummary,
+    },
+    RdmaMrResult {
+        mr: craft_core::rdma::MemoryRegionDescriptor,
+    },
+    RdmaPeerResult {
+        peer: craft_core::rdma::RdmaPeerEndpoint,
+    },
+    RdmaPeersListResult {
+        peers: Vec<craft_core::rdma::RdmaPeerEndpoint>,
+    },
+    RdmaBenchResult {
+        metrics: craft_core::rdma::RdmaBenchmarkMetrics,
+    },
+    RdmaMetricsResetResult {
         message: String,
     },
     Error { error: String },

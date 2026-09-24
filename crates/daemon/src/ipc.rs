@@ -1751,6 +1751,56 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::RdmaGetStatus { server } => {
+                let service = crate::rdma_service::RdmaService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(summary) => IpcResponse::RdmaStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::RdmaRegisterMr { server, size, read_only } => {
+                let service = crate::rdma_service::RdmaService::global(supervisor.paths());
+                let resp = match service.register_mr(server.as_deref(), size, read_only) {
+                    Ok(mr) => IpcResponse::RdmaMrResult { mr },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::RdmaConnectPeer { server, peer_address, qp_num } => {
+                let service = crate::rdma_service::RdmaService::global(supervisor.paths());
+                let resp = match service.connect_peer(server.as_deref(), &peer_address, qp_num) {
+                    Ok(peer) => IpcResponse::RdmaPeerResult { peer },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::RdmaListPeers { server } => {
+                let service = crate::rdma_service::RdmaService::global(supervisor.paths());
+                let resp = match service.list_peers(server.as_deref()) {
+                    Ok(peers) => IpcResponse::RdmaPeersListResult { peers },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::RdmaRunBench { iterations, buffer_size } => {
+                let service = crate::rdma_service::RdmaService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations, buffer_size) {
+                    Ok(metrics) => IpcResponse::RdmaBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::RdmaResetMetrics { server } => {
+                let service = crate::rdma_service::RdmaService::global(supervisor.paths());
+                let resp = match service.reset_metrics(server.as_deref()) {
+                    Ok(_) => IpcResponse::RdmaMetricsResetResult {
+                        message: "RDMA fabric metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -3792,6 +3842,97 @@ impl DaemonClient {
     ) -> Result<String> {
         match self.request(IpcRequest::CrashResetMetrics { server }).await? {
             IpcResponse::CrashMetricsResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_rdma_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<craft_core::rdma::RdmaStatusSummary> {
+        match self.request(IpcRequest::RdmaGetStatus { server }).await? {
+            IpcResponse::RdmaStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn register_rdma_mr(
+        &mut self,
+        server: Option<String>,
+        size: usize,
+        read_only: bool,
+    ) -> Result<craft_core::rdma::MemoryRegionDescriptor> {
+        match self
+            .request(IpcRequest::RdmaRegisterMr {
+                server,
+                size,
+                read_only,
+            })
+            .await?
+        {
+            IpcResponse::RdmaMrResult { mr } => Ok(mr),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn connect_rdma_peer(
+        &mut self,
+        server: Option<String>,
+        peer_address: String,
+        qp_num: u32,
+    ) -> Result<craft_core::rdma::RdmaPeerEndpoint> {
+        match self
+            .request(IpcRequest::RdmaConnectPeer {
+                server,
+                peer_address,
+                qp_num,
+            })
+            .await?
+        {
+            IpcResponse::RdmaPeerResult { peer } => Ok(peer),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_rdma_peers(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<Vec<craft_core::rdma::RdmaPeerEndpoint>> {
+        match self.request(IpcRequest::RdmaListPeers { server }).await? {
+            IpcResponse::RdmaPeersListResult { peers } => Ok(peers),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_rdma_bench(
+        &mut self,
+        iterations: usize,
+        buffer_size: usize,
+    ) -> Result<craft_core::rdma::RdmaBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::RdmaRunBench {
+                iterations,
+                buffer_size,
+            })
+            .await?
+        {
+            IpcResponse::RdmaBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_rdma_metrics(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<String> {
+        match self.request(IpcRequest::RdmaResetMetrics { server }).await? {
+            IpcResponse::RdmaMetricsResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

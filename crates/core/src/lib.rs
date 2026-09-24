@@ -45,6 +45,7 @@ pub mod shm;
 pub mod patch;
 pub mod vm;
 pub mod crash;
+pub mod rdma;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -222,6 +223,12 @@ pub use crash::{
     CrashTriageBenchmarkMetrics, CrashTriageRegistry, CrashTriageReport, CrashTriageStatusSummary,
     CrashType, ElfCoreDumpHeader, ElfCoreNoteType, ElfCoreParsedInfo, JvmCrashLogParsed,
     LeakCandidate, CrashRemediationAction,
+};
+pub use rdma::{
+    render_rdma_bench_text, render_rdma_peers_text, render_rdma_status_text, MemoryRegionDescriptor,
+    QueuePairConfig, RdmaAccessFlags, RdmaBenchmarkMetrics, RdmaLinkStatus, RdmaPeerEndpoint,
+    RdmaQpState, RdmaQpType, RdmaRegistry, RdmaStatusSummary, RdmaTransportType, WorkCompletion,
+    WorkCompletionStatus, WorkOpcode, WorkRequest,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

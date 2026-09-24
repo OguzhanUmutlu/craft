@@ -678,6 +678,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<CrashCommands>,
     },
+    /// Autonomous RDMA Network Acceleration, InfiniBand/RoCE Direct Memory Offloading & Sub-Microsecond Inter-Server Fabric
+    #[command(name = "rdma", alias = "infiniband", alias = "roce", alias = "verbs")]
+    Rdma {
+        #[command(subcommand)]
+        action: Option<RdmaCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2425,6 +2431,82 @@ pub enum CrashCommands {
         /// Filter by server name
         #[arg(short, long)]
         server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum RdmaCommands {
+    /// Inspect RDMA transport status, NIC hardware info, active memory regions, and peer links
+    Status {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Register a direct memory region (MR) with lkey/rkey protections for RDMA offloading
+    MrRegister {
+        /// Filter or associate with server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Memory region size in bytes
+        #[arg(short = 'b', long = "size", default_value_t = 67108864)]
+        size: usize,
+        /// Register with read-only access (disallows remote writes)
+        #[arg(long)]
+        read_only: bool,
+        /// Allow atomic operations (fetch-and-add, compare-and-swap)
+        #[arg(long)]
+        atomic: bool,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Connect a remote RDMA peer queue pair (QP)
+    Connect {
+        /// Peer identifier or node name
+        #[arg(short, long)]
+        peer: String,
+        /// Peer socket address (ip:port)
+        #[arg(short, long)]
+        addr: String,
+        /// Transport protocol: rocev2, rocev1, infiniband
+        #[arg(short, long, default_value = "rocev2")]
+        transport: String,
+        /// Maximum Transmission Unit (MTU) size (1024, 2048, 4096)
+        #[arg(short, long, default_value_t = 4096)]
+        mtu: u32,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List active RDMA peers, link states, and round-trip latencies
+    Peers {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark RDMA write/read memory throughput and sub-microsecond latency
+    Bench {
+        /// Target peer node (runs synthetic loopback benchmark if omitted)
+        #[arg(short, long)]
+        peer: Option<String>,
+        /// Benchmark iteration count
+        #[arg(short, long, default_value_t = 10000)]
+        iterations: usize,
+        /// Transfer payload size in bytes
+        #[arg(short, long, default_value_t = 4096)]
+        size: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset RDMA cumulative transfer counters and error metrics
+    ResetMetrics {
         /// Output in machine-readable JSON format
         #[arg(long)]
         json: bool,
@@ -5576,6 +5658,89 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Vm ResetMetrics command"),
+        }
+    }
+
+    #[test]
+    fn test_rdma_cli_commands() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "rdma", "status", "-s", "lobby", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Rdma {
+                action: Some(RdmaCommands::Status { server, json }),
+            }) => {
+                assert_eq!(server, Some("lobby".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Rdma Status command"),
+        }
+
+        // MrRegister command via alias 'roce'
+        let cli_mr = Cli::try_parse_from(["craft", "roce", "mr-register", "--size", "1048576", "--read-only", "--json"]).unwrap();
+        match cli_mr.command {
+            Some(Commands::Rdma {
+                action: Some(RdmaCommands::MrRegister { size, read_only, atomic, json, .. }),
+            }) => {
+                assert_eq!(size, 1048576);
+                assert!(read_only);
+                assert!(!atomic);
+                assert!(json);
+            }
+            _ => panic!("Expected Rdma MrRegister command via alias 'roce'"),
+        }
+
+        // Connect command via alias 'infiniband'
+        let cli_connect = Cli::try_parse_from([
+            "craft", "infiniband", "connect", "-p", "node-2", "-a", "192.168.10.2:4791", "-t", "rocev2", "-m", "4096", "--json",
+        ])
+        .unwrap();
+        match cli_connect.command {
+            Some(Commands::Rdma {
+                action: Some(RdmaCommands::Connect { peer, addr, transport, mtu, json }),
+            }) => {
+                assert_eq!(peer, "node-2");
+                assert_eq!(addr, "192.168.10.2:4791");
+                assert_eq!(transport, "rocev2");
+                assert_eq!(mtu, 4096);
+                assert!(json);
+            }
+            _ => panic!("Expected Rdma Connect command via alias 'infiniband'"),
+        }
+
+        // Peers command via alias 'verbs'
+        let cli_peers = Cli::try_parse_from(["craft", "verbs", "peers", "--json"]).unwrap();
+        match cli_peers.command {
+            Some(Commands::Rdma {
+                action: Some(RdmaCommands::Peers { json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Rdma Peers command via alias 'verbs'"),
+        }
+
+        // Bench command
+        let cli_bench = Cli::try_parse_from(["craft", "rdma", "bench", "-p", "node-2", "-i", "5000", "-s", "2048", "--json"]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Rdma {
+                action: Some(RdmaCommands::Bench { peer, iterations, size, json }),
+            }) => {
+                assert_eq!(peer, Some("node-2".to_string()));
+                assert_eq!(iterations, 5000);
+                assert_eq!(size, 2048);
+                assert!(json);
+            }
+            _ => panic!("Expected Rdma Bench command"),
+        }
+
+        // ResetMetrics command
+        let cli_reset = Cli::try_parse_from(["craft", "rdma", "reset-metrics", "--json"]).unwrap();
+        match cli_reset.command {
+            Some(Commands::Rdma {
+                action: Some(RdmaCommands::ResetMetrics { json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Rdma ResetMetrics command"),
         }
     }
 }

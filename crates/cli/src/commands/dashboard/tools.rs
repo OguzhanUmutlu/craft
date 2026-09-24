@@ -1809,6 +1809,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             DynamicBinaryPatching,
             MicroVmSandboxing,
             CrashTriagingAndLeakDetection,
+            RdmaAcceleration,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2038,6 +2039,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::CrashTriagingAndLeakDetection);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Autonomous RDMA Network Acceleration & Sub-Microsecond Fabric",
+            )
+            .with_aliases(&["rdma", "infiniband", "roce", "verbs"]),
+        );
+        actions.push(ToolItemAction::RdmaAcceleration);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2136,6 +2147,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::CrashTriagingAndLeakDetection => {
                     crash_tui(paths).await?;
+                }
+                ToolItemAction::RdmaAcceleration => {
+                    rdma_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3834,6 +3848,54 @@ async fn crash_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft crash reset-metrics               Reset cumulative triage metrics".green().to_string());
 
     show_modal_message("AI CRASH TRIAGING & LEAK DETECTION", &lines, false)?;
+    Ok(())
+}
+
+async fn rdma_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::RdmaService::global(paths);
+    let status = service.get_status(None)?;
+    let peers = service.list_peers(None).unwrap_or_default();
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS RDMA ACCELERATION & SUB-MICROSECOND INTER-SERVER FABRIC".bold().to_string());
+    lines.push("InfiniBand, RoCE v2, Zero-Copy Direct Memory Transfers & Transparent TCP Failover".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Fabric Link Status:     {}", status.link_status.as_str()));
+    lines.push(format!("Active Queue Pairs:     {}", status.active_qps));
+    lines.push(format!("Registered MRs:         {} (Allocated: {:.2} MB)", status.registered_mrs, status.total_registered_bytes as f64 / (1024.0 * 1024.0)));
+    lines.push(format!("Tx Bandwidth:           {:.2} Gbps", status.tx_bandwidth_gbps));
+    lines.push(format!("Rx Bandwidth:           {:.2} Gbps", status.rx_bandwidth_gbps));
+    lines.push(format!("Avg Direct DMA Latency: {} ns ({:.3} us)", status.avg_latency_nanos, status.avg_latency_nanos as f64 / 1000.0));
+    lines.push(format!("TCP Fallback Active:    {}", if status.fallback_to_tcp_active { "[WARN] YES (Degraded Mode)" } else { "[OK] NO (Zero-Copy DMA)" }));
+    lines.push("".to_string());
+    if !peers.is_empty() {
+        lines.push("Connected RDMA Fabric Peers:".bold().to_string());
+        for p in peers.iter().take(3) {
+            lines.push(
+                format!(
+                    "  {} / {} (QP #{}, {}) - {} ns RTT [{}]",
+                    p.node_id,
+                    p.gid_or_ip,
+                    p.qp_num,
+                    p.transport.as_str(),
+                    p.rtt_nanos,
+                    p.link_status.as_str()
+                )
+                .dimmed()
+                .to_string(),
+            );
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft rdma status [--server <S>]        Inspect RDMA adapter, MR allocations & peers".green().to_string());
+    lines.push("  craft rdma mr-register [--size <BYTES>] Register zero-copy direct memory region".green().to_string());
+    lines.push("  craft rdma connect -p <PEER> -a <ADDR>  Connect remote RDMA queue pair endpoint".green().to_string());
+    lines.push("  craft rdma peers                        List connected fabric peers & RTT latencies".green().to_string());
+    lines.push("  craft rdma bench                        Benchmark direct memory read/write latency".green().to_string());
+    lines.push("  craft rdma reset-metrics                Reset cumulative transfer counters".green().to_string());
+
+    show_modal_message("RDMA ACCELERATION & FABRIC", &lines, false)?;
     Ok(())
 }
 

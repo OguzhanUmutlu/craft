@@ -92,6 +92,9 @@ pub enum LifecycleEvent {
     CrashTriageCompleted,
     MemoryLeakDetected,
     CriticalFaultRemediated,
+    RdmaLinkEstablished,
+    RdmaFailoverTriggered,
+    RdmaLatencySpike,
 }
 
 impl LifecycleEvent {
@@ -178,6 +181,9 @@ impl LifecycleEvent {
             Self::CrashTriageCompleted => "on_crash_triage_completed",
             Self::MemoryLeakDetected => "on_memory_leak_detected",
             Self::CriticalFaultRemediated => "on_critical_fault_remediated",
+            Self::RdmaLinkEstablished => "on_rdma_link_established",
+            Self::RdmaFailoverTriggered => "on_rdma_failover_triggered",
+            Self::RdmaLatencySpike => "on_rdma_latency_spike",
         }
     }
 
@@ -265,6 +271,9 @@ impl LifecycleEvent {
             "on_crash_triage_completed" | "crash_triage_completed" | "crash_triage" => Some(Self::CrashTriageCompleted),
             "on_memory_leak_detected" | "memory_leak_detected" | "leak_detected" | "leak" => Some(Self::MemoryLeakDetected),
             "on_critical_fault_remediated" | "critical_fault_remediated" | "fault_remediated" => Some(Self::CriticalFaultRemediated),
+            "on_rdma_link_established" | "rdma_link_established" | "rdma_link" | "rdma_connect" => Some(Self::RdmaLinkEstablished),
+            "on_rdma_failover_triggered" | "rdma_failover_triggered" | "rdma_failover" => Some(Self::RdmaFailoverTriggered),
+            "on_rdma_latency_spike" | "rdma_latency_spike" | "rdma_spike" => Some(Self::RdmaLatencySpike),
             _ => None,
         }
     }
@@ -352,6 +361,9 @@ impl LifecycleEvent {
             Self::CrashTriageCompleted,
             Self::MemoryLeakDetected,
             Self::CriticalFaultRemediated,
+            Self::RdmaLinkEstablished,
+            Self::RdmaFailoverTriggered,
+            Self::RdmaLatencySpike,
         ]
     }
 }
@@ -596,6 +608,14 @@ pub struct HookContext {
     pub root_cause: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remediation_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rdma_peer_node: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rdma_transport: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rdma_latency_nanos: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rdma_bandwidth_gbps: Option<f64>,
 }
 
 impl HookContext {
@@ -929,6 +949,39 @@ impl HookContext {
         ctx.details = Some(format!(
             "Critical crash fault '{}' remediated with action: {}",
             report_id, action
+        ));
+        ctx
+    }
+
+    pub fn for_rdma_link_established(peer_node: &str, transport: &str, bandwidth_gbps: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::RdmaLinkEstablished);
+        ctx.rdma_peer_node = Some(peer_node.to_string());
+        ctx.rdma_transport = Some(transport.to_string());
+        ctx.rdma_bandwidth_gbps = Some(bandwidth_gbps);
+        ctx.details = Some(format!(
+            "RDMA link established with peer '{}' via {} ({:.1} Gbps)",
+            peer_node, transport, bandwidth_gbps
+        ));
+        ctx
+    }
+
+    pub fn for_rdma_failover(peer_node: &str, reason: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::RdmaFailoverTriggered);
+        ctx.rdma_peer_node = Some(peer_node.to_string());
+        ctx.details = Some(format!(
+            "RDMA failover to TCP fallback triggered for peer '{}': {}",
+            peer_node, reason
+        ));
+        ctx
+    }
+
+    pub fn for_rdma_latency_spike(peer_node: &str, latency_nanos: u64, threshold_nanos: u64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::RdmaLatencySpike);
+        ctx.rdma_peer_node = Some(peer_node.to_string());
+        ctx.rdma_latency_nanos = Some(latency_nanos);
+        ctx.details = Some(format!(
+            "RDMA transfer latency spike on peer '{}': {} ns > {} ns threshold",
+            peer_node, latency_nanos, threshold_nanos
         ));
         ctx
     }
@@ -1669,5 +1722,53 @@ mod tests {
         let rem_ctx = HookContext::for_critical_fault_remediated("report-41", "ApplyHotfix");
         assert_eq!(rem_ctx.event, "on_critical_fault_remediated");
         assert_eq!(rem_ctx.remediation_status.as_deref(), Some("ApplyHotfix"));
+    }
+
+    #[test]
+    fn test_rdma_lifecycle_events() {
+        assert_eq!(LifecycleEvent::RdmaLinkEstablished.as_str(), "on_rdma_link_established");
+        assert_eq!(LifecycleEvent::RdmaFailoverTriggered.as_str(), "on_rdma_failover_triggered");
+        assert_eq!(LifecycleEvent::RdmaLatencySpike.as_str(), "on_rdma_latency_spike");
+
+        assert_eq!(
+            LifecycleEvent::from_name("on_rdma_link_established"),
+            Some(LifecycleEvent::RdmaLinkEstablished)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("rdma_link"),
+            Some(LifecycleEvent::RdmaLinkEstablished)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_rdma_failover_triggered"),
+            Some(LifecycleEvent::RdmaFailoverTriggered)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("rdma_failover"),
+            Some(LifecycleEvent::RdmaFailoverTriggered)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_rdma_latency_spike"),
+            Some(LifecycleEvent::RdmaLatencySpike)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("rdma_spike"),
+            Some(LifecycleEvent::RdmaLatencySpike)
+        );
+
+        let link_ctx = HookContext::for_rdma_link_established("node-2", "RoCEv2", 100.0);
+        assert_eq!(link_ctx.event, "on_rdma_link_established");
+        assert_eq!(link_ctx.rdma_peer_node.as_deref(), Some("node-2"));
+        assert_eq!(link_ctx.rdma_transport.as_deref(), Some("RoCEv2"));
+        assert_eq!(link_ctx.rdma_bandwidth_gbps, Some(100.0));
+
+        let failover_ctx = HookContext::for_rdma_failover("node-2", "Excessive CRC errors");
+        assert_eq!(failover_ctx.event, "on_rdma_failover_triggered");
+        assert_eq!(failover_ctx.rdma_peer_node.as_deref(), Some("node-2"));
+        assert!(failover_ctx.details.unwrap().contains("Excessive CRC errors"));
+
+        let spike_ctx = HookContext::for_rdma_latency_spike("node-2", 4500, 2000);
+        assert_eq!(spike_ctx.event, "on_rdma_latency_spike");
+        assert_eq!(spike_ctx.rdma_peer_node.as_deref(), Some("node-2"));
+        assert_eq!(spike_ctx.rdma_latency_nanos, Some(4500));
     }
 }

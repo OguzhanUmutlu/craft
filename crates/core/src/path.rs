@@ -127,6 +127,10 @@ pub struct CraftPaths {
     pub crash_reports_dir: PathBuf,
     pub crash_dumps_dir: PathBuf,
     pub crash_lock: PathBuf,
+    pub rdma_dir: PathBuf,
+    pub rdma_registry_file: PathBuf,
+    pub rdma_state_file: PathBuf,
+    pub rdma_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -253,6 +257,10 @@ impl CraftPaths {
         let crash_reports_dir = crash_dir.join("reports");
         let crash_dumps_dir = crash_dir.join("dumps");
         let crash_lock = locks_dir.join("crash.lock");
+        let rdma_dir = home.join("rdma");
+        let rdma_registry_file = rdma_dir.join("registry.json");
+        let rdma_state_file = rdma_dir.join("state.json");
+        let rdma_lock = locks_dir.join("rdma.lock");
 
         Self {
             home,
@@ -377,6 +385,10 @@ impl CraftPaths {
             crash_reports_dir,
             crash_dumps_dir,
             crash_lock,
+            rdma_dir,
+            rdma_registry_file,
+            rdma_state_file,
+            rdma_lock,
         }
     }
 
@@ -446,6 +458,7 @@ impl CraftPaths {
         let crash_dir = home.join("crash");
         let crash_reports_dir = crash_dir.join("reports");
         let crash_dumps_dir = crash_dir.join("dumps");
+        let rdma_dir = home.join("rdma");
 
         // Ensure all primary directories exist
         for dir in [
@@ -502,6 +515,7 @@ impl CraftPaths {
             &crash_dir,
             &crash_reports_dir,
             &crash_dumps_dir,
+            &rdma_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -577,6 +591,9 @@ impl CraftPaths {
         let crash_registry_file = crash_dir.join("registry.json");
         let crash_state_file = crash_dir.join("state.json");
         let crash_lock = locks_dir.join("crash.lock");
+        let rdma_registry_file = rdma_dir.join("registry.json");
+        let rdma_state_file = rdma_dir.join("state.json");
+        let rdma_lock = locks_dir.join("rdma.lock");
 
         Ok(Self {
             home,
@@ -701,7 +718,16 @@ impl CraftPaths {
             crash_reports_dir,
             crash_dumps_dir,
             crash_lock,
+            rdma_dir,
+            rdma_registry_file,
+            rdma_state_file,
+            rdma_lock,
         })
+    }
+
+    /// Returns the memory region file path for a specific MR ID
+    pub fn rdma_mr_path(&self, mr_id: &str) -> PathBuf {
+        self.rdma_dir.join(format!("{}.mr", mr_id))
     }
 
     /// Returns the crash report JSON file path for a specific report ID

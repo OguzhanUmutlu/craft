@@ -1921,6 +1921,90 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Fetches RDMA status from the remote host
+    pub fn get_remote_rdma_status(&self, server: Option<&str>) -> Result<craft_core::rdma::RdmaStatusSummary> {
+        let mut cmd = "craft rdma status --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote RDMA status query failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote RDMA status: {}", e)))
+    }
+
+    /// Registers a memory region on the remote host
+    pub fn register_remote_rdma_mr(&self, server: Option<&str>, size: usize, read_only: bool) -> Result<craft_core::rdma::MemoryRegionDescriptor> {
+        let mut cmd = format!("craft rdma mr-register --size {} --json", size);
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        if read_only {
+            cmd.push_str(" --read-only");
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote RDMA MR register failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote RDMA MR descriptor: {}", e)))
+    }
+
+    /// Connects to a remote RDMA peer endpoint
+    pub fn connect_remote_rdma_peer(&self, server: Option<&str>, peer: &str, qp: u32) -> Result<craft_core::rdma::RdmaPeerEndpoint> {
+        let mut cmd = format!("craft rdma connect --peer {} --qp {} --json", peer, qp);
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote RDMA peer connect failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote RDMA peer endpoint: {}", e)))
+    }
+
+    /// Lists connected RDMA peer endpoints on the remote host
+    pub fn list_remote_rdma_peers(&self, server: Option<&str>) -> Result<Vec<craft_core::rdma::RdmaPeerEndpoint>> {
+        let mut cmd = "craft rdma peers --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote RDMA peers query failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote RDMA peers list: {}", e)))
+    }
+
+    /// Runs an RDMA zero-copy throughput benchmark on the remote host
+    pub fn run_remote_rdma_bench(&self, iterations: usize, buffer_size: usize) -> Result<craft_core::rdma::RdmaBenchmarkMetrics> {
+        let cmd = format!("craft rdma bench --iterations {} --buffer-size {} --json", iterations, buffer_size);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote RDMA bench failed: {}", err.trim())));
+        }
+        serde_json::from_str(&stdout).map_err(|e| CraftError::Other(format!("Failed to parse remote RDMA bench metrics: {}", e)))
+    }
+
+    /// Resets RDMA metrics on the remote host
+    pub fn reset_remote_rdma_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft rdma reset-metrics --json".to_string();
+        if let Some(srv) = server {
+            cmd.push_str(&format!(" --server {}", srv));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote RDMA metrics reset failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

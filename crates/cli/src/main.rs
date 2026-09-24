@@ -582,6 +582,9 @@ async fn main() {
         Some(Commands::Crash { action }) => {
             commands::crash::handle_crash(&paths, action).await
         }
+        Some(Commands::Rdma { action }) => {
+            commands::rdma::handle_rdma(&paths, action).await
+        }
     };
 
     if let Err(e) = result {
