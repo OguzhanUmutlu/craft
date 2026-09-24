@@ -1419,6 +1419,44 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries the memory compaction, THP, and page pool status from the remote host
+    pub fn get_remote_compaction_status(&self) -> Result<String> {
+        let cmd = "craft memory status --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote compaction status query failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Triggers an immediate memory defragmentation cycle on the remote host
+    pub fn trigger_remote_compaction(&self) -> Result<String> {
+        let cmd = "craft memory compact --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote memory compaction trigger failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Configures transparent hugepages and defrag policy on the remote host
+    pub fn configure_remote_thp(&self, mode: &str, defrag: Option<&str>) -> Result<String> {
+        let mut cmd = format!("craft memory thp --mode {}", mode);
+        if let Some(def) = defrag {
+            cmd.push_str(&format!(" --defrag {}", def));
+        }
+        cmd.push_str(" --json");
+
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!("Remote THP configuration failed: {}", err.trim())));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

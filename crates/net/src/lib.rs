@@ -12,6 +12,7 @@ pub mod loopback;
 pub mod live_splicer;
 pub mod mtls;
 pub mod packet_inspector;
+pub mod page_pool;
 pub mod pqc_transport;
 pub mod query;
 pub mod raknet;
@@ -54,6 +55,10 @@ pub use loopback::{enable_bedrock_loopback, is_bedrock_loopback_enabled};
 pub use mtls::{CertMetadata, MtlsEngine, NodeCertBundle, RootCaBundle};
 pub use packet_inspector::{
     AnomalySeverity, NettyPacketInspector, PacketFloodAnomaly, PacketRateSummary,
+};
+pub use page_pool::{
+    PageDescriptor, PagePoolPipelineResult, PageSliceRef, SocketPagePool, CACHE_LINE_ALIGNMENT,
+    DEFAULT_PAGE_SLICE_SIZE, DEFAULT_POOL_CAPACITY_PAGES,
 };
 pub use pqc_transport::{
     decode_pqc_proposal, decode_pqc_response, encode_pqc_proposal, encode_pqc_response,

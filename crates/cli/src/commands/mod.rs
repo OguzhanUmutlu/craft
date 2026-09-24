@@ -25,6 +25,7 @@ pub mod load;
 pub mod live_migrate;
 pub mod log;
 pub mod ls;
+pub mod memory;
 pub mod mesh;
 pub mod migrate;
 pub mod mod_cmd;

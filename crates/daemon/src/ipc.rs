@@ -1356,6 +1356,51 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::CompactionGetStatus => {
+                let service = crate::compaction_service::CompactionService::global(supervisor.paths());
+                let resp = match service.get_status() {
+                    Ok(summary) => IpcResponse::CompactionStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CompactionTriggerNow => {
+                let service = crate::compaction_service::CompactionService::global(supervisor.paths());
+                let resp = match service.trigger_compaction() {
+                    Ok(result) => IpcResponse::CompactionCycleResult { result },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CompactionConfigureThp { mode, defrag } => {
+                let service = crate::compaction_service::CompactionService::global(supervisor.paths());
+                let resp = match service.configure_thp(mode, defrag) {
+                    Ok(status) => IpcResponse::CompactionThpConfigured {
+                        status,
+                        message: format!("Transparent hugepages configured to mode='{}', defrag='{}'", mode, defrag),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CompactionGetPoolStats => {
+                let service = crate::compaction_service::CompactionService::global(supervisor.paths());
+                let resp = match service.get_pool_stats() {
+                    Ok(stats) => IpcResponse::CompactionPoolStatsResult { stats },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CompactionResetMetrics => {
+                let service = crate::compaction_service::CompactionService::global(supervisor.paths());
+                let resp = match service.reset_metrics() {
+                    Ok(()) => IpcResponse::CompactionMetricsResetResult {
+                        message: "Compaction and page pool metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -2888,6 +2933,50 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::HsmZkVerifyResult { valid, message } => Ok((valid, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_compaction_status(&mut self) -> Result<craft_core::CompactionStatusSummary> {
+        match self.request(IpcRequest::CompactionGetStatus).await? {
+            IpcResponse::CompactionStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn trigger_compaction(&mut self) -> Result<craft_core::CompactionCycleResult> {
+        match self.request(IpcRequest::CompactionTriggerNow).await? {
+            IpcResponse::CompactionCycleResult { result } => Ok(result),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn configure_thp(
+        &mut self,
+        mode: craft_core::ThpMode,
+        defrag: craft_core::ThpDefragMode,
+    ) -> Result<(craft_core::ThpStatus, String)> {
+        match self.request(IpcRequest::CompactionConfigureThp { mode, defrag }).await? {
+            IpcResponse::CompactionThpConfigured { status, message } => Ok((status, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_compaction_pool_stats(&mut self) -> Result<craft_core::PagePoolStats> {
+        match self.request(IpcRequest::CompactionGetPoolStats).await? {
+            IpcResponse::CompactionPoolStatsResult { stats } => Ok(stats),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_compaction_metrics(&mut self) -> Result<String> {
+        match self.request(IpcRequest::CompactionResetMetrics).await? {
+            IpcResponse::CompactionMetricsResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

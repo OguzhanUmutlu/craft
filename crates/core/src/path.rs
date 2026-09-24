@@ -98,6 +98,9 @@ pub struct CraftPaths {
     pub hsm_zk_dir: PathBuf,
     pub hsm_registry_file: PathBuf,
     pub hsm_lock: PathBuf,
+    pub compaction_dir: PathBuf,
+    pub compaction_registry_file: PathBuf,
+    pub compaction_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -195,6 +198,9 @@ impl CraftPaths {
         let hsm_zk_dir = hsm_dir.join("zk");
         let hsm_registry_file = hsm_dir.join("registry.json");
         let hsm_lock = locks_dir.join("hsm.lock");
+        let compaction_dir = home.join("compaction");
+        let compaction_registry_file = compaction_dir.join("registry.json");
+        let compaction_lock = locks_dir.join("compaction.lock");
 
         Self {
             home,
@@ -290,6 +296,9 @@ impl CraftPaths {
             hsm_zk_dir,
             hsm_registry_file,
             hsm_lock,
+            compaction_dir,
+            compaction_registry_file,
+            compaction_lock,
         }
     }
 
@@ -453,6 +462,9 @@ impl CraftPaths {
         let pqc_lock = locks_dir.join("pqc.lock");
         let hsm_registry_file = hsm_dir.join("registry.json");
         let hsm_lock = locks_dir.join("hsm.lock");
+        let compaction_dir = home.join("compaction");
+        let compaction_registry_file = compaction_dir.join("registry.json");
+        let compaction_lock = locks_dir.join("compaction.lock");
 
         Ok(Self {
             home,
@@ -548,6 +560,9 @@ impl CraftPaths {
             hsm_zk_dir,
             hsm_registry_file,
             hsm_lock,
+            compaction_dir,
+            compaction_registry_file,
+            compaction_lock,
         })
     }
 
@@ -564,6 +579,11 @@ impl CraftPaths {
     /// Returns the ZKP membership commitment file path for a cluster ID
     pub fn hsm_zk_path(&self, cluster_id: &str) -> PathBuf {
         self.hsm_zk_dir.join(format!("{}.json", cluster_id))
+    }
+
+    /// Returns the compaction profile path for a specific server or node
+    pub fn compaction_profile_path(&self, identifier: &str) -> PathBuf {
+        self.compaction_dir.join(format!("{}.json", identifier))
     }
 
     /// Returns the public or private key path for a specific PQC key identifier

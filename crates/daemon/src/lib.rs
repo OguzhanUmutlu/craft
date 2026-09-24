@@ -1,6 +1,7 @@
 pub mod anvil_service;
 pub mod autopilot;
 pub mod circuit_breaker;
+pub mod compaction_service;
 pub mod dpdk_service;
 pub mod ebpf_service;
 pub mod edge_broker;
@@ -32,6 +33,7 @@ pub mod web_dashboard;
 pub mod webhooks;
 
 pub use anvil_service::AnvilService;
+pub use compaction_service::CompactionService;
 pub use dpdk_service::DpdkNumaService;
 pub use ebpf_service::EbpfObservabilityService;
 pub use hermetic::{create_reproducible_zip, normalize_filesystem_metadata, sanitize_env, HermeticBuildRunner, SeccompBpfPolicy};

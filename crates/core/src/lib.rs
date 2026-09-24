@@ -4,6 +4,7 @@ pub mod autoscale_config;
 pub mod backup_config;
 pub mod cache;
 pub mod cluster_config;
+pub mod compaction;
 pub mod config;
 pub mod crypto;
 pub mod dr_config;
@@ -53,6 +54,11 @@ pub use autoscale_config::{AutoscaleRegistry, ServerAutoscalePolicy};
 pub use cgroups::{
     CgroupStatSnapshot, CgroupV2Driver, QuotaRegistry, QuotaUsageSummary, ServerPriority,
     ServerResourceLimit, TenantQuota,
+};
+pub use compaction::{
+    BuddyAllocatorState, CompactionCycleResult, CompactionOrchestrator, CompactionRegistry,
+    CompactionStatus, CompactionStatusSummary, PagePoolConfig, PagePoolStats, ThpDefragMode,
+    ThpMode, ThpStatus, HUGEPAGE_SIZE_BYTES, MAX_BUDDY_ORDER, PAGE_SIZE_BYTES,
 };
 pub use crypto::{derive_key, ChaCha20, ChaCha20Poly1305, Poly1305};
 pub use dr_config::{DrFailoverReport, DrPlan, DrRecoveryResult, DrRunbook, DrSimulationResult};

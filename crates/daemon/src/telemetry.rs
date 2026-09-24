@@ -182,6 +182,7 @@ pub async fn generate_prometheus_metrics(
     out.push_str(&crate::supply_chain_service::SupplyChainService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::pqc_service::PqcService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::hsm_service::HsmService::global(paths).generate_prometheus_metrics());
+    out.push_str(&crate::compaction_service::CompactionService::global(paths).generate_prometheus_metrics());
 
     out
 }

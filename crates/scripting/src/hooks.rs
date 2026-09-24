@@ -70,6 +70,9 @@ pub enum LifecycleEvent {
     HsmTokenInserted,
     EnclaveAttestationVerified,
     ZkMembershipValidated,
+    MemoryCompactionCompleted,
+    HighMemoryFragmentationDetected,
+    ThpAllocationStallAlert,
 }
 
 impl LifecycleEvent {
@@ -134,6 +137,9 @@ impl LifecycleEvent {
             Self::HsmTokenInserted => "on_hsm_token_inserted",
             Self::EnclaveAttestationVerified => "on_enclave_attestation_verified",
             Self::ZkMembershipValidated => "on_zk_membership_validated",
+            Self::MemoryCompactionCompleted => "on_memory_compaction_completed",
+            Self::HighMemoryFragmentationDetected => "on_high_memory_fragmentation_detected",
+            Self::ThpAllocationStallAlert => "on_thp_allocation_stall_alert",
         }
     }
 
@@ -199,6 +205,9 @@ impl LifecycleEvent {
             "on_hsm_token_inserted" | "hsm_token_inserted" | "token_inserted" => Some(Self::HsmTokenInserted),
             "on_enclave_attestation_verified" | "enclave_attestation_verified" | "attestation_verified" => Some(Self::EnclaveAttestationVerified),
             "on_zk_membership_validated" | "zk_membership_validated" | "membership_validated" => Some(Self::ZkMembershipValidated),
+            "on_memory_compaction_completed" | "memory_compaction_completed" | "memory_compaction" => Some(Self::MemoryCompactionCompleted),
+            "on_high_memory_fragmentation_detected" | "high_memory_fragmentation_detected" | "high_fragmentation" => Some(Self::HighMemoryFragmentationDetected),
+            "on_thp_allocation_stall_alert" | "thp_allocation_stall_alert" | "thp_stall" => Some(Self::ThpAllocationStallAlert),
             _ => None,
         }
     }
@@ -264,6 +273,9 @@ impl LifecycleEvent {
             Self::HsmTokenInserted,
             Self::EnclaveAttestationVerified,
             Self::ZkMembershipValidated,
+            Self::MemoryCompactionCompleted,
+            Self::HighMemoryFragmentationDetected,
+            Self::ThpAllocationStallAlert,
         ]
     }
 }
@@ -440,6 +452,14 @@ pub struct HookContext {
     pub build_digest: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub violation_reasons: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compaction_migrated_pages: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compaction_hugepages: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fragmentation_index: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thp_alloc_stalls: Option<u64>,
 }
 
 impl HookContext {
@@ -541,6 +561,38 @@ impl HookContext {
         ctx.lock_symbol = Some(lock_symbol.to_string());
         ctx.contention_ms = Some(contention_ms);
         ctx.details = Some(format!("Thread lock contention surge on '{}': {:.2}ms", lock_symbol, contention_ms));
+        ctx
+    }
+
+    pub fn for_memory_compaction(migrated: u64, hugepages: u64, frag_index: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::MemoryCompactionCompleted);
+        ctx.compaction_migrated_pages = Some(migrated);
+        ctx.compaction_hugepages = Some(hugepages);
+        ctx.fragmentation_index = Some(frag_index);
+        ctx.details = Some(format!(
+            "Memory compaction cycle coalesced {} pages into {} 2MB hugepages (frag index: {:.2})",
+            migrated, hugepages, frag_index
+        ));
+        ctx
+    }
+
+    pub fn for_high_memory_fragmentation(frag_index: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::HighMemoryFragmentationDetected);
+        ctx.fragmentation_index = Some(frag_index);
+        ctx.details = Some(format!(
+            "High memory fragmentation ratio detected: {:.2}",
+            frag_index
+        ));
+        ctx
+    }
+
+    pub fn for_thp_allocation_stall(stalls: u64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::ThpAllocationStallAlert);
+        ctx.thp_alloc_stalls = Some(stalls);
+        ctx.details = Some(format!(
+            "Transparent hugepage allocation stall alert: {} stalls observed",
+            stalls
+        ));
         ctx
     }
 }

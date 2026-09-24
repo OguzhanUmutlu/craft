@@ -271,6 +271,14 @@ pub enum IpcRequest {
         cluster_id: String,
         proof: craft_core::hsm::ZkMembershipProof,
     },
+    CompactionGetStatus,
+    CompactionTriggerNow,
+    CompactionConfigureThp {
+        mode: craft_core::ThpMode,
+        defrag: craft_core::ThpDefragMode,
+    },
+    CompactionGetPoolStats,
+    CompactionResetMetrics,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -531,6 +539,22 @@ pub enum IpcResponse {
     },
     HsmZkVerifyResult {
         valid: bool,
+        message: String,
+    },
+    CompactionStatusResult {
+        summary: craft_core::CompactionStatusSummary,
+    },
+    CompactionCycleResult {
+        result: craft_core::CompactionCycleResult,
+    },
+    CompactionThpConfigured {
+        status: craft_core::ThpStatus,
+        message: String,
+    },
+    CompactionPoolStatsResult {
+        stats: craft_core::PagePoolStats,
+    },
+    CompactionMetricsResetResult {
         message: String,
     },
     Error { error: String },

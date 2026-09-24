@@ -636,6 +636,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<HsmCommands>,
     },
+    /// Autonomous Memory Compaction, Transparent Hugepage Defragmentation & Kernel page_pool Offloading
+    #[command(name = "memory", alias = "compaction", alias = "hugepages", alias = "pagepool", alias = "thp")]
+    Memory {
+        #[command(subcommand)]
+        action: Option<MemoryCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -1962,6 +1968,49 @@ pub enum HsmCommands {
         #[arg(long = "cluster")]
         cluster: String,
         /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum MemoryCommands {
+    /// Show memory fragmentation, buddy allocator distribution, THP status and page pool statistics
+    Status {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Trigger proactive memory compaction and buddy page coalescing
+    Compact {
+        /// Target buddy allocator order (default: 9 for 2MB hugepages)
+        #[arg(long, default_value = "9")]
+        target_order: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Configure transparent hugepages (THP) mode and defragmentation strategy
+    Thp {
+        /// THP allocation mode: always, madvise, never
+        #[arg(long)]
+        mode: String,
+        /// Defragmentation strategy: always, defer, defer+madvise, madvise, never
+        #[arg(long)]
+        defrag: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark zero-allocation socket page pool recycling throughput and DMA performance
+    Pool {
+        /// Number of simulated packets to cycle through page pool
+        #[arg(long, default_value = "10000")]
+        packets: usize,
+        /// Packet slice payload size in bytes
+        #[arg(long, default_value = "1024")]
+        slice_size: usize,
+        /// Output in machine-readable JSON format
         #[arg(long)]
         json: bool,
     },
@@ -4566,6 +4615,78 @@ mod tests {
                 assert!(!json);
             }
             _ => panic!("Expected Hsm ZkMember command"),
+        }
+    }
+
+    #[test]
+    fn test_memory_cli_parsing() {
+        // Status command
+        let cli_status = Cli::try_parse_from(["craft", "memory", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Memory {
+                action: Some(MemoryCommands::Status { json }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Memory Status command"),
+        }
+
+        // Aliases
+        for alias in &["compaction", "hugepages", "pagepool", "thp"] {
+            let cli_alias = Cli::try_parse_from(["craft", alias, "status"]).unwrap();
+            assert!(matches!(
+                cli_alias.command,
+                Some(Commands::Memory {
+                    action: Some(MemoryCommands::Status { json: false })
+                })
+            ));
+        }
+
+        // Compact command
+        let cli_compact = Cli::try_parse_from([
+            "craft", "memory", "compact", "--target-order", "9", "--json",
+        ])
+        .unwrap();
+        match cli_compact.command {
+            Some(Commands::Memory {
+                action: Some(MemoryCommands::Compact { target_order, json }),
+            }) => {
+                assert_eq!(target_order, 9);
+                assert!(json);
+            }
+            _ => panic!("Expected Memory Compact command"),
+        }
+
+        // Thp command
+        let cli_thp = Cli::try_parse_from([
+            "craft", "memory", "thp", "--mode", "always", "--defrag", "defer+madvise", "--json",
+        ])
+        .unwrap();
+        match cli_thp.command {
+            Some(Commands::Memory {
+                action: Some(MemoryCommands::Thp { mode, defrag, json }),
+            }) => {
+                assert_eq!(mode, "always");
+                assert_eq!(defrag, Some("defer+madvise".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Memory Thp command"),
+        }
+
+        // Pool command
+        let cli_pool = Cli::try_parse_from([
+            "craft", "memory", "pool", "--packets", "5000", "--slice-size", "2048", "--json",
+        ])
+        .unwrap();
+        match cli_pool.command {
+            Some(Commands::Memory {
+                action: Some(MemoryCommands::Pool { packets, slice_size, json }),
+            }) => {
+                assert_eq!(packets, 5000);
+                assert_eq!(slice_size, 2048);
+                assert!(json);
+            }
+            _ => panic!("Expected Memory Pool command"),
         }
     }
 }

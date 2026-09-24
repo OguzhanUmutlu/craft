@@ -1802,6 +1802,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             SupplyChain,
             PostQuantum,
             HardwareSecurityModule,
+            MemoryCompaction,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -1961,6 +1962,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::HardwareSecurityModule);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Memory Compaction & Transparent Hugepages (THP)",
+            )
+            .with_aliases(&["memory", "compaction", "hugepages", "thp", "pagepool"]),
+        );
+        actions.push(ToolItemAction::MemoryCompaction);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2038,6 +2049,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::HardwareSecurityModule => {
                     hsm_tui(paths).await?;
+                }
+                ToolItemAction::MemoryCompaction => {
+                    memory_compaction_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -3449,6 +3463,47 @@ async fn hsm_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft hsm zk-member                    Prove zero-knowledge cluster membership".green().to_string());
 
     show_modal_message("HARDWARE SECURITY MODULE (HSM & TPM 2.0)", &lines, false)?;
+    Ok(())
+}
+
+async fn memory_compaction_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::CompactionService::global(paths);
+    let status = service.get_status()?;
+    let pool_stats = service.get_pool_stats()?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS MEMORY COMPACTION & TRANSPARENT HUGEPAGES (THP)".bold().to_string());
+    lines.push("Buddy Allocator Defragmentation, Page Pool Zero-Alloc & Kernel Offloading".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("THP Mode:                 {}", status.thp_status.enabled));
+    lines.push(format!("THP Defrag Mode:          {}", status.thp_status.defrag));
+    lines.push(format!(
+        "Fragmentation Index:      {:.2}% (Threshold: {:.1}%)",
+        status.fragmentation_index * 100.0,
+        status.fragmentation_threshold * 100.0
+    ));
+    lines.push(format!(
+        "Compaction Needed:        {}",
+        if status.compaction_needed { "Yes (Action Required)" } else { "No (Optimal)" }
+    ));
+    lines.push(format!("Total Compaction Cycles:  {}", status.total_cycles_completed));
+    lines.push(format!("Allocated Network Pages:  {}", status.total_pages_allocated));
+    lines.push(format!(
+        "Zero-Alloc Recycled:      {} ({:.1}% efficiency)",
+        status.pages_recycled, status.recycle_efficiency_percent
+    ));
+    lines.push(format!("Active Page Pool Slots:   {}", pool_stats.active_pages));
+    lines.push(format!("Page Pool Exhaustions:    {}", pool_stats.pool_exhaustions));
+    lines.push(format!("THP Hugepages Allocated:  {}", status.thp_status.hugepages_allocated));
+    lines.push(format!("THP Hugepages Split:      {}", status.thp_status.hugepages_split));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft memory status                    Display memory fragmentation & page pool stats".green().to_string());
+    lines.push("  craft memory compact                   Trigger immediate buddy page defragmentation".green().to_string());
+    lines.push("  craft memory thp --mode always         Configure transparent hugepages allocation".green().to_string());
+    lines.push("  craft memory pool --packets 10000      Benchmark zero-allocation socket packet pool".green().to_string());
+
+    show_modal_message("MEMORY COMPACTION & TRANSPARENT HUGEPAGES", &lines, false)?;
     Ok(())
 }
 

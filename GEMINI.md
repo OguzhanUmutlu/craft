@@ -75,7 +75,8 @@ Full multi-phased task breakdowns and 5–10 line technical specifications are t
 
 | Category | Phase | Focus Area | Status |
 | :--- | :--- | :--- | :--- |
-| **Current** | **Phase 35** | Autonomous Self-Optimizing Memory Compaction, Transparent Hugepage Defragmentation & Kernel page_pool Offloading (Zero-copy compaction, THP defragmentation, kernel page_pool, io_uring zero-alloc) | **READY** |
+| **Current** | **Phase 36** | Autonomous Self-Healing eBPF XDP Firewall, Anti-DDoS Mitigation & State-Machine Flow Tracking (eBPF XDP, Anti-DDoS, in-kernel BPF maps, line-rate filtering) | **READY** |
+| **Done** | **Phase 35** | Autonomous Self-Optimizing Memory Compaction, Transparent Hugepage Defragmentation & Kernel page_pool Offloading (Zero-copy compaction, THP defragmentation, kernel page_pool, io_uring zero-alloc) | **COMPLETED** |
 | **Done** | **Phase 34** | Autonomous Hardware Security Module (HSM) Integration, PKCS#11 Enclave Attestation & Zero-Knowledge Cluster Membership (Hardware tokens, Nitro enclaves, TPM 2.0, zk-SNARKs) | **COMPLETED** |
 | **Done** | **Phase 33** | Autonomous Quantum-Resistant Cryptographic Transition, ML-KEM Key Exchange & State Machine Post-Quantum Hardening (ML-KEM/Kyber-768/1024, ML-DSA/Dilithium, hybrid SSH/mTLS, post-quantum Raft) | **COMPLETED** |
 | **Done** | **Phase 32** | Immutable Cryptographic Supply Chain Verification, Hermetic Build Isolation & Reproducible Artifact Signing (In-toto attestations, SLSA Level 3, Sigstore/Cosign verification, seccomp-bpf namespaces) | **COMPLETED** |

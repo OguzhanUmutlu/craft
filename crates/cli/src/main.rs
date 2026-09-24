@@ -561,6 +561,9 @@ async fn main() {
         Some(Commands::Hsm { action }) => {
             commands::hsm::handle_hsm(action, &paths).await
         }
+        Some(Commands::Memory { action }) => {
+            commands::memory::handle_memory(&paths, action).await
+        }
     };
 
     if let Err(e) = result {
