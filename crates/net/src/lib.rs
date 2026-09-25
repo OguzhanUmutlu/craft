@@ -37,6 +37,7 @@ pub mod bft;
 pub mod jitter;
 pub mod neuromorphic;
 pub mod optical;
+pub mod ptp;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -154,6 +155,10 @@ pub use neuromorphic::{
 pub use optical::{
     benchmark_optical_crossbar, MemsCrossbarSwitch, OpticalWaveguideFrame, WdmMultiplexer,
     OPTICAL_FRAME_MAGIC, OPTICAL_HEADER_SIZE,
+};
+pub use ptp::{
+    benchmark_ptp_clock_sync, generate_ptp_status_summary, PtpClockServo, PtpMessage,
+    PtpMessageType, TrueTimeEngine, PTP_FRAME_MAGIC, PTP_HEADER_SIZE,
 };
 
 

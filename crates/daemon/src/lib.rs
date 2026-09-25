@@ -46,6 +46,7 @@ pub mod bft_service;
 pub mod jitter_service;
 pub mod neuromorphic_service;
 pub mod optical_service;
+pub mod ptp_service;
 
 pub use anvil_service::AnvilService;
 pub use compaction_service::CompactionService;
@@ -72,6 +73,7 @@ pub use bft_service::BftConsensusService;
 pub use jitter_service::JitterMitigationService;
 pub use neuromorphic_service::NeuromorphicService;
 pub use optical_service::OpticalSwitchService;
+pub use ptp_service::PtpClockService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

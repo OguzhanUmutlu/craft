@@ -636,6 +636,32 @@ pub enum IpcRequest {
     OpticalResetMetrics {
         server: Option<String>,
     },
+    PtpGetStatus {
+        server: Option<String>,
+    },
+    PtpSetServoMode {
+        server: Option<String>,
+        mode: String,
+    },
+    PtpQueryTrueTime {
+        server: Option<String>,
+    },
+    PtpStepServo {
+        server: Option<String>,
+        offset_ns: f64,
+        rtt_ns: f64,
+    },
+    PtpTriggerLeapSecondSmear {
+        server: Option<String>,
+        leap_seconds: i32,
+    },
+    PtpRunBench {
+        iterations: u32,
+        peer_count: u16,
+    },
+    PtpResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1222,6 +1248,30 @@ pub enum IpcResponse {
         metrics: craft_core::OpticalBenchmarkMetrics,
     },
     OpticalResetResult {
+        success: bool,
+    },
+    PtpStatusResult {
+        status: craft_core::PtpStatusSummary,
+    },
+    PtpModeUpdated {
+        success: bool,
+        mode: String,
+    },
+    PtpTrueTimeResult {
+        interval: craft_core::TrueTimeInterval,
+    },
+    PtpServoStepped {
+        success: bool,
+        corrected_offset_ns: f64,
+    },
+    PtpLeapSmearTriggered {
+        success: bool,
+        leap_seconds: i32,
+    },
+    PtpBenchResult {
+        metrics: craft_core::PtpBenchmarkMetrics,
+    },
+    PtpResetResult {
         success: bool,
     },
     Error { error: String },

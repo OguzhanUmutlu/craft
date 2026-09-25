@@ -2,9 +2,9 @@ use crate::protocol::{IpcRequest, IpcResponse};
 use crate::supervisor::Supervisor;
 use craft_core::{
     is_process_running, read_pid_file, remove_pid_file, write_pid_file, CraftError, CraftPaths,
-    MembraneRasterPoint, NeuromorphicBenchmarkMetrics, NeuromorphicStatusSummary,
-    OpticalBenchmarkMetrics, OpticalCircuit, OpticalRoutingMode, OpticalStatusSummary, Result,
-    TickPrediction,
+    ClockServoMode, MembraneRasterPoint, NeuromorphicBenchmarkMetrics, NeuromorphicStatusSummary,
+    OpticalBenchmarkMetrics, OpticalCircuit, OpticalRoutingMode, OpticalStatusSummary,
+    PtpBenchmarkMetrics, PtpStatusSummary, Result, TickPrediction, TrueTimeInterval,
 };
 use std::path::{Path, PathBuf};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -2319,6 +2319,63 @@ where
                 let service = crate::optical_service::OpticalSwitchService::global(supervisor.paths());
                 let resp = match service.reset_metrics() {
                     Ok(success) => IpcResponse::OpticalResetResult { success },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PtpGetStatus { server } => {
+                let service = crate::ptp_service::PtpClockService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(status) => IpcResponse::PtpStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PtpSetServoMode { server, mode } => {
+                let service = crate::ptp_service::PtpClockService::global(supervisor.paths());
+                let parsed_mode = mode.parse::<ClockServoMode>().unwrap_or(ClockServoMode::Autonomous);
+                let resp = match service.set_mode(parsed_mode, server.as_deref()) {
+                    Ok(_) => IpcResponse::PtpModeUpdated { success: true, mode: parsed_mode.to_string() },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PtpQueryTrueTime { server } => {
+                let service = crate::ptp_service::PtpClockService::global(supervisor.paths());
+                let resp = match service.query_truetime(server.as_deref()) {
+                    Ok(interval) => IpcResponse::PtpTrueTimeResult { interval },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PtpStepServo { server: _, offset_ns, rtt_ns } => {
+                let service = crate::ptp_service::PtpClockService::global(supervisor.paths());
+                let resp = match service.step_servo(offset_ns, rtt_ns, None) {
+                    Ok(corrected) => IpcResponse::PtpServoStepped { success: true, corrected_offset_ns: corrected },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PtpTriggerLeapSecondSmear { server: _, leap_seconds } => {
+                let service = crate::ptp_service::PtpClockService::global(supervisor.paths());
+                let resp = match service.trigger_leap_smear(leap_seconds, None) {
+                    Ok(success) => IpcResponse::PtpLeapSmearTriggered { success, leap_seconds },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PtpRunBench { iterations, peer_count } => {
+                let service = crate::ptp_service::PtpClockService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations, peer_count) {
+                    Ok(metrics) => IpcResponse::PtpBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::PtpResetMetrics { .. } => {
+                let service = crate::ptp_service::PtpClockService::global(supervisor.paths());
+                let resp = match service.reset_metrics() {
+                    Ok(success) => IpcResponse::PtpResetResult { success },
                     Err(e) => IpcResponse::Error { error: e.to_string() },
                 };
                 write_frame(&mut stream, &resp).await?;
@@ -5273,6 +5330,102 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::OpticalResetResult { success } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_ptp_status(&mut self, server: Option<&str>) -> Result<PtpStatusSummary> {
+        match self
+            .request(IpcRequest::PtpGetStatus {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::PtpStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_ptp_servo_mode(&mut self, mode: &str, server: Option<&str>) -> Result<String> {
+        match self
+            .request(IpcRequest::PtpSetServoMode {
+                server: server.map(|s| s.to_string()),
+                mode: mode.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::PtpModeUpdated { mode, .. } => Ok(mode),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn query_ptp_truetime(&mut self, server: Option<&str>) -> Result<TrueTimeInterval> {
+        match self
+            .request(IpcRequest::PtpQueryTrueTime {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::PtpTrueTimeResult { interval } => Ok(interval),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn step_ptp_servo(&mut self, offset_ns: f64, rtt_ns: f64, server: Option<&str>) -> Result<f64> {
+        match self
+            .request(IpcRequest::PtpStepServo {
+                server: server.map(|s| s.to_string()),
+                offset_ns,
+                rtt_ns,
+            })
+            .await?
+        {
+            IpcResponse::PtpServoStepped { corrected_offset_ns, .. } => Ok(corrected_offset_ns),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn trigger_ptp_leap_smear(&mut self, leap_seconds: i32, server: Option<&str>) -> Result<bool> {
+        match self
+            .request(IpcRequest::PtpTriggerLeapSecondSmear {
+                server: server.map(|s| s.to_string()),
+                leap_seconds,
+            })
+            .await?
+        {
+            IpcResponse::PtpLeapSmearTriggered { success, .. } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_ptp_bench(&mut self, iterations: u32, peer_count: u16) -> Result<PtpBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::PtpRunBench {
+                iterations,
+                peer_count,
+            })
+            .await?
+        {
+            IpcResponse::PtpBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_ptp_metrics(&mut self, server: Option<&str>) -> Result<bool> {
+        match self
+            .request(IpcRequest::PtpResetMetrics {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::PtpResetResult { success } => Ok(success),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

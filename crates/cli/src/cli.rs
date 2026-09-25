@@ -732,6 +732,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<OpticalCommands>,
     },
+    /// Autonomous Sub-Atomic Quantum Clock Synchronization, PTP Hardware Timestamping & Relativity-Aware Tick Sequencing
+    #[command(name = "ptp", alias = "clock", alias = "truetime", alias = "timesync", alias = "1588")]
+    Ptp {
+        #[command(subcommand)]
+        action: Option<PtpCommands>,
+    },
 }
 
 
@@ -3295,6 +3301,93 @@ pub enum OpticalCommands {
         json: bool,
     },
     /// Reset optical telemetry counters, collision events, and error stats
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
+        /// Target server or cluster name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum PtpCommands {
+    /// Inspect PTP synchronization telemetry, clock stratum, and TrueTime uncertainty
+    Status {
+        /// Filter by clock or server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Configure operational clock servo mode (Autonomous, HardwarePtp, PpsDisciplined, SoftwareFallback, TrueTimeBounded)
+    #[command(name = "mode", alias = "set-mode", alias = "servo-mode")]
+    Mode {
+        /// Target server or cluster name
+        #[arg(short, long, default_value = "default")]
+        server: String,
+        /// Clock servo mode (autonomous, hardware-ptp, pps, software, truetime)
+        #[arg(short, long, default_value = "autonomous")]
+        mode: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Query bounded TrueTime uncertainty interval [t_earliest, t_latest]
+    #[command(name = "truetime", alias = "interval", alias = "now")]
+    TrueTime {
+        /// Target server or cluster name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Step PTP servo phase offset with simulated or measured delta and RTT
+    #[command(name = "step", alias = "adjust", alias = "correct")]
+    Step {
+        /// Target server or cluster name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Measured phase offset in nanoseconds
+        #[arg(short = 'o', long, default_value_t = 0.40, allow_hyphen_values = true)]
+        offset: f64,
+        /// Round-trip time in nanoseconds
+        #[arg(short = 'r', long, default_value_t = 120.0)]
+        rtt: f64,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Trigger a 24-hour cosine leap second smearing schedule
+    #[command(name = "leap-smear", alias = "smear", alias = "leap")]
+    LeapSmear {
+        /// Target server or cluster name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Leap second adjustment magnitude (+1 or -1)
+        #[arg(short = 'l', long, default_value_t = 1, allow_hyphen_values = true)]
+        leap_seconds: i32,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark IEEE 1588 hardware PTP clock synchronization and TrueTime causality ordering
+    Bench {
+        /// Number of benchmark sync iterations
+        #[arg(short, long, default_value_t = 5000)]
+        iterations: u32,
+        /// Number of peer clock nodes
+        #[arg(short, long, default_value_t = 4)]
+        peers: u16,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset PTP telemetry counters, frequency slew stats, and causality violation counters
     #[command(name = "reset-metrics", alias = "reset")]
     ResetMetrics {
         /// Target server or cluster name
@@ -7248,7 +7341,10 @@ mod tests {
             }
             _ => panic!("Expected Neuromorphic Bench command"),
         }
+    }
 
+    #[test]
+    fn test_optical_cli_commands() {
         // Optical status
         let cli_opt_status = Cli::try_parse_from([
             "craft", "optical", "status", "-s", "lobby", "--json"
@@ -7322,6 +7418,81 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Optical Bench command"),
+        }
+    }
+
+    #[test]
+    fn test_ptp_cli_commands() {
+        // PTP status
+        let cli_ptp_status = Cli::try_parse_from([
+            "craft", "ptp", "status", "-s", "node-1", "--json"
+        ]).unwrap();
+        match cli_ptp_status.command {
+            Some(Commands::Ptp {
+                action: Some(PtpCommands::Status { server, json }),
+            }) => {
+                assert_eq!(server.as_deref(), Some("node-1"));
+                assert!(json);
+            }
+            _ => panic!("Expected Ptp Status command"),
+        }
+
+        // PTP mode alias and set
+        let cli_ptp_mode = Cli::try_parse_from([
+            "craft", "clock", "mode", "-m", "hardware-ptp", "-s", "default", "--json"
+        ]).unwrap();
+        match cli_ptp_mode.command {
+            Some(Commands::Ptp {
+                action: Some(PtpCommands::Mode { mode, server, json }),
+            }) => {
+                assert_eq!(mode, "hardware-ptp");
+                assert_eq!(server, "default");
+                assert!(json);
+            }
+            _ => panic!("Expected Ptp Mode command"),
+        }
+
+        // PTP TrueTime alias
+        let cli_ptp_tt = Cli::try_parse_from([
+            "craft", "truetime", "truetime", "--json"
+        ]).unwrap();
+        match cli_ptp_tt.command {
+            Some(Commands::Ptp {
+                action: Some(PtpCommands::TrueTime { json, .. }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Ptp TrueTime command"),
+        }
+
+        // PTP step alias
+        let cli_ptp_step = Cli::try_parse_from([
+            "craft", "timesync", "step", "-o", "0.25", "-r", "110.5", "--json"
+        ]).unwrap();
+        match cli_ptp_step.command {
+            Some(Commands::Ptp {
+                action: Some(PtpCommands::Step { offset, rtt, json, .. }),
+            }) => {
+                assert_eq!(offset, 0.25);
+                assert_eq!(rtt, 110.5);
+                assert!(json);
+            }
+            _ => panic!("Expected Ptp Step command"),
+        }
+
+        // PTP bench alias
+        let cli_ptp_bench = Cli::try_parse_from([
+            "craft", "1588", "bench", "-i", "1000", "-p", "8", "--json"
+        ]).unwrap();
+        match cli_ptp_bench.command {
+            Some(Commands::Ptp {
+                action: Some(PtpCommands::Bench { iterations, peers, json }),
+            }) => {
+                assert_eq!(iterations, 1000);
+                assert_eq!(peers, 8);
+                assert!(json);
+            }
+            _ => panic!("Expected Ptp Bench command"),
         }
     }
 }

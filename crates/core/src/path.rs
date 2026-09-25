@@ -169,6 +169,11 @@ pub struct CraftPaths {
     pub optical_registry_file: PathBuf,
     pub optical_state_file: PathBuf,
     pub optical_lock: PathBuf,
+    pub ptp_dir: PathBuf,
+    pub ptp_timestamps_dir: PathBuf,
+    pub ptp_registry_file: PathBuf,
+    pub ptp_state_file: PathBuf,
+    pub ptp_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -337,6 +342,11 @@ impl CraftPaths {
         let optical_registry_file = optical_dir.join("registry.json");
         let optical_state_file = optical_dir.join("state.json");
         let optical_lock = locks_dir.join("optical.lock");
+        let ptp_dir = home.join("ptp");
+        let ptp_timestamps_dir = ptp_dir.join("timestamps");
+        let ptp_registry_file = ptp_dir.join("registry.json");
+        let ptp_state_file = ptp_dir.join("state.json");
+        let ptp_lock = locks_dir.join("ptp.lock");
 
         Self {
             home,
@@ -503,6 +513,11 @@ impl CraftPaths {
             optical_registry_file,
             optical_state_file,
             optical_lock,
+            ptp_dir,
+            ptp_timestamps_dir,
+            ptp_registry_file,
+            ptp_state_file,
+            ptp_lock,
         }
     }
 
@@ -758,6 +773,17 @@ impl CraftPaths {
         let optical_registry_file = optical_dir.join("registry.json");
         let optical_state_file = optical_dir.join("state.json");
         let optical_lock = locks_dir.join("optical.lock");
+        let ptp_dir = home.join("ptp");
+        let ptp_timestamps_dir = ptp_dir.join("timestamps");
+        let ptp_registry_file = ptp_dir.join("registry.json");
+        let ptp_state_file = ptp_dir.join("state.json");
+        let ptp_lock = locks_dir.join("ptp.lock");
+
+        for d in &[&optical_dir, &optical_circuits_dir, &ptp_dir, &ptp_timestamps_dir] {
+            if !d.exists() {
+                fs::create_dir_all(d)?;
+            }
+        }
 
         Ok(Self {
             home,
@@ -924,7 +950,17 @@ impl CraftPaths {
             optical_registry_file,
             optical_state_file,
             optical_lock,
+            ptp_dir,
+            ptp_timestamps_dir,
+            ptp_registry_file,
+            ptp_state_file,
+            ptp_lock,
         })
+    }
+
+    /// Returns the timestamp trace path for a specific clock ID
+    pub fn ptp_timestamps_path(&self, clock_id: &str) -> PathBuf {
+        self.ptp_timestamps_dir.join(format!("{}.ptp", clock_id))
     }
 
     /// Returns the optical circuit configuration path for a specific circuit ID

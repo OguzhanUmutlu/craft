@@ -1818,6 +1818,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             KernelJitterElimination,
             NeuromorphicAiScheduler,
             OpticalNetworkSwitching,
+            QuantumClockSynchronization,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2137,6 +2138,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::OpticalNetworkSwitching);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Quantum Clock Synchronization & IEEE 1588 PTP",
+            )
+            .with_aliases(&["ptp", "clock", "truetime", "timesync", "1588"]),
+        );
+        actions.push(ToolItemAction::QuantumClockSynchronization);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2262,6 +2273,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::OpticalNetworkSwitching => {
                     optical_tui(paths).await?;
+                }
+                ToolItemAction::QuantumClockSynchronization => {
+                    ptp_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4352,6 +4366,39 @@ async fn optical_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft optical reset-metrics                Reset optical telemetry & counters".green().to_string());
 
     show_modal_message("OPTICAL NETWORK SWITCHING & PHOTONIC INTERCONNECTS", &lines, false)?;
+    Ok(())
+}
+
+async fn ptp_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::PtpClockService::global(paths);
+    let summary = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS SUB-ATOMIC QUANTUM CLOCK SYNCHRONIZATION".bold().to_string());
+    lines.push("IEEE 1588 PTP Hardware Timestamping & Relativity-Aware Tick Sequencing".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Grandmaster Clock ID:   {}", summary.master_id));
+    lines.push(format!("Clock Class:            {}", summary.clock_class));
+    lines.push(format!("Clock Accuracy:         {}", summary.clock_accuracy));
+    lines.push(format!("Servo Mode:             {}", summary.mode));
+    lines.push(format!("Synchronized Peers:     {}", summary.synchronized_peers));
+    lines.push(format!("Phase Error:            {:.3} ns", summary.phase_error_ns));
+    lines.push(format!("Frequency Drift:        {:.4} ppm", summary.frequency_drift_ppm));
+    lines.push(format!("TrueTime Epsilon:       {:.3} ns", summary.truetime_epsilon_ns));
+    lines.push(format!("Leap Second Smear:      {}", if summary.leap_smear_active { "ACTIVE" } else { "INACTIVE" }));
+    lines.push(format!("PTP Packets Processed:  {}", summary.packets_processed_total));
+    lines.push(format!("Causality Violations:   {}", summary.causality_violations_total));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft ptp status [--server <S>]            Inspect PTP synchronization telemetry".green().to_string());
+    lines.push("  craft ptp mode -m <MODE>                   Configure clock servo mode".green().to_string());
+    lines.push("  craft ptp truetime [--server <S>]          Query TrueTime uncertainty interval".green().to_string());
+    lines.push("  craft ptp step -o <OFFSET> -r <RTT>        Step PTP servo phase offset".green().to_string());
+    lines.push("  craft ptp leap-smear -l <SECS>             Trigger 24h cosine leap second smear".green().to_string());
+    lines.push("  craft ptp bench [-i <N>] [-p <PEERS>]      Benchmark IEEE 1588 synchronization".green().to_string());
+    lines.push("  craft ptp reset-metrics                    Reset PTP telemetry counters".green().to_string());
+
+    show_modal_message("QUANTUM CLOCK SYNCHRONIZATION & IEEE 1588 PTP", &lines, false)?;
     Ok(())
 }
 

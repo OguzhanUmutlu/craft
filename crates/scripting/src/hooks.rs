@@ -125,6 +125,10 @@ pub enum LifecycleEvent {
     OpticalCircuitTornDown,
     OpticalWavelengthCollisionAvoided,
     OpticalLinkAttenuationDegraded,
+    PtpClockSynchronized,
+    PtpClockDriftExceeded,
+    PtpTrueTimeWindowAdjusted,
+    PtpLeapSecondSmeared,
 }
 
 impl LifecycleEvent {
@@ -244,6 +248,10 @@ impl LifecycleEvent {
             Self::OpticalCircuitTornDown => "on_optical_circuit_torn_down",
             Self::OpticalWavelengthCollisionAvoided => "on_optical_wavelength_collision_avoided",
             Self::OpticalLinkAttenuationDegraded => "on_optical_link_attenuation_degraded",
+            Self::PtpClockSynchronized => "on_ptp_clock_synchronized",
+            Self::PtpClockDriftExceeded => "on_ptp_clock_drift_exceeded",
+            Self::PtpTrueTimeWindowAdjusted => "on_ptp_truetime_window_adjusted",
+            Self::PtpLeapSecondSmeared => "on_ptp_leap_second_smeared",
         }
     }
 
@@ -364,6 +372,10 @@ impl LifecycleEvent {
             "on_optical_circuit_torn_down" | "optical_circuit_torn_down" | "circuit_torn_down" => Some(Self::OpticalCircuitTornDown),
             "on_optical_wavelength_collision_avoided" | "optical_wavelength_collision_avoided" | "collision_avoided" => Some(Self::OpticalWavelengthCollisionAvoided),
             "on_optical_link_attenuation_degraded" | "optical_link_attenuation_degraded" | "attenuation_degraded" => Some(Self::OpticalLinkAttenuationDegraded),
+            "on_ptp_clock_synchronized" | "ptp_clock_synchronized" | "clock_synchronized" => Some(Self::PtpClockSynchronized),
+            "on_ptp_clock_drift_exceeded" | "ptp_clock_drift_exceeded" | "drift_exceeded" => Some(Self::PtpClockDriftExceeded),
+            "on_ptp_truetime_window_adjusted" | "ptp_truetime_window_adjusted" | "truetime_adjusted" => Some(Self::PtpTrueTimeWindowAdjusted),
+            "on_ptp_leap_second_smeared" | "ptp_leap_second_smeared" | "leap_smear" => Some(Self::PtpLeapSecondSmeared),
             _ => None,
         }
     }
@@ -484,6 +496,10 @@ impl LifecycleEvent {
             Self::OpticalCircuitTornDown,
             Self::OpticalWavelengthCollisionAvoided,
             Self::OpticalLinkAttenuationDegraded,
+            Self::PtpClockSynchronized,
+            Self::PtpClockDriftExceeded,
+            Self::PtpTrueTimeWindowAdjusted,
+            Self::PtpLeapSecondSmeared,
         ]
     }
 }
@@ -820,6 +836,14 @@ pub struct HookContext {
     pub optical_attenuation_db: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub optical_latency_ns: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ptp_phase_error_ns: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ptp_frequency_drift_ppm: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ptp_truetime_epsilon_ns: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ptp_master_id: Option<String>,
 }
 
 impl HookContext {
@@ -1538,6 +1562,50 @@ impl HookContext {
         ctx.details = Some(format!(
             "Optical link attenuation degraded on port {}: {:.2} dB",
             ingress, attenuation_db
+        ));
+        ctx
+    }
+
+    pub fn for_ptp_clock_synchronized(server: &str, master_id: &str, phase_error_ns: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::PtpClockSynchronized);
+        ctx.server_name = Some(server.to_string());
+        ctx.ptp_master_id = Some(master_id.to_string());
+        ctx.ptp_phase_error_ns = Some(phase_error_ns);
+        ctx.details = Some(format!(
+            "PTP clock synchronized with master '{}': phase error {:.3} ns",
+            master_id, phase_error_ns
+        ));
+        ctx
+    }
+
+    pub fn for_ptp_clock_drift_exceeded(server: &str, drift_ppm: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::PtpClockDriftExceeded);
+        ctx.server_name = Some(server.to_string());
+        ctx.ptp_frequency_drift_ppm = Some(drift_ppm);
+        ctx.details = Some(format!(
+            "PTP oscillator frequency drift exceeded: {:.4} ppm",
+            drift_ppm
+        ));
+        ctx
+    }
+
+    pub fn for_ptp_truetime_window_adjusted(server: &str, epsilon_ns: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::PtpTrueTimeWindowAdjusted);
+        ctx.server_name = Some(server.to_string());
+        ctx.ptp_truetime_epsilon_ns = Some(epsilon_ns);
+        ctx.details = Some(format!(
+            "TrueTime bounded uncertainty window adjusted: eps = {:.3} ns",
+            epsilon_ns
+        ));
+        ctx
+    }
+
+    pub fn for_ptp_leap_second_smeared(server: &str, leap_sec: i32) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::PtpLeapSecondSmeared);
+        ctx.server_name = Some(server.to_string());
+        ctx.details = Some(format!(
+            "PTP leap second cosine smear active: {} second adjustment over 24h",
+            leap_sec
         ));
         ctx
     }
@@ -2709,5 +2777,58 @@ mod tests {
         assert_eq!(atten_ctx.event, "on_optical_link_attenuation_degraded");
         assert_eq!(atten_ctx.optical_ingress_port, Some(3));
         assert_eq!(atten_ctx.optical_attenuation_db, Some(4.8));
+    }
+
+    #[test]
+    fn test_ptp_lifecycle_events_and_context() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_ptp_clock_synchronized"),
+            Some(LifecycleEvent::PtpClockSynchronized)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("clock_synchronized"),
+            Some(LifecycleEvent::PtpClockSynchronized)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_ptp_clock_drift_exceeded"),
+            Some(LifecycleEvent::PtpClockDriftExceeded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("drift_exceeded"),
+            Some(LifecycleEvent::PtpClockDriftExceeded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_ptp_truetime_window_adjusted"),
+            Some(LifecycleEvent::PtpTrueTimeWindowAdjusted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("truetime_adjusted"),
+            Some(LifecycleEvent::PtpTrueTimeWindowAdjusted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_ptp_leap_second_smeared"),
+            Some(LifecycleEvent::PtpLeapSecondSmeared)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("leap_smear"),
+            Some(LifecycleEvent::PtpLeapSecondSmeared)
+        );
+
+        let sync_ctx = HookContext::for_ptp_clock_synchronized("survival", "master-01", 0.35);
+        assert_eq!(sync_ctx.event, "on_ptp_clock_synchronized");
+        assert_eq!(sync_ctx.ptp_master_id.as_deref(), Some("master-01"));
+        assert_eq!(sync_ctx.ptp_phase_error_ns, Some(0.35));
+
+        let drift_ctx = HookContext::for_ptp_clock_drift_exceeded("survival", 0.05);
+        assert_eq!(drift_ctx.event, "on_ptp_clock_drift_exceeded");
+        assert_eq!(drift_ctx.ptp_frequency_drift_ppm, Some(0.05));
+
+        let tt_ctx = HookContext::for_ptp_truetime_window_adjusted("survival", 0.85);
+        assert_eq!(tt_ctx.event, "on_ptp_truetime_window_adjusted");
+        assert_eq!(tt_ctx.ptp_truetime_epsilon_ns, Some(0.85));
+
+        let smear_ctx = HookContext::for_ptp_leap_second_smeared("survival", 1);
+        assert_eq!(smear_ctx.event, "on_ptp_leap_second_smeared");
+        assert!(smear_ctx.details.unwrap().contains("24h"));
     }
 }

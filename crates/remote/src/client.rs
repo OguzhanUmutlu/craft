@@ -3051,6 +3051,133 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries PTP clock synchronization status on the remote host
+    pub fn get_remote_ptp_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft ptp status".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote PTP status query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Updates PTP clock servo mode on the remote host
+    pub fn set_remote_ptp_servo_mode(&self, mode: &str, server: Option<&str>) -> Result<String> {
+        let mut cmd = format!("craft ptp mode -m {}", mode);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote PTP mode update failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Queries bounded TrueTime uncertainty interval on the remote host
+    pub fn query_remote_ptp_truetime(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft ptp truetime".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote PTP TrueTime query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Steps the PTP servo phase offset on the remote host
+    pub fn step_remote_ptp_servo(
+        &self,
+        offset_ns: f64,
+        rtt_ns: f64,
+        server: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!("craft ptp step -o {} -r {}", offset_ns, rtt_ns);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote PTP servo step failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Triggers a 24-hour cosine leap second smear on the remote host
+    pub fn trigger_remote_ptp_leap_smear(&self, leap_sec: i32, server: Option<&str>) -> Result<String> {
+        let mut cmd = format!("craft ptp leap-smear -l {}", leap_sec);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote PTP leap second smear failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs PTP clock synchronization benchmark on the remote host
+    pub fn run_remote_ptp_bench(&self, iterations: u32, peers: u16) -> Result<String> {
+        let cmd = format!("craft ptp bench -i {} -p {} --json", iterations, peers);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote PTP bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets PTP clock telemetry counters on the remote host
+    pub fn reset_remote_ptp_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft ptp reset-metrics".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote PTP metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

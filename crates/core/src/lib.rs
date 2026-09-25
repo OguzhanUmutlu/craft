@@ -54,6 +54,7 @@ pub mod bft;
 pub mod jitter;
 pub mod neuromorphic;
 pub mod optical;
+pub mod ptp;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -284,6 +285,11 @@ pub use optical::{
     MemsMirrorState, OpticalBenchmarkMetrics, OpticalCircuit, OpticalRegistry,
     OpticalRoutingMode, OpticalStatusSummary, OpticalSwitchTopology, OpticalWavelength,
     PhotonicPort,
+};
+pub use ptp::{
+    render_ptp_bench_table, render_ptp_peers_table, render_ptp_status_table, render_truetime_table,
+    CausalityVectorClock, ClockAccuracy, ClockClass, ClockServoMode, PtpBenchmarkMetrics,
+    PtpPeer, PtpPortRole, PtpRegistry, PtpStatusSummary, TrueTimeInterval,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

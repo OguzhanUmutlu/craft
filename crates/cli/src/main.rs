@@ -609,6 +609,9 @@ async fn main() {
         Some(Commands::Optical { action }) => {
             commands::optical::handle_optical(&paths, action).await
         }
+        Some(Commands::Ptp { action }) => {
+            commands::ptp::handle_ptp(&paths, action).await
+        }
     };
 
 
