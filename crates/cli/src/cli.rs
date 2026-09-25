@@ -714,6 +714,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<BftCommands>,
     },
+    /// Autonomous eBPF-Driven Live Game Kernel Tracing, Micro-Stall Schedulers & Real-Time Kernel Jitter Elimination
+    #[command(name = "jitter", alias = "sched", alias = "microstall", alias = "realtime", alias = "sched-trace")]
+    Jitter {
+        #[command(subcommand)]
+        action: Option<JitterCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -3014,6 +3020,96 @@ pub enum BftCommands {
     /// Reset BFT consensus telemetry counters and metrics
     #[command(name = "reset-metrics", alias = "reset")]
     ResetMetrics {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum JitterCommands {
+    /// Inspect kernel thread scheduling telemetry, micro-stalls, and jitter metrics
+    Status {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Configure SCHED_FIFO real-time priority and core affinity isolation
+    #[command(name = "isolate", alias = "set-realtime", alias = "shield")]
+    Isolate {
+        /// Target server name
+        #[arg(short, long, default_value = "default")]
+        server: String,
+        /// Real-time SCHED_FIFO priority (1-99)
+        #[arg(short, long, default_value_t = 80)]
+        priority: u32,
+        /// Comma-separated isolated CPU core list (e.g. 2,3)
+        #[arg(short, long, default_value = "2,3")]
+        cores: String,
+        /// Process ID (defaults to current process or server lock PID)
+        #[arg(long)]
+        pid: Option<u32>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Display captured kernel micro-stall events and priority inversion incidents
+    #[command(name = "stalls", alias = "events", alias = "list-stalls")]
+    Stalls {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Maximum number of micro-stall events to display
+        #[arg(short, long, default_value_t = 20)]
+        limit: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Rebalance hardware IRQ affinities away from game loop cores to housekeeping cores
+    #[command(name = "irq", alias = "rebalance-irq", alias = "mitigate-irq")]
+    Irq {
+        /// Hardware IRQ interrupt line number
+        #[arg(short, long, default_value_t = 33)]
+        irq: u32,
+        /// Comma-separated target housekeeping CPU core list (e.g. 0,1)
+        #[arg(short = 'c', long = "target-cores", default_value = "0,1")]
+        target_cores: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Display runqueue latency logarithmic micro-histogram (0-10us through >1ms)
+    #[command(name = "histogram", alias = "hist", alias = "latencies")]
+    Histogram {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run synthetic kernel jitter benchmark (<100us P99 scheduling jitter, zero dropped ticks)
+    Bench {
+        /// Number of benchmark tick iterations
+        #[arg(short, long, default_value_t = 1000)]
+        iterations: usize,
+        /// Number of synthetic micro-stall events to simulate
+        #[arg(short = 's', long = "simulated-stalls", default_value_t = 5)]
+        simulated_stalls: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset kernel jitter telemetry counters and micro-stall logs
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
         /// Output in machine-readable JSON format
         #[arg(long)]
         json: bool,
@@ -6749,6 +6845,125 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Bft Bench command"),
+        }
+    }
+
+    #[test]
+    fn test_jitter_cli_commands() {
+        // Jitter status
+        let cli_status = Cli::try_parse_from(["craft", "jitter", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Jitter {
+                action: Some(JitterCommands::Status { server: None, json }),
+            }) => assert!(json),
+            _ => panic!("Expected Jitter Status command"),
+        }
+
+        // Jitter sched alias and isolate
+        let cli_iso = Cli::try_parse_from([
+            "craft", "sched", "isolate",
+            "-s", "lobby",
+            "-p", "85",
+            "-c", "2,3",
+            "--json",
+        ]).unwrap();
+        match cli_iso.command {
+            Some(Commands::Jitter {
+                action: Some(JitterCommands::Isolate {
+                    server,
+                    priority,
+                    cores,
+                    pid: None,
+                    json,
+                }),
+            }) => {
+                assert_eq!(server, "lobby");
+                assert_eq!(priority, 85);
+                assert_eq!(cores, "2,3");
+                assert!(json);
+            }
+            _ => panic!("Expected Jitter Isolate command"),
+        }
+
+        // Jitter microstall alias and stalls
+        let cli_stalls = Cli::try_parse_from([
+            "craft", "microstall", "stalls",
+            "-s", "lobby",
+            "-l", "10",
+            "--json",
+        ]).unwrap();
+        match cli_stalls.command {
+            Some(Commands::Jitter {
+                action: Some(JitterCommands::Stalls {
+                    server: Some(s),
+                    limit,
+                    json,
+                }),
+            }) => {
+                assert_eq!(s, "lobby");
+                assert_eq!(limit, 10);
+                assert!(json);
+            }
+            _ => panic!("Expected Jitter Stalls command"),
+        }
+
+        // Jitter realtime alias and irq
+        let cli_irq = Cli::try_parse_from([
+            "craft", "realtime", "irq",
+            "-i", "45",
+            "-c", "0,1",
+            "--json",
+        ]).unwrap();
+        match cli_irq.command {
+            Some(Commands::Jitter {
+                action: Some(JitterCommands::Irq {
+                    irq,
+                    target_cores,
+                    json,
+                }),
+            }) => {
+                assert_eq!(irq, 45);
+                assert_eq!(target_cores, "0,1");
+                assert!(json);
+            }
+            _ => panic!("Expected Jitter Irq command"),
+        }
+
+        // Jitter sched-trace alias and histogram
+        let cli_hist = Cli::try_parse_from([
+            "craft", "sched-trace", "histogram",
+            "--json",
+        ]).unwrap();
+        match cli_hist.command {
+            Some(Commands::Jitter {
+                action: Some(JitterCommands::Histogram {
+                    server: None,
+                    json,
+                }),
+            }) => assert!(json),
+            _ => panic!("Expected Jitter Histogram command"),
+        }
+
+        // Jitter bench
+        let cli_bench = Cli::try_parse_from([
+            "craft", "jitter", "bench",
+            "-i", "500",
+            "-s", "3",
+            "--json",
+        ]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Jitter {
+                action: Some(JitterCommands::Bench {
+                    iterations,
+                    simulated_stalls,
+                    json,
+                }),
+            }) => {
+                assert_eq!(iterations, 500);
+                assert_eq!(simulated_stalls, 3);
+                assert!(json);
+            }
+            _ => panic!("Expected Jitter Bench command"),
         }
     }
 }

@@ -51,6 +51,7 @@ pub mod memfabric;
 pub mod nvme;
 pub mod vpn;
 pub mod bft;
+pub mod jitter;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -262,6 +263,12 @@ pub use bft::{
     BftRegistry, BftStatusSummary, BftTransaction, BftTxType, BftValidator, BlsAggregateSignature,
     BlsKeypair, BlsPublicKey, BlsSignature, QuorumCertificate, RecursiveStateAttestation,
     SlashingEvidence, SlashingReason, SlashingVerdict, ZkStateProof, ZkStateProver,
+};
+pub use jitter::{
+    render_histogram_table, render_irqs_table, render_jitter_bench_table, render_jitter_status_table,
+    render_stalls_table, set_realtime_fifo_priority, IrqStormDescriptor, JitterBenchmarkMetrics,
+    JitterMitigationConfig, JitterRegistry, JitterStatusSummary, MicroStallCause, MicroStallEvent,
+    PriorityInversionRecord, SchedPolicy, SchedTracepointType,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

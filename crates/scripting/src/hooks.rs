@@ -113,6 +113,10 @@ pub enum LifecycleEvent {
     BftQuorumFormed,
     BftValidatorSlashed,
     BftViewTimeout,
+    KernelMicroStallDetected,
+    RealtimePriorityEscalated,
+    IrqStormShielded,
+    JitterThresholdExceeded,
 }
 
 impl LifecycleEvent {
@@ -220,6 +224,10 @@ impl LifecycleEvent {
             Self::BftQuorumFormed => "on_bft_quorum_formed",
             Self::BftValidatorSlashed => "on_bft_validator_slashed",
             Self::BftViewTimeout => "on_bft_view_timeout",
+            Self::KernelMicroStallDetected => "on_kernel_microstall_detected",
+            Self::RealtimePriorityEscalated => "on_realtime_priority_escalated",
+            Self::IrqStormShielded => "on_irq_storm_shielded",
+            Self::JitterThresholdExceeded => "on_jitter_threshold_exceeded",
         }
     }
 
@@ -328,6 +336,10 @@ impl LifecycleEvent {
             "on_bft_quorum_formed" | "bft_quorum_formed" | "bft_quorum" | "quorum_formed" => Some(Self::BftQuorumFormed),
             "on_bft_validator_slashed" | "bft_validator_slashed" | "validator_slashed" | "bft_slash" => Some(Self::BftValidatorSlashed),
             "on_bft_view_timeout" | "bft_view_timeout" | "view_timeout" | "pacemaker_timeout" => Some(Self::BftViewTimeout),
+            "on_kernel_microstall_detected" | "kernel_microstall_detected" | "microstall_detected" | "microstall" => Some(Self::KernelMicroStallDetected),
+            "on_realtime_priority_escalated" | "realtime_priority_escalated" | "priority_escalated" | "realtime_escalated" => Some(Self::RealtimePriorityEscalated),
+            "on_irq_storm_shielded" | "irq_storm_shielded" | "irq_shielded" | "irq_storm" => Some(Self::IrqStormShielded),
+            "on_jitter_threshold_exceeded" | "jitter_threshold_exceeded" | "jitter_exceeded" | "jitter_threshold" => Some(Self::JitterThresholdExceeded),
             _ => None,
         }
     }
@@ -436,6 +448,10 @@ impl LifecycleEvent {
             Self::BftQuorumFormed,
             Self::BftValidatorSlashed,
             Self::BftViewTimeout,
+            Self::KernelMicroStallDetected,
+            Self::RealtimePriorityEscalated,
+            Self::IrqStormShielded,
+            Self::JitterThresholdExceeded,
         ]
     }
 }
@@ -744,6 +760,14 @@ pub struct HookContext {
     pub bft_slash_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bft_commit_latency_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub microstall_duration_us: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub realtime_priority: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub irq_number: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub isolated_cpus: Option<String>,
 }
 
 impl HookContext {
@@ -1324,6 +1348,51 @@ impl HookContext {
         ctx.details = Some(format!(
             "BFT view pacemaker timeout at view {}: leader rotated from '{}' to '{}'",
             view, old_leader, new_leader
+        ));
+        ctx
+    }
+
+    pub fn for_kernel_microstall_detected(server: &str, duration_us: u64, cause: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::KernelMicroStallDetected);
+        ctx.server_name = Some(server.to_string());
+        ctx.microstall_duration_us = Some(duration_us);
+        ctx.details = Some(format!(
+            "Kernel micro-stall detected on server '{}': {}us caused by {}",
+            server, duration_us, cause
+        ));
+        ctx
+    }
+
+    pub fn for_realtime_priority_escalated(server: &str, priority: u32, cores: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::RealtimePriorityEscalated);
+        ctx.server_name = Some(server.to_string());
+        ctx.realtime_priority = Some(priority);
+        ctx.isolated_cpus = Some(cores.to_string());
+        ctx.details = Some(format!(
+            "Real-time SCHED_FIFO priority {} escalated for server '{}' isolated on cores {}",
+            priority, server, cores
+        ));
+        ctx
+    }
+
+    pub fn for_irq_storm_shielded(irq: u32, irq_name: &str, target_cpus: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::IrqStormShielded);
+        ctx.irq_number = Some(irq);
+        ctx.isolated_cpus = Some(target_cpus.to_string());
+        ctx.details = Some(format!(
+            "Hardware IRQ storm {} ({}) shielded away to housekeeping cores {}",
+            irq, irq_name, target_cpus
+        ));
+        ctx
+    }
+
+    pub fn for_jitter_threshold_exceeded(server: &str, jitter_us: f64, threshold_us: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::JitterThresholdExceeded);
+        ctx.server_name = Some(server.to_string());
+        ctx.jitter_micros = Some(jitter_us);
+        ctx.details = Some(format!(
+            "Kernel jitter threshold exceeded on server '{}': {:.2}us > {:.2}us",
+            server, jitter_us, threshold_us
         ));
         ctx
     }
@@ -2329,5 +2398,62 @@ mod tests {
         let timeout_ctx = HookContext::for_bft_view_timeout(42, "val-1", "val-2");
         assert_eq!(timeout_ctx.event, "on_bft_view_timeout");
         assert_eq!(timeout_ctx.bft_view, Some(42));
+    }
+
+    #[test]
+    fn test_jitter_lifecycle_hooks() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_kernel_microstall_detected"),
+            Some(LifecycleEvent::KernelMicroStallDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("microstall"),
+            Some(LifecycleEvent::KernelMicroStallDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_realtime_priority_escalated"),
+            Some(LifecycleEvent::RealtimePriorityEscalated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("priority_escalated"),
+            Some(LifecycleEvent::RealtimePriorityEscalated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_irq_storm_shielded"),
+            Some(LifecycleEvent::IrqStormShielded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("irq_shielded"),
+            Some(LifecycleEvent::IrqStormShielded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_jitter_threshold_exceeded"),
+            Some(LifecycleEvent::JitterThresholdExceeded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("jitter_exceeded"),
+            Some(LifecycleEvent::JitterThresholdExceeded)
+        );
+
+        let stall_ctx = HookContext::for_kernel_microstall_detected("lobby", 850, "PriorityInversion");
+        assert_eq!(stall_ctx.event, "on_kernel_microstall_detected");
+        assert_eq!(stall_ctx.server_name.as_deref(), Some("lobby"));
+        assert_eq!(stall_ctx.microstall_duration_us, Some(850));
+
+        let prio_ctx = HookContext::for_realtime_priority_escalated("lobby", 85, "2,3");
+        assert_eq!(prio_ctx.event, "on_realtime_priority_escalated");
+        assert_eq!(prio_ctx.server_name.as_deref(), Some("lobby"));
+        assert_eq!(prio_ctx.realtime_priority, Some(85));
+        assert_eq!(prio_ctx.isolated_cpus.as_deref(), Some("2,3"));
+
+        let irq_ctx = HookContext::for_irq_storm_shielded(33, "mlx5_comp", "0,1");
+        assert_eq!(irq_ctx.event, "on_irq_storm_shielded");
+        assert_eq!(irq_ctx.irq_number, Some(33));
+        assert_eq!(irq_ctx.isolated_cpus.as_deref(), Some("0,1"));
+
+        let thresh_ctx = HookContext::for_jitter_threshold_exceeded("lobby", 620.5, 500.0);
+        assert_eq!(thresh_ctx.event, "on_jitter_threshold_exceeded");
+        assert_eq!(thresh_ctx.server_name.as_deref(), Some("lobby"));
+        assert_eq!(thresh_ctx.jitter_micros, Some(620.5));
     }
 }

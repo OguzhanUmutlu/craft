@@ -34,6 +34,7 @@ pub mod memfabric;
 pub mod nvme;
 pub mod vpn;
 pub mod bft;
+pub mod jitter;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -140,6 +141,10 @@ pub use bft::{
     ProposalWirePayload, QcWirePayload, ViewChangeWirePayload, VoteWirePayload,
     ZkProofSyncPayload, BFT_WIRE_MAGIC, MSG_TYPE_PROPOSAL, MSG_TYPE_QC, MSG_TYPE_VIEW_CHANGE,
     MSG_TYPE_VOTE, MSG_TYPE_ZK_SYNC,
+};
+pub use jitter::{
+    benchmark_kernel_jitter, KernelSchedTracer, MicroStallScheduler, PerfEventRingBuffer,
+    RawPerfSample,
 };
 
 

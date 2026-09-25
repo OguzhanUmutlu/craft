@@ -2657,6 +2657,142 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries the kernel jitter telemetry and scheduler status on the remote host
+    pub fn get_remote_jitter_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft jitter status".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote jitter status query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Configures SCHED_FIFO real-time priority and core affinity on the remote host
+    pub fn set_remote_jitter_realtime(
+        &self,
+        server: &str,
+        pid: Option<u32>,
+        priority: u8,
+        cores: &[usize],
+    ) -> Result<String> {
+        let mut cmd = format!("craft jitter isolate --server {} --priority {}", server, priority);
+        if let Some(p) = pid {
+            cmd.push_str(&format!(" --pid {}", p));
+        }
+        if !cores.is_empty() {
+            let core_strs: Vec<String> = cores.iter().map(|c| c.to_string()).collect();
+            cmd.push_str(&format!(" --cores {}", core_strs.join(",")));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote jitter isolate configuration failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Fetches captured micro-stall events on the remote host
+    pub fn get_remote_jitter_stalls(&self, server: Option<&str>, limit: usize) -> Result<String> {
+        let mut cmd = format!("craft jitter stalls --limit {}", limit);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote jitter stalls query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Rebalances hardware IRQ affinity away from isolated server cores on the remote host
+    pub fn mitigate_remote_jitter_irq(&self, irq: u32, target_cores: &[usize]) -> Result<String> {
+        let mut cmd = format!("craft jitter irq --irq {}", irq);
+        if !target_cores.is_empty() {
+            let core_strs: Vec<String> = target_cores.iter().map(|c| c.to_string()).collect();
+            cmd.push_str(&format!(" --target-cores {}", core_strs.join(",")));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote jitter IRQ mitigation failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Fetches runqueue delay logarithmic micro-histogram from the remote host
+    pub fn get_remote_jitter_histogram(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft jitter histogram".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote jitter histogram query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs kernel jitter and micro-stall benchmark on the remote host
+    pub fn run_remote_jitter_bench(&self, iterations: usize, simulated_stalls: usize) -> Result<String> {
+        let cmd = format!(
+            "craft jitter bench --iterations {} --simulated-stalls {} --json",
+            iterations, simulated_stalls
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote jitter bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets kernel jitter telemetry counters on the remote host
+    pub fn reset_remote_jitter_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft jitter reset-metrics".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote jitter metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

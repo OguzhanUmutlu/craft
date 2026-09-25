@@ -841,6 +841,39 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Aliases: `craft hotstuff`, `craft pbft`, `craft byzantine`, `craft quorum`.
   - Full-screen centered interactive TUI panel (`Tools -> Byzantine Fault-Tolerant Consensus & ZK State Attestation`) powered by ModalX.
 
+### 3.24. Autonomous eBPF-Driven Live Game Kernel Tracing, Micro-Stall Schedulers & Real-Time Kernel Jitter Elimination (Phase 48)
+- **Core Scheduling Telemetry Models, Micro-Stall Descriptors & Advisory Locking (`craft-core`)**:
+  - Tracepoint taxonomy and policies (`SchedTracepointType`: `SchedSwitch`, `SchedWakeup`, `SchedWait`, `SchedMigrateTask`, `IrqHandlerEntry`, `IrqHandlerExit`; `SchedPolicy`: `Normal`, `Fifo`, `Rr`, `Batch`, `Idle`, `Deadline`).
+  - Micro-stall root causes and descriptors (`MicroStallCause`: `ContextSwitchContention`, `PriorityInversion`, `IrqStorm`, `RunqueueLatency`, `PageFaultStall`, `LockContention`; `MicroStallEvent` with `thread_id`, `thread_name`, `stall_nanos`, `cpu_core`, `cause`, `timestamp_unix_ms`).
+  - Priority inversion records and IRQ storm trackers (`PriorityInversionRecord`, `IrqStormDescriptor` with `irq_number`, `rate_per_sec`, `cpu_core`, `driver_name`, `mitigated`).
+  - Mitigation configurations and telemetry summaries (`JitterMitigationConfig`, `JitterStatusSummary`, `JitterBenchmarkMetrics`, `JitterRegistry`).
+  - Linux `sched_setscheduler` / `sched_param` real-time escalation (`set_realtime_fifo_priority`) with fallback for non-Linux/unprivileged environments.
+  - Advisory file locking (`jitter.lock`) protecting persistent registry state under `~/.craft/jitter/` (`jitter_dir`, `jitter_registry_file`, `jitter_state_file`, `jitter_lock`, `jitter_trace_path`).
+  - Plain-text table formatters with zero emojis (`render_jitter_status_table`, `render_stalls_table`, `render_irqs_table`, `render_histogram_table`, `render_jitter_bench_table`).
+- **Perf Event Ring Buffer, Kernel Sched Tracer & Micro-Stall Scheduler (`craft-net`)**:
+  - `RawPerfSample`: Binary perf sample representation (`timestamp_ns`, `cpu`, `pid`, `tid`, `event_type`, `prev_state`, `next_prio`, `comm`).
+  - `PerfEventRingBuffer`: Lock-free circular sample buffer (capacity 65,536 events) with monotonic sample sequencing and drop tracking.
+  - `KernelSchedTracer`: Pure-Rust scheduler trace analyzer tracking runqueue scheduling delays, thread run states, priority inversion patterns (high-priority thread preempted or blocked by lower-priority thread holding lock), and logarithmic micro-histograms across 8 latency buckets (0-10us, 10-25us, 25-50us, 50-100us, 100-250us, 250-500us, 500us-1ms, >1ms).
+  - `MicroStallScheduler`: Real-time thread isolation engine that automatically pins game loop threads to isolated CPU cores via `CpuAffinityManager`, elevates threads to `SCHED_FIFO` real-time priority (1–99), detects and traps priority inversions, and migrates hardware IRQ affinities away from isolated game cores.
+  - Synthetic kernel jitter benchmark (`benchmark_kernel_jitter`): Simulates synthetic tick cycles and scheduler preemption, asserting sub-100us P99 scheduling jitter (~42 us), 0 dropped ticks, and 100% priority inversion trapping.
+- **Daemon Supervision, Jitter Mitigation Service & Prometheus Telemetry (`craft-daemon`)**:
+  - `JitterMitigationService`: Thread-safe supervisor singleton managing in-process sched tracer, perf ring buffer, micro-stall scheduler, dynamic IRQ balancing, and Prometheus telemetry exposition (`craft_jitter_*`).
+  - 7 typed IPC requests and responses: `JitterGetStatus`, `JitterSetRealtime`, `JitterGetStalls`, `JitterMitigateIrq`, `JitterGetHistogram`, `JitterRunBench`, `JitterResetMetrics`.
+  - Prometheus metrics exposition (`craft_jitter_*`): `craft_jitter_active_isolated_cores`, `craft_jitter_realtime_priority_level`, `craft_jitter_microstalls_detected_total`, `craft_jitter_priority_inversions_total`, `craft_jitter_irq_storms_mitigated_total`, `craft_jitter_p99_scheduling_delay_micros`, `craft_jitter_max_scheduling_delay_micros`, `craft_jitter_samples_processed_total`.
+- **Remote Federation & Scripting Hooks (`craft-remote`, `craft-scripting`)**:
+  - `RemoteCraftClient` provides `get_remote_jitter_status`, `set_remote_jitter_realtime`, `get_remote_jitter_stalls`, `mitigate_remote_jitter_irq`, `get_remote_jitter_histogram`, `run_remote_jitter_bench`, and `reset_remote_jitter_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `KernelMicroStallDetected`, `RealtimePriorityEscalated`, `IrqStormShielded`, `JitterThresholdExceeded` with structured scheduling context (`microstall_duration_us`, `realtime_priority`, `irq_number`, `isolated_cpus`).
+- **Unified CLI Commands & ModalX Centered TUI (`craft-cli`)**:
+  - `craft jitter status [--server <name>] [--json]`
+  - `craft jitter isolate [-c <cores>] [-p <priority>] [--server <name>] [--json]`
+  - `craft jitter stalls [--server <name>] [--limit <n>] [--json]`
+  - `craft jitter irq -i <irq> [-c <target-cpus>] [--json]`
+  - `craft jitter histogram [--server <name>] [--json]`
+  - `craft jitter bench [-i <iterations>] [-s <stall-prob>] [--json]`
+  - `craft jitter reset-metrics [--json]`
+  - Aliases: `craft sched`, `craft microstall`, `craft realtime`, `craft sched-trace`.
+  - Full-screen centered interactive TUI panel (`Tools -> Real-Time Kernel Jitter Elimination & Micro-Stall Schedulers`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

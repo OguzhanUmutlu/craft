@@ -43,6 +43,7 @@ pub mod memfabric_service;
 pub mod nvme_service;
 pub mod vpn_service;
 pub mod bft_service;
+pub mod jitter_service;
 
 pub use anvil_service::AnvilService;
 pub use compaction_service::CompactionService;
@@ -66,6 +67,7 @@ pub use memfabric_service::MemFabricService;
 pub use nvme_service::NvmeTargetService;
 pub use vpn_service::VpnMeshService;
 pub use bft_service::BftConsensusService;
+pub use jitter_service::JitterMitigationService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

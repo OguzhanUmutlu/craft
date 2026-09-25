@@ -2147,6 +2147,64 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::JitterGetStatus { server } => {
+                let service = crate::jitter_service::JitterMitigationService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(status) => IpcResponse::JitterStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::JitterSetRealtime { server, priority, isolated_cores } => {
+                let service = crate::jitter_service::JitterMitigationService::global(supervisor.paths());
+                let resp = match service.set_realtime(&server, priority, &isolated_cores) {
+                    Ok(message) => IpcResponse::JitterRealtimeConfiguredResult { message },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::JitterGetStalls { server, limit } => {
+                let service = crate::jitter_service::JitterMitigationService::global(supervisor.paths());
+                let resp = match service.get_stalls(server.as_deref(), limit) {
+                    Ok(stalls) => IpcResponse::JitterStallListResult { stalls },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::JitterMitigateIrq { irq_num, target_cpus } => {
+                let service = crate::jitter_service::JitterMitigationService::global(supervisor.paths());
+                let resp = match service.mitigate_irq(irq_num, &target_cpus) {
+                    Ok(message) => IpcResponse::JitterIrqMitigatedResult { message },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::JitterGetHistogram { server } => {
+                let service = crate::jitter_service::JitterMitigationService::global(supervisor.paths());
+                let resp = match service.get_histogram(server.as_deref()) {
+                    Ok(buckets) => IpcResponse::JitterHistogramResult { buckets },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::JitterRunBench { iterations, simulate_load } => {
+                let service = crate::jitter_service::JitterMitigationService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations, simulate_load) {
+                    Ok(metrics) => IpcResponse::JitterBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::JitterResetMetrics => {
+                let service = crate::jitter_service::JitterMitigationService::global(supervisor.paths());
+                let resp = match service.reset_metrics() {
+                    Ok(_) => IpcResponse::JitterResetResult {
+                        message: "Kernel jitter telemetry and stall metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -4768,6 +4826,110 @@ impl DaemonClient {
     pub async fn reset_bft_metrics(&mut self) -> Result<String> {
         match self.request(IpcRequest::BftResetMetrics).await? {
             IpcResponse::BftResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_jitter_status(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<craft_core::JitterStatusSummary> {
+        match self.request(IpcRequest::JitterGetStatus { server }).await? {
+            IpcResponse::JitterStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_jitter_realtime(
+        &mut self,
+        server: String,
+        priority: u32,
+        isolated_cores: Vec<usize>,
+    ) -> Result<String> {
+        match self
+            .request(IpcRequest::JitterSetRealtime {
+                server,
+                priority,
+                isolated_cores,
+            })
+            .await?
+        {
+            IpcResponse::JitterRealtimeConfiguredResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_jitter_stalls(
+        &mut self,
+        server: Option<String>,
+        limit: usize,
+    ) -> Result<Vec<craft_core::MicroStallEvent>> {
+        match self
+            .request(IpcRequest::JitterGetStalls { server, limit })
+            .await?
+        {
+            IpcResponse::JitterStallListResult { stalls } => Ok(stalls),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn mitigate_jitter_irq(
+        &mut self,
+        irq_num: u32,
+        target_cpus: Vec<usize>,
+    ) -> Result<String> {
+        match self
+            .request(IpcRequest::JitterMitigateIrq { irq_num, target_cpus })
+            .await?
+        {
+            IpcResponse::JitterIrqMitigatedResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_jitter_histogram(
+        &mut self,
+        server: Option<String>,
+    ) -> Result<Vec<(String, u64)>> {
+        match self
+            .request(IpcRequest::JitterGetHistogram { server })
+            .await?
+        {
+            IpcResponse::JitterHistogramResult { buckets } => Ok(buckets),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_jitter_bench(
+        &mut self,
+        iterations: usize,
+        simulate_load: bool,
+    ) -> Result<craft_core::JitterBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::JitterRunBench {
+                iterations,
+                simulate_load,
+            })
+            .await?
+        {
+            IpcResponse::JitterBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_jitter_metrics(&mut self) -> Result<String> {
+        match self
+            .request(IpcRequest::JitterResetMetrics)
+            .await?
+        {
+            IpcResponse::JitterResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

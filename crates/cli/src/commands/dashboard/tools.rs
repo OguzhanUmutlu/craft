@@ -1815,6 +1815,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             NvmeStorageFabric,
             VpnMesh,
             BftConsensus,
+            KernelJitterElimination,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2104,6 +2105,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::BftConsensus);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Kernel Sched Tracing & Real-Time Jitter Elimination",
+            )
+            .with_aliases(&["jitter", "sched", "microstall", "realtime"]),
+        );
+        actions.push(ToolItemAction::KernelJitterElimination);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2220,6 +2231,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::BftConsensus => {
                     bft_tui(paths).await?;
+                }
+                ToolItemAction::KernelJitterElimination => {
+                    jitter_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4195,6 +4209,52 @@ async fn bft_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft bft reset-metrics                    Reset cumulative telemetry counters".green().to_string());
 
     show_modal_message("BFT CONSENSUS & ZERO-KNOWLEDGE STATE QUORUM", &lines, false)?;
+    Ok(())
+}
+
+async fn jitter_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::JitterMitigationService::global(paths);
+    let summary = service.get_status(None)?;
+    let stalls = service.get_stalls(None, 3)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS LIVE GAME KERNEL SCHED TRACING & JITTER ELIMINATION".bold().to_string());
+    lines.push("Sub-100us P99 Scheduling Jitter, FIFO Escalation, Core Isolation & IRQ Shielding".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Server Name:            {}", summary.server_name));
+    lines.push(format!("Active Tracepoints:     {}", summary.active_tracepoints));
+    lines.push(format!("Total Sched Switches:   {}", summary.total_sched_switches));
+    lines.push(format!("Micro-Stalls Detected:  {}", summary.micro_stalls_detected));
+    lines.push(format!("Priority Inversions:    {}", summary.priority_inversions_detected));
+    lines.push(format!("IRQ Storms Mitigated:   {}", summary.irq_storms_mitigated));
+    lines.push(format!("Avg Runqueue Jitter:    {:.2} us", summary.avg_jitter_micros));
+    lines.push(format!("P99 Runqueue Jitter:    {:.2} us", summary.p99_jitter_micros));
+    lines.push(format!("Max Runqueue Jitter:    {:.2} us", summary.max_jitter_micros));
+    lines.push(format!("Active Policy:          {:?}", summary.active_policy));
+    lines.push(format!("Isolated Cores:         {:?}", summary.isolated_cores));
+    lines.push(format!("Core Shielding Active:  {}", summary.shielding_active));
+    lines.push("".to_string());
+    if !stalls.is_empty() {
+        lines.push("Recent Micro-Stall Events:".bold().to_string());
+        for s in stalls.iter().take(3) {
+            lines.push(
+                format!("  PID: {:<6} Duration: {:<5.1}us Cause: {:<16} Thread: {}",
+                    s.pid, s.stall_micros(), format!("{:?}", s.cause), s.thread_name
+                ).dimmed().to_string()
+            );
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft jitter status [--server <S>]         Inspect kernel jitter telemetry & policy".green().to_string());
+    lines.push("  craft jitter isolate -s <S> -p <PRIO>      Configure SCHED_FIFO real-time priority & cores".green().to_string());
+    lines.push("  craft jitter stalls [--limit <N>]          Display captured micro-stall events".green().to_string());
+    lines.push("  craft jitter irq -i <IRQ> -c <CORES>       Rebalance hardware IRQ away from game cores".green().to_string());
+    lines.push("  craft jitter histogram                     Display latency logarithmic micro-histogram".green().to_string());
+    lines.push("  craft jitter bench                         Run synthetic kernel jitter benchmark".green().to_string());
+    lines.push("  craft jitter reset-metrics                 Reset cumulative telemetry & stall logs".green().to_string());
+
+    show_modal_message("KERNEL SCHED TRACING & JITTER ELIMINATION", &lines, false)?;
     Ok(())
 }
 

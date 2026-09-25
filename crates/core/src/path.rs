@@ -155,6 +155,10 @@ pub struct CraftPaths {
     pub bft_registry_file: PathBuf,
     pub bft_state_file: PathBuf,
     pub bft_lock: PathBuf,
+    pub jitter_dir: PathBuf,
+    pub jitter_registry_file: PathBuf,
+    pub jitter_state_file: PathBuf,
+    pub jitter_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -309,6 +313,10 @@ impl CraftPaths {
         let bft_registry_file = bft_dir.join("registry.toml");
         let bft_state_file = bft_dir.join("state.json");
         let bft_lock = locks_dir.join("bft.lock");
+        let jitter_dir = home.join("jitter");
+        let jitter_registry_file = jitter_dir.join("registry.json");
+        let jitter_state_file = jitter_dir.join("state.json");
+        let jitter_lock = locks_dir.join("jitter.lock");
 
         Self {
             home,
@@ -461,6 +469,10 @@ impl CraftPaths {
             bft_registry_file,
             bft_state_file,
             bft_lock,
+            jitter_dir,
+            jitter_registry_file,
+            jitter_state_file,
+            jitter_lock,
         }
     }
 
@@ -540,6 +552,7 @@ impl CraftPaths {
         let vpn_keys_dir = vpn_dir.join("keys");
         let bft_dir = home.join("bft");
         let bft_proofs_dir = bft_dir.join("proofs");
+        let jitter_dir = home.join("jitter");
 
         // Ensure all primary directories exist
         for dir in [
@@ -606,6 +619,7 @@ impl CraftPaths {
             &vpn_keys_dir,
             &bft_dir,
             &bft_proofs_dir,
+            &jitter_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -699,6 +713,9 @@ impl CraftPaths {
         let bft_registry_file = bft_dir.join("registry.toml");
         let bft_state_file = bft_dir.join("state.json");
         let bft_lock = locks_dir.join("bft.lock");
+        let jitter_registry_file = jitter_dir.join("registry.json");
+        let jitter_state_file = jitter_dir.join("state.json");
+        let jitter_lock = locks_dir.join("jitter.lock");
 
         Ok(Self {
             home,
@@ -851,7 +868,16 @@ impl CraftPaths {
             bft_registry_file,
             bft_state_file,
             bft_lock,
+            jitter_dir,
+            jitter_registry_file,
+            jitter_state_file,
+            jitter_lock,
         })
+    }
+
+    /// Returns the trace log path for a specific server's micro-stall trace
+    pub fn jitter_trace_path(&self, server: &str) -> PathBuf {
+        self.jitter_dir.join(format!("{}.trace", server))
     }
 
     /// Returns the proof file path for a specific BFT zero-knowledge state proof ID

@@ -600,6 +600,9 @@ async fn main() {
         Some(Commands::Bft { action }) => {
             commands::bft::handle_bft(&paths, action).await
         }
+        Some(Commands::Jitter { action }) => {
+            commands::jitter::handle_jitter(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

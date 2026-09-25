@@ -558,6 +558,30 @@ pub enum IpcRequest {
         validators: u32,
     },
     BftResetMetrics,
+    JitterGetStatus {
+        server: Option<String>,
+    },
+    JitterSetRealtime {
+        server: String,
+        priority: u32,
+        isolated_cores: Vec<usize>,
+    },
+    JitterGetStalls {
+        server: Option<String>,
+        limit: usize,
+    },
+    JitterMitigateIrq {
+        irq_num: u32,
+        target_cpus: Vec<usize>,
+    },
+    JitterGetHistogram {
+        server: Option<String>,
+    },
+    JitterRunBench {
+        iterations: usize,
+        simulate_load: bool,
+    },
+    JitterResetMetrics,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1077,6 +1101,27 @@ pub enum IpcResponse {
         metrics: craft_core::BftBenchmarkMetrics,
     },
     BftResetResult {
+        message: String,
+    },
+    JitterStatusResult {
+        status: craft_core::JitterStatusSummary,
+    },
+    JitterRealtimeConfiguredResult {
+        message: String,
+    },
+    JitterStallListResult {
+        stalls: Vec<craft_core::MicroStallEvent>,
+    },
+    JitterIrqMitigatedResult {
+        message: String,
+    },
+    JitterHistogramResult {
+        buckets: Vec<(String, u64)>,
+    },
+    JitterBenchResult {
+        metrics: craft_core::JitterBenchmarkMetrics,
+    },
+    JitterResetResult {
         message: String,
     },
     Error { error: String },
