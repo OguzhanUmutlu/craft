@@ -2,7 +2,8 @@ use crate::protocol::{IpcRequest, IpcResponse};
 use crate::supervisor::Supervisor;
 use craft_core::{
     is_process_running, read_pid_file, remove_pid_file, write_pid_file, CraftError, CraftPaths,
-    MembraneRasterPoint, NeuromorphicBenchmarkMetrics, NeuromorphicStatusSummary, Result,
+    MembraneRasterPoint, NeuromorphicBenchmarkMetrics, NeuromorphicStatusSummary,
+    OpticalBenchmarkMetrics, OpticalCircuit, OpticalRoutingMode, OpticalStatusSummary, Result,
     TickPrediction,
 };
 use std::path::{Path, PathBuf};
@@ -2261,6 +2262,63 @@ where
                 let service = crate::neuromorphic_service::NeuromorphicService::global(supervisor.paths());
                 let resp = match service.reset_metrics(server.as_deref()) {
                     Ok(()) => IpcResponse::NeuromorphicResetResult { success: true },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::OpticalGetStatus { server } => {
+                let service = crate::optical_service::OpticalSwitchService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(status) => IpcResponse::OpticalStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::OpticalSetMode { server, mode } => {
+                let service = crate::optical_service::OpticalSwitchService::global(supervisor.paths());
+                let parsed_mode = mode.parse::<OpticalRoutingMode>().unwrap_or(OpticalRoutingMode::Autonomous);
+                let resp = match service.set_mode(parsed_mode, server.as_deref()) {
+                    Ok(_) => IpcResponse::OpticalModeUpdated { success: true, mode: parsed_mode.to_string() },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::OpticalCreateCircuit { circuit_id, ingress_port, egress_port, wavelength_ch, server } => {
+                let service = crate::optical_service::OpticalSwitchService::global(supervisor.paths());
+                let resp = match service.create_circuit(circuit_id, ingress_port, egress_port, wavelength_ch, server) {
+                    Ok(circuit) => IpcResponse::OpticalCircuitCreated { circuit },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::OpticalDeleteCircuit { circuit_id } => {
+                let service = crate::optical_service::OpticalSwitchService::global(supervisor.paths());
+                let resp = match service.delete_circuit(&circuit_id) {
+                    Ok(success) => IpcResponse::OpticalCircuitDeleted { success, circuit_id },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::OpticalListCircuits { server } => {
+                let service = crate::optical_service::OpticalSwitchService::global(supervisor.paths());
+                let resp = match service.list_circuits(server.as_deref()) {
+                    Ok(circuits) => IpcResponse::OpticalCircuitsListResult { circuits },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::OpticalRunBench { iterations, port_count } => {
+                let service = crate::optical_service::OpticalSwitchService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations, port_count) {
+                    Ok(metrics) => IpcResponse::OpticalBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::OpticalResetMetrics { .. } => {
+                let service = crate::optical_service::OpticalSwitchService::global(supervisor.paths());
+                let resp = match service.reset_metrics() {
+                    Ok(success) => IpcResponse::OpticalResetResult { success },
                     Err(e) => IpcResponse::Error { error: e.to_string() },
                 };
                 write_frame(&mut stream, &resp).await?;
@@ -5111,6 +5169,110 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::NeuromorphicResetResult { success } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_optical_status(&mut self, server: Option<&str>) -> Result<OpticalStatusSummary> {
+        match self
+            .request(IpcRequest::OpticalGetStatus {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::OpticalStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_optical_mode(&mut self, server: Option<&str>, mode: &str) -> Result<String> {
+        match self
+            .request(IpcRequest::OpticalSetMode {
+                server: server.map(|s| s.to_string()),
+                mode: mode.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::OpticalModeUpdated { mode, .. } => Ok(mode),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn create_optical_circuit(
+        &mut self,
+        circuit_id: &str,
+        ingress_port: u16,
+        egress_port: u16,
+        wavelength_ch: u16,
+        server: Option<&str>,
+    ) -> Result<OpticalCircuit> {
+        match self
+            .request(IpcRequest::OpticalCreateCircuit {
+                circuit_id: circuit_id.to_string(),
+                ingress_port,
+                egress_port,
+                wavelength_ch,
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::OpticalCircuitCreated { circuit } => Ok(circuit),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn delete_optical_circuit(&mut self, circuit_id: &str) -> Result<bool> {
+        match self
+            .request(IpcRequest::OpticalDeleteCircuit {
+                circuit_id: circuit_id.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::OpticalCircuitDeleted { success, .. } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_optical_circuits(&mut self, server: Option<&str>) -> Result<Vec<OpticalCircuit>> {
+        match self
+            .request(IpcRequest::OpticalListCircuits {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::OpticalCircuitsListResult { circuits } => Ok(circuits),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_optical_bench(&mut self, iterations: u32, port_count: u16) -> Result<OpticalBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::OpticalRunBench {
+                iterations,
+                port_count,
+            })
+            .await?
+        {
+            IpcResponse::OpticalBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_optical_metrics(&mut self, server: Option<&str>) -> Result<bool> {
+        match self
+            .request(IpcRequest::OpticalResetMetrics {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::OpticalResetResult { success } => Ok(success),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

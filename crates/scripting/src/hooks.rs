@@ -121,6 +121,10 @@ pub enum LifecycleEvent {
     NeuromorphicTickAdjusted,
     NeuromorphicIdleCompressionEngaged,
     NeuromorphicSynapticWeightsConsolidated,
+    OpticalCircuitProvisioned,
+    OpticalCircuitTornDown,
+    OpticalWavelengthCollisionAvoided,
+    OpticalLinkAttenuationDegraded,
 }
 
 impl LifecycleEvent {
@@ -236,6 +240,10 @@ impl LifecycleEvent {
             Self::NeuromorphicTickAdjusted => "on_neuromorphic_tick_adjusted",
             Self::NeuromorphicIdleCompressionEngaged => "on_neuromorphic_idle_compression_engaged",
             Self::NeuromorphicSynapticWeightsConsolidated => "on_neuromorphic_synaptic_weights_consolidated",
+            Self::OpticalCircuitProvisioned => "on_optical_circuit_provisioned",
+            Self::OpticalCircuitTornDown => "on_optical_circuit_torn_down",
+            Self::OpticalWavelengthCollisionAvoided => "on_optical_wavelength_collision_avoided",
+            Self::OpticalLinkAttenuationDegraded => "on_optical_link_attenuation_degraded",
         }
     }
 
@@ -352,6 +360,10 @@ impl LifecycleEvent {
             "on_neuromorphic_tick_adjusted" | "neuromorphic_tick_adjusted" | "tick_adjusted" | "neuromorphic_tick" => Some(Self::NeuromorphicTickAdjusted),
             "on_neuromorphic_idle_compression_engaged" | "neuromorphic_idle_compression_engaged" | "idle_compression_engaged" | "idle_compression" => Some(Self::NeuromorphicIdleCompressionEngaged),
             "on_neuromorphic_synaptic_weights_consolidated" | "neuromorphic_synaptic_weights_consolidated" | "synaptic_weights_consolidated" | "weights_consolidated" => Some(Self::NeuromorphicSynapticWeightsConsolidated),
+            "on_optical_circuit_provisioned" | "optical_circuit_provisioned" | "circuit_provisioned" => Some(Self::OpticalCircuitProvisioned),
+            "on_optical_circuit_torn_down" | "optical_circuit_torn_down" | "circuit_torn_down" => Some(Self::OpticalCircuitTornDown),
+            "on_optical_wavelength_collision_avoided" | "optical_wavelength_collision_avoided" | "collision_avoided" => Some(Self::OpticalWavelengthCollisionAvoided),
+            "on_optical_link_attenuation_degraded" | "optical_link_attenuation_degraded" | "attenuation_degraded" => Some(Self::OpticalLinkAttenuationDegraded),
             _ => None,
         }
     }
@@ -468,6 +480,10 @@ impl LifecycleEvent {
             Self::NeuromorphicTickAdjusted,
             Self::NeuromorphicIdleCompressionEngaged,
             Self::NeuromorphicSynapticWeightsConsolidated,
+            Self::OpticalCircuitProvisioned,
+            Self::OpticalCircuitTornDown,
+            Self::OpticalWavelengthCollisionAvoided,
+            Self::OpticalLinkAttenuationDegraded,
         ]
     }
 }
@@ -792,6 +808,18 @@ pub struct HookContext {
     pub neuromorphic_sleep_micros: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub neuromorphic_synapse_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optical_circuit_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optical_wavelength_ch: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optical_ingress_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optical_egress_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optical_attenuation_db: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optical_latency_ns: Option<f64>,
 }
 
 impl HookContext {
@@ -1461,6 +1489,55 @@ impl HookContext {
         ctx.details = Some(format!(
             "Neuromorphic synaptic weights consolidated on server '{}': {} synapses, avg weight {:.3}",
             server, synapse_count, avg_weight
+        ));
+        ctx
+    }
+
+    pub fn for_optical_circuit_provisioned(server: &str, circuit_id: &str, ingress: u16, egress: u16, wavelength: u16) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::OpticalCircuitProvisioned);
+        ctx.server_name = Some(server.to_string());
+        ctx.optical_circuit_id = Some(circuit_id.to_string());
+        ctx.optical_ingress_port = Some(ingress);
+        ctx.optical_egress_port = Some(egress);
+        ctx.optical_wavelength_ch = Some(wavelength);
+        ctx.details = Some(format!(
+            "Optical lightpath circuit '{}' provisioned: port {} -> port {} on lambda channel {}",
+            circuit_id, ingress, egress, wavelength
+        ));
+        ctx
+    }
+
+    pub fn for_optical_circuit_torn_down(server: &str, circuit_id: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::OpticalCircuitTornDown);
+        ctx.server_name = Some(server.to_string());
+        ctx.optical_circuit_id = Some(circuit_id.to_string());
+        ctx.details = Some(format!(
+            "Optical lightpath circuit '{}' torn down on server '{}'",
+            circuit_id, server
+        ));
+        ctx
+    }
+
+    pub fn for_optical_wavelength_collision_avoided(server: &str, ingress: u16, wavelength: u16, colliding_circuit: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::OpticalWavelengthCollisionAvoided);
+        ctx.server_name = Some(server.to_string());
+        ctx.optical_ingress_port = Some(ingress);
+        ctx.optical_wavelength_ch = Some(wavelength);
+        ctx.details = Some(format!(
+            "Optical wavelength collision avoided on port {} lambda channel {} (held by '{}')",
+            ingress, wavelength, colliding_circuit
+        ));
+        ctx
+    }
+
+    pub fn for_optical_link_attenuation_degraded(server: &str, ingress: u16, attenuation_db: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::OpticalLinkAttenuationDegraded);
+        ctx.server_name = Some(server.to_string());
+        ctx.optical_ingress_port = Some(ingress);
+        ctx.optical_attenuation_db = Some(attenuation_db);
+        ctx.details = Some(format!(
+            "Optical link attenuation degraded on port {}: {:.2} dB",
+            ingress, attenuation_db
         ));
         ctx
     }
@@ -2579,5 +2656,58 @@ mod tests {
         assert_eq!(syn_ctx.event, "on_neuromorphic_synaptic_weights_consolidated");
         assert_eq!(syn_ctx.server_name.as_deref(), Some("survival"));
         assert_eq!(syn_ctx.neuromorphic_synapse_count, Some(512));
+    }
+
+    #[test]
+    fn test_optical_lifecycle_events_and_context() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_optical_circuit_provisioned"),
+            Some(LifecycleEvent::OpticalCircuitProvisioned)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("circuit_provisioned"),
+            Some(LifecycleEvent::OpticalCircuitProvisioned)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_optical_circuit_torn_down"),
+            Some(LifecycleEvent::OpticalCircuitTornDown)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("circuit_torn_down"),
+            Some(LifecycleEvent::OpticalCircuitTornDown)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_optical_wavelength_collision_avoided"),
+            Some(LifecycleEvent::OpticalWavelengthCollisionAvoided)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("collision_avoided"),
+            Some(LifecycleEvent::OpticalWavelengthCollisionAvoided)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_optical_link_attenuation_degraded"),
+            Some(LifecycleEvent::OpticalLinkAttenuationDegraded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("attenuation_degraded"),
+            Some(LifecycleEvent::OpticalLinkAttenuationDegraded)
+        );
+
+        let prov_ctx = HookContext::for_optical_circuit_provisioned("survival", "circ-01", 1, 2, 8);
+        assert_eq!(prov_ctx.event, "on_optical_circuit_provisioned");
+        assert_eq!(prov_ctx.server_name.as_deref(), Some("survival"));
+        assert_eq!(prov_ctx.optical_circuit_id.as_deref(), Some("circ-01"));
+        assert_eq!(prov_ctx.optical_ingress_port, Some(1));
+        assert_eq!(prov_ctx.optical_egress_port, Some(2));
+        assert_eq!(prov_ctx.optical_wavelength_ch, Some(8));
+
+        let teardown_ctx = HookContext::for_optical_circuit_torn_down("survival", "circ-01");
+        assert_eq!(teardown_ctx.event, "on_optical_circuit_torn_down");
+        assert_eq!(teardown_ctx.optical_circuit_id.as_deref(), Some("circ-01"));
+
+        let atten_ctx = HookContext::for_optical_link_attenuation_degraded("survival", 3, 4.8);
+        assert_eq!(atten_ctx.event, "on_optical_link_attenuation_degraded");
+        assert_eq!(atten_ctx.optical_ingress_port, Some(3));
+        assert_eq!(atten_ctx.optical_attenuation_db, Some(4.8));
     }
 }

@@ -57,6 +57,7 @@ cargo-timing.html
 !/tools/test_bft_consensus.py
 !/tools/test_kernel_jitter_elimination.py
 !/tools/test_neuromorphic_tick_scheduling.py
+!/tools/test_optical_network_switching.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

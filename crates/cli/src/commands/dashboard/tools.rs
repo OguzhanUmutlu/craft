@@ -1817,6 +1817,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             BftConsensus,
             KernelJitterElimination,
             NeuromorphicAiScheduler,
+            OpticalNetworkSwitching,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2126,6 +2127,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::NeuromorphicAiScheduler);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Optical Network Switching & Photonic Waveguide Routing",
+            )
+            .with_aliases(&["optical", "ocs", "photonic", "waveguide", "wdm"]),
+        );
+        actions.push(ToolItemAction::OpticalNetworkSwitching);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2248,6 +2259,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::NeuromorphicAiScheduler => {
                     neuromorphic_tui(paths).await?;
+                }
+                ToolItemAction::OpticalNetworkSwitching => {
+                    optical_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4308,6 +4322,40 @@ async fn neuromorphic_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("NEUROMORPHIC AI TICK SCHEDULING", &lines, false)?;
     Ok(())
 }
+
+async fn optical_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::OpticalSwitchService::global(paths);
+    let summary = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS OPTICAL NETWORK SWITCHING & PHOTONIC INTERCONNECTS".bold().to_string());
+    lines.push("Silicon Photonic MEMS Crossbar, DWDM Grid & Nanosecond Waveguides".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Photonic Ports:         {}", summary.port_count));
+    lines.push(format!("Active Ports:           {}", summary.active_ports));
+    lines.push(format!("Active Circuits:        {}", summary.active_circuits_count));
+    lines.push(format!("Routing Mode:           {}", summary.mode));
+    lines.push(format!("Packets Routed:         {}", summary.packets_routed_total));
+    lines.push(format!("Aggregate Bandwidth:    {:.1} Gbps", summary.aggregate_bandwidth_gbps));
+    lines.push(format!("Mean Latency:           {:.2} ns", summary.mean_switching_latency_nanos));
+    lines.push(format!("Insertion Loss:         {:.2} dB", summary.insertion_loss_db));
+    lines.push(format!("WDM Channels Active:    {}", summary.wdm_channels_utilized));
+    lines.push(format!("Attenuation Warnings:   {}", summary.attenuation_warnings_total));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft optical status [--server <S>]        Inspect optical switching telemetry".green().to_string());
+    lines.push("  craft optical mode -m <MODE>               Configure optical routing mode".green().to_string());
+    lines.push("  craft optical circuit-add -c <ID> -i <i>   Provision optical lightpath circuit".green().to_string());
+    lines.push("  craft optical circuit-rm -c <ID>           Tear down optical circuit lightpath".green().to_string());
+    lines.push("  craft optical circuits                     List all active optical lightpaths".green().to_string());
+    lines.push("  craft optical bench [-f <N>] [-d <DIM>]    Benchmark MEMS crossbar switching".green().to_string());
+    lines.push("  craft optical reset-metrics                Reset optical telemetry & counters".green().to_string());
+
+    show_modal_message("OPTICAL NETWORK SWITCHING & PHOTONIC INTERCONNECTS", &lines, false)?;
+    Ok(())
+}
+
+
 
 
 

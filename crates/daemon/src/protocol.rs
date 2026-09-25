@@ -609,6 +609,33 @@ pub enum IpcRequest {
     NeuromorphicResetMetrics {
         server: Option<String>,
     },
+    OpticalGetStatus {
+        server: Option<String>,
+    },
+    OpticalSetMode {
+        server: Option<String>,
+        mode: String,
+    },
+    OpticalCreateCircuit {
+        circuit_id: String,
+        ingress_port: u16,
+        egress_port: u16,
+        wavelength_ch: u16,
+        server: Option<String>,
+    },
+    OpticalDeleteCircuit {
+        circuit_id: String,
+    },
+    OpticalListCircuits {
+        server: Option<String>,
+    },
+    OpticalRunBench {
+        iterations: u32,
+        port_count: u16,
+    },
+    OpticalResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1172,6 +1199,29 @@ pub enum IpcResponse {
         metrics: craft_core::NeuromorphicBenchmarkMetrics,
     },
     NeuromorphicResetResult {
+        success: bool,
+    },
+    OpticalStatusResult {
+        status: craft_core::OpticalStatusSummary,
+    },
+    OpticalModeUpdated {
+        success: bool,
+        mode: String,
+    },
+    OpticalCircuitCreated {
+        circuit: craft_core::OpticalCircuit,
+    },
+    OpticalCircuitDeleted {
+        success: bool,
+        circuit_id: String,
+    },
+    OpticalCircuitsListResult {
+        circuits: Vec<craft_core::OpticalCircuit>,
+    },
+    OpticalBenchResult {
+        metrics: craft_core::OpticalBenchmarkMetrics,
+    },
+    OpticalResetResult {
         success: bool,
     },
     Error { error: String },

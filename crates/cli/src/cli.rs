@@ -726,7 +726,14 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<NeuromorphicCommands>,
     },
+    /// Autonomous Optical Network Switching, Photonic Interconnects & Line-Rate Nanosecond Waveguide Routing
+    #[command(name = "optical", alias = "ocs", alias = "photonic", alias = "waveguide", alias = "wdm")]
+    Optical {
+        #[command(subcommand)]
+        action: Option<OpticalCommands>,
+    },
 }
+
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
 pub enum ProfileCommands {
@@ -3211,6 +3218,94 @@ pub enum NeuromorphicCommands {
         json: bool,
     },
 }
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum OpticalCommands {
+    /// Inspect optical network switching telemetry, MEMS micro-mirror topology, and DWDM wavelengths
+    Status {
+        /// Filter by circuit or server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Configure optical switching routing mode (Autonomous, CircuitSwitched, WavelengthRouted, HybridElectronic, Passthrough)
+    #[command(name = "mode", alias = "set-mode", alias = "routing-mode")]
+    Mode {
+        /// Target server or cluster name
+        #[arg(short, long, default_value = "default")]
+        server: String,
+        /// Routing mode (autonomous, circuit-switched, wavelength-routed, hybrid-electronic, passthrough)
+        #[arg(short, long, default_value = "autonomous")]
+        mode: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Provision a dynamic optical lightpath circuit across photonic crossbars
+    #[command(name = "circuit-add", alias = "lightpath-add", alias = "connect")]
+    CircuitAdd {
+        /// Target server or lightpath tag
+        #[arg(short, long, default_value = "default")]
+        server: String,
+        /// Circuit identifier
+        #[arg(short = 'c', long)]
+        circuit_id: String,
+        /// Ingress port ID (0 to N-1)
+        #[arg(short = 'i', long, default_value_t = 0)]
+        ingress: u32,
+        /// Egress port ID (0 to N-1)
+        #[arg(short = 'e', long, default_value_t = 1)]
+        egress: u32,
+        /// DWDM ITU-T channel index (1 to 64)
+        #[arg(short = 'w', long, default_value_t = 1)]
+        channel: u16,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Tear down an established optical circuit lightpath
+    #[command(name = "circuit-rm", alias = "lightpath-rm", alias = "disconnect")]
+    CircuitRm {
+        /// Circuit identifier to tear down
+        #[arg(short = 'c', long)]
+        circuit_id: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List all active optical lightpath circuits
+    #[command(name = "circuits", alias = "list")]
+    Circuits {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark MEMS optical crossbar switching throughput and switching latency
+    Bench {
+        /// Number of benchmark frames to inject
+        #[arg(short, long, default_value_t = 5000)]
+        frames: usize,
+        /// Benchmark crossbar dimension (N x N, e.g. 16, 32, 64)
+        #[arg(short = 'd', long = "dimension", default_value_t = 32)]
+        dimension: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset optical telemetry counters, collision events, and error stats
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
+        /// Target server or cluster name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
 pub enum XdpRuleSubcommands {
@@ -7153,8 +7248,84 @@ mod tests {
             }
             _ => panic!("Expected Neuromorphic Bench command"),
         }
+
+        // Optical status
+        let cli_opt_status = Cli::try_parse_from([
+            "craft", "optical", "status", "-s", "lobby", "--json"
+        ]).unwrap();
+        match cli_opt_status.command {
+            Some(Commands::Optical {
+                action: Some(OpticalCommands::Status { server, json }),
+            }) => {
+                assert_eq!(server.as_deref(), Some("lobby"));
+                assert!(json);
+            }
+            _ => panic!("Expected Optical Status command"),
+        }
+
+        // Optical mode alias and set
+        let cli_opt_mode = Cli::try_parse_from([
+            "craft", "ocs", "mode", "-m", "circuit-switched", "-s", "default", "--json"
+        ]).unwrap();
+        match cli_opt_mode.command {
+            Some(Commands::Optical {
+                action: Some(OpticalCommands::Mode { mode, server, json }),
+            }) => {
+                assert_eq!(mode, "circuit-switched");
+                assert_eq!(server, "default");
+                assert!(json);
+            }
+            _ => panic!("Expected Optical Mode command"),
+        }
+
+        // Optical circuit-add alias
+        let cli_opt_circuit_add = Cli::try_parse_from([
+            "craft", "photonic", "circuit-add", "-c", "lp-01", "-i", "2", "-e", "5", "-w", "16", "--json"
+        ]).unwrap();
+        match cli_opt_circuit_add.command {
+            Some(Commands::Optical {
+                action: Some(OpticalCommands::CircuitAdd { circuit_id, ingress, egress, channel, json, .. }),
+            }) => {
+                assert_eq!(circuit_id, "lp-01");
+                assert_eq!(ingress, 2);
+                assert_eq!(egress, 5);
+                assert_eq!(channel, 16);
+                assert!(json);
+            }
+            _ => panic!("Expected Optical CircuitAdd command"),
+        }
+
+        // Optical circuit-rm alias
+        let cli_opt_circuit_rm = Cli::try_parse_from([
+            "craft", "waveguide", "circuit-rm", "-c", "lp-01", "--json"
+        ]).unwrap();
+        match cli_opt_circuit_rm.command {
+            Some(Commands::Optical {
+                action: Some(OpticalCommands::CircuitRm { circuit_id, json }),
+            }) => {
+                assert_eq!(circuit_id, "lp-01");
+                assert!(json);
+            }
+            _ => panic!("Expected Optical CircuitRm command"),
+        }
+
+        // Optical bench alias
+        let cli_opt_bench = Cli::try_parse_from([
+            "craft", "wdm", "bench", "-f", "2000", "-d", "16", "--json"
+        ]).unwrap();
+        match cli_opt_bench.command {
+            Some(Commands::Optical {
+                action: Some(OpticalCommands::Bench { frames, dimension, json }),
+            }) => {
+                assert_eq!(frames, 2000);
+                assert_eq!(dimension, 16);
+                assert!(json);
+            }
+            _ => panic!("Expected Optical Bench command"),
+        }
     }
 }
+
 
 
 

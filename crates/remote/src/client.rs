@@ -2923,6 +2923,134 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries the optical switch status on the remote host
+    pub fn get_remote_optical_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft optical status".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote optical status query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Updates optical routing mode on the remote host
+    pub fn set_remote_optical_mode(&self, mode: &str, server: Option<&str>) -> Result<String> {
+        let mut cmd = format!("craft optical mode -m {}", mode);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote optical mode update failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Provisions an optical lightpath circuit on the remote host
+    pub fn create_remote_optical_circuit(
+        &self,
+        circuit_id: &str,
+        ingress: u16,
+        egress: u16,
+        wavelength: u16,
+        server: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!(
+            "craft optical circuit-add --circuit-id {} -i {} -e {} -w {}",
+            circuit_id, ingress, egress, wavelength
+        );
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote optical circuit provisioning failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Tears down an active optical lightpath circuit on the remote host
+    pub fn delete_remote_optical_circuit(&self, circuit_id: &str) -> Result<String> {
+        let cmd = format!("craft optical circuit-rm -c {} --json", circuit_id);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote optical circuit teardown failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Lists active optical circuits on the remote host
+    pub fn list_remote_optical_circuits(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft optical circuits".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote optical circuits listing failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs optical crossbar switching benchmark on the remote host
+    pub fn run_remote_optical_bench(&self, iterations: u32, ports: u16) -> Result<String> {
+        let cmd = format!("craft optical bench -i {} -p {} --json", iterations, ports);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote optical bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets optical switch telemetry counters on the remote host
+    pub fn reset_remote_optical_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft optical reset-metrics".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote optical metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

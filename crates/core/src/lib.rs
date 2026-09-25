@@ -53,6 +53,7 @@ pub mod vpn;
 pub mod bft;
 pub mod jitter;
 pub mod neuromorphic;
+pub mod optical;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -277,6 +278,12 @@ pub use neuromorphic::{
     NeuromorphicBenchmarkMetrics, NeuromorphicRegistry, NeuromorphicScheduleMode,
     NeuromorphicStatusSummary, NeuronId, SpikeEvent, SpikeSourceType, StdpConfig,
     SynapticConnection, TickPrediction,
+};
+pub use optical::{
+    render_optical_bench_table, render_optical_circuits_table, render_optical_status_table,
+    MemsMirrorState, OpticalBenchmarkMetrics, OpticalCircuit, OpticalRegistry,
+    OpticalRoutingMode, OpticalStatusSummary, OpticalSwitchTopology, OpticalWavelength,
+    PhotonicPort,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

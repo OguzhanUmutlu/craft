@@ -164,6 +164,11 @@ pub struct CraftPaths {
     pub neuromorphic_registry_file: PathBuf,
     pub neuromorphic_state_file: PathBuf,
     pub neuromorphic_lock: PathBuf,
+    pub optical_dir: PathBuf,
+    pub optical_circuits_dir: PathBuf,
+    pub optical_registry_file: PathBuf,
+    pub optical_state_file: PathBuf,
+    pub optical_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -327,6 +332,11 @@ impl CraftPaths {
         let neuromorphic_registry_file = neuromorphic_dir.join("registry.json");
         let neuromorphic_state_file = neuromorphic_dir.join("state.json");
         let neuromorphic_lock = locks_dir.join("neuromorphic.lock");
+        let optical_dir = home.join("optical");
+        let optical_circuits_dir = optical_dir.join("circuits");
+        let optical_registry_file = optical_dir.join("registry.json");
+        let optical_state_file = optical_dir.join("state.json");
+        let optical_lock = locks_dir.join("optical.lock");
 
         Self {
             home,
@@ -488,6 +498,11 @@ impl CraftPaths {
             neuromorphic_registry_file,
             neuromorphic_state_file,
             neuromorphic_lock,
+            optical_dir,
+            optical_circuits_dir,
+            optical_registry_file,
+            optical_state_file,
+            optical_lock,
         }
     }
 
@@ -738,6 +753,11 @@ impl CraftPaths {
         let neuromorphic_registry_file = neuromorphic_dir.join("registry.json");
         let neuromorphic_state_file = neuromorphic_dir.join("state.json");
         let neuromorphic_lock = locks_dir.join("neuromorphic.lock");
+        let optical_dir = home.join("optical");
+        let optical_circuits_dir = optical_dir.join("circuits");
+        let optical_registry_file = optical_dir.join("registry.json");
+        let optical_state_file = optical_dir.join("state.json");
+        let optical_lock = locks_dir.join("optical.lock");
 
         Ok(Self {
             home,
@@ -899,7 +919,17 @@ impl CraftPaths {
             neuromorphic_registry_file,
             neuromorphic_state_file,
             neuromorphic_lock,
+            optical_dir,
+            optical_circuits_dir,
+            optical_registry_file,
+            optical_state_file,
+            optical_lock,
         })
+    }
+
+    /// Returns the optical circuit configuration path for a specific circuit ID
+    pub fn optical_circuit_path(&self, circuit_id: &str) -> PathBuf {
+        self.optical_circuits_dir.join(format!("{}.opt", circuit_id))
     }
 
     /// Returns the neuromorphic model file path for a specific model ID or server

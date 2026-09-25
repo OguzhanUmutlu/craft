@@ -606,7 +606,11 @@ async fn main() {
         Some(Commands::Neuromorphic { action }) => {
             commands::neuromorphic::handle_neuromorphic(&paths, action).await
         }
+        Some(Commands::Optical { action }) => {
+            commands::optical::handle_optical(&paths, action).await
+        }
     };
+
 
     if let Err(e) = result {
         modalx::terminal::restore_terminal();

@@ -36,6 +36,7 @@ pub mod vpn;
 pub mod bft;
 pub mod jitter;
 pub mod neuromorphic;
+pub mod optical;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -149,6 +150,10 @@ pub use jitter::{
 };
 pub use neuromorphic::{
     benchmark_neuromorphic_scheduler, SpikeNeuralNetwork, SpikeQueue, SynapseMatrix,
+};
+pub use optical::{
+    benchmark_optical_crossbar, MemsCrossbarSwitch, OpticalWaveguideFrame, WdmMultiplexer,
+    OPTICAL_FRAME_MAGIC, OPTICAL_HEADER_SIZE,
 };
 
 
