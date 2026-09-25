@@ -1814,6 +1814,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             MemFabricPaging,
             NvmeStorageFabric,
             VpnMesh,
+            BftConsensus,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2093,6 +2094,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::VpnMesh);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Byzantine Fault-Tolerant Consensus & ZK State Attestation",
+            )
+            .with_aliases(&["bft", "hotstuff", "pbft", "quorum"]),
+        );
+        actions.push(ToolItemAction::BftConsensus);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2206,6 +2217,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::VpnMesh => {
                     vpn_tui(paths).await?;
+                }
+                ToolItemAction::BftConsensus => {
+                    bft_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4134,6 +4148,53 @@ async fn vpn_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft vpn reset-metrics                    Reset cumulative telemetry counters".green().to_string());
 
     show_modal_message("QUANTUM-ENCRYPTED WIREGUARD VPN MESH", &lines, false)?;
+    Ok(())
+}
+
+async fn bft_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::BftConsensusService::global(paths);
+    let summary = service.get_status(None)?;
+    let validators = service.list_validators(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("BYZANTINE FAULT-TOLERANT CONSENSUS & ZK QUORUM".bold().to_string());
+    lines.push("Pure-Rust HotStuff/PBFT State Machine, BLS Aggregate Signatures & ZK Attestation".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Current View:           {}", summary.current_view));
+    lines.push(format!("Block Height:           {}", summary.block_height));
+    lines.push(format!("Current Proposer:       {}", summary.current_proposer));
+    lines.push(format!("Active Validators:      {}", summary.active_validators));
+    lines.push(format!("Total Validators:       {}", summary.total_validators));
+    lines.push(format!("Quorum Size (2f+1):     {}", summary.quorum_size));
+    lines.push(format!("Byzantine Ceiling (f):  {}", summary.byzantine_threshold_f));
+    lines.push(format!("Committed Blocks:       {}", summary.committed_blocks));
+    lines.push(format!("Slashed Validators:     {}", summary.slashed_validators));
+    lines.push(format!("Avg Commit Latency:     {:.2} ms", summary.avg_commit_latency_ms));
+    lines.push(format!("Last Committed Hash:    {}", summary.last_committed_block_hash));
+    lines.push("".to_string());
+    if !validators.is_empty() {
+        lines.push("Validators:".bold().to_string());
+        for v in validators.iter().take(3) {
+            lines.push(
+                format!("  {:<16} Stake: {:<4} Role: {:<10} Slashed: {}",
+                    v.node_id, v.stake, format!("{:?}", v.role), v.slashed
+                ).dimmed().to_string()
+            );
+        }
+        lines.push("".to_string());
+    }
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft bft status [--server <S>]            Inspect consensus state, view & slashing".green().to_string());
+    lines.push("  craft bft validators                       List active validators & BLS keys".green().to_string());
+    lines.push("  craft bft validator-add -i <ID> -w <W>     Register validator node into quorum".green().to_string());
+    lines.push("  craft bft validator-rm -i <ID>             Remove/slash validator from quorum".green().to_string());
+    lines.push("  craft bft tx-submit -t <T> -p <P>          Submit state transaction to mempool".green().to_string());
+    lines.push("  craft bft view-change                      Trigger view pacemaker leader rotation".green().to_string());
+    lines.push("  craft bft zk-verify -p <FILE>              Verify zero-knowledge recursive proof".green().to_string());
+    lines.push("  craft bft bench                            Benchmark >5,000 TPS, 3-chain finality".green().to_string());
+    lines.push("  craft bft reset-metrics                    Reset cumulative telemetry counters".green().to_string());
+
+    show_modal_message("BFT CONSENSUS & ZERO-KNOWLEDGE STATE QUORUM", &lines, false)?;
     Ok(())
 }
 

@@ -150,6 +150,11 @@ pub struct CraftPaths {
     pub vpn_registry_file: PathBuf,
     pub vpn_state_file: PathBuf,
     pub vpn_lock: PathBuf,
+    pub bft_dir: PathBuf,
+    pub bft_proofs_dir: PathBuf,
+    pub bft_registry_file: PathBuf,
+    pub bft_state_file: PathBuf,
+    pub bft_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -299,6 +304,11 @@ impl CraftPaths {
         let vpn_registry_file = vpn_dir.join("registry.json");
         let vpn_state_file = vpn_dir.join("state.json");
         let vpn_lock = locks_dir.join("vpn.lock");
+        let bft_dir = home.join("bft");
+        let bft_proofs_dir = bft_dir.join("proofs");
+        let bft_registry_file = bft_dir.join("registry.toml");
+        let bft_state_file = bft_dir.join("state.json");
+        let bft_lock = locks_dir.join("bft.lock");
 
         Self {
             home,
@@ -446,6 +456,11 @@ impl CraftPaths {
             vpn_registry_file,
             vpn_state_file,
             vpn_lock,
+            bft_dir,
+            bft_proofs_dir,
+            bft_registry_file,
+            bft_state_file,
+            bft_lock,
         }
     }
 
@@ -523,6 +538,8 @@ impl CraftPaths {
         let vpn_dir = home.join("vpn");
         let vpn_tunnels_dir = vpn_dir.join("tunnels");
         let vpn_keys_dir = vpn_dir.join("keys");
+        let bft_dir = home.join("bft");
+        let bft_proofs_dir = bft_dir.join("proofs");
 
         // Ensure all primary directories exist
         for dir in [
@@ -587,6 +604,8 @@ impl CraftPaths {
             &vpn_dir,
             &vpn_tunnels_dir,
             &vpn_keys_dir,
+            &bft_dir,
+            &bft_proofs_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -677,6 +696,9 @@ impl CraftPaths {
         let vpn_registry_file = vpn_dir.join("registry.json");
         let vpn_state_file = vpn_dir.join("state.json");
         let vpn_lock = locks_dir.join("vpn.lock");
+        let bft_registry_file = bft_dir.join("registry.toml");
+        let bft_state_file = bft_dir.join("state.json");
+        let bft_lock = locks_dir.join("bft.lock");
 
         Ok(Self {
             home,
@@ -824,7 +846,17 @@ impl CraftPaths {
             vpn_registry_file,
             vpn_state_file,
             vpn_lock,
+            bft_dir,
+            bft_proofs_dir,
+            bft_registry_file,
+            bft_state_file,
+            bft_lock,
         })
+    }
+
+    /// Returns the proof file path for a specific BFT zero-knowledge state proof ID
+    pub fn bft_proof_path(&self, proof_id: &str) -> PathBuf {
+        self.bft_proofs_dir.join(format!("{}.zkp", proof_id))
     }
 
     /// Returns the configuration path for a VPN tunnel interface

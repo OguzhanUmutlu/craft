@@ -77,6 +77,10 @@ Craft follows a strict layered architecture where lower-level crates provide pur
 ├── rdma/                  # Autonomous RDMA acceleration & fabric topology state
 │   ├── registry.json      # Registered memory regions, peers, and QP state
 │   └── state.json         # Real-time transfer metrics and failover state
+├── bft/                   # Autonomous BFT consensus, BLS signatures & ZK proofs
+│   ├── registry.json      # Registered BFT validators, public keys, and stakes
+│   ├── state.json         # Current view, high QC, and committed state tree root
+│   └── proofs/            # Serialized ZK state transition proofs and QCs
 └── audit.log              # Append-only continuous HMAC-SHA256 audit ledger
 ```
 
@@ -106,6 +110,7 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `intelligence.lock` guards autonomous autopilot policies and remediation thresholds.
   - `supply_chain.lock` synchronizes supply chain policies, trust anchors, and attestation registries.
   - `crash.lock` guards crash reports, memory leak detections, and automated remediation actions.
+  - `bft.lock` guards BFT consensus state mutations and validator registry modifications.
   - `<server_dir>/server.lock` ensures a server instance cannot be launched simultaneously by multiple processes.
 
 ### 3.3. `RbacRegistry` & `AuditLedger`
@@ -796,6 +801,45 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - `craft vpn reset-metrics [--json]`
   - Aliases: `craft wireguard`, `craft pqxdh`, `craft mesh-vpn`.
   - Full-screen centered interactive TUI panel (`Tools -> Autonomous Quantum-Encrypted Inter-Cluster VPN Mesh`) powered by ModalX.
+
+### 3.23. Autonomous Geo-Distributed Byzantine Fault-Tolerant Consensus, Zero-Knowledge State Attestation & BFT Cluster Quorum (Phase 47)
+- **Core BFT Models, BLS Cryptography & Advisory Locking (`craft-core`)**:
+  - Validator roles and consensus phases (`BftNodeRole`: `Leader`, `Validator`, `Learner`, `FaultyAdversary`; `BftPhase`: `Prepare`, `PreCommit`, `Commit`, `Decide`).
+  - Transaction types (`BftTxType`: `StateUpdate`, `ConfigChange`, `MembershipChange`, `ContractCall`, `SlashingVerdictTx`) and case-insensitive parsing from string/CLI.
+  - Slashing reasons and verdicts (`SlashingReason`: `EquivocationDoubleSigning`, `InvalidStateTransition`, `ConsensusLivenessFault`, `MaliciousPayload`; `SlashingEvidence`, `SlashingVerdict`).
+  - BLS / threshold cryptography: aggregate signatures over `U256` safe-prime group ($g^x \pmod p$), deterministic aggregation ($\prod \sigma_i \pmod p$), public key aggregation ($\prod pk_i \pmod p$), and signature verification.
+  - Quorum Certificates (`QuorumCertificate`): view number, block hash, aggregate BLS signature, participating validator signers list, and phase.
+  - Zero-knowledge recursive state transition proofs (`ZkStateProof`, `RecursiveStateAttestation`, `ZkStateProver`): Fiat-Shamir challenge calculation, polynomial evaluation constraint ($s = k + c \cdot x$), and recursive proof aggregation compressing arbitrary state lineages into $O(1)$ constant-size verification.
+  - Advisory file locking (`bft.lock`) protecting persistent registry state under `~/.craft/bft/` (`bft_dir`, `bft_proofs_dir`, `bft_registry_file`, `bft_state_file`, `bft_lock`, `bft_proof_path`).
+  - Plain-text table rendering for BFT status, validator sets, and consensus benchmark summaries with zero emojis.
+- **Pure-Rust HotStuff Chained State Machine, Equivocation Slashing & Wire Protocol Framing (`craft-net`)**:
+  - `BftWireMessage`: Pure-Rust binary wire framing with 4-byte magic `CFT1` (`0x43465431`), 1-byte message type (`0x01` Propose, `0x02` Vote, `0x03` Timeout/ViewChange, `0x04` SlashingProof, `0x05` ZkAttestation), 8-byte view, 4-byte payload length, payload bytes, and 32-byte HMAC-SHA256 integrity tag.
+  - `BftRateLimiter`: Token-bucket rate limiter defending against malicious message floods and DDoS attacks.
+  - `HotStuffBftEngine`: Pure-Rust chained Byzantine Fault-Tolerant state machine ($N \ge 3f + 1$, quorum threshold $Q = 2f + 1$):
+    - Linear communication complexity $O(N)$ with pacemaker leader rotation.
+    - 3-chain commit finality rule (`Prepare` -> `PreCommit` -> `Commit` -> `Decide`): commits ancestor block $B^*$ when three consecutive blocks have contiguous views ($v, v+1, v+2$) with valid Quorum Certificates.
+    - Equivocation detection: detects validator double-signing on different block hashes in the same view, generates `SlashingEvidence`, slashes 100% of validator stake, burns voting power, and marks node as slashed adversary.
+    - State Machine Replication (SMR): deterministic key-value state tree transitions with Merkle root hash recalculation.
+  - Synthetic consensus benchmark (`benchmark_bft_consensus`): verifies sub-50ms finality latency, high TPS, and 100% Byzantine adversary trapping and slashing.
+- **Daemon Supervision, BFT Service & Prometheus Telemetry (`craft-daemon`)**:
+  - `BftConsensusService`: Thread-safe supervisor singleton managing in-process BFT engine, validator registry synchronization, pacemaker view timeouts, and Prometheus telemetry exposition (`craft_bft_*`).
+  - 9 typed IPC requests and responses: `BftGetStatus`, `BftSubmitTransaction`, `BftListValidators`, `BftAddValidator`, `BftRemoveValidator`, `BftTriggerViewChange`, `BftVerifyZkProof`, `BftRunBench`, `BftResetMetrics`.
+  - Prometheus metrics exposition (`craft_bft_*`): `craft_bft_current_view`, `craft_bft_active_validators`, `craft_bft_fault_tolerance_f`, `craft_bft_committed_blocks_total`, `craft_bft_slashed_validators_total`, `craft_bft_tps_current`, `craft_bft_avg_commit_latency_ms`, `craft_bft_zk_proofs_verified_total`.
+- **Remote Federation & Scripting Hooks (`craft-remote`, `craft-scripting`)**:
+  - `RemoteCraftClient` provides `get_remote_bft_status`, `submit_remote_bft_transaction`, `list_remote_bft_validators`, `add_remote_bft_validator`, `remove_remote_bft_validator`, `trigger_remote_bft_view_change`, `verify_remote_bft_zk_proof`, `run_remote_bft_bench`, and `reset_remote_bft_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `BftBlockCommitted`, `BftQuorumFormed`, `BftValidatorSlashed`, `BftViewTimeout` with structured consensus context (`bft_view`, `bft_block_hash`, `bft_validator_id`, `bft_slashing_reason`, `bft_quorum_signers_count`).
+- **Unified CLI Commands & ModalX Centered TUI (`craft-cli`)**:
+  - `craft bft status [--server <name>] [--json]`
+  - `craft bft validators [--server <name>] [--json]`
+  - `craft bft validator-add -v <id> -p <pubkey> -s <stake> [-r <role>] [--endpoint <ep>] [--json]`
+  - `craft bft validator-rm -v <id> [--json]`
+  - `craft bft tx-submit -t <type> -p <payload> [--sender <sender>] [--json]`
+  - `craft bft view-change -v <view> [-r <reason>] [--json]`
+  - `craft bft zk-verify [-f <file>] [--view <view>] [--json]`
+  - `craft bft bench [-i <iterations>] [-v <validators>] [--json]`
+  - `craft bft reset-metrics [--json]`
+  - Aliases: `craft hotstuff`, `craft pbft`, `craft byzantine`, `craft quorum`.
+  - Full-screen centered interactive TUI panel (`Tools -> Byzantine Fault-Tolerant Consensus & ZK State Attestation`) powered by ModalX.
 
 ---
 

@@ -50,6 +50,7 @@ pub mod smartnic;
 pub mod memfabric;
 pub mod nvme;
 pub mod vpn;
+pub mod bft;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -255,6 +256,12 @@ pub use vpn::{
     PqxdhHandshakeStage, PqxdhHandshakeState, VpnBenchmarkMetrics, VpnCryptoMode,
     VpnKeyRotationPolicy, VpnPeerConfig, VpnRegistry, VpnStatusSummary, VpnTunnelDescriptor,
     VpnTunnelState,
+};
+pub use bft::{
+    render_validators_table, BftBenchmarkMetrics, BftBlock, BftNodeRole, BftPhase,
+    BftRegistry, BftStatusSummary, BftTransaction, BftTxType, BftValidator, BlsAggregateSignature,
+    BlsKeypair, BlsPublicKey, BlsSignature, QuorumCertificate, RecursiveStateAttestation,
+    SlashingEvidence, SlashingReason, SlashingVerdict, ZkStateProof, ZkStateProver,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

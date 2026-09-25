@@ -194,6 +194,7 @@ pub async fn generate_prometheus_metrics(
     out.push_str(&crate::memfabric_service::MemFabricService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::nvme_service::NvmeTargetService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::vpn_service::VpnMeshService::global(paths).generate_prometheus_metrics());
+    out.push_str(&crate::bft_service::BftConsensusService::global(paths).generate_prometheus_metrics());
 
     out
 }

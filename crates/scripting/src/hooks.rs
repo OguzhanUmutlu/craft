@@ -109,6 +109,10 @@ pub enum LifecycleEvent {
     VpnKeyRotated,
     VpnPeerConnected,
     VpnSecurityDegradedAlert,
+    BftBlockCommitted,
+    BftQuorumFormed,
+    BftValidatorSlashed,
+    BftViewTimeout,
 }
 
 impl LifecycleEvent {
@@ -212,6 +216,10 @@ impl LifecycleEvent {
             Self::VpnKeyRotated => "on_vpn_key_rotated",
             Self::VpnPeerConnected => "on_vpn_peer_connected",
             Self::VpnSecurityDegradedAlert => "on_vpn_security_degraded_alert",
+            Self::BftBlockCommitted => "on_bft_block_committed",
+            Self::BftQuorumFormed => "on_bft_quorum_formed",
+            Self::BftValidatorSlashed => "on_bft_validator_slashed",
+            Self::BftViewTimeout => "on_bft_view_timeout",
         }
     }
 
@@ -316,6 +324,10 @@ impl LifecycleEvent {
             "on_vpn_key_rotated" | "vpn_key_rotated" | "vpn_rekey" | "key_rotated" => Some(Self::VpnKeyRotated),
             "on_vpn_peer_connected" | "vpn_peer_connected" | "peer_connected" => Some(Self::VpnPeerConnected),
             "on_vpn_security_degraded_alert" | "vpn_security_degraded_alert" | "vpn_degraded" | "security_degraded" => Some(Self::VpnSecurityDegradedAlert),
+            "on_bft_block_committed" | "bft_block_committed" | "bft_block" | "block_committed" => Some(Self::BftBlockCommitted),
+            "on_bft_quorum_formed" | "bft_quorum_formed" | "bft_quorum" | "quorum_formed" => Some(Self::BftQuorumFormed),
+            "on_bft_validator_slashed" | "bft_validator_slashed" | "validator_slashed" | "bft_slash" => Some(Self::BftValidatorSlashed),
+            "on_bft_view_timeout" | "bft_view_timeout" | "view_timeout" | "pacemaker_timeout" => Some(Self::BftViewTimeout),
             _ => None,
         }
     }
@@ -420,6 +432,10 @@ impl LifecycleEvent {
             Self::VpnKeyRotated,
             Self::VpnPeerConnected,
             Self::VpnSecurityDegradedAlert,
+            Self::BftBlockCommitted,
+            Self::BftQuorumFormed,
+            Self::BftValidatorSlashed,
+            Self::BftViewTimeout,
         ]
     }
 }
@@ -718,6 +734,16 @@ pub struct HookContext {
     pub vpn_throughput_gbps: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vpn_renegotiation_micros: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bft_view: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bft_block_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bft_validator_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bft_slash_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bft_commit_latency_ms: Option<f64>,
 }
 
 impl HookContext {
@@ -1253,6 +1279,51 @@ impl HookContext {
         ctx.details = Some(format!(
             "VPN security degraded alert on tunnel '{}': {}",
             tunnel_id, reason
+        ));
+        ctx
+    }
+
+    pub fn for_bft_block_committed(view: u64, block_hash: &str, latency_ms: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::BftBlockCommitted);
+        ctx.bft_view = Some(view);
+        ctx.bft_block_hash = Some(block_hash.to_string());
+        ctx.bft_commit_latency_ms = Some(latency_ms);
+        ctx.details = Some(format!(
+            "BFT consensus block {} committed at view {} in {:.2}ms",
+            block_hash, view, latency_ms
+        ));
+        ctx
+    }
+
+    pub fn for_bft_quorum_formed(view: u64, block_hash: &str, signers_count: usize) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::BftQuorumFormed);
+        ctx.bft_view = Some(view);
+        ctx.bft_block_hash = Some(block_hash.to_string());
+        ctx.details = Some(format!(
+            "BFT 2f+1 Quorum Certificate formed for view {} block {} with {} signers",
+            view, block_hash, signers_count
+        ));
+        ctx
+    }
+
+    pub fn for_bft_validator_slashed(validator_id: &str, reason: &str, view: u64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::BftValidatorSlashed);
+        ctx.bft_validator_id = Some(validator_id.to_string());
+        ctx.bft_slash_reason = Some(reason.to_string());
+        ctx.bft_view = Some(view);
+        ctx.details = Some(format!(
+            "BFT validator '{}' slashed at view {}: {}",
+            validator_id, view, reason
+        ));
+        ctx
+    }
+
+    pub fn for_bft_view_timeout(view: u64, old_leader: &str, new_leader: &str) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::BftViewTimeout);
+        ctx.bft_view = Some(view);
+        ctx.details = Some(format!(
+            "BFT view pacemaker timeout at view {}: leader rotated from '{}' to '{}'",
+            view, old_leader, new_leader
         ));
         ctx
     }
@@ -2201,5 +2272,62 @@ mod tests {
         assert_eq!(rekey_ctx.vpn_tunnel_id.as_deref(), Some("craft-wg0"));
         assert_eq!(rekey_ctx.vpn_peer_id.as_deref(), Some("eu-central"));
         assert_eq!(rekey_ctx.vpn_renegotiation_micros, Some(42));
+    }
+
+    #[test]
+    fn test_bft_lifecycle_hooks() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_bft_block_committed"),
+            Some(LifecycleEvent::BftBlockCommitted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("bft_block"),
+            Some(LifecycleEvent::BftBlockCommitted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_bft_quorum_formed"),
+            Some(LifecycleEvent::BftQuorumFormed)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("quorum_formed"),
+            Some(LifecycleEvent::BftQuorumFormed)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_bft_validator_slashed"),
+            Some(LifecycleEvent::BftValidatorSlashed)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("validator_slashed"),
+            Some(LifecycleEvent::BftValidatorSlashed)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_bft_view_timeout"),
+            Some(LifecycleEvent::BftViewTimeout)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("pacemaker_timeout"),
+            Some(LifecycleEvent::BftViewTimeout)
+        );
+
+        let commit_ctx = HookContext::for_bft_block_committed(42, "0xabcd1234", 12.5);
+        assert_eq!(commit_ctx.event, "on_bft_block_committed");
+        assert_eq!(commit_ctx.bft_view, Some(42));
+        assert_eq!(commit_ctx.bft_block_hash.as_deref(), Some("0xabcd1234"));
+        assert_eq!(commit_ctx.bft_commit_latency_ms, Some(12.5));
+
+        let qc_ctx = HookContext::for_bft_quorum_formed(42, "0xabcd1234", 4);
+        assert_eq!(qc_ctx.event, "on_bft_quorum_formed");
+        assert_eq!(qc_ctx.bft_view, Some(42));
+        assert_eq!(qc_ctx.bft_block_hash.as_deref(), Some("0xabcd1234"));
+
+        let slash_ctx = HookContext::for_bft_validator_slashed("val-byzantine", "equivocation", 42);
+        assert_eq!(slash_ctx.event, "on_bft_validator_slashed");
+        assert_eq!(slash_ctx.bft_validator_id.as_deref(), Some("val-byzantine"));
+        assert_eq!(slash_ctx.bft_slash_reason.as_deref(), Some("equivocation"));
+        assert_eq!(slash_ctx.bft_view, Some(42));
+
+        let timeout_ctx = HookContext::for_bft_view_timeout(42, "val-1", "val-2");
+        assert_eq!(timeout_ctx.event, "on_bft_view_timeout");
+        assert_eq!(timeout_ctx.bft_view, Some(42));
     }
 }

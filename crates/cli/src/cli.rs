@@ -708,6 +708,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<VpnCommands>,
     },
+    /// Autonomous Geo-Distributed Byzantine Fault-Tolerant Consensus, Zero-Knowledge State Attestation & BFT Cluster Quorum
+    #[command(name = "bft", alias = "hotstuff", alias = "pbft", alias = "byzantine", alias = "quorum")]
+    Bft {
+        #[command(subcommand)]
+        action: Option<BftCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -2896,6 +2902,116 @@ pub enum VpnCommands {
         json: bool,
     },
     /// Reset VPN mesh telemetry counters and performance statistics
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum BftCommands {
+    /// Inspect BFT consensus cluster state, view pacemaker telemetry, and slashing status
+    Status {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List active BFT consensus validators and cryptographic voting keys
+    #[command(name = "validators", alias = "list")]
+    Validators {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Register a new validator node into the BFT consensus quorum
+    #[command(name = "validator-add", alias = "add-validator")]
+    ValidatorAdd {
+        /// Unique validator node identifier
+        #[arg(short = 'i', long = "id")]
+        id: String,
+        /// Voting weight allocated to validator
+        #[arg(short = 'w', long = "voting-weight", default_value_t = 1)]
+        voting_weight: u64,
+        /// BLS public key in hex format (auto-generated if omitted)
+        #[arg(short = 'k', long = "public-key")]
+        public_key: Option<String>,
+        /// Validator role (Validator, Leader, Learner, Slashed)
+        #[arg(short = 'r', long = "role", default_value = "Validator")]
+        role: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Remove or slash a validator node from the BFT quorum
+    #[command(name = "validator-rm", alias = "rm-validator", alias = "slash-validator")]
+    ValidatorRm {
+        /// Unique validator identifier to remove
+        #[arg(short = 'i', long = "id")]
+        id: String,
+        /// Reason for validator removal or slashing
+        #[arg(long = "reason")]
+        reason: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Submit a state-transition transaction to the BFT consensus mempool
+    #[command(name = "tx-submit", alias = "submit-tx")]
+    TxSubmit {
+        /// Transaction type (StateUpdate, ConfigChange, MembershipChange, Slashing)
+        #[arg(short = 't', long = "type", default_value = "StateUpdate")]
+        tx_type: String,
+        /// Transaction JSON or raw payload
+        #[arg(short = 'p', long = "payload")]
+        payload: String,
+        /// Transaction sender identifier
+        #[arg(short = 's', long = "sender")]
+        sender: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Manually trigger a BFT view change / pacemaker leader rotation
+    #[command(name = "view-change", alias = "rotate-leader")]
+    ViewChange {
+        /// Reason for triggering view change
+        #[arg(long = "reason")]
+        reason: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Verify a zero-knowledge recursive state transition proof file
+    #[command(name = "zk-verify", alias = "verify-proof")]
+    ZkVerify {
+        /// Path to the JSON zero-knowledge state proof file
+        #[arg(short = 'p', long = "proof")]
+        proof_path: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run end-to-end BFT consensus benchmark (>5,000 TPS, 3-chain finality, slashing)
+    Bench {
+        /// Number of transactions to simulate
+        #[arg(short = 't', long = "transactions", default_value_t = 500)]
+        transactions: usize,
+        /// Number of simulated BFT cluster validators
+        #[arg(short = 'v', long = "validators", default_value_t = 4)]
+        validators: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset BFT consensus telemetry counters and metrics
     #[command(name = "reset-metrics", alias = "reset")]
     ResetMetrics {
         /// Output in machine-readable JSON format
@@ -6487,6 +6603,152 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Vpn Bench command"),
+        }
+    }
+
+    #[test]
+    fn test_bft_cli_commands() {
+        // BFT status
+        let cli_status = Cli::try_parse_from(["craft", "bft", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Bft {
+                action: Some(BftCommands::Status { server: None, json }),
+            }) => assert!(json),
+            _ => panic!("Expected Bft Status command"),
+        }
+
+        // BFT hotstuff alias and validators
+        let cli_val = Cli::try_parse_from(["craft", "hotstuff", "validators", "--json"]).unwrap();
+        match cli_val.command {
+            Some(Commands::Bft {
+                action: Some(BftCommands::Validators { server: None, json }),
+            }) => assert!(json),
+            _ => panic!("Expected Bft Validators command"),
+        }
+
+        // BFT pbft alias and validator-add
+        let cli_add = Cli::try_parse_from([
+            "craft", "pbft", "validator-add",
+            "-i", "validator-4",
+            "-w", "10",
+            "-k", "0102030405",
+            "-r", "Validator",
+            "--json",
+        ]).unwrap();
+        match cli_add.command {
+            Some(Commands::Bft {
+                action: Some(BftCommands::ValidatorAdd {
+                    id,
+                    voting_weight,
+                    public_key,
+                    role,
+                    json,
+                }),
+            }) => {
+                assert_eq!(id, "validator-4");
+                assert_eq!(voting_weight, 10);
+                assert_eq!(public_key.as_deref(), Some("0102030405"));
+                assert_eq!(role, "Validator");
+                assert!(json);
+            }
+            _ => panic!("Expected Bft ValidatorAdd command"),
+        }
+
+        // BFT byzantine alias and validator-rm
+        let cli_rm = Cli::try_parse_from([
+            "craft", "byzantine", "validator-rm",
+            "-i", "val-bad",
+            "--reason", "double-signing",
+            "--json",
+        ]).unwrap();
+        match cli_rm.command {
+            Some(Commands::Bft {
+                action: Some(BftCommands::ValidatorRm { id, reason, json }),
+            }) => {
+                assert_eq!(id, "val-bad");
+                assert_eq!(reason.as_deref(), Some("double-signing"));
+                assert!(json);
+            }
+            _ => panic!("Expected Bft ValidatorRm command"),
+        }
+
+        // BFT tx-submit
+        let cli_tx = Cli::try_parse_from([
+            "craft", "bft", "tx-submit",
+            "-t", "StateUpdate",
+            "-p", "{\"key\":\"val\"}",
+            "-s", "sender-node-1",
+            "--json",
+        ]).unwrap();
+        match cli_tx.command {
+            Some(Commands::Bft {
+                action: Some(BftCommands::TxSubmit {
+                    tx_type,
+                    payload,
+                    sender,
+                    json,
+                }),
+            }) => {
+                assert_eq!(tx_type, "StateUpdate");
+                assert_eq!(payload, "{\"key\":\"val\"}");
+                assert_eq!(sender.as_deref(), Some("sender-node-1"));
+                assert!(json);
+            }
+            _ => panic!("Expected Bft TxSubmit command"),
+        }
+
+        // BFT view-change
+        let cli_vc = Cli::try_parse_from([
+            "craft", "bft", "view-change",
+            "--reason", "leader-timeout",
+            "--json",
+        ]).unwrap();
+        match cli_vc.command {
+            Some(Commands::Bft {
+                action: Some(BftCommands::ViewChange { reason, json }),
+            }) => {
+                assert_eq!(reason.as_deref(), Some("leader-timeout"));
+                assert!(json);
+            }
+            _ => panic!("Expected Bft ViewChange command"),
+        }
+
+        // BFT zk-verify
+        let cli_zk = Cli::try_parse_from([
+            "craft", "bft", "zk-verify",
+            "-p", "/var/craft/bft/proof.json",
+            "--json",
+        ]).unwrap();
+        match cli_zk.command {
+            Some(Commands::Bft {
+                action: Some(BftCommands::ZkVerify { proof_path, json }),
+            }) => {
+                assert_eq!(proof_path, "/var/craft/bft/proof.json");
+                assert!(json);
+            }
+            _ => panic!("Expected Bft ZkVerify command"),
+        }
+
+        // BFT quorum alias and bench
+        let cli_bench = Cli::try_parse_from([
+            "craft", "quorum", "bench",
+            "-t", "200",
+            "-v", "7",
+            "--json",
+        ]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Bft {
+                action: Some(BftCommands::Bench {
+                    transactions,
+                    validators,
+                    json,
+                }),
+            }) => {
+                assert_eq!(transactions, 200);
+                assert_eq!(validators, 7);
+                assert!(json);
+            }
+            _ => panic!("Expected Bft Bench command"),
         }
     }
 }

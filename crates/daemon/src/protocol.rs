@@ -527,6 +527,37 @@ pub enum IpcRequest {
         packet_size: usize,
     },
     VpnResetMetrics,
+    BftGetStatus {
+        server: Option<String>,
+    },
+    BftSubmitTransaction {
+        tx_type: String,
+        payload: String,
+        sender: Option<String>,
+    },
+    BftListValidators {
+        server: Option<String>,
+    },
+    BftAddValidator {
+        node_id: String,
+        address: String,
+        public_key: String,
+        stake: u64,
+    },
+    BftRemoveValidator {
+        node_id: String,
+    },
+    BftTriggerViewChange {
+        reason: String,
+    },
+    BftVerifyZkProof {
+        proof_json: String,
+    },
+    BftRunBench {
+        iterations: u32,
+        validators: u32,
+    },
+    BftResetMetrics,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1012,6 +1043,40 @@ pub enum IpcResponse {
         metrics: craft_core::vpn::VpnBenchmarkMetrics,
     },
     VpnResetResult {
+        message: String,
+    },
+    BftStatusResult {
+        summary: craft_core::BftStatusSummary,
+    },
+    BftTransactionSubmittedResult {
+        tx_id: String,
+        view: u64,
+        status: String,
+    },
+    BftValidatorsListResult {
+        validators: Vec<craft_core::BftValidator>,
+    },
+    BftValidatorAddedResult {
+        node_id: String,
+        message: String,
+    },
+    BftValidatorRemovedResult {
+        node_id: String,
+        message: String,
+    },
+    BftViewChangedResult {
+        from_view: u64,
+        to_view: u64,
+        new_proposer: String,
+    },
+    BftZkProofVerifiedResult {
+        valid: bool,
+        message: String,
+    },
+    BftBenchResult {
+        metrics: craft_core::BftBenchmarkMetrics,
+    },
+    BftResetResult {
         message: String,
     },
     Error { error: String },

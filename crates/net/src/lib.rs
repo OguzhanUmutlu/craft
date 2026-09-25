@@ -33,6 +33,7 @@ pub mod smartnic;
 pub mod memfabric;
 pub mod nvme;
 pub mod vpn;
+pub mod bft;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -133,6 +134,12 @@ pub use vpn::{
     benchmark_vpn_mesh, compute_mac1, hkdf_sha256, PqxdhEngine, PqxdhInitiatorState,
     PqxdhSession, SmartNicCryptoOffloadEngine, WgPqxdhDataPacket, WgPqxdhInitMessage,
     WgPqxdhResponseMessage, WireGuardMeshEngine,
+};
+pub use bft::{
+    benchmark_bft_consensus, BftRateLimiter, BftWireMessage, HotStuffBftEngine,
+    ProposalWirePayload, QcWirePayload, ViewChangeWirePayload, VoteWirePayload,
+    ZkProofSyncPayload, BFT_WIRE_MAGIC, MSG_TYPE_PROPOSAL, MSG_TYPE_QC, MSG_TYPE_VIEW_CHANGE,
+    MSG_TYPE_VOTE, MSG_TYPE_ZK_SYNC,
 };
 
 

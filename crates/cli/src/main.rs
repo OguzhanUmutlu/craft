@@ -597,6 +597,9 @@ async fn main() {
         Some(Commands::Vpn { action }) => {
             commands::vpn::handle_vpn(&paths, action).await
         }
+        Some(Commands::Bft { action }) => {
+            commands::bft::handle_bft(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

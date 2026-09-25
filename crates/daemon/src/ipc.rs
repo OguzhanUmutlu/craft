@@ -2052,6 +2052,101 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::BftGetStatus { server } => {
+                let service = crate::bft_service::BftConsensusService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(summary) => IpcResponse::BftStatusResult { summary },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BftSubmitTransaction { tx_type, payload, sender } => {
+                let service = crate::bft_service::BftConsensusService::global(supervisor.paths());
+                let resp = match service.submit_transaction(&tx_type, &payload, sender.as_deref()) {
+                    Ok((tx_id, view)) => IpcResponse::BftTransactionSubmittedResult {
+                        tx_id,
+                        view,
+                        status: "COMMITTED".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BftListValidators { server } => {
+                let service = crate::bft_service::BftConsensusService::global(supervisor.paths());
+                let resp = match service.list_validators(server.as_deref()) {
+                    Ok(validators) => IpcResponse::BftValidatorsListResult { validators },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BftAddValidator { node_id, address, public_key, stake } => {
+                let service = crate::bft_service::BftConsensusService::global(supervisor.paths());
+                let resp = match service.add_validator(&node_id, &address, &public_key, stake) {
+                    Ok(()) => IpcResponse::BftValidatorAddedResult {
+                        node_id: node_id.clone(),
+                        message: format!("Validator '{}' successfully added to BFT quorum", node_id),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BftRemoveValidator { node_id } => {
+                let service = crate::bft_service::BftConsensusService::global(supervisor.paths());
+                let resp = match service.remove_validator(&node_id) {
+                    Ok(()) => IpcResponse::BftValidatorRemovedResult {
+                        node_id: node_id.clone(),
+                        message: format!("Validator '{}' successfully removed from BFT quorum", node_id),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BftTriggerViewChange { reason } => {
+                let service = crate::bft_service::BftConsensusService::global(supervisor.paths());
+                let resp = match service.trigger_view_change(&reason) {
+                    Ok((from_view, to_view, new_proposer)) => IpcResponse::BftViewChangedResult {
+                        from_view,
+                        to_view,
+                        new_proposer,
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BftVerifyZkProof { proof_json } => {
+                let service = crate::bft_service::BftConsensusService::global(supervisor.paths());
+                let resp = match service.verify_zk_proof(&proof_json) {
+                    Ok(valid) => IpcResponse::BftZkProofVerifiedResult {
+                        valid,
+                        message: if valid {
+                            "Zero-knowledge state transition proof verified successfully".to_string()
+                        } else {
+                            "Zero-knowledge state transition proof verification failed".to_string()
+                        },
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BftRunBench { iterations, validators } => {
+                let service = crate::bft_service::BftConsensusService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations, validators) {
+                    Ok(metrics) => IpcResponse::BftBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::BftResetMetrics => {
+                let service = crate::bft_service::BftConsensusService::global(supervisor.paths());
+                let resp = match service.reset_metrics() {
+                    Ok(_) => IpcResponse::BftResetResult {
+                        message: "BFT cluster consensus metrics reset successfully".to_string(),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -4563,6 +4658,116 @@ impl DaemonClient {
     pub async fn reset_vpn_metrics(&mut self) -> Result<String> {
         match self.request(IpcRequest::VpnResetMetrics).await? {
             IpcResponse::VpnResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_bft_status(&mut self, server: Option<String>) -> Result<craft_core::BftStatusSummary> {
+        match self.request(IpcRequest::BftGetStatus { server }).await? {
+            IpcResponse::BftStatusResult { summary } => Ok(summary),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn submit_bft_transaction(
+        &mut self,
+        tx_type: String,
+        payload: String,
+        sender: Option<String>,
+    ) -> Result<(String, u64, String)> {
+        match self
+            .request(IpcRequest::BftSubmitTransaction {
+                tx_type,
+                payload,
+                sender,
+            })
+            .await?
+        {
+            IpcResponse::BftTransactionSubmittedResult { tx_id, view, status } => Ok((tx_id, view, status)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_bft_validators(&mut self, server: Option<String>) -> Result<Vec<craft_core::BftValidator>> {
+        match self.request(IpcRequest::BftListValidators { server }).await? {
+            IpcResponse::BftValidatorsListResult { validators } => Ok(validators),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn add_bft_validator(
+        &mut self,
+        node_id: String,
+        address: String,
+        public_key: String,
+        stake: u64,
+    ) -> Result<String> {
+        match self
+            .request(IpcRequest::BftAddValidator {
+                node_id,
+                address,
+                public_key,
+                stake,
+            })
+            .await?
+        {
+            IpcResponse::BftValidatorAddedResult { message, .. } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn remove_bft_validator(&mut self, node_id: String) -> Result<String> {
+        match self.request(IpcRequest::BftRemoveValidator { node_id }).await? {
+            IpcResponse::BftValidatorRemovedResult { message, .. } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn trigger_bft_view_change(&mut self, reason: String) -> Result<(u64, u64, String)> {
+        match self.request(IpcRequest::BftTriggerViewChange { reason }).await? {
+            IpcResponse::BftViewChangedResult { from_view, to_view, new_proposer } => {
+                Ok((from_view, to_view, new_proposer))
+            }
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn verify_bft_zk_proof(&mut self, proof_json: String) -> Result<(bool, String)> {
+        match self.request(IpcRequest::BftVerifyZkProof { proof_json }).await? {
+            IpcResponse::BftZkProofVerifiedResult { valid, message } => Ok((valid, message)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_bft_bench(
+        &mut self,
+        iterations: u32,
+        validators: u32,
+    ) -> Result<craft_core::BftBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::BftRunBench {
+                iterations,
+                validators,
+            })
+            .await?
+        {
+            IpcResponse::BftBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_bft_metrics(&mut self) -> Result<String> {
+        match self.request(IpcRequest::BftResetMetrics).await? {
+            IpcResponse::BftResetResult { message } => Ok(message),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

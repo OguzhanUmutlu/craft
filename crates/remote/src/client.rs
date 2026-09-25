@@ -2499,6 +2499,164 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries BFT consensus cluster status and PACEMAKER view telemetry from the remote host
+    pub fn get_remote_bft_status(&self) -> Result<String> {
+        let cmd = "craft bft status --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote BFT status query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Submits a state-transition transaction to the remote BFT consensus mempool
+    pub fn submit_remote_bft_transaction(
+        &self,
+        tx_type: &str,
+        payload: &str,
+        sender: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!(
+            "craft bft tx-submit --type {} --payload \"{}\" --json",
+            tx_type, payload
+        );
+        if let Some(s) = sender {
+            cmd.push_str(&format!(" --sender {}", s));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote BFT tx submit failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Lists active BFT consensus validators and public keys on the remote host
+    pub fn list_remote_bft_validators(&self) -> Result<String> {
+        let cmd = "craft bft validators --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote BFT list validators failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Registers a new validator into the remote BFT consensus quorum
+    pub fn add_remote_bft_validator(
+        &self,
+        validator_id: &str,
+        voting_weight: u64,
+        public_key: Option<&str>,
+        role: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!(
+            "craft bft validator-add --id {} --voting-weight {} --json",
+            validator_id, voting_weight
+        );
+        if let Some(pk) = public_key {
+            cmd.push_str(&format!(" --public-key {}", pk));
+        }
+        if let Some(r) = role {
+            cmd.push_str(&format!(" --role {}", r));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote BFT validator add failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Removes or slashes a validator from the remote BFT consensus quorum
+    pub fn remove_remote_bft_validator(&self, validator_id: &str) -> Result<String> {
+        let cmd = format!("craft bft validator-rm --id {} --json", validator_id);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote BFT validator remove failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Triggers a view change / pacemaker timeout on the remote BFT consensus cluster
+    pub fn trigger_remote_bft_view_change(&self, reason: Option<&str>) -> Result<String> {
+        let mut cmd = "craft bft view-change --json".to_string();
+        if let Some(r) = reason {
+            cmd.push_str(&format!(" --reason \"{}\"", r));
+        }
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote BFT view-change failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Verifies a zero-knowledge recursive state transition proof on the remote host
+    pub fn verify_remote_bft_zk_proof(&self, proof_path: &str) -> Result<String> {
+        let cmd = format!("craft bft zk-verify --proof \"{}\" --json", proof_path);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote BFT ZK proof verify failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs end-to-end BFT consensus benchmark on the remote host
+    pub fn run_remote_bft_bench(&self, transactions: usize, validators: usize) -> Result<String> {
+        let cmd = format!(
+            "craft bft bench --transactions {} --validators {} --json",
+            transactions, validators
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote BFT bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets BFT consensus telemetry counters on the remote host
+    pub fn reset_remote_bft_metrics(&self) -> Result<String> {
+        let cmd = "craft bft reset-metrics --json";
+        let (code, stdout, stderr) = self.session.exec(cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote BFT metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]
