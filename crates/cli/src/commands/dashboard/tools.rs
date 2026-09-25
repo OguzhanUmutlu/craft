@@ -1816,6 +1816,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             VpnMesh,
             BftConsensus,
             KernelJitterElimination,
+            NeuromorphicAiScheduler,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2115,6 +2116,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::KernelJitterElimination);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Neuromorphic AI Tick Scheduling & SNN Inference",
+            )
+            .with_aliases(&["neuromorphic", "snn", "lif", "spike"]),
+        );
+        actions.push(ToolItemAction::NeuromorphicAiScheduler);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2234,6 +2245,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::KernelJitterElimination => {
                     jitter_tui(paths).await?;
+                }
+                ToolItemAction::NeuromorphicAiScheduler => {
+                    neuromorphic_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4255,6 +4269,43 @@ async fn jitter_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft jitter reset-metrics                 Reset cumulative telemetry & stall logs".green().to_string());
 
     show_modal_message("KERNEL SCHED TRACING & JITTER ELIMINATION", &lines, false)?;
+    Ok(())
+}
+
+async fn neuromorphic_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::NeuromorphicService::global(paths);
+    let summary = service.get_status(None)?;
+    let prediction = service.get_prediction(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS NEUROMORPHIC AI TICK SCHEDULING & SPIKE-DRIVEN INFERENCE".bold().to_string());
+    lines.push("Leaky Integrate-and-Fire Neurons, STDP Plasticity & Microsecond Forecasting".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Active Layers:          {}", summary.active_layers));
+    lines.push(format!("Total LIF Neurons:      {}", summary.total_neurons));
+    lines.push(format!("Total Synapses:         {}", summary.total_synapses));
+    lines.push(format!("Schedule Mode:          {}", summary.mode));
+    lines.push(format!("Spikes Processed:       {}", summary.spikes_processed));
+    lines.push(format!("Inference Latency:      {:.3} us", summary.inference_latency_micros));
+    lines.push(format!("Idle CPU Saved:         {:.1}%", summary.idle_cpu_saved_percent));
+    lines.push(format!("Predicted MSPT:         {:.1} us", summary.predicted_mspt_micros));
+    lines.push(format!("STDP Weight Updates:    {}", summary.stdp_weight_updates));
+    lines.push(format!("Predicted Duration:     {:.1} us", prediction.predicted_duration_micros));
+    lines.push(format!("Recommended Sleep:      {} us", prediction.recommended_sleep_micros));
+    lines.push(format!("Prediction Confidence:  {:.1}%", prediction.confidence * 100.0));
+    lines.push(format!("Burst Intensity:        {:.2}", prediction.burst_intensity));
+    lines.push(format!("Contention Score:       {:.2}", prediction.entity_contention_score));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft neuromorphic status [--server <S>]   Inspect SNN neuron states & telemetry".green().to_string());
+    lines.push("  craft neuromorphic mode -m <MODE>          Configure neuromorphic schedule mode".green().to_string());
+    lines.push("  craft neuromorphic inject -n <ID> -c <CUR> Inject synthetic sensory spike".green().to_string());
+    lines.push("  craft neuromorphic raster [--limit <N>]    Display membrane potential raster plot".green().to_string());
+    lines.push("  craft neuromorphic predict                 Display latency forecast & dynamic sleep".green().to_string());
+    lines.push("  craft neuromorphic bench                   Run SNN microsecond inference benchmark".green().to_string());
+    lines.push("  craft neuromorphic reset-metrics           Reset SNN counters & raster buffer".green().to_string());
+
+    show_modal_message("NEUROMORPHIC AI TICK SCHEDULING", &lines, false)?;
     Ok(())
 }
 

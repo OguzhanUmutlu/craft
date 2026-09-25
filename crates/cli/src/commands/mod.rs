@@ -71,3 +71,4 @@ pub mod nvme;
 pub mod vpn;
 pub mod bft;
 pub mod jitter;
+pub mod neuromorphic;

@@ -603,6 +603,9 @@ async fn main() {
         Some(Commands::Jitter { action }) => {
             commands::jitter::handle_jitter(&paths, action).await
         }
+        Some(Commands::Neuromorphic { action }) => {
+            commands::neuromorphic::handle_neuromorphic(&paths, action).await
+        }
     };
 
     if let Err(e) = result {

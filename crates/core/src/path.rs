@@ -159,6 +159,11 @@ pub struct CraftPaths {
     pub jitter_registry_file: PathBuf,
     pub jitter_state_file: PathBuf,
     pub jitter_lock: PathBuf,
+    pub neuromorphic_dir: PathBuf,
+    pub neuromorphic_models_dir: PathBuf,
+    pub neuromorphic_registry_file: PathBuf,
+    pub neuromorphic_state_file: PathBuf,
+    pub neuromorphic_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -317,6 +322,11 @@ impl CraftPaths {
         let jitter_registry_file = jitter_dir.join("registry.json");
         let jitter_state_file = jitter_dir.join("state.json");
         let jitter_lock = locks_dir.join("jitter.lock");
+        let neuromorphic_dir = home.join("neuromorphic");
+        let neuromorphic_models_dir = neuromorphic_dir.join("models");
+        let neuromorphic_registry_file = neuromorphic_dir.join("registry.json");
+        let neuromorphic_state_file = neuromorphic_dir.join("state.json");
+        let neuromorphic_lock = locks_dir.join("neuromorphic.lock");
 
         Self {
             home,
@@ -473,6 +483,11 @@ impl CraftPaths {
             jitter_registry_file,
             jitter_state_file,
             jitter_lock,
+            neuromorphic_dir,
+            neuromorphic_models_dir,
+            neuromorphic_registry_file,
+            neuromorphic_state_file,
+            neuromorphic_lock,
         }
     }
 
@@ -553,6 +568,8 @@ impl CraftPaths {
         let bft_dir = home.join("bft");
         let bft_proofs_dir = bft_dir.join("proofs");
         let jitter_dir = home.join("jitter");
+        let neuromorphic_dir = home.join("neuromorphic");
+        let neuromorphic_models_dir = neuromorphic_dir.join("models");
 
         // Ensure all primary directories exist
         for dir in [
@@ -620,6 +637,8 @@ impl CraftPaths {
             &bft_dir,
             &bft_proofs_dir,
             &jitter_dir,
+            &neuromorphic_dir,
+            &neuromorphic_models_dir,
         ] {
             if !dir.exists() {
                 fs::create_dir_all(dir)?;
@@ -716,6 +735,9 @@ impl CraftPaths {
         let jitter_registry_file = jitter_dir.join("registry.json");
         let jitter_state_file = jitter_dir.join("state.json");
         let jitter_lock = locks_dir.join("jitter.lock");
+        let neuromorphic_registry_file = neuromorphic_dir.join("registry.json");
+        let neuromorphic_state_file = neuromorphic_dir.join("state.json");
+        let neuromorphic_lock = locks_dir.join("neuromorphic.lock");
 
         Ok(Self {
             home,
@@ -872,7 +894,17 @@ impl CraftPaths {
             jitter_registry_file,
             jitter_state_file,
             jitter_lock,
+            neuromorphic_dir,
+            neuromorphic_models_dir,
+            neuromorphic_registry_file,
+            neuromorphic_state_file,
+            neuromorphic_lock,
         })
+    }
+
+    /// Returns the neuromorphic model file path for a specific model ID or server
+    pub fn neuromorphic_model_path(&self, model_id: &str) -> PathBuf {
+        self.neuromorphic_models_dir.join(format!("{}.snn", model_id))
     }
 
     /// Returns the trace log path for a specific server's micro-stall trace

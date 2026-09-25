@@ -2793,6 +2793,136 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Queries the neuromorphic tick scheduler status on the remote host
+    pub fn get_remote_neuromorphic_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft neuromorphic status".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote neuromorphic status query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Updates the neuromorphic tick scheduling mode on the remote host
+    pub fn set_remote_neuromorphic_mode(&self, server: &str, mode: &str) -> Result<String> {
+        let cmd = format!(
+            "craft neuromorphic mode --server {} --mode {} --json",
+            server, mode
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote neuromorphic mode configuration failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Injects an external spike into the remote neuromorphic SNN
+    pub fn inject_remote_neuromorphic_spike(
+        &self,
+        server: &str,
+        neuron_id: usize,
+        source_type: &str,
+        current: f32,
+    ) -> Result<String> {
+        let cmd = format!(
+            "craft neuromorphic inject --server {} --neuron {} --source {} --current {} --json",
+            server, neuron_id, source_type, current
+        );
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote neuromorphic spike injection failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Retrieves membrane potential raster plot data from the remote host
+    pub fn get_remote_neuromorphic_raster(&self, server: Option<&str>, limit: usize) -> Result<String> {
+        let mut cmd = format!("craft neuromorphic raster --limit {}", limit);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote neuromorphic raster query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Fetches the latest neuromorphic tick prediction from the remote host
+    pub fn get_remote_neuromorphic_prediction(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft neuromorphic predict".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote neuromorphic prediction query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs neuromorphic scheduler SNN inference benchmark on the remote host
+    pub fn run_remote_neuromorphic_bench(&self, server: Option<&str>, spikes: usize) -> Result<String> {
+        let mut cmd = format!("craft neuromorphic bench --spikes {}", spikes);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote neuromorphic bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets neuromorphic telemetry counters on the remote host
+    pub fn reset_remote_neuromorphic_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft neuromorphic reset-metrics".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote neuromorphic metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

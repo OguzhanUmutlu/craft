@@ -35,6 +35,7 @@ pub mod nvme;
 pub mod vpn;
 pub mod bft;
 pub mod jitter;
+pub mod neuromorphic;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -145,6 +146,9 @@ pub use bft::{
 pub use jitter::{
     benchmark_kernel_jitter, KernelSchedTracer, MicroStallScheduler, PerfEventRingBuffer,
     RawPerfSample,
+};
+pub use neuromorphic::{
+    benchmark_neuromorphic_scheduler, SpikeNeuralNetwork, SpikeQueue, SynapseMatrix,
 };
 
 

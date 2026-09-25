@@ -720,6 +720,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<JitterCommands>,
     },
+    /// Autonomous Neuromorphic AI Tick Scheduling, Spike-Driven Game Loop Inference & Microsecond Latency Forecasting
+    #[command(name = "neuromorphic", alias = "snn", alias = "lif", alias = "spike", alias = "neuromorph")]
+    Neuromorphic {
+        #[command(subcommand)]
+        action: Option<NeuromorphicCommands>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -3105,6 +3111,96 @@ pub enum JitterCommands {
         json: bool,
     },
     /// Reset kernel jitter telemetry counters and micro-stall logs
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum NeuromorphicCommands {
+    /// Inspect neuromorphic SNN tick scheduling telemetry, LIF neuron states, and STDP synaptic weights
+    Status {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Configure neuromorphic tick scheduling mode (Disabled, ShadowInference, PredictiveThrottle, AutonomousMicrosecond)
+    #[command(name = "mode", alias = "set-mode", alias = "schedule-mode")]
+    Mode {
+        /// Target server name
+        #[arg(short, long, default_value = "default")]
+        server: String,
+        /// Scheduling mode (disabled, shadow-inference, predictive-throttle, autonomous-microsecond)
+        #[arg(short, long, default_value = "autonomous-microsecond")]
+        mode: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Inject a synthetic sensory spike into the neuromorphic SNN input layer
+    #[command(name = "inject", alias = "spike-in", alias = "send-spike")]
+    Inject {
+        /// Target server name
+        #[arg(short, long, default_value = "default")]
+        server: String,
+        /// Target input neuron ID (0-15)
+        #[arg(short, long, default_value_t = 0)]
+        neuron: u32,
+        /// Injected spike synaptic current or weight (0.0 to 1.0)
+        #[arg(short, long, default_value_t = 1.0)]
+        current: f32,
+        /// Sensory spike source type (packet-arrival, scheduler-timer, entity-collision, block-change, redstone-update)
+        #[arg(long, default_value = "packet-arrival")]
+        source: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Display membrane potential raster plot across input, reservoir, and output neurons
+    #[command(name = "raster", alias = "plot", alias = "spikes")]
+    Raster {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Maximum number of raster points to display
+        #[arg(short, long, default_value_t = 30)]
+        limit: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Display latest neuromorphic SNN tick prediction, latency forecast, and dynamic sleep duration
+    #[command(name = "predict", alias = "prediction", alias = "forecast")]
+    Predict {
+        /// Filter by server or instance name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run neuromorphic scheduler benchmark (<1.0us forward inference, >95% idle power reduction)
+    Bench {
+        /// Number of benchmark spike iterations
+        #[arg(short, long, default_value_t = 2000)]
+        iterations: usize,
+        /// Ratio of high-frequency spike bursts to idle periods (0.0 to 1.0)
+        #[arg(short = 'b', long = "burst-ratio", default_value_t = 0.2)]
+        burst_ratio: f64,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset neuromorphic telemetry counters, raster ring buffer, and STDP synaptic weights
     #[command(name = "reset-metrics", alias = "reset")]
     ResetMetrics {
         /// Filter by server or instance name
@@ -6964,6 +7060,98 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Jitter Bench command"),
+        }
+    }
+
+    #[test]
+    fn test_neuromorphic_cli_commands() {
+        // Neuromorphic status
+        let cli_snn_status = Cli::try_parse_from([
+            "craft", "neuromorphic", "status", "--server", "survival", "--json"
+        ]).unwrap();
+        match cli_snn_status.command {
+            Some(Commands::Neuromorphic {
+                action: Some(NeuromorphicCommands::Status { server, json }),
+            }) => {
+                assert_eq!(server.as_deref(), Some("survival"));
+                assert!(json);
+            }
+            _ => panic!("Expected Neuromorphic Status command"),
+        }
+
+        // Neuromorphic snn alias and mode
+        let cli_snn_mode = Cli::try_parse_from([
+            "craft", "snn", "mode", "--server", "creative", "--mode", "predictive-throttle", "--json"
+        ]).unwrap();
+        match cli_snn_mode.command {
+            Some(Commands::Neuromorphic {
+                action: Some(NeuromorphicCommands::Mode { server, mode, json }),
+            }) => {
+                assert_eq!(server, "creative");
+                assert_eq!(mode, "predictive-throttle");
+                assert!(json);
+            }
+            _ => panic!("Expected Neuromorphic Mode command"),
+        }
+
+        // Neuromorphic lif alias and inject
+        let cli_snn_inject = Cli::try_parse_from([
+            "craft", "lif", "inject", "--server", "creative", "--neuron", "3", "--current", "0.95", "--source", "packet-arrival", "--json"
+        ]).unwrap();
+        match cli_snn_inject.command {
+            Some(Commands::Neuromorphic {
+                action: Some(NeuromorphicCommands::Inject { server, neuron, current, source, json }),
+            }) => {
+                assert_eq!(server, "creative");
+                assert_eq!(neuron, 3);
+                assert_eq!(current, 0.95);
+                assert_eq!(source, "packet-arrival");
+                assert!(json);
+            }
+            _ => panic!("Expected Neuromorphic Inject command"),
+        }
+
+        // Neuromorphic spike alias and raster
+        let cli_snn_raster = Cli::try_parse_from([
+            "craft", "spike", "raster", "--limit", "25", "--json"
+        ]).unwrap();
+        match cli_snn_raster.command {
+            Some(Commands::Neuromorphic {
+                action: Some(NeuromorphicCommands::Raster { limit, json, .. }),
+            }) => {
+                assert_eq!(limit, 25);
+                assert!(json);
+            }
+            _ => panic!("Expected Neuromorphic Raster command"),
+        }
+
+        // Neuromorphic predict
+        let cli_snn_pred = Cli::try_parse_from([
+            "craft", "neuromorph", "predict", "--server", "lobby", "--json"
+        ]).unwrap();
+        match cli_snn_pred.command {
+            Some(Commands::Neuromorphic {
+                action: Some(NeuromorphicCommands::Predict { server, json }),
+            }) => {
+                assert_eq!(server.as_deref(), Some("lobby"));
+                assert!(json);
+            }
+            _ => panic!("Expected Neuromorphic Predict command"),
+        }
+
+        // Neuromorphic bench
+        let cli_snn_bench = Cli::try_parse_from([
+            "craft", "neuromorphic", "bench", "-i", "1000", "-b", "0.25", "--json"
+        ]).unwrap();
+        match cli_snn_bench.command {
+            Some(Commands::Neuromorphic {
+                action: Some(NeuromorphicCommands::Bench { iterations, burst_ratio, json }),
+            }) => {
+                assert_eq!(iterations, 1000);
+                assert_eq!(burst_ratio, 0.25);
+                assert!(json);
+            }
+            _ => panic!("Expected Neuromorphic Bench command"),
         }
     }
 }

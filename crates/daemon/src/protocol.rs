@@ -582,6 +582,33 @@ pub enum IpcRequest {
         simulate_load: bool,
     },
     JitterResetMetrics,
+    NeuromorphicGetStatus {
+        server: Option<String>,
+    },
+    NeuromorphicSetMode {
+        server: Option<String>,
+        mode: String,
+    },
+    NeuromorphicInjectSpike {
+        server: Option<String>,
+        neuron_id: u32,
+        weight: f32,
+        source: String,
+    },
+    NeuromorphicGetRaster {
+        server: Option<String>,
+        limit: Option<usize>,
+    },
+    NeuromorphicGetPrediction {
+        server: Option<String>,
+    },
+    NeuromorphicRunBench {
+        iterations: Option<usize>,
+        burst_ratio: Option<f64>,
+    },
+    NeuromorphicResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1123,6 +1150,29 @@ pub enum IpcResponse {
     },
     JitterResetResult {
         message: String,
+    },
+    NeuromorphicStatusResult {
+        status: craft_core::NeuromorphicStatusSummary,
+    },
+    NeuromorphicModeUpdated {
+        success: bool,
+        message: String,
+    },
+    NeuromorphicSpikeInjected {
+        success: bool,
+        spike_id: u64,
+    },
+    NeuromorphicRasterResult {
+        points: Vec<craft_core::MembraneRasterPoint>,
+    },
+    NeuromorphicPredictionResult {
+        prediction: craft_core::TickPrediction,
+    },
+    NeuromorphicBenchResult {
+        metrics: craft_core::NeuromorphicBenchmarkMetrics,
+    },
+    NeuromorphicResetResult {
+        success: bool,
     },
     Error { error: String },
 }

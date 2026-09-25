@@ -52,6 +52,7 @@ pub mod nvme;
 pub mod vpn;
 pub mod bft;
 pub mod jitter;
+pub mod neuromorphic;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -269,6 +270,13 @@ pub use jitter::{
     render_stalls_table, set_realtime_fifo_priority, IrqStormDescriptor, JitterBenchmarkMetrics,
     JitterMitigationConfig, JitterRegistry, JitterStatusSummary, MicroStallCause, MicroStallEvent,
     PriorityInversionRecord, SchedPolicy, SchedTracepointType,
+};
+pub use neuromorphic::{
+    render_neuromorphic_bench_table, render_neuromorphic_status_table, render_raster_plot_table,
+    render_synapses_table, LifNeuron, LifNeuronConfig, LifNeuronState, MembraneRasterPoint,
+    NeuromorphicBenchmarkMetrics, NeuromorphicRegistry, NeuromorphicScheduleMode,
+    NeuromorphicStatusSummary, NeuronId, SpikeEvent, SpikeSourceType, StdpConfig,
+    SynapticConnection, TickPrediction,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -874,6 +874,38 @@ Craft follows a strict layered architecture where lower-level crates provide pur
   - Aliases: `craft sched`, `craft microstall`, `craft realtime`, `craft sched-trace`.
   - Full-screen centered interactive TUI panel (`Tools -> Real-Time Kernel Jitter Elimination & Micro-Stall Schedulers`) powered by ModalX.
 
+### 3.25. Autonomous Neuromorphic AI Tick Scheduling, Spike-Driven Game Loop Inference & Microsecond Latency Forecasting (Phase 49)
+- **Core Neuromorphic Models, Leaky Integrate-and-Fire (LIF) Equations & Advisory Locking (`craft-core`)**:
+  - Pure-Rust Leaky Integrate-and-Fire (LIF) neuron model (`LifNeuron`, `NeuronModelType`): membrane potential integration $V_{m}(t) = V_{m}(t-1) \cdot \lambda + I_{in}(t)$, dynamic firing threshold $\theta = 1.0\,\text{mV}$, resting potential $V_{rest} = 0.0\,\text{mV}$, exponential leak rate $\lambda = 0.95$, refractory recovery period (2 ticks), and post-spike reset.
+  - Spike events and source taxonomy (`SpikeEvent`, `SpikeSourceType`: `NetworkPacket`, `EntityTick`, `ChunkGeneration`, `BlockPhysics`, `CommandExecution`, `GarbageCollectionStall`) with microsecond timestamping and source entity attribution.
+  - Spike-Timing-Dependent Plasticity (STDP) synaptic weight adaptation (`SynapseConfig`, `StdpConfig`, `StdpLearningRule`: `StandardStdp`, `AntiHebbian`, `TripletStdp`, `ConstantWeights`): asymmetric bi-exponential Hebbian learning window $\Delta w = A_+ e^{-\Delta t / \tau_+}$ for pre-before-post LTP ($A_+ = 0.01$, $\tau_+ = 20\,\text{ms}$) and $\Delta w = -A_- e^{\Delta t / \tau_-}$ for post-before-pre LTD ($A_- = 0.012$, $\tau_- = 20\,\text{ms}$), bounded between $w_{min} = -2.0$ and $w_{max} = 2.0$.
+  - Neuromorphic scheduling modes and policy descriptors (`NeuromorphicScheduleMode`: `Autonomous`, `Predictive`, `EventDriven`, `EnergyEfficient`, `Passthrough`).
+  - Persistent registry state and summaries (`NeuromorphicRegistry`, `NeuromorphicStatusSummary`, `NeuromorphicBenchmarkMetrics`).
+  - Advisory file locking (`neuromorphic.lock`) protecting persistent registry state under `~/.craft/neuromorphic/` (`neuromorphic_dir`, `neuromorphic_models_dir`, `neuromorphic_registry_file`, `neuromorphic_state_file`, `neuromorphic_lock`, `neuromorphic_model_path`).
+  - Plain-text table formatters with zero emojis (`render_neuromorphic_status_table`, `render_neuromorphic_spikes_table`, `render_neuromorphic_bench_table`).
+- **Spike Queue, Synapse Matrix & Spike Neural Network Engine (`craft-net`)**:
+  - `SpikeQueue`: Pure-Rust asynchronous lockless circular spike ring buffer with configurable capacity (default 65,536 events), monotonic sequence assignment, high-watermark surge tracking, and zero-allocation spike draining.
+  - `SynapseMatrix`: Cache-aligned contiguous synaptic weight matrix supporting dense vector dot-product activations, weight normalization, and STDP batch trace consolidation.
+  - `SpikeNeuralNetwork`: 3-layer recurrent spiking neural network architecture comprising input sensory layer (16 neurons), liquid state recurrent reservoir layer (32 neurons with lateral inhibition), and readout layer (16 neurons) totaling 2,048 synapses. Tracks membrane state, firing statistics, and dynamic tick budget forecasting.
+  - Synthetic neuromorphic scheduler benchmark (`benchmark_neuromorphic_scheduler`): Simulates thousands of event spikes and tick loop iterations, asserting sub-microsecond inference latency (<1.0 us mean and P99), >95% idle CPU power reduction through temporal spike sparsity, and 100% stable synaptic weight consolidation.
+- **Daemon Supervision, Neuromorphic Service & Prometheus Telemetry (`craft-daemon`)**:
+  - `NeuromorphicService`: Thread-safe supervisor singleton managing in-process SNN engine, spike event ingestion, dynamic tick budget calculation, synaptic weight persistence, and Prometheus telemetry exposition (`craft_neuromorphic_*`).
+  - 7 typed IPC requests and responses: `NeuromorphicGetStatus`, `NeuromorphicSetMode`, `NeuromorphicRecordSpike`, `NeuromorphicStepLoop`, `NeuromorphicConsolidateWeights`, `NeuromorphicRunBench`, `NeuromorphicResetMetrics`.
+  - Prometheus metrics exposition (`craft_neuromorphic_*`): `craft_neuromorphic_active_neurons`, `craft_neuromorphic_total_synapses`, `craft_neuromorphic_spikes_processed_total`, `craft_neuromorphic_spikes_queued`, `craft_neuromorphic_avg_inference_latency_micros`, `craft_neuromorphic_p99_inference_latency_micros`, `craft_neuromorphic_idle_energy_reduction_pct`, `craft_neuromorphic_recommended_tick_budget_ms`.
+- **Remote Federation & Scripting Hooks (`craft-remote`, `craft-scripting`)**:
+  - `RemoteCraftClient` provides `get_remote_neuromorphic_status`, `set_remote_neuromorphic_mode`, `record_remote_neuromorphic_spike`, `step_remote_neuromorphic_loop`, `consolidate_remote_neuromorphic_weights`, `run_remote_neuromorphic_bench`, and `reset_remote_neuromorphic_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `NeuromorphicSpikeBurstDetected`, `NeuromorphicTickAdjusted`, `NeuromorphicIdleCompressionEngaged`, `NeuromorphicSynapticWeightsConsolidated` with structured neuromorphic context (`spikes_count`, `tick_budget_ms`, `energy_reduction_pct`, `consolidated_synapses_count`).
+- **Unified CLI Commands & ModalX Centered TUI (`craft-cli`)**:
+  - `craft neuromorphic status [--server <name>] [--json]`
+  - `craft neuromorphic mode -m <mode> [--server <name>] [--json]`
+  - `craft neuromorphic spike -s <source> [-a <amplitude>] [--server <name>] [--json]`
+  - `craft neuromorphic step [-d <delta-ms>] [-u <duration-us>] [--server <name>] [--json]`
+  - `craft neuromorphic consolidate [--server <name>] [--json]`
+  - `craft neuromorphic bench [-i <iterations>] [-s <spikes-per-tick>] [--json]`
+  - `craft neuromorphic reset-metrics [--json]`
+  - Aliases: `craft snn`, `craft lif`, `craft spike`, `craft neuromorph`.
+  - Full-screen centered interactive TUI panel (`Tools -> Neuromorphic AI Tick Scheduling & Spike Inference`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

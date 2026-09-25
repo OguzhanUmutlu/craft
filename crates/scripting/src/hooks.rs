@@ -117,6 +117,10 @@ pub enum LifecycleEvent {
     RealtimePriorityEscalated,
     IrqStormShielded,
     JitterThresholdExceeded,
+    NeuromorphicSpikeBurstDetected,
+    NeuromorphicTickAdjusted,
+    NeuromorphicIdleCompressionEngaged,
+    NeuromorphicSynapticWeightsConsolidated,
 }
 
 impl LifecycleEvent {
@@ -228,6 +232,10 @@ impl LifecycleEvent {
             Self::RealtimePriorityEscalated => "on_realtime_priority_escalated",
             Self::IrqStormShielded => "on_irq_storm_shielded",
             Self::JitterThresholdExceeded => "on_jitter_threshold_exceeded",
+            Self::NeuromorphicSpikeBurstDetected => "on_neuromorphic_spike_burst_detected",
+            Self::NeuromorphicTickAdjusted => "on_neuromorphic_tick_adjusted",
+            Self::NeuromorphicIdleCompressionEngaged => "on_neuromorphic_idle_compression_engaged",
+            Self::NeuromorphicSynapticWeightsConsolidated => "on_neuromorphic_synaptic_weights_consolidated",
         }
     }
 
@@ -340,6 +348,10 @@ impl LifecycleEvent {
             "on_realtime_priority_escalated" | "realtime_priority_escalated" | "priority_escalated" | "realtime_escalated" => Some(Self::RealtimePriorityEscalated),
             "on_irq_storm_shielded" | "irq_storm_shielded" | "irq_shielded" | "irq_storm" => Some(Self::IrqStormShielded),
             "on_jitter_threshold_exceeded" | "jitter_threshold_exceeded" | "jitter_exceeded" | "jitter_threshold" => Some(Self::JitterThresholdExceeded),
+            "on_neuromorphic_spike_burst_detected" | "neuromorphic_spike_burst_detected" | "spike_burst_detected" | "spike_burst" => Some(Self::NeuromorphicSpikeBurstDetected),
+            "on_neuromorphic_tick_adjusted" | "neuromorphic_tick_adjusted" | "tick_adjusted" | "neuromorphic_tick" => Some(Self::NeuromorphicTickAdjusted),
+            "on_neuromorphic_idle_compression_engaged" | "neuromorphic_idle_compression_engaged" | "idle_compression_engaged" | "idle_compression" => Some(Self::NeuromorphicIdleCompressionEngaged),
+            "on_neuromorphic_synaptic_weights_consolidated" | "neuromorphic_synaptic_weights_consolidated" | "synaptic_weights_consolidated" | "weights_consolidated" => Some(Self::NeuromorphicSynapticWeightsConsolidated),
             _ => None,
         }
     }
@@ -452,6 +464,10 @@ impl LifecycleEvent {
             Self::RealtimePriorityEscalated,
             Self::IrqStormShielded,
             Self::JitterThresholdExceeded,
+            Self::NeuromorphicSpikeBurstDetected,
+            Self::NeuromorphicTickAdjusted,
+            Self::NeuromorphicIdleCompressionEngaged,
+            Self::NeuromorphicSynapticWeightsConsolidated,
         ]
     }
 }
@@ -768,6 +784,14 @@ pub struct HookContext {
     pub irq_number: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub isolated_cpus: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub neuromorphic_spike_rate: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub neuromorphic_predicted_mspt: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub neuromorphic_sleep_micros: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub neuromorphic_synapse_count: Option<usize>,
 }
 
 impl HookContext {
@@ -1393,6 +1417,50 @@ impl HookContext {
         ctx.details = Some(format!(
             "Kernel jitter threshold exceeded on server '{}': {:.2}us > {:.2}us",
             server, jitter_us, threshold_us
+        ));
+        ctx
+    }
+
+    pub fn for_neuromorphic_spike_burst_detected(server: &str, spike_rate: f64, neuron_id: u32) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::NeuromorphicSpikeBurstDetected);
+        ctx.server_name = Some(server.to_string());
+        ctx.neuromorphic_spike_rate = Some(spike_rate);
+        ctx.details = Some(format!(
+            "Neuromorphic spike burst detected on server '{}': {:.1} spikes/s initiated by neuron {}",
+            server, spike_rate, neuron_id
+        ));
+        ctx
+    }
+
+    pub fn for_neuromorphic_tick_adjusted(server: &str, predicted_mspt: f64, sleep_micros: u64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::NeuromorphicTickAdjusted);
+        ctx.server_name = Some(server.to_string());
+        ctx.neuromorphic_predicted_mspt = Some(predicted_mspt);
+        ctx.neuromorphic_sleep_micros = Some(sleep_micros);
+        ctx.details = Some(format!(
+            "Neuromorphic tick adjusted on server '{}': predicted MSPT {:.2}ms, dynamic sleep {}us",
+            server, predicted_mspt, sleep_micros
+        ));
+        ctx
+    }
+
+    pub fn for_neuromorphic_idle_compression_engaged(server: &str, idle_ratio: f64, power_saving_percent: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::NeuromorphicIdleCompressionEngaged);
+        ctx.server_name = Some(server.to_string());
+        ctx.details = Some(format!(
+            "Neuromorphic idle compression engaged on server '{}': quiescent ratio {:.1}%, power saving {:.1}%",
+            server, idle_ratio * 100.0, power_saving_percent
+        ));
+        ctx
+    }
+
+    pub fn for_neuromorphic_synaptic_weights_consolidated(server: &str, synapse_count: usize, avg_weight: f32) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::NeuromorphicSynapticWeightsConsolidated);
+        ctx.server_name = Some(server.to_string());
+        ctx.neuromorphic_synapse_count = Some(synapse_count);
+        ctx.details = Some(format!(
+            "Neuromorphic synaptic weights consolidated on server '{}': {} synapses, avg weight {:.3}",
+            server, synapse_count, avg_weight
         ));
         ctx
     }
@@ -2455,5 +2523,61 @@ mod tests {
         assert_eq!(thresh_ctx.event, "on_jitter_threshold_exceeded");
         assert_eq!(thresh_ctx.server_name.as_deref(), Some("lobby"));
         assert_eq!(thresh_ctx.jitter_micros, Some(620.5));
+    }
+
+    #[test]
+    fn test_neuromorphic_lifecycle_hooks() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_neuromorphic_spike_burst_detected"),
+            Some(LifecycleEvent::NeuromorphicSpikeBurstDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("spike_burst"),
+            Some(LifecycleEvent::NeuromorphicSpikeBurstDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_neuromorphic_tick_adjusted"),
+            Some(LifecycleEvent::NeuromorphicTickAdjusted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("tick_adjusted"),
+            Some(LifecycleEvent::NeuromorphicTickAdjusted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_neuromorphic_idle_compression_engaged"),
+            Some(LifecycleEvent::NeuromorphicIdleCompressionEngaged)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("idle_compression"),
+            Some(LifecycleEvent::NeuromorphicIdleCompressionEngaged)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_neuromorphic_synaptic_weights_consolidated"),
+            Some(LifecycleEvent::NeuromorphicSynapticWeightsConsolidated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("weights_consolidated"),
+            Some(LifecycleEvent::NeuromorphicSynapticWeightsConsolidated)
+        );
+
+        let burst_ctx = HookContext::for_neuromorphic_spike_burst_detected("survival", 420.0, 5);
+        assert_eq!(burst_ctx.event, "on_neuromorphic_spike_burst_detected");
+        assert_eq!(burst_ctx.server_name.as_deref(), Some("survival"));
+        assert_eq!(burst_ctx.neuromorphic_spike_rate, Some(420.0));
+
+        let tick_ctx = HookContext::for_neuromorphic_tick_adjusted("survival", 44.5, 5500);
+        assert_eq!(tick_ctx.event, "on_neuromorphic_tick_adjusted");
+        assert_eq!(tick_ctx.server_name.as_deref(), Some("survival"));
+        assert_eq!(tick_ctx.neuromorphic_predicted_mspt, Some(44.5));
+        assert_eq!(tick_ctx.neuromorphic_sleep_micros, Some(5500));
+
+        let idle_ctx = HookContext::for_neuromorphic_idle_compression_engaged("survival", 0.96, 95.8);
+        assert_eq!(idle_ctx.event, "on_neuromorphic_idle_compression_engaged");
+        assert_eq!(idle_ctx.server_name.as_deref(), Some("survival"));
+
+        let syn_ctx = HookContext::for_neuromorphic_synaptic_weights_consolidated("survival", 512, 0.75);
+        assert_eq!(syn_ctx.event, "on_neuromorphic_synaptic_weights_consolidated");
+        assert_eq!(syn_ctx.server_name.as_deref(), Some("survival"));
+        assert_eq!(syn_ctx.neuromorphic_synapse_count, Some(512));
     }
 }

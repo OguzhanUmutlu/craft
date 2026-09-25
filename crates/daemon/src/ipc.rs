@@ -2,7 +2,8 @@ use crate::protocol::{IpcRequest, IpcResponse};
 use crate::supervisor::Supervisor;
 use craft_core::{
     is_process_running, read_pid_file, remove_pid_file, write_pid_file, CraftError, CraftPaths,
-    Result,
+    MembraneRasterPoint, NeuromorphicBenchmarkMetrics, NeuromorphicStatusSummary, Result,
+    TickPrediction,
 };
 use std::path::{Path, PathBuf};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -2201,6 +2202,65 @@ where
                     Ok(_) => IpcResponse::JitterResetResult {
                         message: "Kernel jitter telemetry and stall metrics reset successfully".to_string(),
                     },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NeuromorphicGetStatus { server } => {
+                let service = crate::neuromorphic_service::NeuromorphicService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(status) => IpcResponse::NeuromorphicStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NeuromorphicSetMode { server, mode } => {
+                let service = crate::neuromorphic_service::NeuromorphicService::global(supervisor.paths());
+                let resp = match service.set_mode(server.as_deref(), &mode) {
+                    Ok(()) => IpcResponse::NeuromorphicModeUpdated {
+                        success: true,
+                        message: format!("Neuromorphic schedule mode updated to {}", mode),
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NeuromorphicInjectSpike { server, neuron_id, weight, source } => {
+                let service = crate::neuromorphic_service::NeuromorphicService::global(supervisor.paths());
+                let resp = match service.inject_spike(server.as_deref(), neuron_id, weight, &source) {
+                    Ok(spike_id) => IpcResponse::NeuromorphicSpikeInjected { success: true, spike_id },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NeuromorphicGetRaster { server, limit } => {
+                let service = crate::neuromorphic_service::NeuromorphicService::global(supervisor.paths());
+                let resp = match service.get_raster(server.as_deref(), limit) {
+                    Ok(points) => IpcResponse::NeuromorphicRasterResult { points },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NeuromorphicGetPrediction { server } => {
+                let service = crate::neuromorphic_service::NeuromorphicService::global(supervisor.paths());
+                let resp = match service.get_prediction(server.as_deref()) {
+                    Ok(prediction) => IpcResponse::NeuromorphicPredictionResult { prediction },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NeuromorphicRunBench { iterations, burst_ratio } => {
+                let service = crate::neuromorphic_service::NeuromorphicService::global(supervisor.paths());
+                let resp = match service.run_bench(iterations, burst_ratio) {
+                    Ok(metrics) => IpcResponse::NeuromorphicBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::NeuromorphicResetMetrics { server } => {
+                let service = crate::neuromorphic_service::NeuromorphicService::global(supervisor.paths());
+                let resp = match service.reset_metrics(server.as_deref()) {
+                    Ok(()) => IpcResponse::NeuromorphicResetResult { success: true },
                     Err(e) => IpcResponse::Error { error: e.to_string() },
                 };
                 write_frame(&mut stream, &resp).await?;
@@ -4930,6 +4990,127 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::JitterResetResult { message } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_neuromorphic_status(
+        &mut self,
+        server: Option<&str>,
+    ) -> Result<NeuromorphicStatusSummary> {
+        match self
+            .request(IpcRequest::NeuromorphicGetStatus {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::NeuromorphicStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_neuromorphic_mode(
+        &mut self,
+        server: Option<&str>,
+        mode: &str,
+    ) -> Result<String> {
+        match self
+            .request(IpcRequest::NeuromorphicSetMode {
+                server: server.map(|s| s.to_string()),
+                mode: mode.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::NeuromorphicModeUpdated { message, .. } => Ok(message),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn inject_neuromorphic_spike(
+        &mut self,
+        server: Option<&str>,
+        neuron_id: u32,
+        weight: f32,
+        source: &str,
+    ) -> Result<u64> {
+        match self
+            .request(IpcRequest::NeuromorphicInjectSpike {
+                server: server.map(|s| s.to_string()),
+                neuron_id,
+                weight,
+                source: source.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::NeuromorphicSpikeInjected { spike_id, .. } => Ok(spike_id),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_neuromorphic_raster(
+        &mut self,
+        server: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<MembraneRasterPoint>> {
+        match self
+            .request(IpcRequest::NeuromorphicGetRaster {
+                server: server.map(|s| s.to_string()),
+                limit,
+            })
+            .await?
+        {
+            IpcResponse::NeuromorphicRasterResult { points } => Ok(points),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_neuromorphic_prediction(
+        &mut self,
+        server: Option<&str>,
+    ) -> Result<TickPrediction> {
+        match self
+            .request(IpcRequest::NeuromorphicGetPrediction {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::NeuromorphicPredictionResult { prediction } => Ok(prediction),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_neuromorphic_bench(
+        &mut self,
+        iterations: Option<usize>,
+        burst_ratio: Option<f64>,
+    ) -> Result<NeuromorphicBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::NeuromorphicRunBench {
+                iterations,
+                burst_ratio,
+            })
+            .await?
+        {
+            IpcResponse::NeuromorphicBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_neuromorphic_metrics(&mut self, server: Option<&str>) -> Result<bool> {
+        match self
+            .request(IpcRequest::NeuromorphicResetMetrics {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::NeuromorphicResetResult { success } => Ok(success),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }
