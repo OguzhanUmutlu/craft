@@ -57,6 +57,7 @@ pub mod optical;
 pub mod ptp;
 pub mod dna;
 pub mod cpo;
+pub mod cryo;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -305,6 +306,12 @@ pub use cpo::{
     render_cpo_bench_table, render_cpo_status_table, render_cpo_tiles_table, CpoBenchmarkMetrics,
     CpoMode, CpoRegistry, CpoStatusSummary, CpoThermalServoState, CpoThermalStatus,
     CpoTileDescriptor, MicroRingModulator, MziCell, MziMesh,
+};
+pub use cryo::{
+    render_cryo_bench_table, render_cryo_power_table, render_cryo_status_table,
+    render_cryo_zones_table, CasimirCavityMems, CryoBenchmarkMetrics, CryoMode, CryoRegistry,
+    CryoStatusSummary, CryoTemperatureStatus, CryoZoneDescriptor, DilutionStageTelemetry,
+    ThermoelectricModule,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

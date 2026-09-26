@@ -3466,6 +3466,141 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Gets Cryogenic cooling and zero-point power status from the remote host
+    pub fn get_remote_cryo_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft cryo status".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote cryo status query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Sets Cryogenic operational mode on the remote host
+    pub fn set_remote_cryo_mode(&self, mode: &str, server: Option<&str>) -> Result<String> {
+        let mut cmd = format!("craft cryo mode -m {}", mode);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote cryo mode set failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Triggers dynamic cryogenic thermal zone balancing on the remote host
+    pub fn balance_remote_cryo_zones(&self, target_temp_mk: Option<f64>, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft cryo balance".to_string();
+        if let Some(t) = target_temp_mk {
+            cmd.push_str(&format!(" -t {}", t));
+        }
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote cryo zone balance failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Triggers Casimir cavity zero-point energy harvesting on the remote host
+    pub fn harvest_remote_cryo_zero_point(&self, cavity_id: Option<&str>, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft cryo harvest".to_string();
+        if let Some(c) = cavity_id {
+            cmd.push_str(&format!(" -c {}", c));
+        }
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote cryo zero-point harvest failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Lists cryogenic thermal zones on the remote host
+    pub fn list_remote_cryo_zones(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft cryo zones".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote cryo zones query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs synthetic cryogenic cooling benchmark on the remote host
+    pub fn run_remote_cryo_bench(&self, zones: Option<usize>, duration_sec: Option<u64>) -> Result<String> {
+        let mut cmd = "craft cryo bench".to_string();
+        if let Some(z) = zones {
+            cmd.push_str(&format!(" -z {}", z));
+        }
+        if let Some(d) = duration_sec {
+            cmd.push_str(&format!(" -d {}", d));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote cryo bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets cryogenic cooling metrics on the remote host
+    pub fn reset_remote_cryo_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft cryo reset-metrics".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote cryo metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

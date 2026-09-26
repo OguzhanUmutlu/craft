@@ -1042,6 +1042,41 @@ Phase 51 delivers sub-nanosecond clock synchronization, Precision Time Protocol 
   - Aliases: `craft die-optics`, `craft cpo-mesh`, `craft photonic-mvm`, `craft silicon-optics`.
   - Full-screen centered interactive TUI panel (`Tools -> Silicon Photonic Co-Packaged Optics & Direct Die Interconnects`) powered by ModalX.
 
+### 3.30 Autonomous Zero-Point Vacuum Energy Harvesting, Thermoelectric Cluster Power Balancing & Sub-Kelvin Cryogenic Cooling
+
+- **Foundational Cryogenic Models & Vacuum Energy Extraction (`craft-core`)**:
+  - `CryoMode`: `Autonomous`, `SuperconductingMaxQ`, `WasteHeatThermoelectric`, `ZeroPointHarvesting`, `SubKelvinCryoStabilized`, `EcoDilution`.
+  - `CryoTemperatureStatus`: `SuperconductingNominal` (<20 mK), `ThermalFluctuation` (20–100 mK), `CriticalQuenchWarning` (>=100 mK), `Regenerating`.
+  - Casimir Cavity MEMS (`CasimirCavityMems`): Sub-micron Casimir parallel plate cavities with plate separation $d$ (nm), area $A$ ($\mu\text{m}^2$), mechanical resonance frequency, calculated Casimir force $F_c = \frac{\pi^2 \hbar c}{240 d^4} A$, harvested ground-state power, and mechanical Q-factor ($Q \approx 150,000$).
+  - Thermoelectric Generator Array (`ThermoelectricModule`): Seebeck coefficient $S$ ($\mu\text{V/K}$), hot-side / cold-side temperature boundaries, internal resistance, figure of merit $ZT \approx 2.4$, and recovered waste-heat electrical power output.
+  - Multi-Stage Dilution Refrigerator Telemetry (`DilutionStageTelemetry`): 300K ambient room stage, 50K radiation shield, 4K pulse tube cryocooler, 800mK distillation still, 100mK cold plate stage, sub-20 mK mixing chamber stage, $^3\text{He}/^4\text{He}$ circulation molar flow rate ($\mu\text{mol/s}$), and helium compressor pressure (bar).
+  - Cryogenic Zone Descriptors & Registries (`CryoZoneDescriptor`, `CryoStatusSummary`, `CryoBenchmarkMetrics`, `CryoRegistry`).
+  - Advisory file locking (`cryo.lock`) protecting persistent registry state under `~/.craft/cryo/` (`cryo_dir`, `cryo_zones_dir`, `cryo_registry_file`, `cryo_state_file`, `cryo_lock`, `cryo_zone_path`).
+  - Zero-emoji plain-text formatters (`render_cryo_status_table`, `render_cryo_zones_table`, `render_cryo_power_table`, `render_cryo_bench_table`).
+- **Binary Power Wire Framing, Casimir Harvester & Cryogenic Thermal Balancer (`craft-net`)**:
+  - `CryoPowerFrame`: Binary wire encapsulation starting with 4-byte magic `0x51564143` (`QVAC`), zone identifier, packet type, sequence counter, payload byte length, and CRC-32 checksum.
+  - `CasimirVacuumHarvester`: Dynamically samples quantum zero-point fluctuations across active MEMS Casimir cavities, integrating micro-Watt power generation and cumulative micro-Joules.
+  - `ThermoelectricPowerRouter`: Routes Seebeck thermal gradient energy across server power rails, converting compute rack waste heat back into auxiliary electricity.
+  - `CryogenicThermalBalancer`: High-precision closed-loop PID controller regulating mixing chamber temperatures; upon thermal fluctuation ($T \ge 100\text{ mK}$), activates emergency workload shedding and escalates cooling power to avert catastrophic superconducting quenches.
+  - Empirical benchmark `benchmark_cryogenic_cooling`: Measures thermal stabilization latency (~120 $\mu\text{s}$), Carnot cooling coefficient of performance ($COP \approx 0.084$), and simulated quench recovery latency.
+- **Daemon Supervision, Cryo Service & Prometheus Telemetry (`craft-daemon`)**:
+  - `CryoService`: Thread-safe supervisor singleton managing in-process cryogenic zones, Casimir cavity arrays, thermoelectric harvesters, dilution refrigerator PID loops, registry serialization, and Prometheus telemetry exposition (`craft_cryo_*`).
+  - 7 typed IPC requests and responses: `CryoGetStatus`, `CryoSetMode`, `CryoBalanceZones`, `CryoHarvestZeroPoint`, `CryoListZones`, `CryoRunBench`, `CryoResetMetrics`.
+  - Prometheus metrics exposition (`craft_cryo_*`): `craft_cryo_total_zones`, `craft_cryo_superconducting_nominal_zones`, `craft_cryo_mean_mixing_chamber_mk`, `craft_cryo_lowest_mixing_chamber_mk`, `craft_cryo_harvested_zero_point_uw`, `craft_cryo_thermoelectric_power_w`, `craft_cryo_total_cooling_power_mw`, `craft_cryo_quenches_averted_total`.
+- **Remote Federation & Scripting Hooks (`craft-remote`, `craft-scripting`)**:
+  - `RemoteCraftClient` provides `get_remote_cryo_status`, `set_remote_cryo_mode`, `balance_remote_cryo_zones`, `harvest_remote_cryo_zero_point`, `list_remote_cryo_zones`, `run_remote_cryo_bench`, and `reset_remote_cryo_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `CryoSuperconductingTransitionAchieved`, `CryoThermalQuenchAverted`, `CryoZeroPointPowerHarvested`, `CryoThermoelectricPowerBalanced` with structured cryogenic telemetry (`cryo_zone_id`, `cryo_temperature_mk`, `cryo_harvested_microwatts`, `cryo_cooling_power_mw`).
+- **Unified CLI Commands & ModalX Centered TUI (`craft-cli`)**:
+  - `craft cryo status [--server <name>] [--json]`
+  - `craft cryo mode -m <mode> [--server <name>] [--json]`
+  - `craft cryo balance [-z <zone>] [--server <name>] [--json]`
+  - `craft cryo harvest [-z <zone>] [-d <ms>] [--server <name>] [--json]`
+  - `craft cryo zones [--server <name>] [--json]`
+  - `craft cryo bench [-i <iters>] [--json]`
+  - `craft cryo reset-metrics [--server <name>] [--json]`
+  - Aliases: `craft zero-point`, `craft cryogenic`, `craft casimir`, `craft subkelvin`.
+  - Full-screen centered interactive TUI panel (`Tools -> Cryogenic Cooling & Zero-Point Vacuum Harvesting`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

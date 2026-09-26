@@ -1821,6 +1821,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             QuantumClockSynchronization,
             BioMolecularDnaArchival,
             CoPackagedOpticsInterconnect,
+            CryogenicCoolingPowerBalancer,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2170,6 +2171,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::CoPackagedOpticsInterconnect);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Cryogenic Cooling & Zero-Point Vacuum Harvesting",
+            )
+            .with_aliases(&["cryo", "zero-point", "cryogenic", "casimir", "subkelvin"]),
+        );
+        actions.push(ToolItemAction::CryogenicCoolingPowerBalancer);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2304,6 +2315,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::CoPackagedOpticsInterconnect => {
                     cpo_tui(paths).await?;
+                }
+                ToolItemAction::CryogenicCoolingPowerBalancer => {
+                    cryo_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4492,6 +4506,37 @@ async fn cpo_tui(paths: &CraftPaths) -> Result<()> {
     show_modal_message("SILICON PHOTONIC CO-PACKAGED OPTICS & TENSOR MVM", &lines, false)?;
     Ok(())
 }
+
+async fn cryo_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::cryo_service::CryoService::global(paths);
+    let summary = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS ZERO-POINT VACUUM ENERGY HARVESTING & CRYOGENICS".bold().to_string());
+    lines.push("Thermoelectric Cluster Power Balancing & Sub-Kelvin Cryocooling".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Operational Mode:        {}", summary.mode));
+    lines.push(format!("Cryogenic Zones:         {}/{} Superconducting Nominal", summary.superconducting_nominal_zones, summary.total_zones));
+    lines.push(format!("Mean Mixing Chamber:     {:.2} mK", summary.mean_mixing_chamber_mk));
+    lines.push(format!("Lowest Mixing Chamber:   {:.2} mK", summary.lowest_mixing_chamber_mk));
+    lines.push(format!("ZPE Harvested Power:     {:.2} uW", summary.total_harvested_zero_point_uw));
+    lines.push(format!("Thermoelectric Recovered:{:.2} W", summary.total_thermoelectric_power_w));
+    lines.push(format!("Dilution Cooling Power:  {:.1} mW", summary.total_cooling_power_mw));
+    lines.push(format!("Quenches Averted:        {}", summary.quenches_averted_count));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft cryo status [--server <S>]          Inspect cryogenic cooling & ZPE telemetry".green().to_string());
+    lines.push("  craft cryo mode -m <MODE>                 Configure cryogenic operational mode".green().to_string());
+    lines.push("  craft cryo balance [-z <ZONE>]            Balance thermal loads across cryo zones".green().to_string());
+    lines.push("  craft cryo harvest [-z <ZONE>] [-d <MS>]  Extract Casimir vacuum zero-point energy".green().to_string());
+    lines.push("  craft cryo zones                          List cryo thermal zones & dilution stages".green().to_string());
+    lines.push("  craft cryo bench [-i <ITERS>]             Benchmark dilution refrigeration cooling".green().to_string());
+    lines.push("  craft cryo reset-metrics                  Reset telemetry counters & quench stats".green().to_string());
+
+    show_modal_message("CRYOGENIC COOLING & ZERO-POINT HARVESTING", &lines, false)?;
+    Ok(())
+}
+
 
 
 

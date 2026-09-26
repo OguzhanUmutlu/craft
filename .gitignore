@@ -61,6 +61,7 @@ cargo-timing.html
 !/tools/test_quantum_clock_synchronization.py
 !/tools/test_biomolecular_dna_archival.py
 !/tools/test_silicon_photonic_cpo.py
+!/tools/test_cryogenic_power_balancing.py
 !/tools/cloudflare_worker_guide.md
 /tools/catalog/output/
 __pycache__/

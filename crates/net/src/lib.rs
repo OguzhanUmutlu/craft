@@ -40,6 +40,7 @@ pub mod optical;
 pub mod ptp;
 pub mod dna;
 pub mod cpo;
+pub mod cryo;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -169,6 +170,11 @@ pub use dna::{
 pub use cpo::{
     benchmark_cpo_interconnect, CpoTensorFrame, CpoThermalRegulator, PhotonicTensorEngine,
     CPO_FRAME_MAGIC, FLAG_ANALOG_MVM, FLAG_LOOPBACK, FLAG_THERMAL_STABILIZED,
+};
+pub use cryo::{
+    benchmark_cryogenic_cooling, CasimirVacuumHarvester, CryogenicThermalBalancer,
+    CryoPowerFrame, ThermoelectricPowerRouter, CRYO_FRAME_MAGIC, FLAG_CRITICAL_QUENCH,
+    FLAG_SUPERCONDUCTING_NOMINAL, FLAG_THERMAL_FLUCTUATION, FLAG_ZERO_POINT_HARVESTING,
 };
 
 

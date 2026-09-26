@@ -2504,6 +2504,71 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::CryoGetStatus { server } => {
+                let service = crate::cryo_service::CryoService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(status) => IpcResponse::CryoStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CryoSetMode { server, mode } => {
+                let service = crate::cryo_service::CryoService::global(supervisor.paths());
+                let parsed_mode = mode.parse::<craft_core::cryo::CryoMode>().unwrap_or(craft_core::cryo::CryoMode::Autonomous);
+                let resp = match service.set_mode(parsed_mode, server.as_deref()) {
+                    Ok(_) => IpcResponse::CryoModeUpdated { success: true, mode: parsed_mode.to_string() },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CryoBalanceZones { server, target_temp_mk } => {
+                let service = crate::cryo_service::CryoService::global(supervisor.paths());
+                let resp = match service.balance_zones(target_temp_mk, server.as_deref()) {
+                    Ok((zones_balanced, mean_temp_mk, quenches_averted)) => IpcResponse::CryoBalanceResult {
+                        zones_balanced,
+                        mean_temp_mk,
+                        quenches_averted,
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CryoHarvestZeroPoint { server, cavity_id } => {
+                let service = crate::cryo_service::CryoService::global(supervisor.paths());
+                let resp = match service.harvest_zero_point(cavity_id, server.as_deref()) {
+                    Ok((harvested_microwatts, thermoelectric_watts, total_energy_joules)) => IpcResponse::CryoHarvestResult {
+                        harvested_microwatts,
+                        thermoelectric_watts,
+                        total_energy_joules,
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CryoListZones { server } => {
+                let service = crate::cryo_service::CryoService::global(supervisor.paths());
+                let resp = match service.list_zones(server.as_deref()) {
+                    Ok(zones) => IpcResponse::CryoZonesResult { zones },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CryoRunBench { zones, duration_sec, server } => {
+                let service = crate::cryo_service::CryoService::global(supervisor.paths());
+                let resp = match service.run_bench(zones, duration_sec, server.as_deref()) {
+                    Ok(metrics) => IpcResponse::CryoBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CryoResetMetrics { server } => {
+                let service = crate::cryo_service::CryoService::global(supervisor.paths());
+                let resp = match service.reset_metrics(server.as_deref()) {
+                    Ok(success) => IpcResponse::CryoResetResult { success },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -5781,6 +5846,126 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::CpoResetResult { success } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_cryo_status(&mut self, server: Option<&str>) -> Result<craft_core::cryo::CryoStatusSummary> {
+        match self
+            .request(IpcRequest::CryoGetStatus {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::CryoStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_cryo_mode(&mut self, mode: &str, server: Option<&str>) -> Result<String> {
+        match self
+            .request(IpcRequest::CryoSetMode {
+                server: server.map(|s| s.to_string()),
+                mode: mode.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::CryoModeUpdated { mode, .. } => Ok(mode),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn balance_cryo_zones(
+        &mut self,
+        target_temp_mk: Option<f64>,
+        server: Option<&str>,
+    ) -> Result<(usize, f64, u32)> {
+        match self
+            .request(IpcRequest::CryoBalanceZones {
+                server: server.map(|s| s.to_string()),
+                target_temp_mk,
+            })
+            .await?
+        {
+            IpcResponse::CryoBalanceResult {
+                zones_balanced,
+                mean_temp_mk,
+                quenches_averted,
+            } => Ok((zones_balanced, mean_temp_mk, quenches_averted)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn harvest_cryo_zero_point(
+        &mut self,
+        cavity_id: Option<String>,
+        server: Option<&str>,
+    ) -> Result<(f64, f64, f64)> {
+        match self
+            .request(IpcRequest::CryoHarvestZeroPoint {
+                server: server.map(|s| s.to_string()),
+                cavity_id,
+            })
+            .await?
+        {
+            IpcResponse::CryoHarvestResult {
+                harvested_microwatts,
+                thermoelectric_watts,
+                total_energy_joules,
+            } => Ok((harvested_microwatts, thermoelectric_watts, total_energy_joules)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_cryo_zones(
+        &mut self,
+        server: Option<&str>,
+    ) -> Result<Vec<craft_core::cryo::CryoZoneDescriptor>> {
+        match self
+            .request(IpcRequest::CryoListZones {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::CryoZonesResult { zones } => Ok(zones),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_cryo_bench(
+        &mut self,
+        zones: Option<usize>,
+        duration_sec: Option<u64>,
+        server: Option<&str>,
+    ) -> Result<craft_core::cryo::CryoBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::CryoRunBench {
+                zones,
+                duration_sec,
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::CryoBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_cryo_metrics(&mut self, server: Option<&str>) -> Result<bool> {
+        match self
+            .request(IpcRequest::CryoResetMetrics {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::CryoResetResult { success } => Ok(success),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

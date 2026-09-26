@@ -618,6 +618,9 @@ async fn main() {
         Some(Commands::Cpo { action }) => {
             commands::cpo::handle_cpo(&paths, action).await
         }
+        Some(Commands::Cryo { action }) => {
+            commands::cryo::handle_cryo(&paths, action).await
+        }
     };
 
 

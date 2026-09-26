@@ -49,6 +49,7 @@ pub mod optical_service;
 pub mod ptp_service;
 pub mod dna_service;
 pub mod cpo_service;
+pub mod cryo_service;
 
 pub use anvil_service::AnvilService;
 pub use compaction_service::CompactionService;
@@ -78,6 +79,7 @@ pub use optical_service::OpticalSwitchService;
 pub use ptp_service::PtpClockService;
 pub use dna_service::DnaArchiveService;
 pub use cpo_service::CpoService;
+pub use cryo_service::CryoService;
 
 pub use autopilot::AutopilotEngine;
 pub use circuit_breaker::{CircuitBreakerInfo, CircuitDecision, CircuitState, CrashCircuitBreaker};

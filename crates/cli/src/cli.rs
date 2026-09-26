@@ -750,6 +750,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<CpoCommands>,
     },
+    /// Autonomous Zero-Point Vacuum Energy Harvesting, Thermoelectric Cluster Power Balancing & Sub-Kelvin Cryogenic Cooling
+    #[command(name = "cryo", alias = "zero-point", alias = "cryogenic", alias = "casimir", alias = "subkelvin")]
+    Cryo {
+        #[command(subcommand)]
+        action: Option<CryoCommands>,
+    },
 }
 
 
@@ -3586,6 +3592,90 @@ pub enum CpoCommands {
         json: bool,
     },
     /// Reset optical performance counters and benchmark metrics
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum CryoCommands {
+    /// Inspect cryogenic cooling status, Casimir cavity arrays, and thermoelectric power routers
+    Status {
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Configure cryogenic operational mode (autonomous, superconducting-max-q, waste-heat-thermoelectric, zero-point-harvesting, sub-kelvin-cryo-stabilized, eco-dilution)
+    #[command(name = "mode", alias = "set-mode")]
+    Mode {
+        /// Operational mode
+        #[arg(short, long, default_value = "autonomous")]
+        mode: String,
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Balance thermal loads and cooling power across cryogenic zones
+    #[command(name = "balance", alias = "rebalance")]
+    Balance {
+        /// Specific zone ID to balance (optional, defaults to all zones)
+        #[arg(short, long)]
+        zone: Option<String>,
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Harvest Casimir zero-point vacuum energy from MEMS cavity arrays
+    #[command(name = "harvest", alias = "zero-point", alias = "casimir")]
+    Harvest {
+        /// Target cryogenic zone ID
+        #[arg(short, long, default_value = "zone-cryo-01")]
+        zone: String,
+        /// Extraction duration in milliseconds
+        #[arg(short, long, default_value_t = 100)]
+        duration: u64,
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List cryogenic thermal zones, dilution stages, and thermoelectric modules
+    #[command(name = "zones", alias = "list-zones")]
+    Zones {
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark cryogenic dilution refrigeration cooling power and Casimir extraction
+    Bench {
+        /// Benchmark iteration count
+        #[arg(short, long, default_value_t = 500)]
+        iterations: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset cryogenic telemetry, energy counters, and benchmark metrics
     #[command(name = "reset-metrics", alias = "reset")]
     ResetMetrics {
         /// Target server name
@@ -7885,6 +7975,105 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Cpo ResetMetrics command"),
+        }
+    }
+
+    #[test]
+    fn test_cryo_cli_commands() {
+        // Cryo status default
+        let cli_status = Cli::try_parse_from(["craft", "cryo", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Cryo {
+                action: Some(CryoCommands::Status { server, json }),
+            }) => {
+                assert_eq!(server, None);
+                assert!(json);
+            }
+            _ => panic!("Expected Cryo Status command"),
+        }
+
+        // Cryo mode alias
+        let cli_mode = Cli::try_parse_from([
+            "craft", "casimir", "mode", "-m", "zero-point-harvesting", "--json"
+        ]).unwrap();
+        match cli_mode.command {
+            Some(Commands::Cryo {
+                action: Some(CryoCommands::Mode { mode, server, json }),
+            }) => {
+                assert_eq!(mode, "zero-point-harvesting");
+                assert_eq!(server, None);
+                assert!(json);
+            }
+            _ => panic!("Expected Cryo Mode command"),
+        }
+
+        // Cryo balance command
+        let cli_balance = Cli::try_parse_from([
+            "craft", "subkelvin", "balance", "-z", "zone-cryo-01", "--json"
+        ]).unwrap();
+        match cli_balance.command {
+            Some(Commands::Cryo {
+                action: Some(CryoCommands::Balance { zone, json, .. }),
+            }) => {
+                assert_eq!(zone, Some("zone-cryo-01".to_string()));
+                assert!(json);
+            }
+            _ => panic!("Expected Cryo Balance command"),
+        }
+
+        // Cryo harvest command
+        let cli_harvest = Cli::try_parse_from([
+            "craft", "zero-point", "harvest", "-z", "zone-cryo-01", "-d", "250", "--json"
+        ]).unwrap();
+        match cli_harvest.command {
+            Some(Commands::Cryo {
+                action: Some(CryoCommands::Harvest { zone, duration, json, .. }),
+            }) => {
+                assert_eq!(zone, "zone-cryo-01");
+                assert_eq!(duration, 250);
+                assert!(json);
+            }
+            _ => panic!("Expected Cryo Harvest command"),
+        }
+
+        // Cryo zones list
+        let cli_zones = Cli::try_parse_from([
+            "craft", "cryogenic", "zones", "--json"
+        ]).unwrap();
+        match cli_zones.command {
+            Some(Commands::Cryo {
+                action: Some(CryoCommands::Zones { json, .. }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Cryo Zones command"),
+        }
+
+        // Cryo bench
+        let cli_bench = Cli::try_parse_from([
+            "craft", "cryo", "bench", "-i", "1000", "--json"
+        ]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Cryo {
+                action: Some(CryoCommands::Bench { iterations, json }),
+            }) => {
+                assert_eq!(iterations, 1000);
+                assert!(json);
+            }
+            _ => panic!("Expected Cryo Bench command"),
+        }
+
+        // Cryo reset-metrics
+        let cli_reset = Cli::try_parse_from([
+            "craft", "cryo", "reset-metrics", "--json"
+        ]).unwrap();
+        match cli_reset.command {
+            Some(Commands::Cryo {
+                action: Some(CryoCommands::ResetMetrics { json, .. }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Cryo ResetMetrics command"),
         }
     }
 }

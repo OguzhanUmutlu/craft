@@ -184,6 +184,11 @@ pub struct CraftPaths {
     pub cpo_registry_file: PathBuf,
     pub cpo_state_file: PathBuf,
     pub cpo_lock: PathBuf,
+    pub cryo_dir: PathBuf,
+    pub cryo_zones_dir: PathBuf,
+    pub cryo_registry_file: PathBuf,
+    pub cryo_state_file: PathBuf,
+    pub cryo_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -367,6 +372,11 @@ impl CraftPaths {
         let cpo_registry_file = cpo_dir.join("cpo.toml");
         let cpo_state_file = cpo_dir.join("state.json");
         let cpo_lock = locks_dir.join("cpo.lock");
+        let cryo_dir = home.join("cryo");
+        let cryo_zones_dir = cryo_dir.join("zones");
+        let cryo_registry_file = cryo_dir.join("cryo.toml");
+        let cryo_state_file = cryo_dir.join("state.json");
+        let cryo_lock = locks_dir.join("cryo.lock");
 
         Self {
             home,
@@ -548,6 +558,11 @@ impl CraftPaths {
             cpo_registry_file,
             cpo_state_file,
             cpo_lock,
+            cryo_dir,
+            cryo_zones_dir,
+            cryo_registry_file,
+            cryo_state_file,
+            cryo_lock,
         }
     }
 
@@ -818,8 +833,13 @@ impl CraftPaths {
         let cpo_registry_file = cpo_dir.join("cpo.toml");
         let cpo_state_file = cpo_dir.join("state.json");
         let cpo_lock = locks_dir.join("cpo.lock");
+        let cryo_dir = home.join("cryo");
+        let cryo_zones_dir = cryo_dir.join("zones");
+        let cryo_registry_file = cryo_dir.join("cryo.toml");
+        let cryo_state_file = cryo_dir.join("state.json");
+        let cryo_lock = locks_dir.join("cryo.lock");
 
-        for d in &[&optical_dir, &optical_circuits_dir, &ptp_dir, &ptp_timestamps_dir, &dna_dir, &dna_oligos_dir, &cpo_dir, &cpo_tiles_dir] {
+        for d in &[&optical_dir, &optical_circuits_dir, &ptp_dir, &ptp_timestamps_dir, &dna_dir, &dna_oligos_dir, &cpo_dir, &cpo_tiles_dir, &cryo_dir, &cryo_zones_dir] {
             if !d.exists() {
                 fs::create_dir_all(d)?;
             }
@@ -1005,7 +1025,17 @@ impl CraftPaths {
             cpo_registry_file,
             cpo_state_file,
             cpo_lock,
+            cryo_dir,
+            cryo_zones_dir,
+            cryo_registry_file,
+            cryo_state_file,
+            cryo_lock,
         })
+    }
+
+    /// Returns the cryogenic thermal zone configuration path for a specific zone ID
+    pub fn cryo_zone_path(&self, zone_id: &str) -> PathBuf {
+        self.cryo_zones_dir.join(format!("{}.json", zone_id))
     }
 
     /// Returns the optical tile configuration path for a specific tile ID

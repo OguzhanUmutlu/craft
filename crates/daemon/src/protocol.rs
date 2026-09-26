@@ -717,6 +717,32 @@ pub enum IpcRequest {
     CpoResetMetrics {
         server: Option<String>,
     },
+    CryoGetStatus {
+        server: Option<String>,
+    },
+    CryoSetMode {
+        server: Option<String>,
+        mode: String,
+    },
+    CryoBalanceZones {
+        server: Option<String>,
+        target_temp_mk: Option<f64>,
+    },
+    CryoHarvestZeroPoint {
+        server: Option<String>,
+        cavity_id: Option<String>,
+    },
+    CryoListZones {
+        server: Option<String>,
+    },
+    CryoRunBench {
+        zones: Option<usize>,
+        duration_sec: Option<u64>,
+        server: Option<String>,
+    },
+    CryoResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1378,6 +1404,32 @@ pub enum IpcResponse {
         metrics: craft_core::cpo::CpoBenchmarkMetrics,
     },
     CpoResetResult {
+        success: bool,
+    },
+    CryoStatusResult {
+        status: craft_core::cryo::CryoStatusSummary,
+    },
+    CryoModeUpdated {
+        success: bool,
+        mode: String,
+    },
+    CryoBalanceResult {
+        zones_balanced: usize,
+        mean_temp_mk: f64,
+        quenches_averted: u32,
+    },
+    CryoHarvestResult {
+        harvested_microwatts: f64,
+        thermoelectric_watts: f64,
+        total_energy_joules: f64,
+    },
+    CryoZonesResult {
+        zones: Vec<craft_core::cryo::CryoZoneDescriptor>,
+    },
+    CryoBenchResult {
+        metrics: craft_core::cryo::CryoBenchmarkMetrics,
+    },
+    CryoResetResult {
         success: bool,
     },
     Error { error: String },

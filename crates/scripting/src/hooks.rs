@@ -137,6 +137,10 @@ pub enum LifecycleEvent {
     CpoThermalDriftCompensated,
     CpoTensorMvmCompleted,
     CpoWaveguideDegraded,
+    CryoSuperconductingTransitionAchieved,
+    CryoThermalQuenchAverted,
+    CryoZeroPointPowerHarvested,
+    CryoThermoelectricPowerBalanced,
 }
 
 impl LifecycleEvent {
@@ -268,6 +272,10 @@ impl LifecycleEvent {
             Self::CpoThermalDriftCompensated => "on_cpo_thermal_drift_compensated",
             Self::CpoTensorMvmCompleted => "on_cpo_tensor_mvm_completed",
             Self::CpoWaveguideDegraded => "on_cpo_waveguide_degraded",
+            Self::CryoSuperconductingTransitionAchieved => "on_cryo_superconducting_transition",
+            Self::CryoThermalQuenchAverted => "on_cryo_thermal_quench_averted",
+            Self::CryoZeroPointPowerHarvested => "on_cryo_zero_point_power_harvested",
+            Self::CryoThermoelectricPowerBalanced => "on_cryo_thermoelectric_power_balanced",
         }
     }
 
@@ -400,6 +408,10 @@ impl LifecycleEvent {
             "on_cpo_thermal_drift_compensated" | "cpo_thermal_drift_compensated" | "drift_compensated" => Some(Self::CpoThermalDriftCompensated),
             "on_cpo_tensor_mvm_completed" | "cpo_tensor_mvm_completed" | "mvm_completed" => Some(Self::CpoTensorMvmCompleted),
             "on_cpo_waveguide_degraded" | "cpo_waveguide_degraded" | "waveguide_degraded" => Some(Self::CpoWaveguideDegraded),
+            "on_cryo_superconducting_transition" | "cryo_superconducting_transition" | "superconducting_transition" => Some(Self::CryoSuperconductingTransitionAchieved),
+            "on_cryo_thermal_quench_averted" | "cryo_thermal_quench_averted" | "thermal_quench_averted" | "quench_averted" => Some(Self::CryoThermalQuenchAverted),
+            "on_cryo_zero_point_power_harvested" | "cryo_zero_point_power_harvested" | "zero_point_harvested" => Some(Self::CryoZeroPointPowerHarvested),
+            "on_cryo_thermoelectric_power_balanced" | "cryo_thermoelectric_power_balanced" | "thermoelectric_balanced" => Some(Self::CryoThermoelectricPowerBalanced),
             _ => None,
         }
     }
@@ -532,6 +544,10 @@ impl LifecycleEvent {
             Self::CpoThermalDriftCompensated,
             Self::CpoTensorMvmCompleted,
             Self::CpoWaveguideDegraded,
+            Self::CryoSuperconductingTransitionAchieved,
+            Self::CryoThermalQuenchAverted,
+            Self::CryoZeroPointPowerHarvested,
+            Self::CryoThermoelectricPowerBalanced,
         ]
     }
 }
@@ -894,6 +910,14 @@ pub struct HookContext {
     pub cpo_mvm_latency_ps: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cpo_throughput_tbps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cryo_zone_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cryo_temperature_mk: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cryo_harvested_microwatts: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cryo_cooling_power_mw: Option<f64>,
 }
 
 impl HookContext {
@@ -1752,6 +1776,52 @@ impl HookContext {
         ctx.details = Some(format!(
             "Silicon Photonic optical waveguide degraded on tile #{}: temperature alert at {:.2} deg C",
             tile_id, temp_c
+        ));
+        ctx
+    }
+
+    pub fn for_cryo_superconducting_transition(zone_id: &str, temp_mk: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CryoSuperconductingTransitionAchieved);
+        ctx.cryo_zone_id = Some(zone_id.to_string());
+        ctx.cryo_temperature_mk = Some(temp_mk);
+        ctx.details = Some(format!(
+            "Cryogenic superconducting transition achieved in zone '{}': temperature locked at {:.2} mK",
+            zone_id, temp_mk
+        ));
+        ctx
+    }
+
+    pub fn for_cryo_thermal_quench_averted(zone_id: &str, temp_mk: f64, cooling_power_mw: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CryoThermalQuenchAverted);
+        ctx.cryo_zone_id = Some(zone_id.to_string());
+        ctx.cryo_temperature_mk = Some(temp_mk);
+        ctx.cryo_cooling_power_mw = Some(cooling_power_mw);
+        ctx.details = Some(format!(
+            "Thermal quench averted in cryogenic zone '{}': temperature {:.2} mK, cooling power escalated to {:.1} mW",
+            zone_id, temp_mk, cooling_power_mw
+        ));
+        ctx
+    }
+
+    pub fn for_cryo_zero_point_power_harvested(zone_id: &str, harvested_uw: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CryoZeroPointPowerHarvested);
+        ctx.cryo_zone_id = Some(zone_id.to_string());
+        ctx.cryo_harvested_microwatts = Some(harvested_uw);
+        ctx.details = Some(format!(
+            "Casimir zero-point vacuum energy harvested in zone '{}': {:.2} uW",
+            zone_id, harvested_uw
+        ));
+        ctx
+    }
+
+    pub fn for_cryo_thermoelectric_power_balanced(zone_id: &str, temp_mk: f64, harvested_uw: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CryoThermoelectricPowerBalanced);
+        ctx.cryo_zone_id = Some(zone_id.to_string());
+        ctx.cryo_temperature_mk = Some(temp_mk);
+        ctx.cryo_harvested_microwatts = Some(harvested_uw);
+        ctx.details = Some(format!(
+            "Thermoelectric waste-heat balanced across cryogenic zone '{}': temp {:.2} mK, recovered {:.2} uW",
+            zone_id, temp_mk, harvested_uw
         ));
         ctx
     }
@@ -3089,5 +3159,60 @@ mod tests {
         assert_eq!(degraded_ctx.event, "on_cpo_waveguide_degraded");
         assert_eq!(degraded_ctx.cpo_tile_id, Some(0));
         assert_eq!(degraded_ctx.cpo_temperature_c, Some(52.4));
+
+        assert_eq!(
+            LifecycleEvent::from_name("on_cryo_superconducting_transition"),
+            Some(LifecycleEvent::CryoSuperconductingTransitionAchieved)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("superconducting_transition"),
+            Some(LifecycleEvent::CryoSuperconductingTransitionAchieved)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_cryo_thermal_quench_averted"),
+            Some(LifecycleEvent::CryoThermalQuenchAverted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("quench_averted"),
+            Some(LifecycleEvent::CryoThermalQuenchAverted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_cryo_zero_point_power_harvested"),
+            Some(LifecycleEvent::CryoZeroPointPowerHarvested)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("zero_point_harvested"),
+            Some(LifecycleEvent::CryoZeroPointPowerHarvested)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_cryo_thermoelectric_power_balanced"),
+            Some(LifecycleEvent::CryoThermoelectricPowerBalanced)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("thermoelectric_balanced"),
+            Some(LifecycleEvent::CryoThermoelectricPowerBalanced)
+        );
+
+        let trans_ctx = HookContext::for_cryo_superconducting_transition("zone-cryo-01", 14.5);
+        assert_eq!(trans_ctx.event, "on_cryo_superconducting_transition");
+        assert_eq!(trans_ctx.cryo_zone_id.as_deref(), Some("zone-cryo-01"));
+        assert_eq!(trans_ctx.cryo_temperature_mk, Some(14.5));
+
+        let quench_ctx = HookContext::for_cryo_thermal_quench_averted("zone-cryo-01", 85.0, 500.0);
+        assert_eq!(quench_ctx.event, "on_cryo_thermal_quench_averted");
+        assert_eq!(quench_ctx.cryo_zone_id.as_deref(), Some("zone-cryo-01"));
+        assert_eq!(quench_ctx.cryo_temperature_mk, Some(85.0));
+        assert_eq!(quench_ctx.cryo_cooling_power_mw, Some(500.0));
+
+        let harvest_ctx = HookContext::for_cryo_zero_point_power_harvested("zone-cryo-01", 245.8);
+        assert_eq!(harvest_ctx.event, "on_cryo_zero_point_power_harvested");
+        assert_eq!(harvest_ctx.cryo_zone_id.as_deref(), Some("zone-cryo-01"));
+        assert_eq!(harvest_ctx.cryo_harvested_microwatts, Some(245.8));
+
+        let balanced_ctx = HookContext::for_cryo_thermoelectric_power_balanced("zone-cryo-01", 18.2, 120.4);
+        assert_eq!(balanced_ctx.event, "on_cryo_thermoelectric_power_balanced");
+        assert_eq!(balanced_ctx.cryo_zone_id.as_deref(), Some("zone-cryo-01"));
+        assert_eq!(balanced_ctx.cryo_temperature_mk, Some(18.2));
+        assert_eq!(balanced_ctx.cryo_harvested_microwatts, Some(120.4));
     }
 }
