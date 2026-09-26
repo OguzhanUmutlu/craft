@@ -612,6 +612,9 @@ async fn main() {
         Some(Commands::Ptp { action }) => {
             commands::ptp::handle_ptp(&paths, action).await
         }
+        Some(Commands::Dna { action }) => {
+            commands::dna::handle_dna(&paths, action).await
+        }
     };
 
 

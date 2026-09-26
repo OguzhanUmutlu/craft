@@ -1819,6 +1819,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             NeuromorphicAiScheduler,
             OpticalNetworkSwitching,
             QuantumClockSynchronization,
+            BioMolecularDnaArchival,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2148,6 +2149,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::QuantumClockSynchronization);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Bio-Molecular DNA Archival & Base-4 Cold Storage",
+            )
+            .with_aliases(&["dna", "bio", "oligo", "nucleotide", "storage-dna"]),
+        );
+        actions.push(ToolItemAction::BioMolecularDnaArchival);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2276,6 +2287,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::QuantumClockSynchronization => {
                     ptp_tui(paths).await?;
+                }
+                ToolItemAction::BioMolecularDnaArchival => {
+                    dna_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4399,6 +4413,38 @@ async fn ptp_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft ptp reset-metrics                    Reset PTP telemetry counters".green().to_string());
 
     show_modal_message("QUANTUM CLOCK SYNCHRONIZATION & IEEE 1588 PTP", &lines, false)?;
+    Ok(())
+}
+
+async fn dna_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::DnaArchiveService::global(paths);
+    let summary = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS BIO-MOLECULAR DNA STATE ARCHIVAL".bold().to_string());
+    lines.push("Cold-Storage Base-4 Quaternary Encoding & Century-Scale World Preservation".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Archive Mode:           {}", summary.mode));
+    lines.push(format!("Synthesized Oligos:     {}", summary.total_oligos));
+    lines.push(format!("Total Nucleotides:      {}", summary.total_bases));
+    lines.push(format!("Total Chunks Archived:  {}", summary.active_archives));
+    lines.push(format!("Mean GC Content:        {:.2}%", summary.mean_gc_ratio * 100.0));
+    lines.push(format!("Physical Density:       {:.2} EB/mm3", summary.bit_density_eb_mm3));
+    lines.push(format!("Decay Half-Life:        {:.1} years", summary.decay_model.half_life_years()));
+    lines.push(format!("Sequencing Accuracy:    {:.2}%", summary.sequencing_accuracy_ratio * 100.0));
+    lines.push(format!("Homopolymer Violations: {}", summary.homopolymer_violations));
+    lines.push(format!("Simulated Retention:    {} years", summary.simulated_retention_years));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft dna status [--server <S>]            Inspect bio-molecular DNA archival telemetry".green().to_string());
+    lines.push("  craft dna mode -m <MODE>                   Configure DNA archival operational mode".green().to_string());
+    lines.push("  craft dna encode -x <X> -z <Z> -d <DIM>    Synthesize chunk into quaternary DNA oligos".green().to_string());
+    lines.push("  craft dna decode -i <OLIGO_ID>             Decode oligo back into binary chunk data".green().to_string());
+    lines.push("  craft dna decay -y <YEARS> -m <MODEL>      Simulate century-scale chemical decay".green().to_string());
+    lines.push("  craft dna bench [-c <CHUNKS>] [-o <OLIGOS>] Benchmark quaternary encoding & RS recovery".green().to_string());
+    lines.push("  craft dna reset-metrics                    Reset DNA telemetry counters".green().to_string());
+
+    show_modal_message("BIO-MOLECULAR DNA STATE ARCHIVAL & BASE-4 COLD STORAGE", &lines, false)?;
     Ok(())
 }
 

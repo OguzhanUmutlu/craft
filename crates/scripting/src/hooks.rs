@@ -129,6 +129,10 @@ pub enum LifecycleEvent {
     PtpClockDriftExceeded,
     PtpTrueTimeWindowAdjusted,
     PtpLeapSecondSmeared,
+    DnaOligoSynthesized,
+    DnaSequencingCompleted,
+    DnaDecayDetected,
+    DnaCenturyRetentionValidated,
 }
 
 impl LifecycleEvent {
@@ -252,6 +256,10 @@ impl LifecycleEvent {
             Self::PtpClockDriftExceeded => "on_ptp_clock_drift_exceeded",
             Self::PtpTrueTimeWindowAdjusted => "on_ptp_truetime_window_adjusted",
             Self::PtpLeapSecondSmeared => "on_ptp_leap_second_smeared",
+            Self::DnaOligoSynthesized => "on_dna_oligo_synthesized",
+            Self::DnaSequencingCompleted => "on_dna_sequencing_completed",
+            Self::DnaDecayDetected => "on_dna_decay_detected",
+            Self::DnaCenturyRetentionValidated => "on_dna_century_retention_validated",
         }
     }
 
@@ -376,6 +384,10 @@ impl LifecycleEvent {
             "on_ptp_clock_drift_exceeded" | "ptp_clock_drift_exceeded" | "drift_exceeded" => Some(Self::PtpClockDriftExceeded),
             "on_ptp_truetime_window_adjusted" | "ptp_truetime_window_adjusted" | "truetime_adjusted" => Some(Self::PtpTrueTimeWindowAdjusted),
             "on_ptp_leap_second_smeared" | "ptp_leap_second_smeared" | "leap_smear" => Some(Self::PtpLeapSecondSmeared),
+            "on_dna_oligo_synthesized" | "dna_oligo_synthesized" | "oligo_synthesized" => Some(Self::DnaOligoSynthesized),
+            "on_dna_sequencing_completed" | "dna_sequencing_completed" | "sequencing_completed" => Some(Self::DnaSequencingCompleted),
+            "on_dna_decay_detected" | "dna_decay_detected" | "decay_detected" => Some(Self::DnaDecayDetected),
+            "on_dna_century_retention_validated" | "dna_century_retention_validated" | "century_retention_validated" => Some(Self::DnaCenturyRetentionValidated),
             _ => None,
         }
     }
@@ -500,6 +512,10 @@ impl LifecycleEvent {
             Self::PtpClockDriftExceeded,
             Self::PtpTrueTimeWindowAdjusted,
             Self::PtpLeapSecondSmeared,
+            Self::DnaOligoSynthesized,
+            Self::DnaSequencingCompleted,
+            Self::DnaDecayDetected,
+            Self::DnaCenturyRetentionValidated,
         ]
     }
 }
@@ -844,6 +860,16 @@ pub struct HookContext {
     pub ptp_truetime_epsilon_ns: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ptp_master_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dna_oligo_id: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dna_base_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dna_gc_ratio: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dna_bit_density_eb_mm3: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dna_recovery_duration_ms: Option<f64>,
 }
 
 impl HookContext {
@@ -1606,6 +1632,54 @@ impl HookContext {
         ctx.details = Some(format!(
             "PTP leap second cosine smear active: {} second adjustment over 24h",
             leap_sec
+        ));
+        ctx
+    }
+
+    pub fn for_dna_oligo_synthesized(server: &str, oligo_id: u32, base_count: usize, gc_ratio: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::DnaOligoSynthesized);
+        ctx.server_name = Some(server.to_string());
+        ctx.dna_oligo_id = Some(oligo_id);
+        ctx.dna_base_count = Some(base_count);
+        ctx.dna_gc_ratio = Some(gc_ratio);
+        ctx.details = Some(format!(
+            "DNA oligo #{} synthesized: {} bases, GC ratio {:.2}%",
+            oligo_id, base_count, gc_ratio * 100.0
+        ));
+        ctx
+    }
+
+    pub fn for_dna_sequencing_completed(server: &str, oligo_id: u32, bit_density: f64, duration_ms: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::DnaSequencingCompleted);
+        ctx.server_name = Some(server.to_string());
+        ctx.dna_oligo_id = Some(oligo_id);
+        ctx.dna_bit_density_eb_mm3 = Some(bit_density);
+        ctx.dna_recovery_duration_ms = Some(duration_ms);
+        ctx.details = Some(format!(
+            "DNA sequencing completed for oligo #{}: {:.4} EB/mm3 density in {:.2}ms",
+            oligo_id, bit_density, duration_ms
+        ));
+        ctx
+    }
+
+    pub fn for_dna_decay_detected(server: &str, oligo_id: u32, damaged_bases: usize) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::DnaDecayDetected);
+        ctx.server_name = Some(server.to_string());
+        ctx.dna_oligo_id = Some(oligo_id);
+        ctx.dna_base_count = Some(damaged_bases);
+        ctx.details = Some(format!(
+            "DNA chemical decay detected in oligo #{}: {} damaged bases corrected via Reed-Solomon",
+            oligo_id, damaged_bases
+        ));
+        ctx
+    }
+
+    pub fn for_dna_century_retention_validated(server: &str, valid_chunks: usize, retention_years: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::DnaCenturyRetentionValidated);
+        ctx.server_name = Some(server.to_string());
+        ctx.details = Some(format!(
+            "DNA century-scale cold storage retention validated: {} chunks intact over {:.0} years",
+            valid_chunks, retention_years
         ));
         ctx
     }
@@ -2830,5 +2904,62 @@ mod tests {
         let smear_ctx = HookContext::for_ptp_leap_second_smeared("survival", 1);
         assert_eq!(smear_ctx.event, "on_ptp_leap_second_smeared");
         assert!(smear_ctx.details.unwrap().contains("24h"));
+    }
+
+    #[test]
+    fn test_dna_lifecycle_events_and_context() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_dna_oligo_synthesized"),
+            Some(LifecycleEvent::DnaOligoSynthesized)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("oligo_synthesized"),
+            Some(LifecycleEvent::DnaOligoSynthesized)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_dna_sequencing_completed"),
+            Some(LifecycleEvent::DnaSequencingCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("sequencing_completed"),
+            Some(LifecycleEvent::DnaSequencingCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_dna_decay_detected"),
+            Some(LifecycleEvent::DnaDecayDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("decay_detected"),
+            Some(LifecycleEvent::DnaDecayDetected)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_dna_century_retention_validated"),
+            Some(LifecycleEvent::DnaCenturyRetentionValidated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("century_retention_validated"),
+            Some(LifecycleEvent::DnaCenturyRetentionValidated)
+        );
+
+        let oligo_ctx = HookContext::for_dna_oligo_synthesized("survival", 101, 200, 0.48);
+        assert_eq!(oligo_ctx.event, "on_dna_oligo_synthesized");
+        assert_eq!(oligo_ctx.dna_oligo_id, Some(101));
+        assert_eq!(oligo_ctx.dna_base_count, Some(200));
+        assert_eq!(oligo_ctx.dna_gc_ratio, Some(0.48));
+
+        let seq_ctx = HookContext::for_dna_sequencing_completed("survival", 101, 0.215, 12.5);
+        assert_eq!(seq_ctx.event, "on_dna_sequencing_completed");
+        assert_eq!(seq_ctx.dna_oligo_id, Some(101));
+        assert_eq!(seq_ctx.dna_bit_density_eb_mm3, Some(0.215));
+        assert_eq!(seq_ctx.dna_recovery_duration_ms, Some(12.5));
+
+        let decay_ctx = HookContext::for_dna_decay_detected("survival", 101, 3);
+        assert_eq!(decay_ctx.event, "on_dna_decay_detected");
+        assert_eq!(decay_ctx.dna_oligo_id, Some(101));
+        assert_eq!(decay_ctx.dna_base_count, Some(3));
+
+        let century_ctx = HookContext::for_dna_century_retention_validated("survival", 64, 100.0);
+        assert_eq!(century_ctx.event, "on_dna_century_retention_validated");
+        assert!(century_ctx.details.unwrap().contains("100 years"));
     }
 }

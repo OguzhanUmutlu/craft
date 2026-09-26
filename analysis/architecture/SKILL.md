@@ -974,6 +974,39 @@ Phase 51 delivers sub-nanosecond clock synchronization, Precision Time Protocol 
   - Aliases: `craft clock`, `craft truetime`, `craft timesync`, `craft 1588`.
   - Full-screen centered interactive TUI panel (`Tools -> Sub-Atomic Quantum Clock Synchronization & TrueTime Sequencing`) powered by ModalX.
 
+### 3.28 Autonomous Bio-Molecular DNA State Archival, Cold-Storage Base-4 Encoding & Century-Scale World Preservation
+
+- **Foundational Base-4 Quaternary Models & Constraint Solvers (`craft-core`)**:
+  - `Nucleotide` quaternary alphabet: `A` (00), `C` (01), `G` (10), `T` (11) base-4 encoding and decoding (`bytes_to_nucleotides`, `nucleotides_to_bytes`).
+  - GC-content and homopolymer constraint solver: Pseudo-random whitening PRNG search (`solve_oligo_constraints`, `apply_whitening`) ensuring GC-ratio remains strictly bounded within 40%–60% and maximum homopolymer run lengths never exceed 3 identical consecutive bases.
+  - Cauchy Reed-Solomon Galois Field GF(256) parity arithmetic: Generates redundant error-correction parity blocks (`generate_rs_parity`, `recover_rs_parity`) over irreducible polynomial $0x11D$ ($x^8 + x^4 + x^3 + x^2 + 1$).
+  - Synthetic DNA oligonucleotide descriptor (`DnaOligo`), operational modes (`DnaArchiveMode`: Autonomous, SyntheticOligo, NanoporeSequencing, SimulatedHybrid, ReadOptimized), and decay simulation models (`DnaDecayModel`: HalfLife500Years, AcceleratedThermal, EnzymaticDegradation, ZeroDecayIdeal).
+  - Status summaries and benchmark telemetry (`DnaStatusSummary`, `DnaBenchmarkMetrics`, `DnaRegistry` with simulated century retention tracking).
+  - Advisory file locking (`dna.lock`) protecting persistent registry state under `~/.craft/dna/` (`dna_dir`, `dna_oligos_dir`, `dna_registry_file`, `dna_state_file`, `dna_lock`, `dna_oligo_path`).
+  - Plain-text table formatters with strictly zero emojis (`render_dna_status_table`, `render_dna_oligos_table`, `render_dna_archive_table`, `render_dna_bench_table`).
+- **Binary DNA Wire Framing, Nanopore Sequencer & Decay Engine (`craft-net`)**:
+  - `DnaSynthesisFrame`: Pure-Rust binary synthesis framing starting with 4-byte magic `0x444E4131` (`DNA1`), oligo ID, sequence length, and CRC-32 checksum.
+  - `NanoporeSequencer`: Simulates 5-mer ionic current squiggle basecalling with simulated Gaussian electrical noise, converting current deviations into discrete quaternary nucleotide calls.
+  - Century-scale chemical decay simulation (`simulate_dna_decay`): Simulates accelerated cytosine deamination ($C \to T$), hydrolytic depurination ($A \to G$), and double-strand break probabilities over centuries of simulated shelf storage.
+  - Synthetic chunk archival and recovery (`encode_chunk_to_oligos`, `decode_oligos_to_chunk`, `benchmark_dna_archival`): Achieves ~1.08 EB/mm$^3$ physical volumetric bit density and 100% loss-free chunk bitstream reconstruction across 500-year simulated retention.
+- **Daemon Supervision, DNA Archive Service & Prometheus Telemetry (`craft-daemon`)**:
+  - `DnaArchiveService`: Thread-safe supervisor singleton managing in-process oligo persistence, decay simulations, benchmark sweeps, registry serialization, and Prometheus telemetry exposition (`craft_dna_*`).
+  - 7 typed IPC requests and responses: `DnaGetStatus`, `DnaSetMode`, `DnaEncodeChunk`, `DnaDecodeOligo`, `DnaSimulateDecay`, `DnaRunBench`, `DnaResetMetrics`.
+  - Prometheus metrics exposition (`craft_dna_*`): `craft_dna_total_oligos`, `craft_dna_total_bases`, `craft_dna_active_archives`, `craft_dna_mean_gc_ratio`, `craft_dna_bit_density_eb_mm3`, `craft_dna_sequencing_accuracy_ratio`, `craft_dna_homopolymer_violations`, `craft_dna_simulated_retention_years`.
+- **Remote Federation & Scripting Hooks (`craft-remote`, `craft-scripting`)**:
+  - `RemoteCraftClient` provides `get_remote_dna_status`, `set_remote_dna_mode`, `encode_remote_dna_chunk`, `decode_remote_dna_oligo`, `simulate_remote_dna_decay`, `run_remote_dna_bench`, and `reset_remote_dna_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `DnaOligoSynthesized`, `DnaSequencingCompleted`, `DnaDecayDetected`, `DnaCenturyRetentionValidated` with structured molecular telemetry (`dna_oligo_id`, `dna_base_count`, `dna_gc_ratio`, `dna_bit_density_eb_mm3`, `dna_recovery_duration_ms`).
+- **Unified CLI Commands & ModalX Centered TUI (`craft-cli`)**:
+  - `craft dna status [--server <name>] [--json]`
+  - `craft dna mode -m <mode> [--server <name>] [--json]`
+  - `craft dna encode -x <X> -z <Z> -d <dim> -t <density> [--server <name>] [--json]`
+  - `craft dna decode -i <oligo-id> [--nanopore] [--server <name>] [--json]`
+  - `craft dna decay -y <years> -m <model> [--server <name>] [--json]`
+  - `craft dna bench [-c <chunks>] [-o <oligos>] [--json]`
+  - `craft dna reset-metrics [--server <name>] [--json]`
+  - Aliases: `craft bio`, `craft oligo`, `craft nucleotide`, `craft storage-dna`.
+  - Full-screen centered interactive TUI panel (`Tools -> Bio-Molecular DNA State Archival & Base-4 Cold Storage`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

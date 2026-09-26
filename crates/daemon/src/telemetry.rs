@@ -199,6 +199,7 @@ pub async fn generate_prometheus_metrics(
     out.push_str(&crate::neuromorphic_service::NeuromorphicService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::optical_service::OpticalSwitchService::global(paths).generate_prometheus_metrics());
     out.push_str(&crate::ptp_service::PtpClockService::global(paths).generate_prometheus_metrics());
+    out.push_str(&crate::dna_service::DnaArchiveService::global(paths).generate_prometheus_metrics());
 
     out
 }

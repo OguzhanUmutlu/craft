@@ -174,6 +174,11 @@ pub struct CraftPaths {
     pub ptp_registry_file: PathBuf,
     pub ptp_state_file: PathBuf,
     pub ptp_lock: PathBuf,
+    pub dna_dir: PathBuf,
+    pub dna_oligos_dir: PathBuf,
+    pub dna_registry_file: PathBuf,
+    pub dna_state_file: PathBuf,
+    pub dna_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -347,6 +352,11 @@ impl CraftPaths {
         let ptp_registry_file = ptp_dir.join("registry.json");
         let ptp_state_file = ptp_dir.join("state.json");
         let ptp_lock = locks_dir.join("ptp.lock");
+        let dna_dir = home.join("dna");
+        let dna_oligos_dir = dna_dir.join("oligos");
+        let dna_registry_file = dna_dir.join("dna.toml");
+        let dna_state_file = dna_dir.join("state.json");
+        let dna_lock = locks_dir.join("dna.lock");
 
         Self {
             home,
@@ -518,6 +528,11 @@ impl CraftPaths {
             ptp_registry_file,
             ptp_state_file,
             ptp_lock,
+            dna_dir,
+            dna_oligos_dir,
+            dna_registry_file,
+            dna_state_file,
+            dna_lock,
         }
     }
 
@@ -778,8 +793,13 @@ impl CraftPaths {
         let ptp_registry_file = ptp_dir.join("registry.json");
         let ptp_state_file = ptp_dir.join("state.json");
         let ptp_lock = locks_dir.join("ptp.lock");
+        let dna_dir = home.join("dna");
+        let dna_oligos_dir = dna_dir.join("oligos");
+        let dna_registry_file = dna_dir.join("dna.toml");
+        let dna_state_file = dna_dir.join("state.json");
+        let dna_lock = locks_dir.join("dna.lock");
 
-        for d in &[&optical_dir, &optical_circuits_dir, &ptp_dir, &ptp_timestamps_dir] {
+        for d in &[&optical_dir, &optical_circuits_dir, &ptp_dir, &ptp_timestamps_dir, &dna_dir, &dna_oligos_dir] {
             if !d.exists() {
                 fs::create_dir_all(d)?;
             }
@@ -955,7 +975,17 @@ impl CraftPaths {
             ptp_registry_file,
             ptp_state_file,
             ptp_lock,
+            dna_dir,
+            dna_oligos_dir,
+            dna_registry_file,
+            dna_state_file,
+            dna_lock,
         })
+    }
+
+    /// Returns the oligo storage path for a specific oligo ID
+    pub fn dna_oligo_path(&self, oligo_id: u32) -> PathBuf {
+        self.dna_oligos_dir.join(format!("oligo_{}.dna", oligo_id))
     }
 
     /// Returns the timestamp trace path for a specific clock ID

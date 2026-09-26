@@ -38,6 +38,7 @@ pub mod jitter;
 pub mod neuromorphic;
 pub mod optical;
 pub mod ptp;
+pub mod dna;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -159,6 +160,10 @@ pub use optical::{
 pub use ptp::{
     benchmark_ptp_clock_sync, generate_ptp_status_summary, PtpClockServo, PtpMessage,
     PtpMessageType, TrueTimeEngine, PTP_FRAME_MAGIC, PTP_HEADER_SIZE,
+};
+pub use dna::{
+    benchmark_dna_archival, decode_oligos_to_chunk, encode_chunk_to_oligos, simulate_dna_decay,
+    DnaSynthesisFrame, NanoporeSequencer, RawSquiggle, DNA_FRAME_MAGIC, SEGMENT_PAYLOAD_SIZE,
 };
 
 

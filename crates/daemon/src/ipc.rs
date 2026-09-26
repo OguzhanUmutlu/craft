@@ -2380,6 +2380,66 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::DnaGetStatus { server } => {
+                let service = crate::dna_service::DnaArchiveService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(status) => IpcResponse::DnaStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::DnaSetMode { server, mode } => {
+                let service = crate::dna_service::DnaArchiveService::global(supervisor.paths());
+                let parsed_mode = mode.parse::<craft_core::dna::DnaArchiveMode>().unwrap_or(craft_core::dna::DnaArchiveMode::Autonomous);
+                let resp = match service.set_mode(parsed_mode, server.as_deref()) {
+                    Ok(_) => IpcResponse::DnaModeUpdated { success: true, mode: parsed_mode.to_string() },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::DnaEncodeChunk { server, chunk_x, chunk_z, dimension, data } => {
+                let service = crate::dna_service::DnaArchiveService::global(supervisor.paths());
+                let resp = match service.encode_chunk(chunk_x, chunk_z, &dimension, &data, server.as_deref()) {
+                    Ok(descriptor) => IpcResponse::DnaEncodeResult { descriptor },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::DnaDecodeOligo { server, oligo_id } => {
+                let service = crate::dna_service::DnaArchiveService::global(supervisor.paths());
+                let resp = match service.decode_oligo(oligo_id, server.as_deref()) {
+                    Ok(payload) => IpcResponse::DnaDecodeResult { oligo_id, bytes_len: payload.len(), payload },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::DnaSimulateDecay { server, years, decay_model } => {
+                let service = crate::dna_service::DnaArchiveService::global(supervisor.paths());
+                let parsed_model = decay_model.parse::<craft_core::dna::DnaDecayModel>().unwrap_or(craft_core::dna::DnaDecayModel::HalfLife500Years);
+                let resp = match service.simulate_decay(years, parsed_model, server.as_deref()) {
+                    Ok(status) => IpcResponse::DnaDecayResult { simulated_years: years, decay_model: parsed_model.to_string(), status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::DnaRunBench { chunks, oligos_per_chunk } => {
+                let service = crate::dna_service::DnaArchiveService::global(supervisor.paths());
+                let c = chunks.unwrap_or(5);
+                let o = oligos_per_chunk.unwrap_or(8);
+                let resp = match service.run_bench(c, o) {
+                    Ok(metrics) => IpcResponse::DnaBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::DnaResetMetrics { .. } => {
+                let service = crate::dna_service::DnaArchiveService::global(supervisor.paths());
+                let resp = match service.reset_metrics() {
+                    Ok(success) => IpcResponse::DnaResetResult { success },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -5426,6 +5486,122 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::PtpResetResult { success } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_dna_status(&mut self, server: Option<&str>) -> Result<craft_core::dna::DnaStatusSummary> {
+        match self
+            .request(IpcRequest::DnaGetStatus {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::DnaStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_dna_mode(&mut self, mode: &str, server: Option<&str>) -> Result<String> {
+        match self
+            .request(IpcRequest::DnaSetMode {
+                server: server.map(|s| s.to_string()),
+                mode: mode.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::DnaModeUpdated { mode, .. } => Ok(mode),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn encode_dna_chunk(
+        &mut self,
+        chunk_x: i32,
+        chunk_z: i32,
+        dimension: &str,
+        data: Vec<u8>,
+        server: Option<&str>,
+    ) -> Result<craft_core::dna::DnaChunkArchiveDescriptor> {
+        match self
+            .request(IpcRequest::DnaEncodeChunk {
+                server: server.map(|s| s.to_string()),
+                chunk_x,
+                chunk_z,
+                dimension: dimension.to_string(),
+                data,
+            })
+            .await?
+        {
+            IpcResponse::DnaEncodeResult { descriptor } => Ok(descriptor),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn decode_dna_oligo(&mut self, oligo_id: u32, server: Option<&str>) -> Result<Vec<u8>> {
+        match self
+            .request(IpcRequest::DnaDecodeOligo {
+                server: server.map(|s| s.to_string()),
+                oligo_id,
+            })
+            .await?
+        {
+            IpcResponse::DnaDecodeResult { payload, .. } => Ok(payload),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn simulate_dna_decay(
+        &mut self,
+        years: u64,
+        decay_model: &str,
+        server: Option<&str>,
+    ) -> Result<craft_core::dna::DnaStatusSummary> {
+        match self
+            .request(IpcRequest::DnaSimulateDecay {
+                server: server.map(|s| s.to_string()),
+                years,
+                decay_model: decay_model.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::DnaDecayResult { status, .. } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_dna_bench(
+        &mut self,
+        chunks: Option<usize>,
+        oligos_per_chunk: Option<usize>,
+    ) -> Result<craft_core::dna::DnaBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::DnaRunBench {
+                chunks,
+                oligos_per_chunk,
+            })
+            .await?
+        {
+            IpcResponse::DnaBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_dna_metrics(&mut self, server: Option<&str>) -> Result<bool> {
+        match self
+            .request(IpcRequest::DnaResetMetrics {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::DnaResetResult { success } => Ok(success),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

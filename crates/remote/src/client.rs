@@ -3178,6 +3178,155 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Gets DNA archival status from the remote host
+    pub fn get_remote_dna_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft dna status".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote DNA status query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Sets DNA archival mode on the remote host
+    pub fn set_remote_dna_mode(&self, mode: &str, server: Option<&str>) -> Result<String> {
+        let mut cmd = format!("craft dna mode -m {}", mode);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote DNA mode set failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Encodes a Minecraft chunk into DNA oligonucleotides on the remote host
+    pub fn encode_remote_dna_chunk(
+        &self,
+        chunk_x: i32,
+        chunk_z: i32,
+        dimension: &str,
+        density_target: u32,
+        server: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!(
+            "craft dna encode -x {} -z {} -d {} -t {}",
+            chunk_x, chunk_z, dimension, density_target
+        );
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote DNA encode failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Decodes an oligonucleotide back into binary data on the remote host
+    pub fn decode_remote_dna_oligo(
+        &self,
+        oligo_id: u32,
+        simulate_nanopore: bool,
+        server: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!("craft dna decode -i {}", oligo_id);
+        if simulate_nanopore {
+            cmd.push_str(" --nanopore");
+        }
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote DNA decode failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Simulates chemical decay on oligonucleotides on the remote host
+    pub fn simulate_remote_dna_decay(
+        &self,
+        elapsed_years: f64,
+        temperature_c: f64,
+        ph: f64,
+        server: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!(
+            "craft dna decay -y {} -t {} -p {}",
+            elapsed_years, temperature_c, ph
+        );
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote DNA decay simulation failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs bio-molecular DNA archival benchmark on the remote host
+    pub fn run_remote_dna_bench(&self, iterations: u32, chunk_size_kb: u32) -> Result<String> {
+        let cmd = format!("craft dna bench -i {} -s {} --json", iterations, chunk_size_kb);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote DNA bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets bio-molecular DNA archival metrics on the remote host
+    pub fn reset_remote_dna_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft dna reset-metrics".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote DNA metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

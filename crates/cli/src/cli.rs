@@ -738,6 +738,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<PtpCommands>,
     },
+    /// Autonomous Bio-Molecular DNA State Archival, Cold-Storage Base-4 Encoding & Century-Scale World Preservation
+    #[command(name = "dna", alias = "bio", alias = "oligo", alias = "nucleotide", alias = "storage-dna")]
+    Dna {
+        #[command(subcommand)]
+        action: Option<DnaCommands>,
+    },
 }
 
 
@@ -3398,6 +3404,109 @@ pub enum PtpCommands {
         json: bool,
     },
 }
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum DnaCommands {
+    /// Inspect bio-molecular DNA archival status, nucleotide counts, and decay health
+    Status {
+        /// Filter by server or world name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Configure DNA archival operational mode (Autonomous, ColdArchive, HybridParity, DeepCenturyPreservation, NanoporeVerifyOnly)
+    #[command(name = "mode", alias = "set-mode", alias = "archive-mode")]
+    Mode {
+        /// Target server or world name
+        #[arg(short, long, default_value = "default")]
+        server: String,
+        /// Operational mode (autonomous, cold-archive, hybrid-parity, deep-century, verify-only)
+        #[arg(short, long, default_value = "autonomous")]
+        mode: String,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Synthesize and encode a Minecraft chunk into quaternary DNA oligonucleotides
+    #[command(name = "encode", alias = "synthesize", alias = "write")]
+    Encode {
+        /// Chunk X coordinate
+        #[arg(short = 'x', long, default_value_t = 0, allow_hyphen_values = true)]
+        chunk_x: i32,
+        /// Chunk Z coordinate
+        #[arg(short = 'z', long, default_value_t = 0, allow_hyphen_values = true)]
+        chunk_z: i32,
+        /// World dimension (overworld, the_nether, the_end)
+        #[arg(short = 'd', long, default_value = "overworld")]
+        dimension: String,
+        /// Target bit density in Exabytes per cubic millimeter (1 to 1000)
+        #[arg(short = 't', long, default_value_t = 215)]
+        density_target: u32,
+        /// Target server or world name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Decode and sequence an oligonucleotide back into binary chunk data
+    #[command(name = "decode", alias = "sequence", alias = "read")]
+    Decode {
+        /// Oligo identifier to decode
+        #[arg(short = 'i', long, default_value_t = 1)]
+        oligo_id: u32,
+        /// Simulate Oxford Nanopore squiggle basecalling with ionic current
+        #[arg(long)]
+        nanopore: bool,
+        /// Target server or world name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Simulate accelerated chemical decay over elapsed retention years
+    #[command(name = "decay", alias = "age", alias = "simulate-decay")]
+    Decay {
+        /// Simulated elapsed time in years
+        #[arg(short = 'y', long, default_value_t = 100)]
+        years: u64,
+        /// Decay model (half-life-500-years, accelerated-thermal, enzymatic-degradation, zero-decay-ideal)
+        #[arg(short = 'm', long, default_value = "half-life-500-years")]
+        model: String,
+        /// Target server or world name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark bio-molecular base-4 quaternary encoding, constraint solving, and Reed-Solomon recovery
+    Bench {
+        /// Number of benchmark chunks
+        #[arg(short, long, default_value_t = 10)]
+        chunks: usize,
+        /// Number of oligos per chunk
+        #[arg(short, long, default_value_t = 8)]
+        oligos: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset DNA telemetry counters, decay tracking, and benchmark metrics
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
+        /// Target server or world name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 
 
 #[derive(Subcommand, Debug, Clone, PartialEq)]
@@ -7493,6 +7602,100 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Ptp Bench command"),
+        }
+    }
+
+    #[test]
+    fn test_dna_cli_commands() {
+        // DNA status alias and parsing
+        let cli_status = Cli::try_parse_from([
+            "craft", "bio", "status", "-s", "world_nether", "--json"
+        ]).unwrap();
+        match cli_status.command {
+            Some(Commands::Dna {
+                action: Some(DnaCommands::Status { server, json }),
+            }) => {
+                assert_eq!(server.as_deref(), Some("world_nether"));
+                assert!(json);
+            }
+            _ => panic!("Expected Dna Status command"),
+        }
+
+        // DNA mode alias and set
+        let cli_mode = Cli::try_parse_from([
+            "craft", "oligo", "mode", "-m", "cold-archive", "-s", "default", "--json"
+        ]).unwrap();
+        match cli_mode.command {
+            Some(Commands::Dna {
+                action: Some(DnaCommands::Mode { mode, server, json }),
+            }) => {
+                assert_eq!(mode, "cold-archive");
+                assert_eq!(server, "default");
+                assert!(json);
+            }
+            _ => panic!("Expected Dna Mode command"),
+        }
+
+        // DNA encode alias
+        let cli_encode = Cli::try_parse_from([
+            "craft", "nucleotide", "encode", "-x", "12", "-z", "-34", "-d", "overworld", "-t", "350", "--json"
+        ]).unwrap();
+        match cli_encode.command {
+            Some(Commands::Dna {
+                action: Some(DnaCommands::Encode { chunk_x, chunk_z, dimension, density_target, json, .. }),
+            }) => {
+                assert_eq!(chunk_x, 12);
+                assert_eq!(chunk_z, -34);
+                assert_eq!(dimension, "overworld");
+                assert_eq!(density_target, 350);
+                assert!(json);
+            }
+            _ => panic!("Expected Dna Encode command"),
+        }
+
+        // DNA decode alias
+        let cli_decode = Cli::try_parse_from([
+            "craft", "storage-dna", "decode", "-i", "42", "--nanopore", "--json"
+        ]).unwrap();
+        match cli_decode.command {
+            Some(Commands::Dna {
+                action: Some(DnaCommands::Decode { oligo_id, nanopore, json, .. }),
+            }) => {
+                assert_eq!(oligo_id, 42);
+                assert!(nanopore);
+                assert!(json);
+            }
+            _ => panic!("Expected Dna Decode command"),
+        }
+
+        // DNA decay alias
+        let cli_decay = Cli::try_parse_from([
+            "craft", "dna", "decay", "-y", "250", "-m", "accelerated-thermal", "--json"
+        ]).unwrap();
+        match cli_decay.command {
+            Some(Commands::Dna {
+                action: Some(DnaCommands::Decay { years, model, json, .. }),
+            }) => {
+                assert_eq!(years, 250);
+                assert_eq!(model, "accelerated-thermal");
+                assert!(json);
+            }
+            _ => panic!("Expected Dna Decay command"),
+        }
+
+        // DNA bench alias
+        let cli_bench = Cli::try_parse_from([
+            "craft", "dna", "bench", "-c", "50", "-o", "16", "--json"
+        ]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Dna {
+                action: Some(DnaCommands::Bench { chunks, oligos, json }),
+            }) => {
+                assert_eq!(chunks, 50);
+                assert_eq!(oligos, 16);
+                assert!(json);
+            }
+            _ => panic!("Expected Dna Bench command"),
         }
     }
 }

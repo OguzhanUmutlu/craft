@@ -55,6 +55,7 @@ pub mod jitter;
 pub mod neuromorphic;
 pub mod optical;
 pub mod ptp;
+pub mod dna;
 
 pub use anvil::{
     chunk_coords_to_index, compress_payload, decompress_payload, region_coords_from_chunk,
@@ -290,6 +291,14 @@ pub use ptp::{
     render_ptp_bench_table, render_ptp_peers_table, render_ptp_status_table, render_truetime_table,
     CausalityVectorClock, ClockAccuracy, ClockClass, ClockServoMode, PtpBenchmarkMetrics,
     PtpPeer, PtpPortRole, PtpRegistry, PtpStatusSummary, TrueTimeInterval,
+};
+pub use dna::{
+    apply_whitening, bytes_to_nucleotides, calculate_gc_ratio, calculate_max_homopolymer,
+    generate_rs_parity, gf_add, gf_mul, nucleotides_to_bytes, recover_rs_parity,
+    render_dna_bench_table, render_dna_oligos_table, render_dna_status_table,
+    solve_oligo_constraints, DnaArchiveMode, DnaBenchmarkMetrics, DnaChunkArchiveDescriptor,
+    DnaDecayModel, DnaOligo, DnaRegistry, DnaStatusSummary, Nucleotide, DEFAULT_FORWARD_PRIMER,
+    DEFAULT_REVERSE_PRIMER,
 };
 
 pub const CRAFT_VERSION: &str = env!("CARGO_PKG_VERSION");

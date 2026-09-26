@@ -662,6 +662,36 @@ pub enum IpcRequest {
     PtpResetMetrics {
         server: Option<String>,
     },
+    DnaGetStatus {
+        server: Option<String>,
+    },
+    DnaSetMode {
+        server: Option<String>,
+        mode: String,
+    },
+    DnaEncodeChunk {
+        server: Option<String>,
+        chunk_x: i32,
+        chunk_z: i32,
+        dimension: String,
+        data: Vec<u8>,
+    },
+    DnaDecodeOligo {
+        server: Option<String>,
+        oligo_id: u32,
+    },
+    DnaSimulateDecay {
+        server: Option<String>,
+        years: u64,
+        decay_model: String,
+    },
+    DnaRunBench {
+        chunks: Option<usize>,
+        oligos_per_chunk: Option<usize>,
+    },
+    DnaResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1272,6 +1302,32 @@ pub enum IpcResponse {
         metrics: craft_core::PtpBenchmarkMetrics,
     },
     PtpResetResult {
+        success: bool,
+    },
+    DnaStatusResult {
+        status: craft_core::dna::DnaStatusSummary,
+    },
+    DnaModeUpdated {
+        success: bool,
+        mode: String,
+    },
+    DnaEncodeResult {
+        descriptor: craft_core::dna::DnaChunkArchiveDescriptor,
+    },
+    DnaDecodeResult {
+        oligo_id: u32,
+        bytes_len: usize,
+        payload: Vec<u8>,
+    },
+    DnaDecayResult {
+        simulated_years: u64,
+        decay_model: String,
+        status: craft_core::dna::DnaStatusSummary,
+    },
+    DnaBenchResult {
+        metrics: craft_core::dna::DnaBenchmarkMetrics,
+    },
+    DnaResetResult {
         success: bool,
     },
     Error { error: String },
