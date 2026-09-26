@@ -39,6 +39,7 @@ pub mod neuromorphic;
 pub mod optical;
 pub mod ptp;
 pub mod dna;
+pub mod cpo;
 
 
 pub use a2s::{ping_a2s_server, A2sPingStatus};
@@ -164,6 +165,10 @@ pub use ptp::{
 pub use dna::{
     benchmark_dna_archival, decode_oligos_to_chunk, encode_chunk_to_oligos, simulate_dna_decay,
     DnaSynthesisFrame, NanoporeSequencer, RawSquiggle, DNA_FRAME_MAGIC, SEGMENT_PAYLOAD_SIZE,
+};
+pub use cpo::{
+    benchmark_cpo_interconnect, CpoTensorFrame, CpoThermalRegulator, PhotonicTensorEngine,
+    CPO_FRAME_MAGIC, FLAG_ANALOG_MVM, FLAG_LOOPBACK, FLAG_THERMAL_STABILIZED,
 };
 
 

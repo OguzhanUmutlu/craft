@@ -2440,6 +2440,70 @@ where
                 };
                 write_frame(&mut stream, &resp).await?;
             }
+            IpcRequest::CpoGetStatus { server } => {
+                let service = crate::cpo_service::CpoService::global(supervisor.paths());
+                let resp = match service.get_status(server.as_deref()) {
+                    Ok(status) => IpcResponse::CpoStatusResult { status },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CpoSetMode { server, mode } => {
+                let service = crate::cpo_service::CpoService::global(supervisor.paths());
+                let parsed_mode = mode.parse::<craft_core::cpo::CpoMode>().unwrap_or(craft_core::cpo::CpoMode::Autonomous);
+                let resp = match service.set_mode(parsed_mode, server.as_deref()) {
+                    Ok(_) => IpcResponse::CpoModeUpdated { success: true, mode: parsed_mode.to_string() },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CpoExecuteMvm { server, input } => {
+                let service = crate::cpo_service::CpoService::global(supervisor.paths());
+                let resp = match service.execute_mvm(&input, server.as_deref()) {
+                    Ok((output, mac_ops, latency_ps, energy_pj)) => IpcResponse::CpoMvmResult {
+                        output,
+                        mac_ops,
+                        latency_ps,
+                        energy_pj,
+                    },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CpoAdjustThermal { server, temp_c } => {
+                let service = crate::cpo_service::CpoService::global(supervisor.paths());
+                let resp = match service.adjust_thermal(temp_c, server.as_deref()) {
+                    Ok(servo_state) => IpcResponse::CpoThermalAdjustResult { servo_state },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CpoListTiles { server } => {
+                let service = crate::cpo_service::CpoService::global(supervisor.paths());
+                let resp = match service.list_tiles(server.as_deref()) {
+                    Ok(tiles) => IpcResponse::CpoTilesResult { tiles },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CpoRunBench { iterations, vector_dim } => {
+                let service = crate::cpo_service::CpoService::global(supervisor.paths());
+                let iters = iterations.unwrap_or(500);
+                let dim = vector_dim.unwrap_or(4);
+                let resp = match service.run_bench(iters, dim, None) {
+                    Ok(metrics) => IpcResponse::CpoBenchResult { metrics },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
+            IpcRequest::CpoResetMetrics { server } => {
+                let service = crate::cpo_service::CpoService::global(supervisor.paths());
+                let resp = match service.reset_metrics(server.as_deref()) {
+                    Ok(success) => IpcResponse::CpoResetResult { success },
+                    Err(e) => IpcResponse::Error { error: e.to_string() },
+                };
+                write_frame(&mut stream, &resp).await?;
+            }
             IpcRequest::ShutdownDaemon => {
                 write_frame(
                     &mut stream,
@@ -5602,6 +5666,121 @@ impl DaemonClient {
             .await?
         {
             IpcResponse::DnaResetResult { success } => Ok(success),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn get_cpo_status(&mut self, server: Option<&str>) -> Result<craft_core::cpo::CpoStatusSummary> {
+        match self
+            .request(IpcRequest::CpoGetStatus {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::CpoStatusResult { status } => Ok(status),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn set_cpo_mode(&mut self, mode: &str, server: Option<&str>) -> Result<String> {
+        match self
+            .request(IpcRequest::CpoSetMode {
+                server: server.map(|s| s.to_string()),
+                mode: mode.to_string(),
+            })
+            .await?
+        {
+            IpcResponse::CpoModeUpdated { mode, .. } => Ok(mode),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn execute_cpo_mvm(
+        &mut self,
+        input: Vec<f32>,
+        server: Option<&str>,
+    ) -> Result<(Vec<f32>, u64, f64, f64)> {
+        match self
+            .request(IpcRequest::CpoExecuteMvm {
+                server: server.map(|s| s.to_string()),
+                input,
+            })
+            .await?
+        {
+            IpcResponse::CpoMvmResult {
+                output,
+                mac_ops,
+                latency_ps,
+                energy_pj,
+            } => Ok((output, mac_ops, latency_ps, energy_pj)),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn adjust_cpo_thermal(
+        &mut self,
+        temp_c: f64,
+        server: Option<&str>,
+    ) -> Result<craft_core::cpo::CpoThermalServoState> {
+        match self
+            .request(IpcRequest::CpoAdjustThermal {
+                server: server.map(|s| s.to_string()),
+                temp_c,
+            })
+            .await?
+        {
+            IpcResponse::CpoThermalAdjustResult { servo_state } => Ok(servo_state),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn list_cpo_tiles(
+        &mut self,
+        server: Option<&str>,
+    ) -> Result<Vec<craft_core::cpo::CpoTileDescriptor>> {
+        match self
+            .request(IpcRequest::CpoListTiles {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::CpoTilesResult { tiles } => Ok(tiles),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn run_cpo_bench(
+        &mut self,
+        iterations: Option<usize>,
+        vector_dim: Option<usize>,
+    ) -> Result<craft_core::cpo::CpoBenchmarkMetrics> {
+        match self
+            .request(IpcRequest::CpoRunBench {
+                iterations,
+                vector_dim,
+            })
+            .await?
+        {
+            IpcResponse::CpoBenchResult { metrics } => Ok(metrics),
+            IpcResponse::Error { error } => Err(CraftError::Other(error)),
+            _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
+        }
+    }
+
+    pub async fn reset_cpo_metrics(&mut self, server: Option<&str>) -> Result<bool> {
+        match self
+            .request(IpcRequest::CpoResetMetrics {
+                server: server.map(|s| s.to_string()),
+            })
+            .await?
+        {
+            IpcResponse::CpoResetResult { success } => Ok(success),
             IpcResponse::Error { error } => Err(CraftError::Other(error)),
             _ => Err(CraftError::Ipc("Unexpected response from daemon".to_string())),
         }

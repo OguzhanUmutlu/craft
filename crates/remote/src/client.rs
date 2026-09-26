@@ -3327,6 +3327,145 @@ impl RemoteCraftClient {
         }
         Ok(stdout.trim().to_string())
     }
+
+    /// Gets CPO status from the remote host
+    pub fn get_remote_cpo_status(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft cpo status".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote CPO status query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Sets CPO operational mode on the remote host
+    pub fn set_remote_cpo_mode(&self, mode: &str, server: Option<&str>) -> Result<String> {
+        let mut cmd = format!("craft cpo mode -m {}", mode);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote CPO mode set failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Executes optical tensor matrix-vector multiplication on the remote host
+    pub fn execute_remote_cpo_mvm(
+        &self,
+        vector: &[f32],
+        server: Option<&str>,
+    ) -> Result<String> {
+        let vector_str = vector
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut cmd = format!("craft cpo mvm -v {}", vector_str);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote CPO MVM execution failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Adjusts micro-ring heater thermal servo setpoint on the remote host
+    pub fn adjust_remote_cpo_thermal(
+        &self,
+        temp_c: f64,
+        server: Option<&str>,
+    ) -> Result<String> {
+        let mut cmd = format!("craft cpo thermal -t {}", temp_c);
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote CPO thermal adjust failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Lists optical tiles on the silicon substrate on the remote host
+    pub fn list_remote_cpo_tiles(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft cpo tiles".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote CPO tiles query failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Runs co-packaged optics tensor benchmark on the remote host
+    pub fn run_remote_cpo_bench(
+        &self,
+        iterations: u32,
+        dim: u32,
+    ) -> Result<String> {
+        let cmd = format!("craft cpo bench -i {} -d {} --json", iterations, dim);
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote CPO bench failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
+
+    /// Resets co-packaged optics performance metrics on the remote host
+    pub fn reset_remote_cpo_metrics(&self, server: Option<&str>) -> Result<String> {
+        let mut cmd = "craft cpo reset-metrics".to_string();
+        if let Some(s) = server {
+            cmd.push_str(&format!(" --server {}", s));
+        }
+        cmd.push_str(" --json");
+        let (code, stdout, stderr) = self.session.exec(&cmd)?;
+        if code != 0 {
+            let err = if !stderr.trim().is_empty() { stderr } else { stdout };
+            return Err(CraftError::Other(format!(
+                "Remote CPO metrics reset failed: {}",
+                err.trim()
+            )));
+        }
+        Ok(stdout.trim().to_string())
+    }
 }
 
 #[cfg(test)]

@@ -75,3 +75,4 @@ pub mod neuromorphic;
 pub mod optical;
 pub mod ptp;
 pub mod dna;
+pub mod cpo;

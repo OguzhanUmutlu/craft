@@ -1820,6 +1820,7 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
             OpticalNetworkSwitching,
             QuantumClockSynchronization,
             BioMolecularDnaArchival,
+            CoPackagedOpticsInterconnect,
             #[cfg(target_os = "windows")]
             Loopback,
             PurgeCache,
@@ -2159,6 +2160,16 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
         actions.push(ToolItemAction::BioMolecularDnaArchival);
         num += 1;
 
+        entries.push(
+            MenuEntry::new(
+                num.to_string(),
+                "Silicon Photonic CPO & Direct Die Interconnect",
+            )
+            .with_aliases(&["cpo", "die-optics", "cpo-mesh", "photonic-mvm", "silicon-optics"]),
+        );
+        actions.push(ToolItemAction::CoPackagedOpticsInterconnect);
+        num += 1;
+
         #[cfg(target_os = "windows")]
         {
             entries.push(
@@ -2290,6 +2301,9 @@ pub async fn tools_menu(paths: &CraftPaths) -> Result<()> {
                 }
                 ToolItemAction::BioMolecularDnaArchival => {
                     dna_tui(paths).await?;
+                }
+                ToolItemAction::CoPackagedOpticsInterconnect => {
+                    cpo_tui(paths).await?;
                 }
                 #[cfg(target_os = "windows")]
                 ToolItemAction::Loopback => {
@@ -4445,6 +4459,37 @@ async fn dna_tui(paths: &CraftPaths) -> Result<()> {
     lines.push("  craft dna reset-metrics                    Reset DNA telemetry counters".green().to_string());
 
     show_modal_message("BIO-MOLECULAR DNA STATE ARCHIVAL & BASE-4 COLD STORAGE", &lines, false)?;
+    Ok(())
+}
+
+async fn cpo_tui(paths: &CraftPaths) -> Result<()> {
+    let service = craft_daemon::cpo_service::CpoService::global(paths);
+    let summary = service.get_status(None)?;
+
+    let mut lines = Vec::new();
+    lines.push("AUTONOMOUS SILICON PHOTONIC CO-PACKAGED OPTICS (CPO)".bold().to_string());
+    lines.push("Optical Neural Matrix Multiply & Sub-Nanosecond Direct Die Interconnects".dimmed().to_string());
+    lines.push("".to_string());
+    lines.push(format!("Operational Mode:       {}", summary.mode));
+    lines.push(format!("Thermal Status:         {}", summary.thermal_status));
+    lines.push(format!("Substrate Temperature:  {:.2} deg C", summary.substrate_temp_c));
+    lines.push(format!("Active Optical Tiles:   {}/{}", summary.active_tiles, summary.total_tiles));
+    lines.push(format!("Aggregate Bandwidth:    {:.2} Tbps", summary.aggregate_bandwidth_tbps));
+    lines.push(format!("Mean Die Latency:       {:.1} ps", summary.average_latency_ps));
+    lines.push(format!("Micro-Ring Resonators:  {}", summary.total_rings));
+    lines.push(format!("Photonic MVM Compute:   {:.1} TOPS", summary.mvm_throughput_tops));
+    lines.push(format!("Energy Efficiency:      {:.3} pJ/MAC", summary.energy_efficiency_pj_per_mac));
+    lines.push("".to_string());
+    lines.push("CLI Commands:".dimmed().to_string());
+    lines.push("  craft cpo status [--server <S>]            Inspect silicon photonic CPO telemetry".green().to_string());
+    lines.push("  craft cpo mode -m <MODE>                   Configure CPO operational mode".green().to_string());
+    lines.push("  craft cpo mvm -v <V1,V2,...>               Execute photonic matrix-vector multiplication".green().to_string());
+    lines.push("  craft cpo thermal -t <TEMP_C>              Regulate micro-ring thermal servo setpoint".green().to_string());
+    lines.push("  craft cpo tiles                            List optical tiles on silicon substrate".green().to_string());
+    lines.push("  craft cpo bench [-i <ITERS>] [-d <DIM>]    Benchmark photonic tensor MVM throughput".green().to_string());
+    lines.push("  craft cpo reset-metrics                    Reset optical telemetry counters".green().to_string());
+
+    show_modal_message("SILICON PHOTONIC CO-PACKAGED OPTICS & TENSOR MVM", &lines, false)?;
     Ok(())
 }
 

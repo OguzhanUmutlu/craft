@@ -692,6 +692,31 @@ pub enum IpcRequest {
     DnaResetMetrics {
         server: Option<String>,
     },
+    CpoGetStatus {
+        server: Option<String>,
+    },
+    CpoSetMode {
+        server: Option<String>,
+        mode: String,
+    },
+    CpoExecuteMvm {
+        server: Option<String>,
+        input: Vec<f32>,
+    },
+    CpoAdjustThermal {
+        server: Option<String>,
+        temp_c: f64,
+    },
+    CpoListTiles {
+        server: Option<String>,
+    },
+    CpoRunBench {
+        iterations: Option<usize>,
+        vector_dim: Option<usize>,
+    },
+    CpoResetMetrics {
+        server: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1328,6 +1353,31 @@ pub enum IpcResponse {
         metrics: craft_core::dna::DnaBenchmarkMetrics,
     },
     DnaResetResult {
+        success: bool,
+    },
+    CpoStatusResult {
+        status: craft_core::cpo::CpoStatusSummary,
+    },
+    CpoModeUpdated {
+        success: bool,
+        mode: String,
+    },
+    CpoMvmResult {
+        output: Vec<f32>,
+        mac_ops: u64,
+        latency_ps: f64,
+        energy_pj: f64,
+    },
+    CpoThermalAdjustResult {
+        servo_state: craft_core::cpo::CpoThermalServoState,
+    },
+    CpoTilesResult {
+        tiles: Vec<craft_core::cpo::CpoTileDescriptor>,
+    },
+    CpoBenchResult {
+        metrics: craft_core::cpo::CpoBenchmarkMetrics,
+    },
+    CpoResetResult {
         success: bool,
     },
     Error { error: String },

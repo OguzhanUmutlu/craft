@@ -615,6 +615,9 @@ async fn main() {
         Some(Commands::Dna { action }) => {
             commands::dna::handle_dna(&paths, action).await
         }
+        Some(Commands::Cpo { action }) => {
+            commands::cpo::handle_cpo(&paths, action).await
+        }
     };
 
 

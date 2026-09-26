@@ -133,6 +133,10 @@ pub enum LifecycleEvent {
     DnaSequencingCompleted,
     DnaDecayDetected,
     DnaCenturyRetentionValidated,
+    CpoLinkTrained,
+    CpoThermalDriftCompensated,
+    CpoTensorMvmCompleted,
+    CpoWaveguideDegraded,
 }
 
 impl LifecycleEvent {
@@ -260,6 +264,10 @@ impl LifecycleEvent {
             Self::DnaSequencingCompleted => "on_dna_sequencing_completed",
             Self::DnaDecayDetected => "on_dna_decay_detected",
             Self::DnaCenturyRetentionValidated => "on_dna_century_retention_validated",
+            Self::CpoLinkTrained => "on_cpo_link_trained",
+            Self::CpoThermalDriftCompensated => "on_cpo_thermal_drift_compensated",
+            Self::CpoTensorMvmCompleted => "on_cpo_tensor_mvm_completed",
+            Self::CpoWaveguideDegraded => "on_cpo_waveguide_degraded",
         }
     }
 
@@ -388,6 +396,10 @@ impl LifecycleEvent {
             "on_dna_sequencing_completed" | "dna_sequencing_completed" | "sequencing_completed" => Some(Self::DnaSequencingCompleted),
             "on_dna_decay_detected" | "dna_decay_detected" | "decay_detected" => Some(Self::DnaDecayDetected),
             "on_dna_century_retention_validated" | "dna_century_retention_validated" | "century_retention_validated" => Some(Self::DnaCenturyRetentionValidated),
+            "on_cpo_link_trained" | "cpo_link_trained" | "link_trained" => Some(Self::CpoLinkTrained),
+            "on_cpo_thermal_drift_compensated" | "cpo_thermal_drift_compensated" | "drift_compensated" => Some(Self::CpoThermalDriftCompensated),
+            "on_cpo_tensor_mvm_completed" | "cpo_tensor_mvm_completed" | "mvm_completed" => Some(Self::CpoTensorMvmCompleted),
+            "on_cpo_waveguide_degraded" | "cpo_waveguide_degraded" | "waveguide_degraded" => Some(Self::CpoWaveguideDegraded),
             _ => None,
         }
     }
@@ -516,6 +528,10 @@ impl LifecycleEvent {
             Self::DnaSequencingCompleted,
             Self::DnaDecayDetected,
             Self::DnaCenturyRetentionValidated,
+            Self::CpoLinkTrained,
+            Self::CpoThermalDriftCompensated,
+            Self::CpoTensorMvmCompleted,
+            Self::CpoWaveguideDegraded,
         ]
     }
 }
@@ -870,6 +886,14 @@ pub struct HookContext {
     pub dna_bit_density_eb_mm3: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dna_recovery_duration_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpo_tile_id: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpo_temperature_c: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpo_mvm_latency_ps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpo_throughput_tbps: Option<f64>,
 }
 
 impl HookContext {
@@ -1680,6 +1704,54 @@ impl HookContext {
         ctx.details = Some(format!(
             "DNA century-scale cold storage retention validated: {} chunks intact over {:.0} years",
             valid_chunks, retention_years
+        ));
+        ctx
+    }
+
+    pub fn for_cpo_link_trained(server: &str, tile_id: u32, throughput_tbps: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CpoLinkTrained);
+        ctx.server_name = Some(server.to_string());
+        ctx.cpo_tile_id = Some(tile_id);
+        ctx.cpo_throughput_tbps = Some(throughput_tbps);
+        ctx.details = Some(format!(
+            "Silicon Photonic CPO tile #{} link trained: aggregate bandwidth {:.2} Tbps",
+            tile_id, throughput_tbps
+        ));
+        ctx
+    }
+
+    pub fn for_cpo_thermal_drift_compensated(server: &str, tile_id: u32, temp_c: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CpoThermalDriftCompensated);
+        ctx.server_name = Some(server.to_string());
+        ctx.cpo_tile_id = Some(tile_id);
+        ctx.cpo_temperature_c = Some(temp_c);
+        ctx.details = Some(format!(
+            "Silicon Photonic micro-ring thermal drift compensated on tile #{}: locked at {:.2} deg C",
+            tile_id, temp_c
+        ));
+        ctx
+    }
+
+    pub fn for_cpo_tensor_mvm_completed(server: &str, tile_id: u32, latency_ps: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CpoTensorMvmCompleted);
+        ctx.server_name = Some(server.to_string());
+        ctx.cpo_tile_id = Some(tile_id);
+        ctx.cpo_mvm_latency_ps = Some(latency_ps);
+        ctx.details = Some(format!(
+            "Photonic neural MVM tensor contraction executed on tile #{}: latency {:.1} ps",
+            tile_id, latency_ps
+        ));
+        ctx
+    }
+
+    pub fn for_cpo_waveguide_degraded(server: &str, tile_id: u32, temp_c: f64) -> Self {
+        let mut ctx = Self::new(LifecycleEvent::CpoWaveguideDegraded);
+        ctx.server_name = Some(server.to_string());
+        ctx.cpo_tile_id = Some(tile_id);
+        ctx.cpo_temperature_c = Some(temp_c);
+        ctx.details = Some(format!(
+            "Silicon Photonic optical waveguide degraded on tile #{}: temperature alert at {:.2} deg C",
+            tile_id, temp_c
         ));
         ctx
     }
@@ -2961,5 +3033,61 @@ mod tests {
         let century_ctx = HookContext::for_dna_century_retention_validated("survival", 64, 100.0);
         assert_eq!(century_ctx.event, "on_dna_century_retention_validated");
         assert!(century_ctx.details.unwrap().contains("100 years"));
+    }
+
+    #[test]
+    fn test_cpo_lifecycle_events_and_context() {
+        assert_eq!(
+            LifecycleEvent::from_name("on_cpo_link_trained"),
+            Some(LifecycleEvent::CpoLinkTrained)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("link_trained"),
+            Some(LifecycleEvent::CpoLinkTrained)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_cpo_thermal_drift_compensated"),
+            Some(LifecycleEvent::CpoThermalDriftCompensated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("drift_compensated"),
+            Some(LifecycleEvent::CpoThermalDriftCompensated)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_cpo_tensor_mvm_completed"),
+            Some(LifecycleEvent::CpoTensorMvmCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("mvm_completed"),
+            Some(LifecycleEvent::CpoTensorMvmCompleted)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("on_cpo_waveguide_degraded"),
+            Some(LifecycleEvent::CpoWaveguideDegraded)
+        );
+        assert_eq!(
+            LifecycleEvent::from_name("waveguide_degraded"),
+            Some(LifecycleEvent::CpoWaveguideDegraded)
+        );
+
+        let trained_ctx = HookContext::for_cpo_link_trained("survival", 1, 12.8);
+        assert_eq!(trained_ctx.event, "on_cpo_link_trained");
+        assert_eq!(trained_ctx.cpo_tile_id, Some(1));
+        assert_eq!(trained_ctx.cpo_throughput_tbps, Some(12.8));
+
+        let thermal_ctx = HookContext::for_cpo_thermal_drift_compensated("survival", 2, 45.02);
+        assert_eq!(thermal_ctx.event, "on_cpo_thermal_drift_compensated");
+        assert_eq!(thermal_ctx.cpo_tile_id, Some(2));
+        assert_eq!(thermal_ctx.cpo_temperature_c, Some(45.02));
+
+        let mvm_ctx = HookContext::for_cpo_tensor_mvm_completed("survival", 3, 275.0);
+        assert_eq!(mvm_ctx.event, "on_cpo_tensor_mvm_completed");
+        assert_eq!(mvm_ctx.cpo_tile_id, Some(3));
+        assert_eq!(mvm_ctx.cpo_mvm_latency_ps, Some(275.0));
+
+        let degraded_ctx = HookContext::for_cpo_waveguide_degraded("survival", 0, 52.4);
+        assert_eq!(degraded_ctx.event, "on_cpo_waveguide_degraded");
+        assert_eq!(degraded_ctx.cpo_tile_id, Some(0));
+        assert_eq!(degraded_ctx.cpo_temperature_c, Some(52.4));
     }
 }

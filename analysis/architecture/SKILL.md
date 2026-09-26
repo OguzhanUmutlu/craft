@@ -1007,6 +1007,41 @@ Phase 51 delivers sub-nanosecond clock synchronization, Precision Time Protocol 
   - Aliases: `craft bio`, `craft oligo`, `craft nucleotide`, `craft storage-dna`.
   - Full-screen centered interactive TUI panel (`Tools -> Bio-Molecular DNA State Archival & Base-4 Cold Storage`) powered by ModalX.
 
+### 3.29 Autonomous Silicon Photonic Co-Packaged Optics (CPO), Optical Neural Matrix Multiply & Sub-Nanosecond Direct Die Interconnects
+
+- **Foundational Silicon Photonic Models & Micro-Ring Resonators (`craft-core`)**:
+  - `CpoMode`: `Autonomous`, `DirectDiePhotonic`, `AnalogTensorMvm`, `ThermalStabilized`, `LoopbackElectronic`.
+  - `CpoThermalStatus`: `Locked` (within ±0.25 °C), `Tuning` (within ±1.0 °C), `DriftWarning` (>1.0 °C drift).
+  - Micro-Ring Resonator (`MicroRingModulator`): Resonant wavelength $\lambda_0$, thermo-optic drift coefficient (82 pm/°C), tuning range, heater power, Q-factor, and insertion loss.
+  - Mach-Zehnder Interferometer Mesh (`MziCell`, `MziMesh`): Unitary $2 \times 2$ optical couplers with thermo-optic phase shifters ($\theta$, $\phi$), configured in triangular/rectangular meshes for passive analog tensor matrix-vector multiplication (MVM) at speed of light.
+  - CPO Tile Descriptor (`CpoTileDescriptor`): Direct die interconnect parameters, DWDM 8-channel optical wavelengths (1310 nm O-band), waveguide loss (dB/cm), extinction ratio (dB), link latency (~0.42 ns), and direct die bandwidth (up to 16.0 Tbps).
+  - Thermal Servo State (`CpoThermalServoState`): Closed-loop proportional-integral-derivative (PID) substrate thermal regulation tracking current temperature, heater power, drift error, and phase stability.
+  - Status summaries and benchmark telemetry (`CpoStatusSummary`, `CpoBenchmarkMetrics`, `CpoRegistry`).
+  - Advisory file locking (`cpo.lock`) protecting persistent registry state under `~/.craft/cpo/` (`cpo_dir`, `cpo_tiles_dir`, `cpo_registry_file`, `cpo_state_file`, `cpo_lock`, `cpo_tile_path`).
+  - Plain-text table formatters with strictly zero emojis (`render_cpo_status_table`, `render_cpo_tiles_table`, `render_cpo_bench_table`).
+- **Binary Photonic Wire Framing, Tensor MVM Engine & Closed-Loop Thermal Regulator (`craft-net`)**:
+  - `CpoTensorFrame`: Pure-Rust binary photonic frame starting with 4-byte magic `0x43504F31` (`CPO1`), tile ID, matrix dimension $N$, input/output vector length, and CRC-32 checksum.
+  - `PhotonicTensorEngine`: Passive optical matrix-vector multiplication ($y = W \cdot x$) via MZI phase transfer matrices with zero digital multiplication latency, sub-nanosecond propagation delay (<0.50 ns), and energy efficiency (~0.12 pJ/MAC).
+  - `CpoThermalRegulator`: High-precision closed-loop PID controller with anti-windup clamping, compensating for ambient thermal fluctuations, driving micro-ring thermo-optic phase shifters to hold optical resonance precisely locked to DWDM grid channels.
+  - Synthetic CPO benchmark (`benchmark_cpo_interconnect`): Evaluates direct die link latency, throughput in Tbps, MVM tensor error epsilon, insertion loss, and thermal lock stability.
+- **Daemon Supervision, CPO Service & Prometheus Telemetry (`craft-daemon`)**:
+  - `CpoService`: Thread-safe supervisor singleton managing in-process CPO tile topologies, thermal regulators, MZI meshes, benchmark sweeps, registry serialization, and Prometheus telemetry exposition (`craft_cpo_*`).
+  - 7 typed IPC requests and responses: `CpoGetStatus`, `CpoSetMode`, `CpoExecuteMvm`, `CpoAdjustThermal`, `CpoListTiles`, `CpoRunBench`, `CpoResetMetrics`.
+  - Prometheus metrics exposition (`craft_cpo_*`): `craft_cpo_total_tiles`, `craft_cpo_active_tiles`, `craft_cpo_substrate_temp_celsius`, `craft_cpo_thermal_locked_ratio`, `craft_cpo_mvm_operations_total`, `craft_cpo_mvm_latency_picoseconds`, `craft_cpo_throughput_terabits_per_sec`, `craft_cpo_energy_efficiency_pj_per_mac`.
+- **Remote Federation & Scripting Hooks (`craft-remote`, `craft-scripting`)**:
+  - `RemoteCraftClient` provides `get_remote_cpo_status`, `set_remote_cpo_mode`, `execute_remote_cpo_mvm`, `adjust_remote_cpo_thermal`, `list_remote_cpo_tiles`, `run_remote_cpo_bench`, and `reset_remote_cpo_metrics` over SSH connection pools.
+  - `HookBus` fires lifecycle events: `CpoLinkTrained`, `CpoThermalDriftCompensated`, `CpoTensorMvmCompleted`, `CpoWaveguideDegraded` with structured optical telemetry (`cpo_tile_id`, `cpo_temperature_c`, `cpo_mvm_latency_ps`, `cpo_throughput_tbps`).
+- **Unified CLI Commands & ModalX Centered TUI (`craft-cli`)**:
+  - `craft cpo status [--server <name>] [--json]`
+  - `craft cpo mode -m <mode> [--server <name>] [--json]`
+  - `craft cpo mvm -t <tile-id> -x <vector-csv> [--server <name>] [--json]`
+  - `craft cpo thermal -t <tile-id> --temp <celsius> [--server <name>] [--json]`
+  - `craft cpo tiles [--server <name>] [--json]`
+  - `craft cpo bench [-t <tiles>] [-d <dimension>] [--json]`
+  - `craft cpo reset-metrics [--server <name>] [--json]`
+  - Aliases: `craft die-optics`, `craft cpo-mesh`, `craft photonic-mvm`, `craft silicon-optics`.
+  - Full-screen centered interactive TUI panel (`Tools -> Silicon Photonic Co-Packaged Optics & Direct Die Interconnects`) powered by ModalX.
+
 ---
 
 ## 4. Error Handling Architecture

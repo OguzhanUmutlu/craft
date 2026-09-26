@@ -179,6 +179,11 @@ pub struct CraftPaths {
     pub dna_registry_file: PathBuf,
     pub dna_state_file: PathBuf,
     pub dna_lock: PathBuf,
+    pub cpo_dir: PathBuf,
+    pub cpo_tiles_dir: PathBuf,
+    pub cpo_registry_file: PathBuf,
+    pub cpo_state_file: PathBuf,
+    pub cpo_lock: PathBuf,
 }
 
 impl CraftPaths {
@@ -357,6 +362,11 @@ impl CraftPaths {
         let dna_registry_file = dna_dir.join("dna.toml");
         let dna_state_file = dna_dir.join("state.json");
         let dna_lock = locks_dir.join("dna.lock");
+        let cpo_dir = home.join("cpo");
+        let cpo_tiles_dir = cpo_dir.join("tiles");
+        let cpo_registry_file = cpo_dir.join("cpo.toml");
+        let cpo_state_file = cpo_dir.join("state.json");
+        let cpo_lock = locks_dir.join("cpo.lock");
 
         Self {
             home,
@@ -533,6 +543,11 @@ impl CraftPaths {
             dna_registry_file,
             dna_state_file,
             dna_lock,
+            cpo_dir,
+            cpo_tiles_dir,
+            cpo_registry_file,
+            cpo_state_file,
+            cpo_lock,
         }
     }
 
@@ -798,8 +813,13 @@ impl CraftPaths {
         let dna_registry_file = dna_dir.join("dna.toml");
         let dna_state_file = dna_dir.join("state.json");
         let dna_lock = locks_dir.join("dna.lock");
+        let cpo_dir = home.join("cpo");
+        let cpo_tiles_dir = cpo_dir.join("tiles");
+        let cpo_registry_file = cpo_dir.join("cpo.toml");
+        let cpo_state_file = cpo_dir.join("state.json");
+        let cpo_lock = locks_dir.join("cpo.lock");
 
-        for d in &[&optical_dir, &optical_circuits_dir, &ptp_dir, &ptp_timestamps_dir, &dna_dir, &dna_oligos_dir] {
+        for d in &[&optical_dir, &optical_circuits_dir, &ptp_dir, &ptp_timestamps_dir, &dna_dir, &dna_oligos_dir, &cpo_dir, &cpo_tiles_dir] {
             if !d.exists() {
                 fs::create_dir_all(d)?;
             }
@@ -980,7 +1000,17 @@ impl CraftPaths {
             dna_registry_file,
             dna_state_file,
             dna_lock,
+            cpo_dir,
+            cpo_tiles_dir,
+            cpo_registry_file,
+            cpo_state_file,
+            cpo_lock,
         })
+    }
+
+    /// Returns the optical tile configuration path for a specific tile ID
+    pub fn cpo_tile_path(&self, tile_id: u32) -> PathBuf {
+        self.cpo_tiles_dir.join(format!("tile_{}.cpo", tile_id))
     }
 
     /// Returns the oligo storage path for a specific oligo ID

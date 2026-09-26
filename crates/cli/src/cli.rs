@@ -744,6 +744,12 @@ pub enum Commands {
         #[command(subcommand)]
         action: Option<DnaCommands>,
     },
+    /// Autonomous Silicon Photonic Co-Packaged Optics (CPO), Optical Neural Matrix Multiply & Sub-Nanosecond Direct Die Interconnects
+    #[command(name = "cpo", alias = "die-optics", alias = "cpo-mesh", alias = "photonic-mvm", alias = "silicon-optics")]
+    Cpo {
+        #[command(subcommand)]
+        action: Option<CpoCommands>,
+    },
 }
 
 
@@ -3499,6 +3505,90 @@ pub enum DnaCommands {
     #[command(name = "reset-metrics", alias = "reset")]
     ResetMetrics {
         /// Target server or world name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, PartialEq)]
+pub enum CpoCommands {
+    /// Inspect silicon photonic CPO interconnect status, optical tiles, and thermal servos
+    Status {
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Configure CPO operational mode (autonomous, direct-die-photonic, analog-tensor-mvm, thermal-stabilized, loopback-electronic)
+    #[command(name = "mode", alias = "set-mode")]
+    Mode {
+        /// Operational mode
+        #[arg(short, long, default_value = "autonomous")]
+        mode: String,
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Execute photonic matrix-vector multiplication (MVM) tensor contraction
+    #[command(name = "mvm", alias = "multiply", alias = "tensor")]
+    Mvm {
+        /// Comma-separated floating point input vector
+        #[arg(short, long, value_delimiter = ',', default_values_t = vec![1.0f32, 1.0, 1.0, 1.0])]
+        vector: Vec<f32>,
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Regulate and stabilize micro-ring heater thermal servo setpoint
+    #[command(name = "thermal", alias = "tune-thermal", alias = "heater")]
+    Thermal {
+        /// Substrate core temperature in Celsius
+        #[arg(short, long, default_value_t = 45.0)]
+        temp: f64,
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// List co-packaged optics tiles and micro-ring modulators
+    #[command(name = "tiles", alias = "list-tiles")]
+    Tiles {
+        /// Target server name
+        #[arg(short, long)]
+        server: Option<String>,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Benchmark photonic neural matrix-vector multiplication throughput and energy efficiency
+    Bench {
+        /// Benchmark iteration count
+        #[arg(short, long, default_value_t = 500)]
+        iterations: usize,
+        /// Vector dimension size
+        #[arg(short, long, default_value_t = 4)]
+        dim: usize,
+        /// Output in machine-readable JSON format
+        #[arg(long)]
+        json: bool,
+    },
+    /// Reset optical performance counters and benchmark metrics
+    #[command(name = "reset-metrics", alias = "reset")]
+    ResetMetrics {
+        /// Target server name
         #[arg(short, long)]
         server: Option<String>,
         /// Output in machine-readable JSON format
@@ -7696,6 +7786,105 @@ mod tests {
                 assert!(json);
             }
             _ => panic!("Expected Dna Bench command"),
+        }
+    }
+
+    #[test]
+    fn test_cpo_cli_commands() {
+        // CPO status default
+        let cli_status = Cli::try_parse_from(["craft", "cpo", "status", "--json"]).unwrap();
+        match cli_status.command {
+            Some(Commands::Cpo {
+                action: Some(CpoCommands::Status { server, json }),
+            }) => {
+                assert_eq!(server, None);
+                assert!(json);
+            }
+            _ => panic!("Expected Cpo Status command"),
+        }
+
+        // CPO mode alias
+        let cli_mode = Cli::try_parse_from([
+            "craft", "die-optics", "mode", "-m", "analog-tensor-mvm", "--json"
+        ]).unwrap();
+        match cli_mode.command {
+            Some(Commands::Cpo {
+                action: Some(CpoCommands::Mode { mode, server, json }),
+            }) => {
+                assert_eq!(mode, "analog-tensor-mvm");
+                assert_eq!(server, None);
+                assert!(json);
+            }
+            _ => panic!("Expected Cpo Mode command"),
+        }
+
+        // CPO mvm command
+        let cli_mvm = Cli::try_parse_from([
+            "craft", "cpo-mesh", "mvm", "-v", "1.5,2.0,-0.5,3.2", "--json"
+        ]).unwrap();
+        match cli_mvm.command {
+            Some(Commands::Cpo {
+                action: Some(CpoCommands::Mvm { vector, json, .. }),
+            }) => {
+                assert_eq!(vector, vec![1.5f32, 2.0, -0.5, 3.2]);
+                assert!(json);
+            }
+            _ => panic!("Expected Cpo Mvm command"),
+        }
+
+        // CPO thermal servo
+        let cli_thermal = Cli::try_parse_from([
+            "craft", "photonic-mvm", "thermal", "-t", "45.8", "--json"
+        ]).unwrap();
+        match cli_thermal.command {
+            Some(Commands::Cpo {
+                action: Some(CpoCommands::Thermal { temp, json, .. }),
+            }) => {
+                assert!((temp - 45.8).abs() < 1e-5);
+                assert!(json);
+            }
+            _ => panic!("Expected Cpo Thermal command"),
+        }
+
+        // CPO tiles list
+        let cli_tiles = Cli::try_parse_from([
+            "craft", "silicon-optics", "tiles", "--json"
+        ]).unwrap();
+        match cli_tiles.command {
+            Some(Commands::Cpo {
+                action: Some(CpoCommands::Tiles { json, .. }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Cpo Tiles command"),
+        }
+
+        // CPO bench
+        let cli_bench = Cli::try_parse_from([
+            "craft", "cpo", "bench", "-i", "1000", "-d", "8", "--json"
+        ]).unwrap();
+        match cli_bench.command {
+            Some(Commands::Cpo {
+                action: Some(CpoCommands::Bench { iterations, dim, json }),
+            }) => {
+                assert_eq!(iterations, 1000);
+                assert_eq!(dim, 8);
+                assert!(json);
+            }
+            _ => panic!("Expected Cpo Bench command"),
+        }
+
+        // CPO reset-metrics
+        let cli_reset = Cli::try_parse_from([
+            "craft", "cpo", "reset-metrics", "--json"
+        ]).unwrap();
+        match cli_reset.command {
+            Some(Commands::Cpo {
+                action: Some(CpoCommands::ResetMetrics { json, .. }),
+            }) => {
+                assert!(json);
+            }
+            _ => panic!("Expected Cpo ResetMetrics command"),
         }
     }
 }
